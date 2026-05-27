@@ -988,6 +988,12 @@ footer .links a:hover { color: var(--ember); }
   display: flex;
   align-items: center;
   gap: 12px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.composer:hover, .composer:active {
+  border-color: var(--ember);
+  background: var(--bg-2);
 }
 .composer .avatar {
   width: 40px; height: 40px;
@@ -1005,40 +1011,138 @@ footer .links a:hover { color: var(--ember); }
   padding: 12px 18px;
   color: var(--text-muted);
   font-size: 14px;
-  cursor: not-allowed;
+  pointer-events: none;
 }
 
-.feed-cta {
-  background: linear-gradient(135deg, var(--surface), var(--bg-2));
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 28px 22px;
+/* Feed container — mixes posts and challenges */
+.feed-container {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.feed-empty {
   text-align: center;
-  margin-bottom: 16px;
-}
-.feed-cta h3 {
-  font-family: var(--font-bricolage);
-  font-weight: 700;
-  font-size: 20px;
-  margin-bottom: 6px;
-}
-.feed-cta p { color: var(--text-dim); font-size: 14px; margin-bottom: 16px; }
-.feed-cta-icon {
-  width: 56px; height: 56px;
-  background: linear-gradient(135deg, var(--ember), var(--flame));
-  border-radius: 16px;
-  display: grid; place-items: center;
-  margin: 0 auto 12px;
-  font-size: 26px;
-  box-shadow: 0 10px 30px -6px rgba(255, 80, 30, 0.5);
-}
-
-/* Feed activity placeholder */
-.feed-placeholder {
-  text-align: center;
-  padding: 40px 20px;
+  padding: 50px 20px;
   color: var(--text-muted);
   font-size: 14px;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+.feed-empty .icon { font-size: 32px; margin-bottom: 10px; opacity: 0.6; }
+
+/* POST CARD */
+.post-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  position: relative;
+}
+.post-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.post-card-avatar {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  background: linear-gradient(135deg, var(--ember), var(--coral));
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.post-card-meta {
+  flex: 1;
+  min-width: 0;
+}
+.post-card-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.post-card-time {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.post-card-menu {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.post-card-menu:hover { color: var(--text); background: var(--bg-2); }
+.post-card-content {
+  font-size: 15px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  color: var(--text);
+}
+.post-card-media {
+  margin-top: 12px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #000;
+  max-height: 500px;
+}
+.post-card-media img,
+.post-card-media video {
+  width: 100%;
+  max-height: 500px;
+  object-fit: contain;
+  display: block;
+}
+
+/* Feed item: challenge tile (mini card style) */
+.feed-challenge-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  cursor: pointer;
+  transition: border-color 0.2s, transform 0.1s;
+}
+.feed-challenge-card:active { transform: scale(0.99); }
+.feed-challenge-card:hover { border-color: var(--ember); }
+.feed-challenge-thumb {
+  width: 60px; height: 60px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--ember), var(--flame));
+  display: grid; place-items: center;
+  font-size: 26px;
+  flex-shrink: 0;
+}
+.feed-challenge-info { flex: 1; min-width: 0; }
+.feed-challenge-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--ember);
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+.feed-challenge-title {
+  font-weight: 600;
+  font-size: 15px;
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.feed-challenge-meta {
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 /* Compact nav links */
@@ -1811,21 +1915,12 @@ footer .links a:hover { color: var(--ember); }
       </div>
     </div>
 
-    <div class="composer">
+    <div class="composer" onclick="openCreatePost()" role="button" tabindex="0">
       <div class="avatar" id="composerAvatar">🔥</div>
-      <div class="composer-input">What's on your mind? (coming soon)</div>
+      <div class="composer-input">What's the heat? Share something...</div>
     </div>
 
-    <div class="feed-cta">
-      <div class="feed-cta-icon">🏆</div>
-      <h3>Challenges launching soon</h3>
-      <p>Create your own competitions. Photos, video, audio, or text. The community votes. Winners climb the leaderboard.</p>
-      <button class="btn btn-ghost" onclick="switchView('polls')">Try Polls in the meantime →</button>
-    </div>
-
-    <div class="feed-placeholder">
-      🔥 Activity feed coming soon — friends' wins, new challenges, your invites
-    </div>
+    <div id="feedContainer" class="feed-container"></div>
   </div>
 </section>
 
@@ -1995,7 +2090,38 @@ footer .links a:hover { color: var(--ember); }
   </div>
 </div>
 
-<!-- CHALLENGE DETAIL SHEET -->
+<!-- CREATE POST SHEET -->
+<div class="cc-sheet" id="createPostSheet">
+  <div class="cc-sheet-header">
+    <button class="cc-close" onclick="closeCreatePost()" aria-label="Close">×</button>
+    <h2>New Post</h2>
+  </div>
+  <div class="cc-sheet-inner">
+    <form id="createPostForm" class="cc-form">
+      <div class="cc-field">
+        <label for="cpContent">What's the heat? <span class="hint">(1-1000 characters)</span></label>
+        <textarea id="cpContent" maxlength="1000" required placeholder="Share what's going on... a win, a vibe, a thought, a hot take..." style="min-height:120px"></textarea>
+      </div>
+
+      <div class="cc-field">
+        <label>Add media <span class="hint">(optional — photo or video)</span></label>
+        <div class="cc-upload" id="cpUploadZone" onclick="document.getElementById('cpFile').click()">
+          <div class="icon">📤</div>
+          <div class="text">Tap to upload</div>
+          <div class="upload-hint">Photo or video · Max 50MB</div>
+        </div>
+        <input type="file" id="cpFile" class="cc-file-input" accept="image/*,video/*" />
+        <div class="cc-preview" id="cpPreview" style="display:none"></div>
+      </div>
+
+      <div id="cpError" class="auth-error"></div>
+
+      <div class="cc-submit-area">
+        <button type="submit" class="btn btn-primary" style="width:100%">🔥 Post</button>
+      </div>
+    </form>
+  </div>
+</div>
 <div class="cd-sheet" id="challengeDetailSheet">
   <div class="cd-sheet-header">
     <button class="cd-close" onclick="closeChallengeDetail()" aria-label="Close">×</button>
@@ -2429,6 +2555,10 @@ let state = {
   voteCountsByPoll: {},
   myVotes: {},
   leaders: [],
+  challenges: [],
+  posts: [],
+  entryCounts: {},
+  creatorEntries: {},
   filter: "trending",
   currentView: "feed",
   loading: true,
@@ -2650,6 +2780,7 @@ function switchView(view) {
   document.getElementById('pollsViewSection').style.display = view === 'polls' ? 'block' : 'none';
   document.getElementById('leaderboardViewSection').style.display = view === 'leaderboard' ? 'block' : 'none';
   if (view === 'challenges') renderChallenges();
+  if (view === 'feed') renderFeed();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -2672,12 +2803,14 @@ async function loadAppData() {
   });
   await loadLeaderboard();
   await loadChallenges();
+  await loadPosts();
   state.loading = false;
   renderPolls();
   renderLeaderboard();
   renderChallenges();
   renderHeatCheck();
   renderFeedHello();
+  renderFeed();
 }
 
 async function loadLeaderboard() {
@@ -4013,6 +4146,268 @@ document.getElementById('ccInviteSearch').addEventListener('input', (e) => {
     }
   }, 300);
 });
+
+/* ============================================
+   PHASE 4: ACTIVITY POSTS
+   ============================================ */
+
+const cpState = { file: null, fileType: null };
+
+async function loadPosts() {
+  // Pull posts with author info from both profiles
+  const { data: posts, error } = await db.from('posts')
+    .select('*, author:profiles!posts_user_id_fkey(id, name, avatar)')
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (error) {
+    console.error('posts load error', error);
+    state.posts = [];
+    return;
+  }
+  state.posts = posts || [];
+}
+
+function timeAgo(dateStr) {
+  const diff = (new Date() - new Date(dateStr)) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+  return new Date(dateStr).toLocaleDateString();
+}
+
+function renderFeed() {
+  const c = document.getElementById('feedContainer');
+  if (!c) return;
+  if (state.loading) {
+    c.innerHTML = `<div class="feed-empty"><div class="icon">🔥</div>Loading feed...</div>`;
+    return;
+  }
+
+  // Build mixed feed: posts + recent active/voting challenges
+  const posts = (state.posts || []).map(p => ({
+    kind: 'post',
+    sortKey: p.created_at,
+    data: p,
+  }));
+
+  // Include recent public challenges (active or voting) — last 14 days
+  const cutoff = new Date(Date.now() - 14 * 86400000);
+  const challenges = (state.challenges || [])
+    .filter(ch => ch.is_public || ch.creator_id === state.profile?.id)
+    .filter(ch => new Date(ch.created_at) >= cutoff)
+    .map(ch => ({
+      kind: 'challenge',
+      sortKey: ch.created_at,
+      data: { ...ch, computedStatus: computeChallengeStatus(ch) },
+    }));
+
+  const mixed = [...posts, ...challenges].sort((a, b) =>
+    new Date(b.sortKey) - new Date(a.sortKey)
+  );
+
+  if (mixed.length === 0) {
+    c.innerHTML = `
+      <div class="feed-empty">
+        <div class="icon">🔥</div>
+        Feed's quiet right now. Be the first to post or create a challenge.
+      </div>`;
+    return;
+  }
+
+  c.innerHTML = mixed.map(item => {
+    if (item.kind === 'post') return renderPostCard(item.data);
+    return renderFeedChallengeCard(item.data);
+  }).join('');
+
+  // Wire up post menus
+  c.querySelectorAll('.post-card-menu').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const postId = btn.dataset.pid;
+      if (confirm('Delete this post?')) deletePost(postId);
+    });
+  });
+  // Wire up challenge clicks
+  c.querySelectorAll('.feed-challenge-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const id = card.dataset.cid;
+      if (typeof openChallengeDetail === 'function') openChallengeDetail(id);
+    });
+  });
+}
+
+function renderPostCard(p) {
+  const author = p.author || { name: 'Unknown', avatar: '🔥' };
+  const isMine = p.user_id === state.profile?.id;
+  let mediaHtml = '';
+  if (p.media_url) {
+    if (p.media_type === 'video') {
+      mediaHtml = `<div class="post-card-media"><video src="${escapeHtml(p.media_url)}" controls playsinline preload="metadata"></video></div>`;
+    } else {
+      mediaHtml = `<div class="post-card-media"><img src="${escapeHtml(p.media_url)}" alt="post media" loading="lazy"></div>`;
+    }
+  }
+  return `
+    <div class="post-card" data-pid="${p.id}">
+      <div class="post-card-header">
+        <div class="post-card-avatar">${escapeHtml(author.avatar || '🔥')}</div>
+        <div class="post-card-meta">
+          <div class="post-card-name">${escapeHtml(author.name)}</div>
+          <div class="post-card-time">${timeAgo(p.created_at)}</div>
+        </div>
+        ${isMine ? `<button class="post-card-menu" data-pid="${p.id}" aria-label="Delete post">⋯</button>` : ''}
+      </div>
+      <div class="post-card-content">${escapeHtml(p.content)}</div>
+      ${mediaHtml}
+    </div>`;
+}
+
+function renderFeedChallengeCard(ch) {
+  const statusLabels = { submitting: 'OPEN', voting: 'VOTING', closed: 'CLOSED', voided: 'VOIDED' };
+  const label = statusLabels[ch.computedStatus] || 'CHALLENGE';
+  const creator = ch.creator || { name: 'Unknown' };
+  const entryCount = state.entryCounts[ch.id] || 0;
+  const meta = ch.computedStatus === 'submitting'
+    ? `${entryCount} ${entryCount === 1 ? 'entry' : 'entries'} · closes ${formatCountdown(ch.submission_deadline)}`
+    : ch.computedStatus === 'voting'
+    ? `Vote now · ends ${formatCountdown(ch.voting_end)}`
+    : `${entryCount} ${entryCount === 1 ? 'entry' : 'entries'} · by ${escapeHtml(creator.name)}`;
+  return `
+    <div class="feed-challenge-card" data-cid="${ch.id}">
+      <div class="feed-challenge-thumb">🏆</div>
+      <div class="feed-challenge-info">
+        <div class="feed-challenge-label">${label}</div>
+        <div class="feed-challenge-title">${escapeHtml(ch.title)}</div>
+        <div class="feed-challenge-meta">${meta}</div>
+      </div>
+    </div>`;
+}
+
+/* ---------- CREATE POST SHEET ---------- */
+function openCreatePost() {
+  if (!state.profile) return;
+  cpState.file = null;
+  cpState.fileType = null;
+  document.getElementById('cpContent').value = '';
+  document.getElementById('cpFile').value = '';
+  document.getElementById('cpPreview').style.display = 'none';
+  document.getElementById('cpPreview').innerHTML = '';
+  document.getElementById('cpUploadZone').style.display = 'block';
+  const err = document.getElementById('cpError');
+  err.classList.remove('show');
+  err.textContent = '';
+  document.getElementById('createPostSheet').classList.add('open');
+}
+
+function closeCreatePost() {
+  document.getElementById('createPostSheet').classList.remove('open');
+}
+
+function showCpError(msg) {
+  const err = document.getElementById('cpError');
+  err.textContent = msg;
+  err.classList.add('show');
+}
+
+document.getElementById('cpFile').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.size > 50 * 1024 * 1024) {
+    showCpError('File too large. Max 50MB.');
+    e.target.value = '';
+    return;
+  }
+  const isVideo = file.type.startsWith('video/');
+  const isImage = file.type.startsWith('image/');
+  if (!isVideo && !isImage) {
+    showCpError('Photos and videos only.');
+    e.target.value = '';
+    return;
+  }
+  cpState.file = file;
+  cpState.fileType = isVideo ? 'video' : 'photo';
+  const preview = document.getElementById('cpPreview');
+  const url = URL.createObjectURL(file);
+  if (isVideo) {
+    preview.innerHTML = `<video src="${url}" controls playsinline style="width:100%;border-radius:12px;max-height:300px"></video>
+      <button type="button" class="btn btn-ghost" style="margin-top:8px;width:100%" onclick="clearCpFile()">Remove</button>`;
+  } else {
+    preview.innerHTML = `<img src="${url}" style="width:100%;border-radius:12px;max-height:300px;object-fit:contain;background:#000">
+      <button type="button" class="btn btn-ghost" style="margin-top:8px;width:100%" onclick="clearCpFile()">Remove</button>`;
+  }
+  preview.style.display = 'block';
+  document.getElementById('cpUploadZone').style.display = 'none';
+  document.getElementById('cpError').classList.remove('show');
+});
+
+function clearCpFile() {
+  cpState.file = null;
+  cpState.fileType = null;
+  document.getElementById('cpFile').value = '';
+  document.getElementById('cpPreview').style.display = 'none';
+  document.getElementById('cpPreview').innerHTML = '';
+  document.getElementById('cpUploadZone').style.display = 'block';
+}
+
+document.getElementById('createPostForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  document.getElementById('cpError').classList.remove('show');
+
+  const content = document.getElementById('cpContent').value.trim();
+  if (!content) return showCpError('Add some text.');
+  if (content.length > 1000) return showCpError('Max 1000 characters.');
+
+  const btn = e.target.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  const orig = btn.textContent;
+
+  try {
+    let mediaUrl = null;
+    let mediaType = null;
+    if (cpState.file) {
+      btn.textContent = 'Uploading...';
+      const ext = (cpState.file.name.split('.').pop() || 'bin').toLowerCase();
+      const filename = `posts/${state.profile.id}/${Date.now()}.${ext}`;
+      const { error: uploadError } = await db.storage
+        .from('challenge-media')
+        .upload(filename, cpState.file, { cacheControl: '3600', upsert: false });
+      if (uploadError) throw new Error('Upload failed: ' + uploadError.message);
+      const { data: pub } = db.storage.from('challenge-media').getPublicUrl(filename);
+      mediaUrl = pub.publicUrl;
+      mediaType = cpState.fileType;
+    }
+
+    btn.textContent = 'Posting...';
+    const { error: insErr } = await db.from('posts').insert({
+      user_id: state.profile.id,
+      content,
+      media_url: mediaUrl,
+      media_type: mediaType,
+    });
+    if (insErr) throw new Error('Post failed: ' + insErr.message);
+
+    closeCreatePost();
+    await loadPosts();
+    renderFeed();
+  } catch (err) {
+    console.error(err);
+    showCpError(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+});
+
+async function deletePost(postId) {
+  const { error } = await db.from('posts').delete().eq('id', postId);
+  if (error) {
+    alert('Delete failed: ' + error.message);
+    return;
+  }
+  await loadPosts();
+  renderFeed();
+}
 
 /* ---------- BOOT ---------- */
 // Fire-and-forget warm-up ping to wake Supabase up before the user does anything
