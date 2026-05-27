@@ -1750,9 +1750,18 @@ async function forgotPassword() {
 /* ---------- SIGN OUT ---------- */
 async function signOut() {
   if (!confirm("Sign out?")) return;
-  await db.auth.signOut();
   closeModals();
-  // onAuthStateChange will swap views
+  // Optimistically swap views right away so the user gets immediate feedback
+  state.session = null;
+  state.profile = null;
+  showAuth();
+  // Then actually clear the session with Supabase
+  try {
+    await db.auth.signOut();
+  } catch (e) {
+    console.error('signOut error', e);
+  }
+  toast("Signed out");
 }
 
 /* ---------- AUTH STATE LISTENER ---------- */
