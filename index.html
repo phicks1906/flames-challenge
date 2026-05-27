@@ -1101,6 +1101,58 @@ footer .links a:hover { color: var(--ember); }
   display: block;
 }
 
+/* Like (flame) button — used on posts and entries */
+.flame-btn {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  color: var(--text-muted);
+  padding: 6px 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.flame-btn:active { transform: scale(0.95); }
+.flame-btn .flame-icon { font-size: 14px; transition: transform 0.2s ease, filter 0.2s ease; }
+.flame-btn:hover { border-color: var(--ember); color: var(--text); }
+.flame-btn.liked {
+  background: rgba(255, 80, 30, 0.15);
+  border-color: var(--ember);
+  color: var(--ember);
+}
+.flame-btn.liked .flame-icon {
+  filter: drop-shadow(0 0 4px rgba(255, 120, 60, 0.7));
+  transform: scale(1.15);
+}
+.flame-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.post-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+/* Flame pop animation when liking */
+@keyframes flamePop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.4); }
+  100% { transform: scale(1.15); }
+}
+.flame-btn.just-liked .flame-icon {
+  animation: flamePop 0.35s ease;
+}
+
 /* Feed item: challenge tile (mini card style) */
 .feed-challenge-card {
   background: var(--surface);
@@ -2559,6 +2611,10 @@ let state = {
   posts: [],
   entryCounts: {},
   creatorEntries: {},
+  postLikeCounts: {},
+  myPostLikes: new Set(),
+  entryLikeCounts: {},
+  myEntryLikes: new Set(),
   filter: "trending",
   currentView: "feed",
   loading: true,
@@ -3486,6 +3542,26 @@ async function loadChallengeDetail(challengeId) {
   state.myCurrentVote = state.profile
     ? (state.currentVotes.find(v => v.voter_id === state.profile.id)?.entry_id || null)
     : null;
+
+  // Load entry likes
+  const entryIds = state.currentEntries.map(e => e.id);
+  if (entryIds.length > 0) {
+    const { data: likes, error: likesErr } = await db.from('entry_likes')
+      .select('entry_id, user_id')
+      .in('entry_id', entryIds);
+    if (likesErr) {
+      console.error('entry likes load error', likesErr);
+    }
+    const counts = {};
+    const mine = new Set();
+    (likes || []).forEach(l => {
+      counts[l.entry_id] = (counts[l.entry_id] || 0) + 1;
+      if (state.profile && l.user_id === state.profile.id) mine.add(l.entry_id);
+    });
+    // Update global state for entry likes (overlay onto existing)
+    Object.assign(state.entryLikeCounts, counts);
+    state.myEntryLikes = mine; // replace for current challenge view
+  }
 }
 
 function renderChallengeDetail() {
@@ -3575,6 +3651,17 @@ function renderChallengeDetail() {
       actionsHtml = '<span class="cd-entry-tag">Your entry</span>';
     }
 
+    // Flame (like) button — available in all phases, never on your own entry
+    const eLikeCount = state.entryLikeCounts[entry.id] || 0;
+    const iLikedEntry = state.myEntryLikes.has(entry.id);
+    const likeBtnHtml = !isMyEntry && state.profile
+      ? `<button class="flame-btn${iLikedEntry ? ' liked' : ''}" data-like-entry="${entry.id}"><span class="flame-icon">🔥</span><span class="flame-count">${eLikeCount}</span></button>`
+      : (eLikeCount > 0 ? `<span class="flame-btn liked" style="cursor:default"><span class="flame-icon">🔥</span><span class="flame-count">${eLikeCount}</span></span>` : '');
+
+    if (likeBtnHtml) {
+      actionsHtml = (actionsHtml ? actionsHtml + ' ' : '') + likeBtnHtml;
+    }
+
     return `
       <div class="cd-entry${iVoted ? ' voted' : ''}${winnerClass}">
         ${medalBadge}
@@ -3594,6 +3681,13 @@ function renderChallengeDetail() {
   // Attach vote handlers
   grid.querySelectorAll('[data-vote-entry]').forEach(btn => {
     btn.addEventListener('click', () => voteOnEntry(btn.dataset.voteEntry));
+  });
+  // Attach like handlers
+  grid.querySelectorAll('[data-like-entry]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      toggleEntryLike(btn.dataset.likeEntry, btn);
+    });
   });
 }
 
@@ -4165,6 +4259,141 @@ async function loadPosts() {
     return;
   }
   state.posts = posts || [];
+  await loadPostLikes();
+}
+
+async function loadPostLikes() {
+  if (!state.posts || state.posts.length === 0) {
+    state.postLikeCounts = {};
+    state.myPostLikes = new Set();
+    return;
+  }
+  const postIds = state.posts.map(p => p.id);
+  const { data: likes, error } = await db.from('post_likes')
+    .select('post_id, user_id')
+    .in('post_id', postIds);
+  if (error) {
+    console.error('post likes load error', error);
+    state.postLikeCounts = {};
+    state.myPostLikes = new Set();
+    return;
+  }
+  const counts = {};
+  const mine = new Set();
+  (likes || []).forEach(l => {
+    counts[l.post_id] = (counts[l.post_id] || 0) + 1;
+    if (state.profile && l.user_id === state.profile.id) mine.add(l.post_id);
+  });
+  state.postLikeCounts = counts;
+  state.myPostLikes = mine;
+}
+
+async function togglePostLike(postId, btnEl) {
+  if (!state.profile) return;
+  const wasLiked = state.myPostLikes.has(postId);
+  const currentCount = state.postLikeCounts[postId] || 0;
+
+  // Optimistic UI update
+  if (wasLiked) {
+    state.myPostLikes.delete(postId);
+    state.postLikeCounts[postId] = Math.max(0, currentCount - 1);
+  } else {
+    state.myPostLikes.add(postId);
+    state.postLikeCounts[postId] = currentCount + 1;
+  }
+  if (btnEl) {
+    btnEl.classList.toggle('liked', !wasLiked);
+    if (!wasLiked) {
+      btnEl.classList.add('just-liked');
+      setTimeout(() => btnEl.classList.remove('just-liked'), 400);
+    }
+    const cnt = btnEl.querySelector('.flame-count');
+    if (cnt) cnt.textContent = state.postLikeCounts[postId];
+  }
+
+  try {
+    if (wasLiked) {
+      const { error } = await db.from('post_likes')
+        .delete()
+        .eq('post_id', postId)
+        .eq('user_id', state.profile.id);
+      if (error) throw error;
+    } else {
+      const { error } = await db.from('post_likes')
+        .insert({ post_id: postId, user_id: state.profile.id });
+      if (error) throw error;
+    }
+  } catch (err) {
+    console.error('like toggle error', err);
+    // Revert on failure
+    if (wasLiked) {
+      state.myPostLikes.add(postId);
+      state.postLikeCounts[postId] = currentCount;
+    } else {
+      state.myPostLikes.delete(postId);
+      state.postLikeCounts[postId] = currentCount;
+    }
+    if (btnEl) {
+      btnEl.classList.toggle('liked', wasLiked);
+      const cnt = btnEl.querySelector('.flame-count');
+      if (cnt) cnt.textContent = currentCount;
+    }
+    toast('Like failed');
+  }
+}
+
+async function toggleEntryLike(entryId, btnEl) {
+  if (!state.profile) return;
+  const wasLiked = state.myEntryLikes.has(entryId);
+  const currentCount = state.entryLikeCounts[entryId] || 0;
+
+  // Optimistic UI update
+  if (wasLiked) {
+    state.myEntryLikes.delete(entryId);
+    state.entryLikeCounts[entryId] = Math.max(0, currentCount - 1);
+  } else {
+    state.myEntryLikes.add(entryId);
+    state.entryLikeCounts[entryId] = currentCount + 1;
+  }
+  if (btnEl) {
+    btnEl.classList.toggle('liked', !wasLiked);
+    if (!wasLiked) {
+      btnEl.classList.add('just-liked');
+      setTimeout(() => btnEl.classList.remove('just-liked'), 400);
+    }
+    const cnt = btnEl.querySelector('.flame-count');
+    if (cnt) cnt.textContent = state.entryLikeCounts[entryId];
+  }
+
+  try {
+    if (wasLiked) {
+      const { error } = await db.from('entry_likes')
+        .delete()
+        .eq('entry_id', entryId)
+        .eq('user_id', state.profile.id);
+      if (error) throw error;
+    } else {
+      const { error } = await db.from('entry_likes')
+        .insert({ entry_id: entryId, user_id: state.profile.id });
+      if (error) throw error;
+    }
+  } catch (err) {
+    console.error('entry like toggle error', err);
+    // Revert on failure
+    if (wasLiked) {
+      state.myEntryLikes.add(entryId);
+      state.entryLikeCounts[entryId] = currentCount;
+    } else {
+      state.myEntryLikes.delete(entryId);
+      state.entryLikeCounts[entryId] = currentCount;
+    }
+    if (btnEl) {
+      btnEl.classList.toggle('liked', wasLiked);
+      const cnt = btnEl.querySelector('.flame-count');
+      if (cnt) cnt.textContent = currentCount;
+    }
+    toast('Like failed');
+  }
 }
 
 function timeAgo(dateStr) {
@@ -4228,6 +4457,13 @@ function renderFeed() {
       if (confirm('Delete this post?')) deletePost(postId);
     });
   });
+  // Wire up post likes
+  c.querySelectorAll('[data-like-post]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      togglePostLike(btn.dataset.likePost, btn);
+    });
+  });
   // Wire up challenge clicks
   c.querySelectorAll('.feed-challenge-card').forEach(card => {
     card.addEventListener('click', () => {
@@ -4248,6 +4484,10 @@ function renderPostCard(p) {
       mediaHtml = `<div class="post-card-media"><img src="${escapeHtml(p.media_url)}" alt="post media" loading="lazy"></div>`;
     }
   }
+  const likeCount = state.postLikeCounts[p.id] || 0;
+  const iLiked = state.myPostLikes.has(p.id);
+  // Can't like your own post
+  const likeBtnAttrs = isMine ? 'disabled aria-label="You can\'t like your own post"' : `data-like-post="${p.id}"`;
   return `
     <div class="post-card" data-pid="${p.id}">
       <div class="post-card-header">
@@ -4260,6 +4500,12 @@ function renderPostCard(p) {
       </div>
       <div class="post-card-content">${escapeHtml(p.content)}</div>
       ${mediaHtml}
+      <div class="post-card-actions">
+        <button class="flame-btn${iLiked ? ' liked' : ''}" ${likeBtnAttrs}>
+          <span class="flame-icon">🔥</span>
+          <span class="flame-count">${likeCount}</span>
+        </button>
+      </div>
     </div>`;
 }
 
@@ -4362,6 +4608,13 @@ document.getElementById('createPostForm').addEventListener('submit', async e => 
   btn.disabled = true;
   const orig = btn.textContent;
 
+  // Timeout wrapper so we never hang forever
+  const withTimeout = (promise, ms, label) =>
+    Promise.race([
+      promise,
+      new Promise((_, rej) => setTimeout(() => rej(new Error(label + ' timed out after ' + (ms/1000) + 's')), ms))
+    ]);
+
   try {
     let mediaUrl = null;
     let mediaType = null;
@@ -4369,30 +4622,36 @@ document.getElementById('createPostForm').addEventListener('submit', async e => 
       btn.textContent = 'Uploading...';
       const ext = (cpState.file.name.split('.').pop() || 'bin').toLowerCase();
       const filename = `posts/${state.profile.id}/${Date.now()}.${ext}`;
-      const { error: uploadError } = await db.storage
-        .from('challenge-media')
-        .upload(filename, cpState.file, { cacheControl: '3600', upsert: false });
-      if (uploadError) throw new Error('Upload failed: ' + uploadError.message);
+      const uploadResp = await withTimeout(
+        db.storage.from('challenge-media').upload(filename, cpState.file, { cacheControl: '3600', upsert: false }),
+        60000, 'Upload'
+      );
+      if (uploadResp.error) throw new Error('Upload failed: ' + uploadResp.error.message);
       const { data: pub } = db.storage.from('challenge-media').getPublicUrl(filename);
       mediaUrl = pub.publicUrl;
       mediaType = cpState.fileType;
     }
 
     btn.textContent = 'Posting...';
-    const { error: insErr } = await db.from('posts').insert({
-      user_id: state.profile.id,
-      content,
-      media_url: mediaUrl,
-      media_type: mediaType,
-    });
-    if (insErr) throw new Error('Post failed: ' + insErr.message);
+    console.log('[post] inserting with user_id=', state.profile?.id, 'content len=', content.length);
+    const insertResp = await withTimeout(
+      db.from('posts').insert({
+        user_id: state.profile.id,
+        content,
+        media_url: mediaUrl,
+        media_type: mediaType,
+      }).select(),
+      15000, 'Insert'
+    );
+    console.log('[post] insert response:', insertResp);
+    if (insertResp.error) throw new Error('Post failed: ' + (insertResp.error.message || JSON.stringify(insertResp.error)));
 
     closeCreatePost();
-    await loadPosts();
-    renderFeed();
+    // Fire-and-forget refresh so button always unlocks fast
+    loadPosts().then(renderFeed).catch(e => console.error('refresh failed', e));
   } catch (err) {
-    console.error(err);
-    showCpError(err.message);
+    console.error('[post] error:', err);
+    showCpError(err.message || 'Something went wrong. Try again.');
   } finally {
     btn.disabled = false;
     btn.textContent = orig;
