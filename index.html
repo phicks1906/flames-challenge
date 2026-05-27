@@ -1552,6 +1552,125 @@ footer .links a:hover { color: var(--ember); }
 }
 .cc-invite-search:focus { outline: none; border-color: var(--ember); }
 
+/* ============ CHALLENGE DETAIL SHEET ============ */
+.cd-sheet {
+  position: fixed; inset: 0; z-index: 240;
+  display: none; background: rgba(0,0,0,0.96);
+  overflow-y: auto;
+}
+.cd-sheet.open { display: block; animation: fadeIn 0.25s ease; }
+.cd-sheet-header {
+  position: fixed; top: 0; left: 0; right: 0;
+  background: rgba(10,7,5,0.95);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 22px;
+  display: flex; align-items: center; gap: 12px;
+  z-index: 1;
+}
+.cd-sheet-header h2 {
+  font-family: var(--font-display);
+  font-size: 20px; text-transform: uppercase;
+  letter-spacing: 0.04em; flex: 1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cd-close {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 22px; line-height: 1;
+  display: grid; place-items: center;
+  cursor: pointer;
+}
+.cd-sheet-inner { max-width: 720px; margin: 0 auto; padding: 78px 18px 60px; }
+.cd-hero {
+  margin-bottom: 24px;
+  padding: 22px;
+  background: linear-gradient(180deg, var(--surface), var(--bg-2));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.cd-status-row {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 10px; margin-bottom: 14px; flex-wrap: wrap;
+}
+.cd-status-row .ch-status { position: static; }
+.cd-countdown { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 13px; color: var(--text-dim); }
+.cd-hero .ch-category { margin-bottom: 6px; }
+.cd-title {
+  font-family: var(--font-display);
+  font-size: clamp(26px, 6vw, 36px);
+  text-transform: uppercase; letter-spacing: 0.01em;
+  line-height: 1.05; margin-bottom: 14px;
+}
+.cd-creator { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text-dim); margin-bottom: 14px; }
+.cd-creator .avatar {
+  width: 30px; height: 30px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: linear-gradient(135deg, var(--ember), var(--coral));
+  font-size: 14px;
+}
+.cd-rules {
+  padding: 12px 14px;
+  background: rgba(255,255,255,0.03);
+  border-left: 3px solid var(--ember);
+  border-radius: 8px; font-size: 14px;
+  line-height: 1.5; color: var(--text-dim);
+}
+.cd-rules strong { color: var(--text); font-weight: 600; }
+.cd-entries-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.cd-entries-header .count { font-family: var(--font-display); font-size: 22px; text-transform: uppercase; letter-spacing: 0.04em; }
+.cd-entries-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+@media (min-width: 600px) { .cd-entries-grid { grid-template-columns: 1fr 1fr; } }
+.cd-entry {
+  background: linear-gradient(180deg, var(--surface), var(--bg-2));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden; position: relative;
+  transition: transform 0.2s, border-color 0.2s;
+}
+.cd-entry.voted { border-color: var(--ember); box-shadow: 0 0 0 1px var(--ember); }
+.cd-entry.winner { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold), 0 8px 30px -10px rgba(255,200,87,0.25); }
+.cd-medal {
+  position: absolute; top: 10px; left: 10px;
+  padding: 5px 12px; border-radius: 100px;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.04em;
+  z-index: 2; backdrop-filter: blur(8px);
+}
+.cd-medal.gold { background: rgba(255,200,87,0.25); color: #ffd97a; border: 1px solid rgba(255,200,87,0.5); }
+.cd-medal.silver { background: rgba(212,212,212,0.2); color: #e8e8e8; border: 1px solid rgba(212,212,212,0.4); }
+.cd-medal.bronze { background: rgba(205,127,50,0.25); color: #f0a060; border: 1px solid rgba(205,127,50,0.4); }
+.cd-entry-media { aspect-ratio: 16 / 11; background: #000; overflow: hidden; position: relative; }
+.cd-entry-media img, .cd-entry-media video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cd-audio-wrap { padding: 24px 16px; background: linear-gradient(135deg, #1a1410, #0a0805); display: flex; align-items: center; height: 100%; }
+.cd-audio-wrap audio { width: 100%; }
+.cd-text-entry { padding: 20px 18px; background: linear-gradient(135deg, #1a1410, #0a0805); font-family: var(--font-bricolage); font-size: 16px; line-height: 1.5; color: var(--text); min-height: 140px; display: flex; align-items: center; }
+.cd-entry-body { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.cd-entry-submitter { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); font-weight: 600; }
+.cd-entry-submitter .avatar {
+  width: 24px; height: 24px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: linear-gradient(135deg, var(--ember), var(--coral));
+  font-size: 12px;
+}
+.cd-entry-caption { color: var(--text-dim); font-size: 14px; line-height: 1.45; }
+.cd-entry-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-top: 10px; border-top: 1px solid var(--border); }
+.cd-entry-tag {
+  font-size: 11px; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.1em;
+  font-weight: 700; padding: 4px 10px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 100px;
+}
+.cd-vote-count { font-family: var(--font-display); font-size: 18px; color: var(--gold); letter-spacing: 0.02em; }
+.cd-vote-count-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-left: 4px; }
+.btn-vote { padding: 8px 16px; font-size: 13px; border-radius: 100px; cursor: pointer; font-family: inherit; font-weight: 600; transition: all 0.15s; }
+.btn-vote.not-voted { background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--text); }
+.btn-vote.not-voted:hover { background: rgba(255,107,53,0.12); border-color: var(--ember); }
+.btn-vote.is-voted { background: linear-gradient(135deg, var(--ember), var(--flame)); border: 1px solid transparent; color: white; box-shadow: 0 4px 14px -4px rgba(255,80,30,0.5); }
+
 </style>
 </head>
 <body>
@@ -1871,6 +1990,56 @@ footer .links a:hover { color: var(--ember); }
 
       <div class="cc-submit-area">
         <button type="submit" class="btn btn-primary" style="width:100%">🔥 Light it up</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- CHALLENGE DETAIL SHEET -->
+<div class="cd-sheet" id="challengeDetailSheet">
+  <div class="cd-sheet-header">
+    <button class="cd-close" onclick="closeChallengeDetail()" aria-label="Close">×</button>
+    <h2 id="cdHeaderTitle">Challenge</h2>
+  </div>
+  <div class="cd-sheet-inner">
+    <div class="cd-hero" id="cdHero"></div>
+    <div class="cd-entries-header">
+      <span class="count" id="cdEntriesCount">0 entries</span>
+      <button class="btn btn-primary" id="cdAddEntryBtn" onclick="openSubmitEntry()" style="display:none">+ Submit your entry</button>
+    </div>
+    <div class="cd-entries-grid" id="cdEntriesGrid"></div>
+  </div>
+</div>
+
+<!-- SUBMIT ENTRY SHEET -->
+<div class="cc-sheet" id="submitEntrySheet">
+  <div class="cc-sheet-header">
+    <button class="cc-close" onclick="closeSubmitEntry()" aria-label="Close">×</button>
+    <h2>Your Entry</h2>
+  </div>
+  <div class="cc-sheet-inner">
+    <form id="submitEntryForm" class="cc-form">
+      <div class="cc-field" id="seUploadField">
+        <label>Your <span id="seMediaTypeLabel">photo</span></label>
+        <div class="cc-upload" id="seUploadZone" onclick="document.getElementById('seFile').click()">
+          <div class="icon">📤</div>
+          <div class="text">Tap to upload</div>
+          <div class="upload-hint">Max 50MB</div>
+        </div>
+        <input type="file" id="seFile" class="cc-file-input" />
+        <div class="cc-preview" id="sePreview" style="display:none"></div>
+      </div>
+      <div class="cc-field" id="seTextField" style="display:none">
+        <label for="seTextEntry">Your text entry</label>
+        <textarea id="seTextEntry" maxlength="500" placeholder="Write your entry..."></textarea>
+      </div>
+      <div class="cc-field" id="seCaptionField">
+        <label for="seCaption">Caption <span class="hint">(optional)</span></label>
+        <input id="seCaption" type="text" maxlength="120" placeholder="Add a caption..." />
+      </div>
+      <div id="seError" class="auth-error"></div>
+      <div class="cc-submit-area">
+        <button type="submit" class="btn btn-primary" style="width:100%">🔥 Submit entry</button>
       </div>
     </form>
   </div>
@@ -3129,9 +3298,331 @@ function renderChallenges() {
   });
 }
 
-function openChallenge(ch) {
-  toast('Full challenge view coming in Phase 3');
+/* =========================================================
+   Phase 3 — CHALLENGE DETAIL, ENTRIES, VOTING
+========================================================= */
+
+state.currentChallenge = null;
+state.currentEntries = [];
+state.currentVotes = [];
+state.myCurrentVote = null;
+
+let seState = {
+  file: null,
+  fileUrl: null,
+};
+
+async function openChallenge(ch) {
+  state.currentChallenge = ch;
+  document.getElementById('cdHeaderTitle').textContent = ch.title;
+  document.getElementById('cdEntriesGrid').innerHTML = '<div class="empty-state-mini" style="grid-column:1/-1">Loading...</div>';
+  document.getElementById('challengeDetailSheet').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  await loadChallengeDetail(ch.id);
+  renderChallengeDetail();
 }
+
+function closeChallengeDetail() {
+  document.getElementById('challengeDetailSheet').classList.remove('open');
+  document.body.style.overflow = '';
+  state.currentChallenge = null;
+  state.currentEntries = [];
+  state.currentVotes = [];
+  state.myCurrentVote = null;
+}
+
+async function loadChallengeDetail(challengeId) {
+  const { data: entries, error: entriesErr } = await db.from('entries')
+    .select('*, submitter:profiles!entries_user_id_fkey(id, name, avatar)')
+    .eq('challenge_id', challengeId);
+  if (entriesErr) {
+    console.error('entries load error', entriesErr);
+    state.currentEntries = [];
+  } else {
+    state.currentEntries = entries || [];
+  }
+  const { data: votes, error: votesErr } = await db.from('entry_votes')
+    .select('id, entry_id, voter_id')
+    .eq('challenge_id', challengeId);
+  if (votesErr) {
+    console.error('votes load error', votesErr);
+    state.currentVotes = [];
+  } else {
+    state.currentVotes = votes || [];
+  }
+  state.myCurrentVote = state.profile
+    ? (state.currentVotes.find(v => v.voter_id === state.profile.id)?.entry_id || null)
+    : null;
+}
+
+function renderChallengeDetail() {
+  const ch = state.currentChallenge;
+  if (!ch) return;
+
+  const status = computeChallengeStatus(ch);
+  const statusLabel = { submitting:'Submitting', voting:'Voting', closed:'Closed', voided:'Voided' }[status];
+  const countdownTarget = status === 'submitting' ? ch.submission_deadline : status === 'voting' ? ch.voting_end : null;
+
+  // Hero
+  document.getElementById('cdHero').innerHTML = `
+    <div class="cd-status-row">
+      <span class="ch-status ${status}"><span class="dot"></span>${statusLabel}</span>
+      ${countdownTarget ? `<span class="cd-countdown">⏱ ${formatCountdown(countdownTarget)}</span>` : ''}
+    </div>
+    <div class="ch-category">${escapeHtml(ch.category)}${ch.is_public ? '' : ' · 🔒 Private'}</div>
+    <h1 class="cd-title">${escapeHtml(ch.title)}</h1>
+    <div class="cd-creator">
+      <div class="avatar">${escapeHtml(ch.creator?.avatar || '🔥')}</div>
+      <span>by ${escapeHtml(ch.creator?.name || 'Unknown')}</span>
+    </div>
+    ${ch.rules ? `<div class="cd-rules"><strong>Rules:</strong> ${escapeHtml(ch.rules)}</div>` : ''}
+  `;
+
+  // Submit button visibility
+  const userHasEntered = state.profile && state.currentEntries.some(e => e.user_id === state.profile.id);
+  const canEnter = status === 'submitting' && !userHasEntered && state.profile;
+  document.getElementById('cdAddEntryBtn').style.display = canEnter ? 'inline-flex' : 'none';
+
+  // Entry count + grid
+  document.getElementById('cdEntriesCount').textContent = `${state.currentEntries.length} ${state.currentEntries.length === 1 ? 'entry' : 'entries'}`;
+
+  const voteCountByEntry = {};
+  state.currentVotes.forEach(v => { voteCountByEntry[v.entry_id] = (voteCountByEntry[v.entry_id] || 0) + 1; });
+
+  const isClosed = status === 'closed';
+  const sortedEntries = [...state.currentEntries].sort((a, b) => {
+    if (isClosed) {
+      const diff = (voteCountByEntry[b.id] || 0) - (voteCountByEntry[a.id] || 0);
+      if (diff !== 0) return diff;
+      return new Date(a.created_at) - new Date(b.created_at); // earlier wins ties
+    }
+    return new Date(a.created_at) - new Date(b.created_at);
+  });
+
+  const grid = document.getElementById('cdEntriesGrid');
+  if (sortedEntries.length === 0) {
+    grid.innerHTML = '<div class="empty-state-mini" style="grid-column:1/-1">No entries yet. Be the first!</div>';
+    return;
+  }
+
+  grid.innerHTML = sortedEntries.map((entry, idx) => {
+    const isMyEntry = state.profile && entry.user_id === state.profile.id;
+    const voteCount = voteCountByEntry[entry.id] || 0;
+    const iVoted = state.myCurrentVote === entry.id;
+
+    let medalBadge = '';
+    let winnerClass = '';
+    if (isClosed && voteCount > 0 && state.currentEntries.length > 1) {
+      if (idx === 0) { medalBadge = '<div class="cd-medal gold">🥇 1st</div>'; winnerClass = ' winner'; }
+      else if (idx === 1) { medalBadge = '<div class="cd-medal silver">🥈 2nd</div>'; }
+      else if (idx === 2) { medalBadge = '<div class="cd-medal bronze">🥉 3rd</div>'; }
+    }
+
+    let mediaHtml = '';
+    if (entry.media_type === 'photo' && entry.media_url) {
+      mediaHtml = `<img src="${entry.media_url}" alt="" loading="lazy">`;
+    } else if (entry.media_type === 'video' && entry.media_url) {
+      mediaHtml = `<video src="${entry.media_url}" controls preload="metadata"></video>`;
+    } else if (entry.media_type === 'audio' && entry.media_url) {
+      mediaHtml = `<div class="cd-audio-wrap"><audio src="${entry.media_url}" controls></audio></div>`;
+    } else if (entry.media_type === 'text') {
+      mediaHtml = `<div class="cd-text-entry">${escapeHtml(entry.caption || '')}</div>`;
+    }
+
+    let actionsHtml = '';
+    if (status === 'voting') {
+      if (isMyEntry) {
+        actionsHtml = '<span class="cd-entry-tag">Your entry</span>';
+      } else if (state.profile) {
+        actionsHtml = `<button class="btn-vote ${iVoted ? 'is-voted' : 'not-voted'}" data-vote-entry="${entry.id}">${iVoted ? '✓ Voted' : '🔥 Vote'}</button>`;
+      }
+    } else if (isClosed) {
+      actionsHtml = `<span><span class="cd-vote-count">${voteCount}</span><span class="cd-vote-count-label">${voteCount === 1 ? 'vote' : 'votes'}</span></span>`;
+    } else if (status === 'submitting' && isMyEntry) {
+      actionsHtml = '<span class="cd-entry-tag">Your entry</span>';
+    }
+
+    return `
+      <div class="cd-entry${iVoted ? ' voted' : ''}${winnerClass}">
+        ${medalBadge}
+        <div class="cd-entry-media">${mediaHtml}</div>
+        <div class="cd-entry-body">
+          <div class="cd-entry-submitter">
+            <div class="avatar">${escapeHtml(entry.submitter?.avatar || '🔥')}</div>
+            <span>${escapeHtml(entry.submitter?.name || 'Unknown')}${isMyEntry ? ' (you)' : ''}</span>
+          </div>
+          ${entry.media_type !== 'text' && entry.caption ? `<div class="cd-entry-caption">${escapeHtml(entry.caption)}</div>` : ''}
+          ${actionsHtml ? `<div class="cd-entry-actions">${actionsHtml}</div>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Attach vote handlers
+  grid.querySelectorAll('[data-vote-entry]').forEach(btn => {
+    btn.addEventListener('click', () => voteOnEntry(btn.dataset.voteEntry));
+  });
+}
+
+async function voteOnEntry(entryId) {
+  if (!state.profile || !state.currentChallenge) return;
+  if (state.myCurrentVote === entryId) return;
+
+  const challengeId = state.currentChallenge.id;
+  const previousVote = state.myCurrentVote;
+
+  try {
+    if (previousVote) {
+      const { error: delErr } = await db.from('entry_votes')
+        .delete()
+        .eq('challenge_id', challengeId)
+        .eq('voter_id', state.profile.id);
+      if (delErr) throw delErr;
+    }
+    const { error: insErr } = await db.from('entry_votes').insert({
+      challenge_id: challengeId,
+      entry_id: entryId,
+      voter_id: state.profile.id,
+    });
+    if (insErr) throw insErr;
+
+    await loadChallengeDetail(challengeId);
+    renderChallengeDetail();
+    toast(previousVote ? '🔥 Vote changed' : '🔥 Vote cast');
+  } catch (err) {
+    console.error('vote error', err);
+    toast('Vote failed: ' + (err.message || 'unknown'));
+  }
+}
+
+/* ---------- SUBMIT ENTRY ---------- */
+function openSubmitEntry() {
+  const ch = state.currentChallenge;
+  if (!ch) return;
+  // Reset form
+  document.getElementById('submitEntryForm').reset();
+  clearSubmitEntryPreview();
+  document.getElementById('seError').classList.remove('show');
+
+  const isText = ch.media_type === 'text';
+  document.getElementById('seUploadField').style.display = isText ? 'none' : 'block';
+  document.getElementById('seTextField').style.display = isText ? 'block' : 'none';
+  document.getElementById('seCaptionField').style.display = isText ? 'none' : 'block';
+
+  const label = { photo: 'photo', video: 'video', audio: 'audio', text: 'text' }[ch.media_type] || 'entry';
+  document.getElementById('seMediaTypeLabel').textContent = label;
+  const fileInput = document.getElementById('seFile');
+  if (ch.media_type === 'photo') fileInput.accept = 'image/*';
+  else if (ch.media_type === 'video') fileInput.accept = 'video/*';
+  else if (ch.media_type === 'audio') fileInput.accept = 'audio/*';
+
+  document.getElementById('submitEntrySheet').classList.add('open');
+}
+
+function closeSubmitEntry() {
+  document.getElementById('submitEntrySheet').classList.remove('open');
+  clearSubmitEntryPreview();
+}
+
+function clearSubmitEntryPreview() {
+  if (seState.fileUrl) URL.revokeObjectURL(seState.fileUrl);
+  seState.file = null;
+  seState.fileUrl = null;
+  const preview = document.getElementById('sePreview');
+  preview.style.display = 'none';
+  preview.innerHTML = '';
+  document.getElementById('seFile').value = '';
+  document.getElementById('seUploadZone').classList.remove('has-file');
+}
+
+document.getElementById('seFile').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.size > 50 * 1024 * 1024) {
+    document.getElementById('seError').textContent = 'File too large. Max 50MB.';
+    document.getElementById('seError').classList.add('show');
+    e.target.value = '';
+    return;
+  }
+  document.getElementById('seError').classList.remove('show');
+  seState.file = file;
+  seState.fileUrl = URL.createObjectURL(file);
+  const ch = state.currentChallenge;
+  const preview = document.getElementById('sePreview');
+  let mediaEl = '';
+  if (ch.media_type === 'photo') mediaEl = `<img src="${seState.fileUrl}" alt="Preview">`;
+  else if (ch.media_type === 'video') mediaEl = `<video src="${seState.fileUrl}" controls></video>`;
+  else if (ch.media_type === 'audio') mediaEl = `<div style="padding:16px;background:#0a0805"><audio src="${seState.fileUrl}" controls style="width:100%"></audio></div>`;
+  preview.innerHTML = mediaEl + `
+    <div class="cc-preview-info">
+      <span>${escapeHtml(file.name)} · ${(file.size/1024/1024).toFixed(1)} MB</span>
+      <button type="button" class="cc-preview-remove" onclick="clearSubmitEntryPreview()">Remove</button>
+    </div>
+  `;
+  preview.style.display = 'block';
+  document.getElementById('seUploadZone').classList.add('has-file');
+});
+
+document.getElementById('submitEntryForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const ch = state.currentChallenge;
+  if (!ch || !state.profile) return;
+  const errBox = document.getElementById('seError');
+  errBox.classList.remove('show');
+
+  const caption = document.getElementById('seCaption').value.trim();
+  const textEntry = document.getElementById('seTextEntry').value.trim();
+
+  if (ch.media_type === 'text' && !textEntry) {
+    errBox.textContent = 'Write something.'; errBox.classList.add('show'); return;
+  }
+  if (ch.media_type !== 'text' && !seState.file) {
+    errBox.textContent = 'Upload your ' + ch.media_type + '.'; errBox.classList.add('show'); return;
+  }
+  if (new Date(ch.submission_deadline) <= new Date()) {
+    errBox.textContent = 'Submission deadline has passed.'; errBox.classList.add('show'); return;
+  }
+
+  const btn = e.target.querySelector('button[type="submit"]');
+  btn.disabled = true; const orig = btn.textContent;
+
+  try {
+    let mediaUrl = null;
+    if (ch.media_type !== 'text') {
+      btn.textContent = 'Uploading...';
+      const ext = (seState.file.name.split('.').pop() || 'bin').toLowerCase();
+      const filename = `${state.profile.id}/${Date.now()}.${ext}`;
+      const { error: uploadError } = await db.storage
+        .from('challenge-media')
+        .upload(filename, seState.file, { cacheControl: '3600', upsert: false });
+      if (uploadError) throw new Error('Upload failed: ' + uploadError.message);
+      const { data: pub } = db.storage.from('challenge-media').getPublicUrl(filename);
+      mediaUrl = pub.publicUrl;
+    }
+    btn.textContent = 'Submitting...';
+    const { error: entryError } = await db.from('entries').insert({
+      challenge_id: ch.id,
+      user_id: state.profile.id,
+      media_url: mediaUrl,
+      media_type: ch.media_type,
+      caption: ch.media_type === 'text' ? textEntry : (caption || null),
+    });
+    if (entryError) throw new Error('Submit failed: ' + entryError.message);
+
+    toast('🔥 Entry submitted!');
+    closeSubmitEntry();
+    await loadChallengeDetail(ch.id);
+    renderChallengeDetail();
+    // Also refresh the main challenges list since entry counts changed
+    await loadChallenges();
+  } catch (err) {
+    console.error(err);
+    errBox.textContent = err.message;
+    errBox.classList.add('show');
+  } finally {
+    btn.disabled = false; btn.textContent = orig;
+  }
+});
 
 function startCountdownTimer() {
   if (countdownTimer) clearInterval(countdownTimer);
