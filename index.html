@@ -1515,6 +1515,43 @@ footer .links a:hover { color: var(--ember); }
   text-transform: uppercase;
 }
 
+.cc-section-label {
+  font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--text-muted);
+  font-weight: 700; margin-bottom: 8px;
+}
+.cc-groups-list {
+  display: flex; flex-direction: column; gap: 6px;
+  max-height: 180px; overflow-y: auto;
+}
+.cc-group-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 10px; cursor: pointer;
+  transition: all 0.15s;
+}
+.cc-group-row:has(input:checked) {
+  background: rgba(255,107,53,0.1);
+  border-color: rgba(255,107,53,0.4);
+}
+.cc-group-row input[type="checkbox"] {
+  width: 20px; height: 20px;
+  accent-color: var(--ember);
+  flex-shrink: 0; cursor: pointer;
+}
+.cc-group-info { flex: 1; min-width: 0; }
+.cc-group-name { color: var(--text); font-weight: 600; font-size: 14px; }
+.cc-group-count { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
+.cc-invite-search {
+  width: 100%; padding: 12px 14px;
+  background: var(--bg-2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text);
+  font-family: inherit; font-size: 16px;
+}
+.cc-invite-search:focus { outline: none; border-color: var(--ember); }
+
 </style>
 </head>
 <body>
@@ -1813,6 +1850,21 @@ footer .links a:hover { color: var(--ember); }
           <button type="button" class="cc-pill selected" data-vis="public">🌎 Public</button>
           <button type="button" class="cc-pill" data-vis="private">🔒 Private</button>
         </div>
+      </div>
+
+      <!-- Invite section (only when private) -->
+      <div class="cc-field" id="ccInviteField" style="display:none">
+        <label>Who can see this? <span class="hint">(pick groups, individuals, or both)</span></label>
+
+        <div class="cc-section-label">Your groups</div>
+        <div class="cc-groups-list" id="ccGroupsList"></div>
+
+        <div class="cc-section-label" style="margin-top:14px">Add individuals</div>
+        <input id="ccInviteSearch" type="text" placeholder="Search by handle..." autocomplete="off" class="cc-invite-search" />
+        <div class="ge-search-results" id="ccInviteResults"></div>
+
+        <div class="cc-section-label" style="margin-top:14px">Will be invited <span id="ccInviteCount"></span></div>
+        <div class="ge-members" id="ccInviteesList"></div>
       </div>
 
       <div id="ccError" class="auth-error"></div>
@@ -2762,6 +2814,7 @@ document.querySelectorAll('#ccVisPills .cc-pill').forEach(p => {
     ccState.visibility = p.dataset.vis;
     document.querySelectorAll('#ccVisPills .cc-pill').forEach(x => x.classList.remove('selected'));
     p.classList.add('selected');
+    document.getElementById('ccInviteField').style.display = ccState.visibility === 'private' ? 'block' : 'none';
   });
 });
 
@@ -2806,13 +2859,22 @@ function toDatetimeLocal(date) {
   return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-function openCreateChallenge() {
+async function openCreateChallenge() {
   if (!state.profile) return;
   const now = new Date();
   const subClose = new Date(now.getTime() + 3*24*60*60*1000);
   const voteEnd = new Date(now.getTime() + 7*24*60*60*1000);
   document.getElementById('ccSubDeadline').value = toDatetimeLocal(subClose);
   document.getElementById('ccVotingEnd').value = toDatetimeLocal(voteEnd);
+  // Reset invite state and load groups for the picker
+  ccInviteState.selectedGroupIds = new Set();
+  ccInviteState.individuals = new Map();
+  document.getElementById('ccInviteSearch').value = '';
+  document.getElementById('ccInviteResults').innerHTML = '';
+  document.getElementById('ccInviteField').style.display = ccState.visibility === 'private' ? 'block' : 'none';
+  await loadGroups();
+  renderInviteGroups();
+  renderInvitees();
   document.getElementById('createChallengeSheet').classList.add('open');
   document.body.style.overflow = 'hidden';
 }
@@ -2833,6 +2895,12 @@ function closeCreateChallenge() {
   document.getElementById('ccTextField').style.display = 'none';
   document.getElementById('ccCaptionField').style.display = 'block';
   document.getElementById('ccError').classList.remove('show');
+  // Reset invite state
+  ccInviteState.selectedGroupIds = new Set();
+  ccInviteState.individuals = new Map();
+  document.getElementById('ccInviteField').style.display = 'none';
+  document.getElementById('ccInviteSearch').value = '';
+  document.getElementById('ccInviteResults').innerHTML = '';
 }
 
 function showCcError(msg) {
@@ -2859,6 +2927,13 @@ document.getElementById('createChallengeForm').addEventListener('submit', async 
   if (new Date(subDeadline) <= new Date()) return showCcError('Submission deadline must be in the future.');
   if (ccState.mediaType === 'text' && !textEntry) return showCcError('Add your text entry.');
   if (ccState.mediaType !== 'text' && !ccState.file) return showCcError('Upload your entry.');
+
+  // Validate private has at least 1 invitee
+  let invitees = [];
+  if (ccState.visibility === 'private') {
+    invitees = computeInvitees();
+    if (invitees.length === 0) return showCcError('Private challenges need at least 1 invitee.');
+  }
 
   const btn = e.target.querySelector('button[type="submit"]');
   btn.disabled = true;
@@ -2902,7 +2977,15 @@ document.getElementById('createChallengeForm').addEventListener('submit', async 
     });
     if (entryError) throw new Error('Entry create failed: ' + entryError.message);
 
-    toast('🔥 Challenge created!');
+    // Insert invites if private
+    if (ccState.visibility === 'private' && invitees.length > 0) {
+      btn.textContent = 'Sending invites...';
+      const inviteRows = invitees.map(i => ({ challenge_id: chData.id, invited_user_id: i.id }));
+      const { error: inviteError } = await db.from('challenge_invites').insert(inviteRows);
+      if (inviteError) throw new Error('Invite creation failed: ' + inviteError.message);
+    }
+
+    toast(ccState.visibility === 'private' ? `🔥 Private challenge created — ${invitees.length} invited` : '🔥 Challenge created!');
     closeCreateChallenge();
     await loadChallenges();
     state.cFilter = 'mine';
@@ -3299,6 +3382,146 @@ async function deleteCurrentGroup() {
   renderGroupsList();
   toast('Group deleted');
 }
+
+/* =========================================================
+   PRIVATE INVITES — Phase 2.5b
+========================================================= */
+
+let ccInviteState = {
+  selectedGroupIds: new Set(),
+  individuals: new Map(), // userId -> {id, name, avatar}
+  searchTimer: null,
+};
+
+function computeInvitees() {
+  // Start with individuals
+  const map = new Map();
+  ccInviteState.individuals.forEach((v, k) => map.set(k, v));
+  // Add members from selected groups
+  ccInviteState.selectedGroupIds.forEach(gid => {
+    const group = groupsState.groups.find(g => g.id === gid);
+    if (!group) return;
+    (group.members || []).forEach(m => {
+      if (m.profile && !map.has(m.profile.id)) {
+        map.set(m.profile.id, { id: m.profile.id, name: m.profile.name, avatar: m.profile.avatar });
+      }
+    });
+  });
+  // Never invite yourself
+  if (state.profile) map.delete(state.profile.id);
+  return Array.from(map.values());
+}
+
+function renderInviteGroups() {
+  const list = document.getElementById('ccGroupsList');
+  if (!list) return;
+  if (!groupsState.groups || groupsState.groups.length === 0) {
+    list.innerHTML = '<div class="empty-state-mini">No groups yet. Create one from your profile menu.</div>';
+    return;
+  }
+  list.innerHTML = groupsState.groups.map(g => {
+    const count = (g.members || []).length;
+    const isChecked = ccInviteState.selectedGroupIds.has(g.id);
+    return `
+      <label class="cc-group-row">
+        <input type="checkbox" data-gid="${escapeHtml(g.id)}" ${isChecked ? 'checked' : ''}>
+        <div class="cc-group-info">
+          <div class="cc-group-name">${escapeHtml(g.name)}</div>
+          <div class="cc-group-count">${count} member${count === 1 ? '' : 's'}</div>
+        </div>
+      </label>
+    `;
+  }).join('');
+  list.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('change', (e) => {
+      const gid = e.target.dataset.gid;
+      if (e.target.checked) ccInviteState.selectedGroupIds.add(gid);
+      else ccInviteState.selectedGroupIds.delete(gid);
+      renderInvitees();
+    });
+  });
+}
+
+function renderInvitees() {
+  const list = document.getElementById('ccInviteesList');
+  const countEl = document.getElementById('ccInviteCount');
+  if (!list) return;
+  const invitees = computeInvitees();
+  if (countEl) countEl.textContent = invitees.length > 0 ? `(${invitees.length})` : '';
+  if (invitees.length === 0) {
+    list.innerHTML = '<div class="empty-state-mini" style="width:100%">Nobody yet — pick a group or add individuals</div>';
+    return;
+  }
+  list.innerHTML = invitees.map(m => {
+    const isIndividual = ccInviteState.individuals.has(m.id);
+    return `
+      <div class="member-chip">
+        <span class="member-chip-avatar">${escapeHtml(m.avatar || '🔥')}</span>
+        <span class="member-chip-name">${escapeHtml(m.name)}</span>
+        ${isIndividual ? `<button class="member-chip-remove" data-uid="${escapeHtml(m.id)}" aria-label="Remove">×</button>` : ''}
+      </div>
+    `;
+  }).join('');
+  list.querySelectorAll('.member-chip-remove').forEach(btn => {
+    btn.addEventListener('click', () => {
+      ccInviteState.individuals.delete(btn.dataset.uid);
+      renderInvitees();
+    });
+  });
+}
+
+// Individual search inside Create Challenge
+document.getElementById('ccInviteSearch').addEventListener('input', (e) => {
+  clearTimeout(ccInviteState.searchTimer);
+  const query = e.target.value.trim();
+  const wrap = document.getElementById('ccInviteResults');
+  if (query.length < 2) { wrap.innerHTML = ''; return; }
+  wrap.innerHTML = '<div class="empty-state-mini">Searching...</div>';
+  ccInviteState.searchTimer = setTimeout(async () => {
+    if (!state.profile || !state.profile.id) {
+      wrap.innerHTML = '<div class="empty-state-mini" style="color:#ff6b7a">Profile not loaded</div>';
+      return;
+    }
+    try {
+      const { data, error } = await db.from('profiles')
+        .select('id, name, avatar')
+        .ilike('name', `%${query}%`)
+        .neq('id', state.profile.id)
+        .limit(8);
+      if (error) {
+        wrap.innerHTML = `<div class="empty-state-mini" style="color:#ff6b7a">Error: ${escapeHtml(error.message)}</div>`;
+        return;
+      }
+      const invitees = computeInvitees();
+      const alreadyIn = new Set(invitees.map(i => i.id));
+      const results = (data || []).filter(p => !alreadyIn.has(p.id));
+      if (results.length === 0) {
+        wrap.innerHTML = `<div class="empty-state-mini">No new matches for "${escapeHtml(query)}"</div>`;
+        return;
+      }
+      wrap.innerHTML = results.map(p => `
+        <div class="search-result" data-uid="${escapeHtml(p.id)}" data-uname="${escapeHtml(p.name)}" data-uavatar="${escapeHtml(p.avatar || '🔥')}">
+          <span class="search-result-avatar">${escapeHtml(p.avatar || '🔥')}</span>
+          <span class="search-result-name">${escapeHtml(p.name)}</span>
+        </div>
+      `).join('');
+      wrap.querySelectorAll('.search-result').forEach(el => {
+        el.addEventListener('click', () => {
+          ccInviteState.individuals.set(el.dataset.uid, {
+            id: el.dataset.uid,
+            name: el.dataset.uname,
+            avatar: el.dataset.uavatar,
+          });
+          document.getElementById('ccInviteSearch').value = '';
+          wrap.innerHTML = '';
+          renderInvitees();
+        });
+      });
+    } catch (err) {
+      wrap.innerHTML = `<div class="empty-state-mini" style="color:#ff6b7a">Threw: ${escapeHtml(err.message || String(err))}</div>`;
+    }
+  }, 300);
+});
 
 /* ---------- BOOT ---------- */
 // Fire-and-forget warm-up ping to wake Supabase up before the user does anything
