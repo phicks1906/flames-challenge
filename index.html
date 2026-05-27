@@ -17,6 +17,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet" />
 
+<!-- Supabase JS SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <style>
 :root {
   --bg: #000000;
@@ -1129,50 +1132,71 @@ footer .links a:hover { color: var(--ember); }
 })();
 
 /* =========================================================
-   FlamesChallenge — voting app
+   FlamesChallenge — Supabase-powered voting app
 ========================================================= */
+
+const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
+const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const AVATARS = ["🔥","⚡","🦊","🐺","🦅","🐉","🦁","🐯","🦈","🐧","🐙","🦉","🦄","🐝","🦖","🐢","🦋","🌶️","⭐","💎","🎯","🎲","🚀","👑"];
 
-const SEED_POLLS = [
-  { id:"p1", category:"trending", question:"Should social media platforms verify all users with real ID?", options:[{label:"Yes — accountability matters",votes:1247},{label:"No — anonymity is a right",votes:1893}], hours:14 },
-  { id:"p2", category:"trending", question:"Is AI making us smarter or lazier?", options:[{label:"Smarter — it's a tool",votes:892},{label:"Lazier — we're outsourcing thinking",votes:1456},{label:"Both, honestly",votes:2104}], hours:6 },
-  { id:"p3", category:"trending", question:"Best pizza topping of all time?", options:[{label:"Pepperoni",votes:3421},{label:"Mushroom",votes:1102},{label:"Pineapple (fight me)",votes:2089},{label:"Just cheese",votes:1567}], hours:22 },
-  { id:"p4", category:"trending", question:"Remote work forever, or back to the office?", options:[{label:"Fully remote",votes:2891},{label:"Hybrid",votes:3204},{label:"In-office daily",votes:412}], hours:31 },
-  { id:"p5", category:"local", question:"Should the city add more protected bike lanes downtown?", options:[{label:"Yes — overdue",votes:734},{label:"No — bad for traffic",votes:481}], hours:8 },
-  { id:"p6", category:"local", question:"Best new restaurant opening this year?", options:[{label:"The Smokehouse",votes:312},{label:"Sakura Ramen",votes:489},{label:"Bodega Verde",votes:267},{label:"Pier 14",votes:198}], hours:48 },
-  { id:"p7", category:"local", question:"Should short-term rentals (Airbnb) be limited in the city?", options:[{label:"Yes — protect housing",votes:892},{label:"No — let owners choose",votes:567}], hours:18 },
-  { id:"p8", category:"national", question:"Should the U.S. adopt a 4-day work week as standard?", options:[{label:"Yes",votes:8421},{label:"No",votes:2987},{label:"Only for some industries",votes:4102}], hours:36 },
-  { id:"p9", category:"national", question:"End daylight savings time?", options:[{label:"Keep permanent standard time",votes:6234},{label:"Keep permanent DST",votes:4891},{label:"Leave it alone",votes:1203}], hours:60 },
-  { id:"p10", category:"national", question:"Voting age — should it be lowered to 16?", options:[{label:"Yes",votes:2104},{label:"No, keep at 18",votes:5891},{label:"Raise it",votes:687}], hours:42 },
-];
+let state = {
+  userId: null,            // localStorage-persisted UUID for this device
+  user: null,              // {id, name, avatar, points, streak}
+  polls: [],               // from DB
+  voteCountsByPoll: {},    // {pollId: {optionIdx: realVoteCount}}
+  myVotes: {},             // {pollId: optionIdx}
+  leaders: [],             // top 10 users
+  filter: "trending",
+  loading: true,
+};
 
-const SEED_LEADERS = [
-  { name:"Maya R.", avatar:"🐉", points:2840, streak:14 },
-  { name:"Jordan K.", avatar:"⚡", points:2615, streak:9 },
-  { name:"Sam Q.", avatar:"🦅", points:2401, streak:11 },
-  { name:"Riley T.", avatar:"🐺", points:2087, streak:6 },
-  { name:"Avery L.", avatar:"🦊", points:1956, streak:7 },
-  { name:"Casey P.", avatar:"🐙", points:1842, streak:4 },
-  { name:"Drew S.", avatar:"🦁", points:1704, streak:5 },
-];
+/* ---------- INIT ---------- */
+async function init() {
+  state.userId = localStorage.getItem("fc_user_id");
 
-let state = { user: null, polls: [], filter: "trending" };
+  // Load polls + counts + leaderboard in parallel
+  const [pollsRes, votesRes, leadersRes] = await Promise.all([
+    db.from('polls').select('*').order('created_at', { ascending: true }),
+    db.from('votes').select('poll_id, option_index, user_id'),
+    db.from('users').select('*').order('points', { ascending: false }).limit(10),
+  ]);
 
-function load() {
-  try {
-    const u = localStorage.getItem("fc_user");
-    if (u) state.user = JSON.parse(u);
-    const p = localStorage.getItem("fc_polls");
-    state.polls = p ? JSON.parse(p) : structuredClone(SEED_POLLS);
-  } catch(e) { state.polls = structuredClone(SEED_POLLS); }
+  if (pollsRes.error) { console.error('polls error', pollsRes.error); }
+  if (votesRes.error) { console.error('votes error', votesRes.error); }
+  if (leadersRes.error) { console.error('leaders error', leadersRes.error); }
+
+  state.polls = pollsRes.data || [];
+  state.leaders = leadersRes.data || [];
+
+  // Aggregate vote counts client-side
+  state.voteCountsByPoll = {};
+  (votesRes.data || []).forEach(v => {
+    if (!state.voteCountsByPoll[v.poll_id]) state.voteCountsByPoll[v.poll_id] = {};
+    state.voteCountsByPoll[v.poll_id][v.option_index] = (state.voteCountsByPoll[v.poll_id][v.option_index] || 0) + 1;
+    // Also track this user's votes
+    if (state.userId && v.user_id === state.userId) {
+      state.myVotes[v.poll_id] = v.option_index;
+    }
+  });
+
+  // Fetch user profile if we have an ID
+  if (state.userId) {
+    const { data: u } = await db.from('users').select('*').eq('id', state.userId).maybeSingle();
+    if (u) state.user = u;
+    else { localStorage.removeItem("fc_user_id"); state.userId = null; }
+  }
+
+  state.loading = false;
+  renderUserChip();
+  renderPolls();
+  renderLeaderboard();
 }
-function save() {
-  if (state.user) localStorage.setItem("fc_user", JSON.stringify(state.user));
-  localStorage.setItem("fc_polls", JSON.stringify(state.polls));
-}
 
+/* ---------- ONBOARDING ---------- */
 let pickedAvatar = AVATARS[0];
+
 function openOnboarding() {
   const picker = document.getElementById("avatarPicker");
   picker.innerHTML = "";
@@ -1191,20 +1215,43 @@ function openOnboarding() {
   setTimeout(() => document.getElementById("nameInput").focus(), 100);
 }
 
-function completeOnboarding() {
+async function completeOnboarding() {
   const name = document.getElementById("nameInput").value.trim();
   if (!name) { document.getElementById("nameInput").focus(); return; }
-  state.user = { name, avatar: pickedAvatar, points: 0, streak: 0, votes: {} };
-  save();
+
+  const btn = event && event.target;
+  if (btn) { btn.disabled = true; btn.textContent = "Lighting up..."; }
+
+  const userId = crypto.randomUUID();
+  const { data, error } = await db.from('users').insert({
+    id: userId,
+    name,
+    avatar: pickedAvatar,
+    points: 0,
+    streak: 0,
+  }).select().single();
+
+  if (btn) { btn.disabled = false; btn.textContent = "Light it up →"; }
+
+  if (error) {
+    toast("Couldn't create account: " + error.message);
+    console.error(error);
+    return;
+  }
+
+  localStorage.setItem("fc_user_id", userId);
+  state.userId = userId;
+  state.user = data;
   closeModals();
   renderUserChip();
+  await refreshLeaderboard();
   toast(`Welcome, ${name}! Pick a poll to start.`);
   document.getElementById("polls").scrollIntoView({behavior:"smooth"});
 }
 
 function openProfile() {
   document.getElementById("profileName").textContent = state.user.avatar + " " + state.user.name;
-  const voteCount = Object.keys(state.user.votes).length;
+  const voteCount = Object.keys(state.myVotes).length;
   document.getElementById("profileStats").innerHTML =
     `<strong style="color:var(--gold)">${state.user.points}</strong> points · ` +
     `<strong>${voteCount}</strong> votes · ` +
@@ -1212,13 +1259,16 @@ function openProfile() {
   document.getElementById("profileModal").classList.add("open");
 }
 
-function signOut() {
-  if (!confirm("Sign out? Your votes will be cleared.")) return;
-  localStorage.removeItem("fc_user");
+async function signOut() {
+  if (!confirm("Sign out? Your account and votes stay saved — you just won't be signed in on this device.")) return;
+  localStorage.removeItem("fc_user_id");
+  state.userId = null;
   state.user = null;
+  state.myVotes = {};
   closeModals();
   renderUserChip();
   renderPolls();
+  await refreshLeaderboard();
   toast("Signed out.");
 }
 
@@ -1234,6 +1284,7 @@ function startVoting() {
   else openOnboarding();
 }
 
+/* ---------- RENDER: nav chip ---------- */
 function renderUserChip() {
   const chip = document.getElementById("userChip");
   const signIn = document.getElementById("signInBtn");
@@ -1248,14 +1299,31 @@ function renderUserChip() {
   }
 }
 
+/* ---------- RENDER: polls ---------- */
 function renderPolls() {
   const grid = document.getElementById("pollsGrid");
+
+  if (state.loading) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--text-muted)">
+      <div style="font-size:24px;margin-bottom:8px">🔥</div>
+      Loading live polls...
+    </div>`;
+    return;
+  }
+
   grid.innerHTML = "";
   const filtered = state.polls.filter(p => p.category === state.filter);
 
   filtered.forEach(poll => {
-    const totalVotes = poll.options.reduce((s,o) => s + o.votes, 0);
-    const userVote = state.user ? state.user.votes[poll.id] : undefined;
+    // Total votes = seed votes + real DB votes
+    const realCounts = state.voteCountsByPoll[poll.id] || {};
+    const optionsWithCounts = poll.options.map((opt, i) => ({
+      label: opt.label,
+      votes: (opt.seed_votes || 0) + (realCounts[i] || 0),
+    }));
+    const totalVotes = optionsWithCounts.reduce((s, o) => s + o.votes, 0);
+
+    const userVote = state.myVotes[poll.id];
     const voted = userVote !== undefined;
 
     const card = document.createElement("article");
@@ -1265,13 +1333,13 @@ function renderPolls() {
     card.innerHTML = `
       <div class="poll-meta">
         <span class="poll-tag ${poll.category}">${tagLabel}</span>
-        <span class="poll-time">⏱ ${poll.hours}h left</span>
+        <span class="poll-time">⏱ ${poll.hours_remaining}h left</span>
       </div>
       <h3 class="poll-question">${escapeHtml(poll.question)}</h3>
       <div class="poll-options"></div>
       <div class="poll-footer">
         <div class="poll-footer-left">
-          <span>👥 ${formatNum(totalVotes + (voted ? 1 : 0))}</span>
+          <span>👥 ${formatNum(totalVotes)}</span>
           <span>💬 ${Math.floor(totalVotes/20)}</span>
         </div>
         <button class="share-btn" title="Share" aria-label="Share">
@@ -1280,13 +1348,11 @@ function renderPolls() {
       </div>
     `;
     const optsBox = card.querySelector(".poll-options");
-    poll.options.forEach((opt, idx) => {
+    optionsWithCounts.forEach((opt, idx) => {
       const btn = document.createElement("button");
       btn.className = "poll-option" + (userVote === idx ? " voted" : "");
       btn.disabled = voted;
-      const total = totalVotes + (voted ? 1 : 0);
-      const myVoteBonus = (voted && userVote === idx) ? 1 : 0;
-      const pct = total ? Math.round(((opt.votes + myVoteBonus) / total) * 100) : 0;
+      const pct = totalVotes ? Math.round((opt.votes / totalVotes) * 100) : 0;
       btn.innerHTML = `
         <span class="fill" style="width:${voted ? pct : 0}%"></span>
         <span class="text">${escapeHtml(opt.label)}</span>
@@ -1304,27 +1370,104 @@ function renderPolls() {
   }
 }
 
-function castVote(pollId, optionIdx) {
+/* ---------- VOTE ---------- */
+async function castVote(pollId, optionIdx) {
   if (!state.user) { openOnboarding(); return; }
-  if (state.user.votes[pollId] !== undefined) return;
+  if (state.myVotes[pollId] !== undefined) return;
 
-  const poll = state.polls.find(p => p.id === pollId);
-  poll.options[optionIdx].votes += 1;
-  state.user.votes[pollId] = optionIdx;
-  state.user.points += 10;
-
-  const sorted = [...poll.options].sort((a,b) => b.votes - a.votes);
-  if (sorted[0] === poll.options[optionIdx]) state.user.points += 5;
-
-  state.user.streak = Math.min(99, state.user.streak + 1);
-
-  save();
-  renderUserChip();
+  // Optimistic update
+  state.myVotes[pollId] = optionIdx;
+  if (!state.voteCountsByPoll[pollId]) state.voteCountsByPoll[pollId] = {};
+  state.voteCountsByPoll[pollId][optionIdx] = (state.voteCountsByPoll[pollId][optionIdx] || 0) + 1;
   renderPolls();
-  renderLeaderboard();
-  toast(`+10 points · ${state.user.points} total`);
+
+  // Calculate points (bonus if voting majority)
+  const poll = state.polls.find(p => p.id === pollId);
+  let pointsEarned = 10;
+  if (poll) {
+    const realCounts = state.voteCountsByPoll[pollId];
+    const optionsWithCounts = poll.options.map((opt, i) => (opt.seed_votes || 0) + (realCounts[i] || 0));
+    const maxCount = Math.max(...optionsWithCounts);
+    if (optionsWithCounts[optionIdx] === maxCount) pointsEarned += 5;
+  }
+
+  // Insert vote
+  const { error: voteError } = await db.from('votes').insert({
+    poll_id: pollId,
+    user_id: state.user.id,
+    option_index: optionIdx,
+  });
+
+  if (voteError) {
+    // Rollback
+    delete state.myVotes[pollId];
+    state.voteCountsByPoll[pollId][optionIdx] = Math.max(0, state.voteCountsByPoll[pollId][optionIdx] - 1);
+    renderPolls();
+    toast("Vote failed: " + voteError.message);
+    return;
+  }
+
+  // Update user points + streak
+  const newPoints = state.user.points + pointsEarned;
+  const newStreak = Math.min(99, state.user.streak + 1);
+  const { error: userError } = await db.from('users').update({
+    points: newPoints,
+    streak: newStreak,
+  }).eq('id', state.user.id);
+
+  if (!userError) {
+    state.user.points = newPoints;
+    state.user.streak = newStreak;
+  }
+
+  renderUserChip();
+  await refreshLeaderboard();
+  toast(`+${pointsEarned} points · ${newPoints} total`);
 }
 
+/* ---------- LEADERBOARD ---------- */
+async function refreshLeaderboard() {
+  const { data } = await db.from('users').select('*').order('points', { ascending: false }).limit(10);
+  state.leaders = data || [];
+  renderLeaderboard();
+}
+
+function renderLeaderboard() {
+  const list = document.getElementById("lbList");
+  list.innerHTML = "";
+
+  if (state.loading) {
+    list.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted)">Loading leaderboard...</div>`;
+    return;
+  }
+  if (state.leaders.length === 0) {
+    list.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted)">No voters yet — be the first!</div>`;
+    return;
+  }
+
+  state.leaders.forEach((u, i) => {
+    const isYou = state.user && u.id === state.user.id;
+    const row = document.createElement("div");
+    row.className = "lb-row" + (isYou ? " you" : "");
+    row.innerHTML = `
+      <div class="lb-rank">#${i+1}</div>
+      <div class="lb-user">
+        <div class="lb-avatar">${u.avatar}</div>
+        <div style="min-width:0">
+          <div class="lb-name">${escapeHtml(u.name)}${isYou ? ' (you)' : ''}</div>
+          <div class="lb-streak">🔥 ${u.streak}-day streak</div>
+        </div>
+      </div>
+      <div>
+        <div class="lb-points">${formatNum(u.points)}</div>
+        <div class="lb-points-label">points</div>
+      </div>
+    `;
+    list.appendChild(row);
+  });
+}
+
+/* ---------- SHARE ---------- */
 async function sharePoll(poll) {
   const url = window.location.href.split("?")[0] + "?poll=" + poll.id;
   const text = `🔥 "${poll.question}" — vote on FlamesChallenge`;
@@ -1339,41 +1482,7 @@ async function sharePoll(poll) {
   }
 }
 
-function renderLeaderboard() {
-  const list = document.getElementById("lbList");
-  list.innerHTML = "";
-  const leaders = [...SEED_LEADERS];
-  if (state.user) {
-    leaders.push({
-      name: state.user.name + " (you)",
-      avatar: state.user.avatar,
-      points: state.user.points,
-      streak: state.user.streak,
-      isYou: true,
-    });
-  }
-  leaders.sort((a,b) => b.points - a.points);
-  leaders.slice(0, 10).forEach((u, i) => {
-    const row = document.createElement("div");
-    row.className = "lb-row" + (u.isYou ? " you" : "");
-    row.innerHTML = `
-      <div class="lb-rank">#${i+1}</div>
-      <div class="lb-user">
-        <div class="lb-avatar">${u.avatar}</div>
-        <div style="min-width:0">
-          <div class="lb-name">${escapeHtml(u.name)}</div>
-          <div class="lb-streak">🔥 ${u.streak}-day streak</div>
-        </div>
-      </div>
-      <div>
-        <div class="lb-points">${formatNum(u.points)}</div>
-        <div class="lb-points-label">points</div>
-      </div>
-    `;
-    list.appendChild(row);
-  });
-}
-
+/* ---------- TABS ---------- */
 document.querySelectorAll(".tab").forEach(t => {
   t.addEventListener("click", () => {
     document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
@@ -1383,6 +1492,7 @@ document.querySelectorAll(".tab").forEach(t => {
   });
 });
 
+/* ---------- HELPERS ---------- */
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function formatNum(n) { return n >= 1000 ? (n/1000).toFixed(n>=10000?0:1) + "k" : n.toString(); }
 
@@ -1395,13 +1505,17 @@ function toast(msg) {
   toastTimer = setTimeout(() => t.classList.remove("show"), 2600);
 }
 
-load();
-renderUserChip();
-renderPolls();
-renderLeaderboard();
-
 document.getElementById("nameInput").addEventListener("keydown", e => {
   if (e.key === "Enter") completeOnboarding();
+});
+
+// Boot
+init().catch(err => {
+  console.error('init failed', err);
+  state.loading = false;
+  renderPolls();
+  renderLeaderboard();
+  toast("Connection issue — try refreshing");
 });
 </script>
 </body>
