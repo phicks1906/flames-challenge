@@ -1068,6 +1068,333 @@ footer .links a:hover { color: var(--ember); }
   .heat-ring-wrap { flex-direction: column; align-items: flex-start; }
   .heat-stats { width: 100%; grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ============ CHALLENGES VIEW ============ */
+.challenges-wrap {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px 22px 60px;
+}
+.ch-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 22px;
+  flex-wrap: wrap;
+}
+.ch-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  overflow-x: auto;
+  margin-bottom: 24px;
+  -webkit-overflow-scrolling: touch;
+  width: fit-content;
+  max-width: 100%;
+}
+.ch-tab {
+  padding: 8px 14px;
+  border-radius: 100px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+.ch-tab:hover { color: var(--text); }
+.ch-tab.active {
+  background: linear-gradient(135deg, var(--ember), var(--flame));
+  color: white;
+  box-shadow: 0 6px 16px -4px rgba(255,80,30,0.5);
+}
+.ch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 18px;
+}
+.ch-card {
+  background: linear-gradient(180deg, var(--surface), var(--bg-2));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.25s ease, border-color 0.2s ease;
+  display: flex;
+  flex-direction: column;
+}
+.ch-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-bright);
+}
+.ch-card .media {
+  aspect-ratio: 16 / 10;
+  background: linear-gradient(135deg, #1a1410, #0a0805);
+  position: relative;
+  overflow: hidden;
+}
+.ch-card .media img,
+.ch-card .media video {
+  width: 100%; height: 100%;
+  object-fit: cover;
+}
+.ch-card .media .media-fallback {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  font-size: 48px;
+  opacity: 0.35;
+}
+.ch-status {
+  position: absolute;
+  top: 12px; left: 12px;
+  padding: 4px 10px;
+  border-radius: 100px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  backdrop-filter: blur(8px);
+}
+.ch-status .dot { width: 6px; height: 6px; border-radius: 50%; }
+.ch-status.submitting { background: rgba(74,222,128,0.18); color: #6effa6; }
+.ch-status.submitting .dot { background: #6effa6; box-shadow: 0 0 8px #6effa6; }
+.ch-status.voting { background: rgba(255,106,44,0.22); color: var(--ember-bright); }
+.ch-status.voting .dot { background: var(--ember-bright); box-shadow: 0 0 8px var(--ember-bright); }
+.ch-status.closed { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.75); }
+.ch-status.closed .dot { background: rgba(255,255,255,0.5); }
+.ch-status.voided { background: rgba(255,80,80,0.15); color: #ff8080; }
+.ch-status.voided .dot { background: #ff8080; }
+
+.ch-card .body {
+  padding: 16px;
+  display: flex; flex-direction: column;
+  gap: 10px; flex: 1;
+}
+.ch-category {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ember);
+  font-weight: 700;
+}
+.ch-title {
+  font-family: var(--font-bricolage);
+  font-weight: 700;
+  font-size: 17px;
+  line-height: 1.25;
+}
+.ch-creator {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--text-dim);
+}
+.ch-creator .avatar {
+  width: 22px; height: 22px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: linear-gradient(135deg, var(--ember), var(--coral));
+  font-size: 12px;
+}
+.ch-footer {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 12px; color: var(--text-muted);
+}
+.ch-footer .countdown {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.ch-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+.ch-empty-icon { font-size: 56px; margin-bottom: 14px; opacity: 0.4; }
+
+/* ============ CREATE CHALLENGE SHEET ============ */
+.cc-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 250;
+  display: none;
+  background: rgba(0,0,0,0.92);
+  overflow-y: auto;
+}
+.cc-sheet.open { display: block; animation: fadeIn 0.25s ease; }
+.cc-sheet-inner {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 76px 22px 60px;
+}
+.cc-sheet-header {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  background: rgba(10, 7, 5, 0.95);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 22px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 1;
+}
+.cc-sheet-header h2 {
+  font-family: var(--font-display);
+  font-size: 22px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex: 1;
+}
+.cc-close {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 22px;
+  display: grid; place-items: center;
+  cursor: pointer;
+  line-height: 1;
+}
+.cc-form { display: flex; flex-direction: column; gap: 22px; }
+.cc-field label {
+  display: block;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+.cc-field label .hint {
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-left: 6px;
+}
+.cc-field input[type="text"],
+.cc-field input[type="datetime-local"],
+.cc-field textarea {
+  width: 100%;
+  padding: 14px 16px;
+  background: rgba(0,0,0,0.5);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 16px;
+  transition: border-color 0.2s;
+}
+.cc-field input:focus,
+.cc-field textarea:focus { outline: none; border-color: var(--ember); }
+.cc-field textarea {
+  resize: vertical;
+  min-height: 88px;
+  line-height: 1.5;
+}
+.cc-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cc-pill {
+  padding: 9px 16px;
+  border-radius: 100px;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.cc-pill:hover { border-color: var(--border-bright); }
+.cc-pill.selected {
+  background: linear-gradient(135deg, var(--ember), var(--flame));
+  border-color: transparent;
+  color: white;
+}
+.cc-file-input { display: none; }
+.cc-upload {
+  border: 2px dashed var(--border-bright);
+  border-radius: 14px;
+  padding: 28px 20px;
+  text-align: center;
+  background: rgba(0,0,0,0.3);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.cc-upload:hover, .cc-upload.has-file {
+  border-color: var(--ember);
+  background: rgba(255,106,44,0.06);
+}
+.cc-upload .icon { font-size: 32px; margin-bottom: 8px; }
+.cc-upload .text { font-weight: 600; font-size: 15px; margin-bottom: 3px; }
+.cc-upload .upload-hint { font-size: 12px; color: var(--text-muted); }
+.cc-preview {
+  margin-top: 14px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.cc-preview img, .cc-preview video {
+  width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+  background: #000;
+  display: block;
+}
+.cc-preview audio { width: 100%; }
+.cc-preview-info {
+  padding: 8px 12px;
+  background: var(--surface);
+  font-size: 12px;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.cc-preview-remove {
+  background: none;
+  border: none;
+  color: var(--ember);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+.cc-dates-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.cc-submit-area {
+  position: sticky;
+  bottom: 0;
+  padding-top: 14px;
+  background: linear-gradient(180deg, transparent, rgba(0,0,0,0.92) 40%);
+  padding-bottom: 4px;
+  margin-top: 12px;
+}
+@media (max-width: 480px) {
+  .cc-dates-row { grid-template-columns: 1fr; }
+}
+
 </style>
 </head>
 <body>
@@ -1154,6 +1481,7 @@ footer .links a:hover { color: var(--ember); }
     </a>
     <div class="nav-links">
       <button class="nav-link active" data-view="feed" onclick="switchView('feed')">Feed</button>
+      <button class="nav-link" data-view="challenges" onclick="switchView('challenges')">Challenges</button>
       <button class="nav-link" data-view="polls" onclick="switchView('polls')">Polls</button>
       <button class="nav-link" data-view="leaderboard" onclick="switchView('leaderboard')">Ranks</button>
     </div>
@@ -1225,6 +1553,26 @@ footer .links a:hover { color: var(--ember); }
   </div>
 </section>
 
+<!-- CHALLENGES VIEW -->
+<section id="challengesViewSection" class="app-section" style="display:none">
+  <div class="challenges-wrap">
+    <div class="ch-header">
+      <div>
+        <h2 class="section-title">Challenges</h2>
+        <p class="section-sub">Compete. Vote. Win.</p>
+      </div>
+      <button class="btn btn-primary" onclick="openCreateChallenge()">+ Create</button>
+    </div>
+    <div class="ch-tabs" id="chTabs">
+      <button class="ch-tab active" data-cfilter="active">🔥 Active</button>
+      <button class="ch-tab" data-cfilter="voting">🗳️ Voting</button>
+      <button class="ch-tab" data-cfilter="closed">🏁 Closed</button>
+      <button class="ch-tab" data-cfilter="mine">👤 Mine</button>
+    </div>
+    <div class="ch-grid" id="challengesGrid"></div>
+  </div>
+</section>
+
 <!-- POLLS VIEW -->
 <section id="pollsViewSection" class="app-section" style="display:none">
   <div class="section">
@@ -1273,6 +1621,88 @@ footer .links a:hover { color: var(--ember); }
 </footer>
 
 </div><!-- /#appView -->
+
+<!-- CREATE CHALLENGE SHEET -->
+<div class="cc-sheet" id="createChallengeSheet">
+  <div class="cc-sheet-header">
+    <button class="cc-close" onclick="closeCreateChallenge()" aria-label="Close">×</button>
+    <h2>New Challenge</h2>
+  </div>
+  <div class="cc-sheet-inner">
+    <form id="createChallengeForm" class="cc-form">
+      <div class="cc-field">
+        <label for="ccTitle">Title <span class="hint">(what's the challenge?)</span></label>
+        <input id="ccTitle" type="text" maxlength="80" required placeholder="e.g. Best Sunset Photo This Week" />
+      </div>
+
+      <div class="cc-field">
+        <label>Category</label>
+        <div class="cc-pills" id="ccCategoryPills"></div>
+      </div>
+
+      <div class="cc-field">
+        <label>Media type <span class="hint">(what kind of entries?)</span></label>
+        <div class="cc-pills" id="ccMediaTypePills">
+          <button type="button" class="cc-pill selected" data-mt="photo">📷 Photo</button>
+          <button type="button" class="cc-pill" data-mt="video">🎬 Video</button>
+          <button type="button" class="cc-pill" data-mt="audio">🎵 Audio</button>
+          <button type="button" class="cc-pill" data-mt="text">✍️ Text</button>
+        </div>
+      </div>
+
+      <div class="cc-field">
+        <label for="ccRules">Rules <span class="hint">(optional)</span></label>
+        <textarea id="ccRules" maxlength="500" placeholder="Any rules? e.g. 'Real photos only, no AI. Must be taken in the last 30 days.'"></textarea>
+      </div>
+
+      <div class="cc-field" id="ccUploadField">
+        <label>Your entry <span class="hint">(you're competing too!)</span></label>
+        <div class="cc-upload" id="ccUploadZone" onclick="document.getElementById('ccFile').click()">
+          <div class="icon">📤</div>
+          <div class="text">Tap to upload</div>
+          <div class="upload-hint" id="ccUploadHint">Max 50MB</div>
+        </div>
+        <input type="file" id="ccFile" class="cc-file-input" accept="image/*" />
+        <div class="cc-preview" id="ccPreview" style="display:none"></div>
+      </div>
+
+      <div class="cc-field" id="ccTextField" style="display:none">
+        <label for="ccTextEntry">Your text entry</label>
+        <textarea id="ccTextEntry" maxlength="500" placeholder="Write your entry..."></textarea>
+      </div>
+
+      <div class="cc-field" id="ccCaptionField">
+        <label for="ccCaption">Caption <span class="hint">(optional)</span></label>
+        <input id="ccCaption" type="text" maxlength="120" placeholder="Add a caption to your entry..." />
+      </div>
+
+      <div class="cc-dates-row">
+        <div class="cc-field">
+          <label for="ccSubDeadline">Submissions close</label>
+          <input id="ccSubDeadline" type="datetime-local" required />
+        </div>
+        <div class="cc-field">
+          <label for="ccVotingEnd">Voting ends</label>
+          <input id="ccVotingEnd" type="datetime-local" required />
+        </div>
+      </div>
+
+      <div class="cc-field">
+        <label>Visibility</label>
+        <div class="cc-pills" id="ccVisPills">
+          <button type="button" class="cc-pill selected" data-vis="public">🌎 Public</button>
+          <button type="button" class="cc-pill" data-vis="private">🔒 Private</button>
+        </div>
+      </div>
+
+      <div id="ccError" class="auth-error"></div>
+
+      <div class="cc-submit-area">
+        <button type="submit" class="btn btn-primary" style="width:100%">🔥 Light it up</button>
+      </div>
+    </form>
+  </div>
+</div>
 
 <!-- PROFILE MODAL -->
 <div class="modal-backdrop" id="profileModal">
@@ -1813,8 +2243,10 @@ function switchView(view) {
   state.currentView = view;
   document.querySelectorAll('.nav-link').forEach(l => l.classList.toggle('active', l.dataset.view === view));
   document.getElementById('feedView').style.display = view === 'feed' ? 'block' : 'none';
+  document.getElementById('challengesViewSection').style.display = view === 'challenges' ? 'block' : 'none';
   document.getElementById('pollsViewSection').style.display = view === 'polls' ? 'block' : 'none';
   document.getElementById('leaderboardViewSection').style.display = view === 'leaderboard' ? 'block' : 'none';
+  if (view === 'challenges') renderChallenges();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -1836,9 +2268,11 @@ async function loadAppData() {
     }
   });
   await loadLeaderboard();
+  await loadChallenges();
   state.loading = false;
   renderPolls();
   renderLeaderboard();
+  renderChallenges();
   renderHeatCheck();
   renderFeedHello();
 }
@@ -2073,6 +2507,376 @@ function toast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
 }
+
+/* =========================================================
+   Phase 2 — CHALLENGES (create + browse)
+========================================================= */
+
+const CATEGORIES = ['Art', 'Photography', 'Music', 'Writing', 'Cooking', 'Style', 'Sports', 'Fitness', 'Comedy', 'Other'];
+
+let ccState = {
+  mediaType: 'photo',
+  category: 'Photography',
+  visibility: 'public',
+  file: null,
+  fileUrl: null,
+};
+
+state.challenges = [];
+state.entryCounts = {};
+state.creatorEntries = {};
+state.cFilter = 'active';
+
+let countdownTimer = null;
+
+function buildCategoryPills() {
+  const wrap = document.getElementById('ccCategoryPills');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  CATEGORIES.forEach((cat, i) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'cc-pill' + (i === 1 ? ' selected' : ''); // default Photography
+    btn.dataset.cat = cat;
+    btn.textContent = cat;
+    btn.onclick = () => {
+      ccState.category = cat;
+      wrap.querySelectorAll('.cc-pill').forEach(p => p.classList.remove('selected'));
+      btn.classList.add('selected');
+    };
+    wrap.appendChild(btn);
+  });
+}
+
+document.querySelectorAll('#chTabs .ch-tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('#chTabs .ch-tab').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    state.cFilter = t.dataset.cfilter;
+    renderChallenges();
+  });
+});
+
+document.querySelectorAll('#ccMediaTypePills .cc-pill').forEach(p => {
+  p.addEventListener('click', () => {
+    ccState.mediaType = p.dataset.mt;
+    document.querySelectorAll('#ccMediaTypePills .cc-pill').forEach(x => x.classList.remove('selected'));
+    p.classList.add('selected');
+    const isText = ccState.mediaType === 'text';
+    document.getElementById('ccUploadField').style.display = isText ? 'none' : 'block';
+    document.getElementById('ccTextField').style.display = isText ? 'block' : 'none';
+    document.getElementById('ccCaptionField').style.display = isText ? 'none' : 'block';
+    const fileInput = document.getElementById('ccFile');
+    if (ccState.mediaType === 'photo') fileInput.accept = 'image/*';
+    else if (ccState.mediaType === 'video') fileInput.accept = 'video/*';
+    else if (ccState.mediaType === 'audio') fileInput.accept = 'audio/*';
+    clearMediaPreview();
+  });
+});
+
+document.querySelectorAll('#ccVisPills .cc-pill').forEach(p => {
+  p.addEventListener('click', () => {
+    ccState.visibility = p.dataset.vis;
+    document.querySelectorAll('#ccVisPills .cc-pill').forEach(x => x.classList.remove('selected'));
+    p.classList.add('selected');
+  });
+});
+
+document.getElementById('ccFile').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.size > 50 * 1024 * 1024) {
+    showCcError('File too large. Max 50MB.');
+    e.target.value = '';
+    return;
+  }
+  document.getElementById('ccError').classList.remove('show');
+  ccState.file = file;
+  ccState.fileUrl = URL.createObjectURL(file);
+  const preview = document.getElementById('ccPreview');
+  let mediaEl = '';
+  if (ccState.mediaType === 'photo') mediaEl = `<img src="${ccState.fileUrl}" alt="Preview">`;
+  else if (ccState.mediaType === 'video') mediaEl = `<video src="${ccState.fileUrl}" controls></video>`;
+  else if (ccState.mediaType === 'audio') mediaEl = `<div style="padding:16px;background:#0a0805"><audio src="${ccState.fileUrl}" controls style="width:100%"></audio></div>`;
+  preview.innerHTML = mediaEl + `
+    <div class="cc-preview-info">
+      <span>${escapeHtml(file.name)} · ${(file.size/1024/1024).toFixed(1)} MB</span>
+      <button type="button" class="cc-preview-remove" onclick="clearMediaPreview()">Remove</button>
+    </div>
+  `;
+  preview.style.display = 'block';
+  document.getElementById('ccUploadZone').classList.add('has-file');
+});
+
+function clearMediaPreview() {
+  if (ccState.fileUrl) URL.revokeObjectURL(ccState.fileUrl);
+  ccState.file = null;
+  ccState.fileUrl = null;
+  document.getElementById('ccPreview').style.display = 'none';
+  document.getElementById('ccPreview').innerHTML = '';
+  document.getElementById('ccFile').value = '';
+  document.getElementById('ccUploadZone').classList.remove('has-file');
+}
+
+function toDatetimeLocal(date) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function openCreateChallenge() {
+  if (!state.profile) return;
+  const now = new Date();
+  const subClose = new Date(now.getTime() + 3*24*60*60*1000);
+  const voteEnd = new Date(now.getTime() + 7*24*60*60*1000);
+  document.getElementById('ccSubDeadline').value = toDatetimeLocal(subClose);
+  document.getElementById('ccVotingEnd').value = toDatetimeLocal(voteEnd);
+  document.getElementById('createChallengeSheet').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeCreateChallenge() {
+  document.getElementById('createChallengeSheet').classList.remove('open');
+  document.body.style.overflow = '';
+  document.getElementById('createChallengeForm').reset();
+  clearMediaPreview();
+  ccState.mediaType = 'photo';
+  ccState.category = 'Photography';
+  ccState.visibility = 'public';
+  // Reset pills
+  document.querySelectorAll('#ccMediaTypePills .cc-pill').forEach((p, i) => p.classList.toggle('selected', i === 0));
+  document.querySelectorAll('#ccCategoryPills .cc-pill').forEach((p, i) => p.classList.toggle('selected', i === 1));
+  document.querySelectorAll('#ccVisPills .cc-pill').forEach((p, i) => p.classList.toggle('selected', i === 0));
+  document.getElementById('ccUploadField').style.display = 'block';
+  document.getElementById('ccTextField').style.display = 'none';
+  document.getElementById('ccCaptionField').style.display = 'block';
+  document.getElementById('ccError').classList.remove('show');
+}
+
+function showCcError(msg) {
+  const errBox = document.getElementById('ccError');
+  errBox.textContent = msg;
+  errBox.classList.add('show');
+}
+
+document.getElementById('createChallengeForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!state.profile) return;
+  document.getElementById('ccError').classList.remove('show');
+
+  const title = document.getElementById('ccTitle').value.trim();
+  const rules = document.getElementById('ccRules').value.trim();
+  const caption = document.getElementById('ccCaption').value.trim();
+  const subDeadline = document.getElementById('ccSubDeadline').value;
+  const voteEnd = document.getElementById('ccVotingEnd').value;
+  const textEntry = document.getElementById('ccTextEntry').value.trim();
+
+  if (!title) return showCcError('Title is required.');
+  if (!subDeadline || !voteEnd) return showCcError('Set both deadlines.');
+  if (new Date(voteEnd) <= new Date(subDeadline)) return showCcError('Voting must end after submissions close.');
+  if (new Date(subDeadline) <= new Date()) return showCcError('Submission deadline must be in the future.');
+  if (ccState.mediaType === 'text' && !textEntry) return showCcError('Add your text entry.');
+  if (ccState.mediaType !== 'text' && !ccState.file) return showCcError('Upload your entry.');
+
+  const btn = e.target.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  const orig = btn.textContent;
+
+  try {
+    let mediaUrl = null;
+    if (ccState.mediaType !== 'text') {
+      btn.textContent = 'Uploading...';
+      const ext = (ccState.file.name.split('.').pop() || 'bin').toLowerCase();
+      const filename = `${state.profile.id}/${Date.now()}.${ext}`;
+      const { error: uploadError } = await db.storage
+        .from('challenge-media')
+        .upload(filename, ccState.file, { cacheControl: '3600', upsert: false });
+      if (uploadError) throw new Error('Upload failed: ' + uploadError.message);
+      const { data: pub } = db.storage.from('challenge-media').getPublicUrl(filename);
+      mediaUrl = pub.publicUrl;
+    }
+
+    btn.textContent = 'Creating...';
+    const { data: chData, error: chError } = await db.from('challenges').insert({
+      creator_id: state.profile.id,
+      title,
+      rules: rules || null,
+      category: ccState.category,
+      media_type: ccState.mediaType,
+      submission_deadline: new Date(subDeadline).toISOString(),
+      voting_end: new Date(voteEnd).toISOString(),
+      is_public: ccState.visibility === 'public',
+      status: 'submitting',
+    }).select().single();
+    if (chError) throw new Error('Challenge create failed: ' + chError.message);
+
+    btn.textContent = 'Adding entry...';
+    const { error: entryError } = await db.from('entries').insert({
+      challenge_id: chData.id,
+      user_id: state.profile.id,
+      media_url: mediaUrl,
+      media_type: ccState.mediaType,
+      caption: ccState.mediaType === 'text' ? textEntry : (caption || null),
+    });
+    if (entryError) throw new Error('Entry create failed: ' + entryError.message);
+
+    toast('🔥 Challenge created!');
+    closeCreateChallenge();
+    await loadChallenges();
+    state.cFilter = 'mine';
+    document.querySelectorAll('#chTabs .ch-tab').forEach(x => x.classList.toggle('active', x.dataset.cfilter === 'mine'));
+    switchView('challenges');
+  } catch (err) {
+    console.error(err);
+    showCcError(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+});
+
+async function loadChallenges() {
+  const { data: challenges, error: chErr } = await db.from('challenges')
+    .select('*, creator:profiles!challenges_creator_id_fkey(id, name, avatar)')
+    .order('created_at', { ascending: false });
+  if (chErr) {
+    console.error('challenges load error', chErr);
+    state.challenges = [];
+    return;
+  }
+  state.challenges = challenges || [];
+
+  const { data: entries } = await db.from('entries').select('challenge_id, user_id, media_url, media_type, caption');
+  state.entryCounts = {};
+  state.creatorEntries = {};
+  (entries || []).forEach(e => {
+    state.entryCounts[e.challenge_id] = (state.entryCounts[e.challenge_id] || 0) + 1;
+    const ch = state.challenges.find(c => c.id === e.challenge_id);
+    if (ch && e.user_id === ch.creator_id) state.creatorEntries[e.challenge_id] = e;
+  });
+}
+
+function computeChallengeStatus(ch) {
+  const now = new Date();
+  const subDeadline = new Date(ch.submission_deadline);
+  const voteEnd = new Date(ch.voting_end);
+  const entryCount = state.entryCounts[ch.id] || 0;
+  if (now < subDeadline) return 'submitting';
+  if (now < voteEnd) {
+    if (entryCount <= 1) return 'voided';
+    return 'voting';
+  }
+  return 'closed';
+}
+
+function formatCountdown(targetDate) {
+  const diff = new Date(targetDate) - new Date();
+  if (diff <= 0) return 'just now';
+  const days = Math.floor(diff / 86400000);
+  const hours = Math.floor((diff % 86400000) / 3600000);
+  const mins = Math.floor((diff % 3600000) / 60000);
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${mins}m`;
+  return `${mins}m`;
+}
+
+function renderChallenges() {
+  const grid = document.getElementById('challengesGrid');
+  if (!grid) return;
+  if (state.loading) {
+    grid.innerHTML = `<div class="ch-empty" style="grid-column:1/-1"><div class="ch-empty-icon">🔥</div>Loading challenges...</div>`;
+    return;
+  }
+
+  let list = state.challenges.map(c => ({ ...c, computedStatus: computeChallengeStatus(c) }));
+  // Filter out private challenges from users that aren't the creator
+  list = list.filter(c => c.is_public || c.creator_id === state.profile?.id);
+
+  if (state.cFilter === 'active') list = list.filter(c => c.computedStatus === 'submitting');
+  else if (state.cFilter === 'voting') list = list.filter(c => c.computedStatus === 'voting');
+  else if (state.cFilter === 'closed') list = list.filter(c => c.computedStatus === 'closed' || c.computedStatus === 'voided');
+  else if (state.cFilter === 'mine') list = list.filter(c => c.creator_id === state.profile?.id);
+
+  grid.innerHTML = '';
+
+  if (list.length === 0) {
+    const emptyMsg = {
+      'active': 'No active challenges right now. Start one!',
+      'voting': 'Nothing being voted on yet.',
+      'closed': 'No closed challenges yet.',
+      'mine': "You haven't created any challenges yet.",
+    }[state.cFilter];
+    grid.innerHTML = `
+      <div class="ch-empty" style="grid-column:1/-1">
+        <div class="ch-empty-icon">🔥</div>
+        ${emptyMsg}
+        ${state.cFilter !== 'closed' ? '<div style="margin-top:18px"><button class="btn btn-primary" onclick="openCreateChallenge()">+ Create challenge</button></div>' : ''}
+      </div>
+    `;
+    return;
+  }
+
+  list.forEach(ch => {
+    const card = document.createElement('article');
+    card.className = 'ch-card';
+    const creatorEntry = state.creatorEntries[ch.id];
+    let mediaHtml;
+    if (ch.media_type === 'photo' && creatorEntry?.media_url) {
+      mediaHtml = `<img src="${creatorEntry.media_url}" alt="" loading="lazy">`;
+    } else if (ch.media_type === 'video' && creatorEntry?.media_url) {
+      mediaHtml = `<video src="${creatorEntry.media_url}" muted preload="metadata"></video>`;
+    } else {
+      const icon = { photo: '📷', video: '🎬', audio: '🎵', text: '✍️' }[ch.media_type] || '🔥';
+      mediaHtml = `<div class="media-fallback">${icon}</div>`;
+    }
+
+    const statusLabel = {
+      'submitting': 'Submitting',
+      'voting': 'Voting',
+      'closed': 'Closed',
+      'voided': 'Voided',
+    }[ch.computedStatus];
+
+    const countdownTarget = ch.computedStatus === 'submitting' ? ch.submission_deadline :
+                            ch.computedStatus === 'voting' ? ch.voting_end : null;
+    const countdownText = countdownTarget ? `⏱ ${formatCountdown(countdownTarget)}` : '';
+
+    card.innerHTML = `
+      <div class="media">
+        ${mediaHtml}
+        <span class="ch-status ${ch.computedStatus}"><span class="dot"></span>${statusLabel}</span>
+      </div>
+      <div class="body">
+        <div class="ch-category">${escapeHtml(ch.category)}${ch.is_public ? '' : ' · 🔒 Private'}</div>
+        <h3 class="ch-title">${escapeHtml(ch.title)}</h3>
+        <div class="ch-creator">
+          <div class="avatar">${escapeHtml(ch.creator?.avatar || '🔥')}</div>
+          <span>by ${escapeHtml(ch.creator?.name || 'Unknown')}</span>
+        </div>
+        <div class="ch-footer">
+          <span>👥 ${state.entryCounts[ch.id] || 0} ${(state.entryCounts[ch.id] || 0) === 1 ? 'entry' : 'entries'}</span>
+          <span class="countdown">${countdownText}</span>
+        </div>
+      </div>
+    `;
+    card.onclick = () => openChallenge(ch);
+    grid.appendChild(card);
+  });
+}
+
+function openChallenge(ch) {
+  toast('Full challenge view coming in Phase 3');
+}
+
+function startCountdownTimer() {
+  if (countdownTimer) clearInterval(countdownTimer);
+  countdownTimer = setInterval(() => {
+    if (state.currentView === 'challenges') renderChallenges();
+  }, 60000);
+}
+
+// Build pills + start countdown on page load
+buildCategoryPills();
+startCountdownTimer();
 
 /* ---------- BOOT ---------- */
 (async function boot() {
