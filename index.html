@@ -3651,16 +3651,15 @@ function renderChallengeDetail() {
       actionsHtml = '<span class="cd-entry-tag">Your entry</span>';
     }
 
-    // Flame (like) button — available in all phases, never on your own entry
+    // Flame (like) button — always show, disabled on your own entry (matches post behavior)
     const eLikeCount = state.entryLikeCounts[entry.id] || 0;
     const iLikedEntry = state.myEntryLikes.has(entry.id);
-    const likeBtnHtml = !isMyEntry && state.profile
-      ? `<button class="flame-btn${iLikedEntry ? ' liked' : ''}" data-like-entry="${entry.id}"><span class="flame-icon">🔥</span><span class="flame-count">${eLikeCount}</span></button>`
-      : (eLikeCount > 0 ? `<span class="flame-btn liked" style="cursor:default"><span class="flame-icon">🔥</span><span class="flame-count">${eLikeCount}</span></span>` : '');
+    const eLikeBtnAttrs = (isMyEntry || !state.profile)
+      ? 'disabled aria-label="Cannot like your own entry"'
+      : `data-like-entry="${entry.id}"`;
+    const likeBtnHtml = `<button class="flame-btn${iLikedEntry ? ' liked' : ''}" ${eLikeBtnAttrs}><span class="flame-icon">🔥</span><span class="flame-count">${eLikeCount}</span></button>`;
 
-    if (likeBtnHtml) {
-      actionsHtml = (actionsHtml ? actionsHtml + ' ' : '') + likeBtnHtml;
-    }
+    actionsHtml = (actionsHtml ? actionsHtml + ' ' : '') + likeBtnHtml;
 
     return `
       <div class="cd-entry${iVoted ? ' voted' : ''}${winnerClass}">
