@@ -1500,6 +1500,21 @@ footer .links a:hover { color: var(--ember); }
 }
 .ge-error.show { display: block; }
 
+.demo-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 7px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 6px;
+  color: rgba(255,255,255,0.55);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  vertical-align: middle;
+  text-transform: uppercase;
+}
+
 </style>
 </head>
 <body>
@@ -2621,6 +2636,7 @@ function renderLeaderboard() {
   }
   state.leaders.forEach((u, i) => {
     const isYou = state.profile && u.id === state.profile.id;
+    const isDemo = !u.isReal;
     const row = document.createElement('div');
     row.className = 'lb-row' + (isYou ? ' you' : '');
     row.innerHTML = `
@@ -2628,7 +2644,7 @@ function renderLeaderboard() {
       <div class="lb-user">
         <div class="lb-avatar">${u.avatar}</div>
         <div style="min-width:0">
-          <div class="lb-name">${escapeHtml(u.name)}${isYou ? ' (you)' : ''}</div>
+          <div class="lb-name">${escapeHtml(u.name)}${isYou ? ' (you)' : ''}${isDemo ? ' <span class="demo-badge">DEMO</span>' : ''}</div>
           <div class="lb-streak">🔥 ${u.streak}-day streak</div>
         </div>
       </div>
@@ -3169,33 +3185,49 @@ function addMemberToGroup(id, name, avatar) {
 document.getElementById('geSearch').addEventListener('input', (e) => {
   clearTimeout(groupsState.searchTimer);
   const query = e.target.value.trim();
+  const wrap = document.getElementById('geSearchResults');
   if (query.length < 2) {
-    document.getElementById('geSearchResults').innerHTML = '';
+    wrap.innerHTML = '';
     return;
   }
+  wrap.innerHTML = '<div class="empty-state-mini">Searching...</div>';
   groupsState.searchTimer = setTimeout(async () => {
-    const { data, error } = await db.from('profiles')
-      .select('id, name, avatar')
-      .ilike('name', `%${query}%`)
-      .neq('id', state.profile.id)
-      .limit(8);
-    if (error) {
-      console.error('profile search error', error);
+    if (!state.profile || !state.profile.id) {
+      wrap.innerHTML = '<div class="empty-state-mini" style="color:#ff6b7a">Profile not loaded — refresh page</div>';
       return;
     }
-    const existing = new Set(groupsState.editingMembers.map(m => m.id));
-    const results = (data || []).filter(p => !existing.has(p.id));
-    const wrap = document.getElementById('geSearchResults');
-    if (results.length === 0) {
-      wrap.innerHTML = '<div class="empty-state-mini">No matches</div>';
-      return;
+    try {
+      const { data, error } = await db.from('profiles')
+        .select('id, name, avatar')
+        .ilike('name', `%${query}%`)
+        .neq('id', state.profile.id)
+        .limit(8);
+      if (error) {
+        wrap.innerHTML = `<div class="empty-state-mini" style="color:#ff6b7a">Search error: ${escapeHtml(error.message || 'unknown')}</div>`;
+        console.error('profile search error', error);
+        return;
+      }
+      const existing = new Set(groupsState.editingMembers.map(m => m.id));
+      const results = (data || []).filter(p => !existing.has(p.id));
+      if (results.length === 0) {
+        wrap.innerHTML = `<div class="empty-state-mini">No matches for "${escapeHtml(query)}" (found ${(data || []).length} total, ${(data || []).length - results.length} already added)</div>`;
+        return;
+      }
+      wrap.innerHTML = results.map(p => `
+        <div class="search-result" data-uid="${escapeHtml(p.id)}" data-uname="${escapeHtml(p.name)}" data-uavatar="${escapeHtml(p.avatar || '🔥')}">
+          <span class="search-result-avatar">${escapeHtml(p.avatar || '🔥')}</span>
+          <span class="search-result-name">${escapeHtml(p.name)}</span>
+        </div>
+      `).join('');
+      wrap.querySelectorAll('.search-result').forEach(el => {
+        el.addEventListener('click', () => {
+          addMemberToGroup(el.dataset.uid, el.dataset.uname, el.dataset.uavatar);
+        });
+      });
+    } catch (err) {
+      wrap.innerHTML = `<div class="empty-state-mini" style="color:#ff6b7a">Search threw: ${escapeHtml(err.message || String(err))}</div>`;
+      console.error('search exception', err);
     }
-    wrap.innerHTML = results.map(p => `
-      <div class="search-result" onclick="addMemberToGroup('${p.id}', ${JSON.stringify(p.name)}, ${JSON.stringify(p.avatar || '🔥')})">
-        <span class="search-result-avatar">${escapeHtml(p.avatar || '🔥')}</span>
-        <span class="search-result-name">${escapeHtml(p.name)}</span>
-      </div>
-    `).join('');
   }, 300);
 });
 
