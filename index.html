@@ -2111,19 +2111,41 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
   const btn = e.target.querySelector('button[type="submit"]');
   btn.disabled = true; const orig = btn.textContent; btn.textContent = 'Logging in...';
 
-  const { data, error } = await db.auth.signInWithPassword({ email, password });
+  // Race login against a 30s timeout so the button never hangs forever
+  let result;
+  try {
+    result = await Promise.race([
+      db.auth.signInWithPassword({ email, password }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Login is taking too long. Refresh and try again — the server may be waking up.')), 30000))
+    ]);
+  } catch (err) {
+    result = { error: err };
+  }
+
   btn.disabled = false; btn.textContent = orig;
 
-  if (error) {
-    if (error.message.toLowerCase().includes('email not confirmed')) {
+  if (result.error) {
+    const msg = result.error.message || 'Login failed';
+    if (msg.toLowerCase().includes('email not confirmed')) {
       showAuthError('Please verify your email first — check your inbox for the link.');
     } else {
-      showAuthError(error.message);
+      showAuthError(msg);
     }
     return;
   }
 
-  // Session set by onAuthStateChange listener below
+  // Manually swap to app (don't rely solely on auth state listener)
+  if (result.data?.session) {
+    state.session = result.data.session;
+    try {
+      await loadProfile();
+      showApp();
+      await loadAppData();
+    } catch (err) {
+      console.error('Post-login load failed', err);
+      showAuthError('Logged in but failed to load data. Refresh the page.');
+    }
+  }
 });
 
 /* ---------- SIGNUP ---------- */
