@@ -1398,6 +1398,108 @@ footer .links a:hover { color: var(--ember); }
   .cc-dates-row { grid-template-columns: 1fr; }
 }
 
+/* ============ GROUPS ============ */
+.groups-modal-content { max-width: 500px; }
+.modal-close-x {
+  position: absolute; top: 18px; right: 18px;
+  width: 36px; height: 36px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 50%;
+  color: #fff; font-size: 22px;
+  cursor: pointer; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+.modal { position: relative; }
+.groups-actions { margin: 16px 0 20px; }
+.groups-list { display: flex; flex-direction: column; gap: 10px; max-height: 50vh; overflow-y: auto; }
+.group-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  padding: 16px 18px;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.group-card:active { background: rgba(255,107,53,0.1); border-color: rgba(255,107,53,0.3); }
+.group-card-info { flex: 1; min-width: 0; }
+.group-card-name { font-weight: 700; color: var(--text); margin-bottom: 4px; font-size: 16px; }
+.group-card-count { font-size: 13px; color: var(--text-muted); }
+.group-card-arrow { color: var(--text-muted); font-size: 20px; flex-shrink: 0; margin-left: 8px; }
+
+.ge-field { margin-bottom: 18px; }
+.ge-field label {
+  display: block; font-size: 12px; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--text-muted);
+  margin-bottom: 8px; font-weight: 600;
+}
+.ge-field input[type="text"] {
+  width: 100%; padding: 14px 16px;
+  background: var(--bg-2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text);
+  font-family: inherit; font-size: 16px;
+}
+.ge-field input[type="text"]:focus { outline: none; border-color: var(--ember); }
+.ge-search-results {
+  margin-top: 8px; max-height: 220px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.search-result {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px; cursor: pointer;
+  transition: all 0.15s;
+}
+.search-result:active { background: rgba(255,107,53,0.12); border-color: rgba(255,107,53,0.3); }
+.search-result-avatar { font-size: 22px; }
+.search-result-name { color: var(--text); font-weight: 600; }
+.ge-members {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  margin-top: 12px;
+  min-height: 40px;
+}
+.member-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: rgba(255,107,53,0.15);
+  border: 1px solid rgba(255,107,53,0.4);
+  padding: 6px 6px 6px 12px;
+  border-radius: 18px;
+  font-size: 14px;
+}
+.member-chip-avatar { font-size: 16px; }
+.member-chip-name { color: var(--text); font-weight: 600; }
+.member-chip-remove {
+  background: rgba(0,0,0,0.3); border: none;
+  color: rgba(255,255,255,0.8);
+  width: 22px; height: 22px; border-radius: 50%;
+  font-size: 16px; cursor: pointer;
+  padding: 0; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+.empty-state-mini {
+  text-align: center; padding: 20px;
+  color: var(--text-muted); font-size: 14px;
+  background: rgba(255,255,255,0.02);
+  border: 1px dashed rgba(255,255,255,0.08);
+  border-radius: 12px;
+}
+.ge-actions { display: flex; gap: 10px; margin-top: 28px; }
+.ge-actions .btn { flex: 1; }
+.ge-error {
+  display: none;
+  background: rgba(220,53,69,0.12);
+  border: 1px solid rgba(220,53,69,0.3);
+  color: #ff6b7a;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+  margin-bottom: 14px;
+}
+.ge-error.show { display: block; }
+
 </style>
 </head>
 <body>
@@ -1713,7 +1815,47 @@ footer .links a:hover { color: var(--ember); }
     <h2 id="profileName">You</h2>
     <p id="profileStats" style="margin-bottom:24px"></p>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="closeModals()">Keep voting</button>
+    <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openGroupsModal()">👥 My Groups</button>
     <button class="btn btn-ghost" style="width:100%;color:#ff6a6a;border-color:#3a1f1a" onclick="signOut()">Sign out</button>
+  </div>
+</div>
+
+<!-- GROUPS MODAL -->
+<div class="modal-backdrop" id="groupsModal">
+  <div class="modal groups-modal-content">
+    <button class="modal-close-x" onclick="closeGroupsModal()" aria-label="Close">×</button>
+    <h2>My Groups</h2>
+    <p>Create groups to easily invite people to private challenges.</p>
+    <div class="groups-actions">
+      <button class="btn btn-primary" style="width:100%" onclick="openGroupEditor(null)">+ New Group</button>
+    </div>
+    <div class="groups-list" id="groupsList"></div>
+  </div>
+</div>
+
+<!-- GROUP EDITOR MODAL -->
+<div class="modal-backdrop" id="groupEditorModal">
+  <div class="modal groups-modal-content">
+    <button class="modal-close-x" onclick="closeGroupEditor()" aria-label="Close">×</button>
+    <h2 id="groupEditorTitle">New Group</h2>
+    <div class="ge-field">
+      <label for="geName">Group name</label>
+      <input id="geName" type="text" maxlength="50" placeholder="e.g. Friends, Work crew" />
+    </div>
+    <div class="ge-field">
+      <label for="geSearch">Add members</label>
+      <input id="geSearch" type="text" placeholder="Search by handle..." autocomplete="off" />
+      <div class="ge-search-results" id="geSearchResults"></div>
+    </div>
+    <div class="ge-field">
+      <label>Members</label>
+      <div class="ge-members" id="geMembers"></div>
+    </div>
+    <div class="ge-error" id="geError"></div>
+    <div class="ge-actions">
+      <button class="btn btn-ghost" id="geDeleteBtn" onclick="deleteCurrentGroup()" style="display:none;color:#ff6a6a;border-color:#3a1f1a">Delete</button>
+      <button class="btn btn-primary" id="geSaveBtn" onclick="saveGroup()">Save</button>
+    </div>
   </div>
 </div>
 
@@ -2902,6 +3044,229 @@ function startCountdownTimer() {
 // Build pills + start countdown on page load
 buildCategoryPills();
 startCountdownTimer();
+
+/* =========================================================
+   GROUPS — Phase 2.5a
+========================================================= */
+
+let groupsState = {
+  groups: [],
+  editingGroupId: null,
+  editingMembers: [], // [{id, name, avatar}]
+  searchTimer: null,
+};
+
+async function openGroupsModal() {
+  closeModals();
+  document.getElementById('groupsModal').classList.add('open');
+  document.getElementById('groupsList').innerHTML = '<div class="empty-state-mini">Loading...</div>';
+  await loadGroups();
+  renderGroupsList();
+}
+
+function closeGroupsModal() {
+  document.getElementById('groupsModal').classList.remove('open');
+}
+
+async function loadGroups() {
+  if (!state.profile) return;
+  const { data, error } = await db.from('user_groups')
+    .select('id, name, created_at, members:user_group_members(user_id, profile:profiles(id, name, avatar))')
+    .eq('owner_id', state.profile.id)
+    .order('created_at', { ascending: false });
+  if (error) {
+    console.error('groups load error', error);
+    groupsState.groups = [];
+    return;
+  }
+  groupsState.groups = data || [];
+}
+
+function renderGroupsList() {
+  const list = document.getElementById('groupsList');
+  if (!list) return;
+  if (groupsState.groups.length === 0) {
+    list.innerHTML = '<div class="empty-state-mini">No groups yet. Tap + New Group to create one.</div>';
+    return;
+  }
+  list.innerHTML = groupsState.groups.map(g => {
+    const count = (g.members || []).length;
+    return `
+      <div class="group-card" onclick="openGroupEditor('${g.id}')">
+        <div class="group-card-info">
+          <div class="group-card-name">${escapeHtml(g.name)}</div>
+          <div class="group-card-count">${count} member${count === 1 ? '' : 's'}</div>
+        </div>
+        <div class="group-card-arrow">›</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function openGroupEditor(groupId) {
+  groupsState.editingGroupId = groupId;
+  groupsState.editingMembers = [];
+  document.getElementById('geError').classList.remove('show');
+  document.getElementById('geSearch').value = '';
+  document.getElementById('geSearchResults').innerHTML = '';
+
+  if (groupId) {
+    const group = groupsState.groups.find(g => g.id === groupId);
+    if (group) {
+      document.getElementById('groupEditorTitle').textContent = 'Edit Group';
+      document.getElementById('geName').value = group.name;
+      document.getElementById('geDeleteBtn').style.display = 'inline-block';
+      groupsState.editingMembers = (group.members || [])
+        .map(m => m.profile)
+        .filter(Boolean);
+    }
+  } else {
+    document.getElementById('groupEditorTitle').textContent = 'New Group';
+    document.getElementById('geName').value = '';
+    document.getElementById('geDeleteBtn').style.display = 'none';
+  }
+  renderGroupMembers();
+  document.getElementById('groupsModal').classList.remove('open');
+  document.getElementById('groupEditorModal').classList.add('open');
+}
+
+function closeGroupEditor() {
+  document.getElementById('groupEditorModal').classList.remove('open');
+  groupsState.editingGroupId = null;
+  groupsState.editingMembers = [];
+}
+
+function renderGroupMembers() {
+  const wrap = document.getElementById('geMembers');
+  if (!wrap) return;
+  if (groupsState.editingMembers.length === 0) {
+    wrap.innerHTML = '<div class="empty-state-mini" style="width:100%">No members added yet</div>';
+    return;
+  }
+  wrap.innerHTML = groupsState.editingMembers.map(m => `
+    <div class="member-chip">
+      <span class="member-chip-avatar">${escapeHtml(m.avatar || '🔥')}</span>
+      <span class="member-chip-name">${escapeHtml(m.name)}</span>
+      <button class="member-chip-remove" onclick="removeMemberFromGroup('${m.id}')" aria-label="Remove">×</button>
+    </div>
+  `).join('');
+}
+
+function removeMemberFromGroup(id) {
+  groupsState.editingMembers = groupsState.editingMembers.filter(m => m.id !== id);
+  renderGroupMembers();
+}
+
+function addMemberToGroup(id, name, avatar) {
+  if (groupsState.editingMembers.some(m => m.id === id)) return;
+  groupsState.editingMembers.push({ id, name, avatar });
+  renderGroupMembers();
+  document.getElementById('geSearch').value = '';
+  document.getElementById('geSearchResults').innerHTML = '';
+}
+
+// Hook up search input
+document.getElementById('geSearch').addEventListener('input', (e) => {
+  clearTimeout(groupsState.searchTimer);
+  const query = e.target.value.trim();
+  if (query.length < 2) {
+    document.getElementById('geSearchResults').innerHTML = '';
+    return;
+  }
+  groupsState.searchTimer = setTimeout(async () => {
+    const { data, error } = await db.from('profiles')
+      .select('id, name, avatar')
+      .ilike('name', `%${query}%`)
+      .neq('id', state.profile.id)
+      .limit(8);
+    if (error) {
+      console.error('profile search error', error);
+      return;
+    }
+    const existing = new Set(groupsState.editingMembers.map(m => m.id));
+    const results = (data || []).filter(p => !existing.has(p.id));
+    const wrap = document.getElementById('geSearchResults');
+    if (results.length === 0) {
+      wrap.innerHTML = '<div class="empty-state-mini">No matches</div>';
+      return;
+    }
+    wrap.innerHTML = results.map(p => `
+      <div class="search-result" onclick="addMemberToGroup('${p.id}', ${JSON.stringify(p.name)}, ${JSON.stringify(p.avatar || '🔥')})">
+        <span class="search-result-avatar">${escapeHtml(p.avatar || '🔥')}</span>
+        <span class="search-result-name">${escapeHtml(p.name)}</span>
+      </div>
+    `).join('');
+  }, 300);
+});
+
+async function saveGroup() {
+  const name = document.getElementById('geName').value.trim();
+  const errBox = document.getElementById('geError');
+  errBox.classList.remove('show');
+  if (!name) {
+    errBox.textContent = 'Group needs a name.';
+    errBox.classList.add('show');
+    return;
+  }
+
+  const btn = document.getElementById('geSaveBtn');
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = 'Saving...';
+
+  try {
+    let groupId = groupsState.editingGroupId;
+
+    if (groupId) {
+      const { error: updErr } = await db.from('user_groups').update({ name }).eq('id', groupId);
+      if (updErr) throw updErr;
+      const { error: delErr } = await db.from('user_group_members').delete().eq('group_id', groupId);
+      if (delErr) throw delErr;
+    } else {
+      const { data, error } = await db.from('user_groups').insert({
+        owner_id: state.profile.id,
+        name
+      }).select().single();
+      if (error) throw error;
+      groupId = data.id;
+    }
+
+    if (groupsState.editingMembers.length > 0) {
+      const rows = groupsState.editingMembers.map(m => ({ group_id: groupId, user_id: m.id }));
+      const { error: memberError } = await db.from('user_group_members').insert(rows);
+      if (memberError) throw memberError;
+    }
+
+    closeGroupEditor();
+    await loadGroups();
+    document.getElementById('groupsModal').classList.add('open');
+    renderGroupsList();
+    toast('🔥 Group saved');
+  } catch (err) {
+    console.error(err);
+    errBox.textContent = err.message || 'Save failed';
+    errBox.classList.add('show');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+}
+
+async function deleteCurrentGroup() {
+  if (!groupsState.editingGroupId) return;
+  if (!confirm("Delete this group? Any private challenges you created with it stay invited.")) return;
+  const { error } = await db.from('user_groups').delete().eq('id', groupsState.editingGroupId);
+  if (error) {
+    document.getElementById('geError').textContent = error.message;
+    document.getElementById('geError').classList.add('show');
+    return;
+  }
+  closeGroupEditor();
+  await loadGroups();
+  document.getElementById('groupsModal').classList.add('open');
+  renderGroupsList();
+  toast('Group deleted');
+}
 
 /* ---------- BOOT ---------- */
 // Fire-and-forget warm-up ping to wake Supabase up before the user does anything
