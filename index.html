@@ -1067,6 +1067,58 @@ footer .links a:hover { color: var(--ember); }
 .comment-empty { text-align: center; padding: 50px 20px; color: var(--text-dim); }
 .comment-empty .icon { font-size: 40px; margin-bottom: 10px; }
 
+/* Replies, reply actions, mentions */
+.comment-row-actions { display: flex; gap: 14px; margin-top: 6px; }
+.comment-reply-btn, .comment-del {
+  background: none; border: none; padding: 0;
+  font-family: inherit; font-size: 12px; font-weight: 600;
+  color: var(--text-muted); cursor: pointer;
+}
+.comment-reply-btn:hover { color: var(--ember); }
+.comment-del:hover { color: #ff8080; }
+.comment-replies {
+  margin-left: 30px;
+  padding-left: 12px;
+  border-left: 2px solid var(--border, #2a221d);
+}
+.comment-row.is-reply .comment-avatar { width: 30px; height: 30px; font-size: 15px; }
+.mention { color: var(--ember-bright, #ff8a4c); font-weight: 600; }
+
+.reply-banner {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 16px;
+  background: rgba(255,106,44,0.1);
+  border-top: 1px solid var(--border, #2a221d);
+  font-size: 13px; color: var(--text-dim);
+}
+.reply-banner strong { color: var(--ember-bright, #ff8a4c); }
+.reply-banner button { background: none; border: none; color: var(--text-muted); font-size: 14px; cursor: pointer; padding: 4px 8px; }
+
+/* @-mention suggestion list */
+.comment-suggest, .post-suggest {
+  background: var(--surface-2, #15110e);
+  border-top: 1px solid var(--border, #2a221d);
+  max-height: 200px; overflow-y: auto;
+}
+.mention-opt {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; text-align: left;
+  background: none; border: none; cursor: pointer;
+  padding: 10px 16px;
+  color: var(--text); font-family: inherit; font-size: 14px; font-weight: 600;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.mention-opt:hover { background: rgba(255,106,44,0.1); }
+.mention-opt-av {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--ember), var(--coral));
+  display: grid; place-items: center; font-size: 14px; overflow: hidden; flex-shrink: 0;
+}
+.post-suggest {
+  border: 1px solid var(--border, #2a221d);
+  border-radius: 12px; margin-top: 8px;
+}
+
 /* Sticky compose bar at the bottom of the comment sheet */
 .comment-compose {
   position: sticky; bottom: 0;
@@ -1107,6 +1159,33 @@ footer .links a:hover { color: var(--ember); }
 .promote-loading { padding: 70px 24px; color: var(--text-muted); font-size: 14px; text-align: center; line-height: 1.5; }
 .promote-actions { display: flex; gap: 10px; margin-top: 10px; }
 .promote-actions .btn { flex: 1; }
+
+/* Notification settings */
+.notif-settings-btn {
+  margin-left: auto; background: none; border: none;
+  font-size: 20px; cursor: pointer; padding: 4px 8px;
+}
+.np-list { display: flex; flex-direction: column; gap: 2px; }
+.np-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 13px 2px; border-bottom: 1px solid var(--border, #1f1a16);
+  cursor: pointer;
+}
+.np-label { display: flex; align-items: center; gap: 11px; font-size: 15px; color: var(--text); }
+.np-icon { width: 22px; text-align: center; font-size: 16px; }
+.np-toggle {
+  width: 48px; height: 28px; border-radius: 100px;
+  background: rgba(255,255,255,0.12);
+  position: relative; flex-shrink: 0;
+  transition: background 0.2s;
+}
+.np-toggle.on { background: linear-gradient(135deg, var(--ember), var(--flame)); }
+.np-knob {
+  position: absolute; top: 3px; left: 3px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: #fff; transition: transform 0.2s;
+}
+.np-toggle.on .np-knob { transform: translateX(20px); }
 
 /* Heat Check card */
 .heat-check {
@@ -2755,6 +2834,7 @@ footer .links a:hover { color: var(--ember); }
       <div class="cc-field">
         <label for="cpContent">What's the heat? <span class="hint">(1-1000 characters)</span></label>
         <textarea id="cpContent" maxlength="1000" required placeholder="Share what's going on... a win, a vibe, a thought, a hot take..." style="min-height:120px"></textarea>
+        <div class="post-suggest" id="postMentionBox" style="display:none"></div>
       </div>
 
       <div class="cc-field">
@@ -2818,6 +2898,7 @@ footer .links a:hover { color: var(--ember); }
   <div class="cd-sheet-header">
     <button class="cd-close" onclick="closeNotifs()" aria-label="Close">×</button>
     <h2>Notifications</h2>
+    <button class="notif-settings-btn" onclick="openNotifSettings()" aria-label="Notification settings">⚙️</button>
   </div>
   <div class="cd-sheet-inner">
     <div class="notif-list" id="notifList"></div>
@@ -2832,6 +2913,11 @@ footer .links a:hover { color: var(--ember); }
   </div>
   <div class="cd-sheet-inner">
     <div class="comment-list" id="commentList"></div>
+  </div>
+  <div class="comment-suggest" id="commentMentionBox" style="display:none"></div>
+  <div class="reply-banner" id="replyBanner" style="display:none">
+    <span>Replying to <strong id="replyBannerName"></strong></span>
+    <button type="button" onclick="cancelReply()" aria-label="Cancel reply">✕</button>
   </div>
   <div class="comment-compose">
     <input id="commentInput" type="text" maxlength="500" placeholder="Add a comment..." autocomplete="off" />
@@ -2852,6 +2938,17 @@ footer .links a:hover { color: var(--ember); }
       <button class="btn btn-ghost" onclick="promoteCopy()">Copy link</button>
     </div>
     <button class="btn btn-ghost" style="width:100%;margin-top:8px" onclick="closePromote()">Later</button>
+  </div>
+</div>
+
+<!-- NOTIFICATION SETTINGS MODAL -->
+<div class="modal-backdrop" id="notifSettingsModal">
+  <div class="modal">
+    <button class="modal-close-x" onclick="closeNotifSettings()" aria-label="Close">×</button>
+    <h2>Notifications</h2>
+    <p class="promote-sub">Choose which notifications show up in your bell.</p>
+    <div class="np-list" id="notifPrefList"></div>
+    <button class="btn btn-primary" style="width:100%;margin-top:16px" onclick="closeNotifSettings()">Done</button>
   </div>
 </div>
 
@@ -3330,7 +3427,7 @@ footer .links a:hover { color: var(--ember); }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v16 · promote-btn";
+const APP_VERSION = "v17 · mentions-replies-prefs";
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
     persistSession: true,
@@ -3365,6 +3462,9 @@ let state = {
   entryCommentCounts: {},    // entryId -> count
   currentComments: [],       // comments in the open comment sheet
   commentTarget: null,       // { type: 'post'|'entry', id }
+  replyTo: null,             // { id, name } when replying to a comment
+  allProfiles: [],           // for @mention matching + autocomplete
+  notifsAll: [],             // unfiltered notifications (prefs applied to derive state.notifs)
   myFollowing: new Set(),    // user IDs I follow
   followerCounts: {},        // userId -> count
   followingCounts: {},       // userId -> count
@@ -3661,6 +3761,7 @@ async function loadAppData() {
   await loadPosts();
   await loadFollows();
   await loadFeedActivity();
+  await loadMentionableProfiles();
   state.loading = false;
   renderPolls();
   renderLeaderboard();
@@ -3903,10 +4004,102 @@ async function loadNotifications() {
     });
   });
 
+  // 9. Mentions of me
+  try {
+    const rows = await sel('mentions', 'target_type, target_id, author_id', q => q.eq('mentioned_user_id', me), 'mentions');
+    rows.filter(r => r.author_id !== me).forEach(r => {
+      let target = { kind: 'feed' }, where = '';
+      if (r.target_type === 'entry') {
+        const cid = entryChallenge[r.target_id];
+        if (cid) { target = { kind: 'challenge', id: cid }; where = allChTitle[cid] ? ` in ${allChTitle[cid]}` : ''; }
+      }
+      notifs.push({ type: 'mention', actorId: r.author_id, ts: r.created_at || null,
+        text: `mentioned you${where}`, target });
+    });
+  } catch (e) { console.warn('notif mentions', e); }
+
+  // 10. Replies to my comments
+  try {
+    const myComments = await sel('comments', 'id', q => q.eq('user_id', me), 'my comments');
+    const myCommentIds = myComments.map(c => c.id);
+    if (myCommentIds.length) {
+      const replies = await sel('comments', 'user_id, parent_id, target_type, target_id', q => q.in('parent_id', myCommentIds), 'replies');
+      replies.filter(r => r.user_id !== me).forEach(r => {
+        let target = { kind: 'feed' };
+        if (r.target_type === 'entry' && entryChallenge[r.target_id]) target = { kind: 'challenge', id: entryChallenge[r.target_id] };
+        notifs.push({ type: 'reply', actorId: r.user_id, ts: r.created_at || null,
+          text: 'replied to your comment', target });
+      });
+    }
+  } catch (e) { console.warn('notif replies', e); }
+
   notifs.forEach(n => { n.actor = n.actorId ? actorOf(n.actorId) : null; });
   notifs.sort((a, b) => (b.ts ? new Date(b.ts).getTime() : 0) - (a.ts ? new Date(a.ts).getTime() : 0));
-  state.notifs = notifs.slice(0, 60);
+  state.notifsAll = notifs.slice(0, 80);
+  applyNotifPrefs();
+}
+
+/* ---------- NOTIFICATION PREFERENCES ---------- */
+const NOTIF_PREF_DEFS = [
+  { key: 'likes',    label: 'Likes',                     icon: '🔥' },
+  { key: 'comments', label: 'Comments',                  icon: '💬' },
+  { key: 'replies',  label: 'Replies',                   icon: '↩️' },
+  { key: 'mentions', label: 'Mentions',                  icon: '@' },
+  { key: 'follows',  label: 'New followers',             icon: '👤' },
+  { key: 'votes',    label: 'Votes on your challenges',  icon: '🗳️' },
+  { key: 'entries',  label: 'Entries to your challenges', icon: '🎬' },
+  { key: 'results',  label: 'Challenge results',         icon: '🏁' },
+];
+function notifTypeCategory(type) {
+  return ({
+    post_like: 'likes', entry_like: 'likes',
+    comment: 'comments', reply: 'replies', mention: 'mentions',
+    follow: 'follows', vote: 'votes', entry: 'entries', challenge_closed: 'results',
+  })[type];
+}
+function notifPrefKey() { return 'fc_notif_prefs_' + (state.profile?.id || 'anon'); }
+function getNotifPrefs() {
+  try { return JSON.parse(localStorage.getItem(notifPrefKey()) || '{}'); } catch (e) { return {}; }
+}
+function isNotifTypeEnabled(type) {
+  const cat = notifTypeCategory(type);
+  if (!cat) return true;
+  return getNotifPrefs()[cat] !== false; // default on
+}
+function setNotifPref(cat, enabled) {
+  const prefs = getNotifPrefs();
+  prefs[cat] = enabled;
+  try { localStorage.setItem(notifPrefKey(), JSON.stringify(prefs)); } catch (e) {}
+  applyNotifPrefs();
+}
+function applyNotifPrefs() {
+  state.notifs = (state.notifsAll || []).filter(n => isNotifTypeEnabled(n.type));
   renderNotifBadge();
+  if (document.getElementById('notifSheet')?.classList.contains('open')) renderNotifs();
+}
+
+function openNotifSettings() {
+  closeModals();
+  const prefs = getNotifPrefs();
+  const list = document.getElementById('notifPrefList');
+  list.innerHTML = NOTIF_PREF_DEFS.map(d => {
+    const on = prefs[d.key] !== false;
+    return `<label class="np-row">
+      <span class="np-label"><span class="np-icon">${d.icon}</span>${d.label}</span>
+      <span class="np-toggle ${on ? 'on' : ''}" data-pref="${d.key}"><span class="np-knob"></span></span>
+    </label>`;
+  }).join('');
+  list.querySelectorAll('.np-toggle').forEach(t => {
+    t.addEventListener('click', () => {
+      const nowOn = !t.classList.contains('on');
+      t.classList.toggle('on', nowOn);
+      setNotifPref(t.dataset.pref, nowOn);
+    });
+  });
+  document.getElementById('notifSettingsModal').classList.add('open');
+}
+function closeNotifSettings() {
+  document.getElementById('notifSettingsModal').classList.remove('open');
 }
 
 function openNotifs() {
@@ -3929,7 +4122,7 @@ function renderNotifs() {
     list.innerHTML = `<div class="notif-empty"><div class="icon">🔔</div>No notifications yet.<br>When people like, follow, vote, or join your challenges, it'll show up here.</div>`;
     return;
   }
-  const kindIcon = { post_like: '🔥', entry_like: '🔥', follow: '👤', vote: '🗳️', entry: '🎬', comment: '💬', challenge_closed: '🏁' };
+  const kindIcon = { post_like: '🔥', entry_like: '🔥', follow: '👤', vote: '🗳️', entry: '🎬', comment: '💬', reply: '↩️', mention: '@', challenge_closed: '🏁' };
   list.innerHTML = notifs.map((n, i) => {
     const unread = isNotifUnread(n);
     const av = n.actor ? avatarInner(n.actor.avatar) : '🏁';
@@ -3968,6 +4161,8 @@ async function openComments(type, id) {
   if (!state.profile) { toast('Sign in to comment'); return; }
   state.commentTarget = { type, id };
   state.currentComments = [];
+  state.replyTo = null;
+  updateReplyBanner();
   document.getElementById('commentSheetTitle').textContent = 'Comments';
   document.getElementById('commentInput').value = '';
   document.getElementById('commentList').innerHTML = '<div class="comment-empty">Loading…</div>';
@@ -3980,21 +4175,24 @@ function closeComments() {
   document.getElementById('commentSheet').classList.remove('open');
   document.body.style.overflow = '';
   state.commentTarget = null;
+  state.replyTo = null;
+  updateReplyBanner();
 }
 
 async function loadComments() {
   const t = state.commentTarget;
   if (!t) return;
+  const run = (withParent) => db.from('comments')
+    .select('id, user_id, body, created_at' + (withParent ? ', parent_id' : '') + ', author:profiles!comments_user_id_fkey(id, name, avatar)')
+    .eq('target_type', t.type).eq('target_id', t.id)
+    .order('created_at', { ascending: true });
   try {
-    const res = await Promise.race([
-      db.from('comments')
-        .select('id, user_id, body, created_at, author:profiles!comments_user_id_fkey(id, name, avatar)')
-        .eq('target_type', t.type).eq('target_id', t.id)
-        .order('created_at', { ascending: true }),
+    let res = await Promise.race([
+      run(true),
       new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 12000)),
     ]);
+    if (res.error) res = await run(false); // parent_id column may not exist yet
     if (res.error) throw res.error;
-    // Make sure the user hasn't closed/switched the sheet while loading
     if (!state.commentTarget || state.commentTarget.id !== t.id) return;
     state.currentComments = res.data || [];
     renderComments();
@@ -4008,34 +4206,74 @@ async function loadComments() {
 function renderComments() {
   const list = document.getElementById('commentList');
   if (!list) return;
-  const comments = state.currentComments || [];
-  if (!comments.length) {
+  const all = state.currentComments || [];
+  if (!all.length) {
     list.innerHTML = '<div class="comment-empty"><div class="icon">💬</div>No comments yet. Be the first!</div>';
     return;
   }
   const me = state.profile?.id;
-  list.innerHTML = comments.map(c => {
+  const tops = all.filter(c => !c.parent_id);
+  const repliesByParent = {};
+  all.filter(c => c.parent_id).forEach(c => {
+    (repliesByParent[c.parent_id] = repliesByParent[c.parent_id] || []).push(c);
+  });
+
+  function row(c, isReply) {
     const a = c.author || { name: 'Unknown', avatar: '🔥', id: null };
     const mine = c.user_id === me;
     const clickable = a.id && a.id !== me;
-    return `<div class="comment-row">
+    return `<div class="comment-row${isReply ? ' is-reply' : ''}">
       <div class="comment-avatar" ${clickable ? `data-open-uid="${a.id}"` : ''}>${avatarInner(a.avatar)}</div>
       <div class="comment-main">
         <div class="comment-head">
           <span class="comment-name" ${clickable ? `data-open-uid="${a.id}"` : ''}>${escapeHtml(a.name)}</span>
           <span class="comment-time">${timeAgo(c.created_at)}</span>
         </div>
-        <div class="comment-body">${escapeHtml(c.body)}</div>
+        <div class="comment-body">${formatBody(c.body)}</div>
+        <div class="comment-row-actions">
+          <button class="comment-reply-btn" data-reply-id="${c.id}" data-reply-name="${escapeHtml(a.name)}">Reply</button>
+          ${mine ? `<button class="comment-del" data-del-comment="${c.id}">Delete</button>` : ''}
+        </div>
       </div>
-      ${mine ? `<button class="comment-del" data-del-comment="${c.id}">Delete</button>` : ''}
     </div>`;
+  }
+
+  list.innerHTML = tops.map(c => {
+    const replies = (repliesByParent[c.id] || []).map(r => row(r, true)).join('');
+    return row(c, false) + (replies ? `<div class="comment-replies">${replies}</div>` : '');
   }).join('');
+
   list.querySelectorAll('[data-open-uid]').forEach(el => {
     el.addEventListener('click', () => { closeComments(); openUserProfile(el.dataset.openUid); });
   });
   list.querySelectorAll('[data-del-comment]').forEach(btn => {
     btn.addEventListener('click', () => deleteComment(btn.dataset.delComment));
   });
+  list.querySelectorAll('[data-reply-id]').forEach(btn => {
+    btn.addEventListener('click', () => startReply(btn.dataset.replyId, btn.dataset.replyName));
+  });
+}
+
+function startReply(commentId, name) {
+  state.replyTo = { id: commentId, name };
+  updateReplyBanner();
+  document.getElementById('commentInput').focus();
+}
+function cancelReply() {
+  state.replyTo = null;
+  updateReplyBanner();
+}
+function updateReplyBanner() {
+  const banner = document.getElementById('replyBanner');
+  if (!banner) return;
+  if (state.replyTo) {
+    banner.style.display = 'flex';
+    document.getElementById('replyBannerName').textContent = state.replyTo.name;
+    document.getElementById('commentInput').placeholder = `Reply to ${state.replyTo.name}…`;
+  } else {
+    banner.style.display = 'none';
+    document.getElementById('commentInput').placeholder = 'Add a comment...';
+  }
 }
 
 async function postComment() {
@@ -4046,16 +4284,20 @@ async function postComment() {
   if (!body) return;
   const btn = document.getElementById('commentSend');
   btn.disabled = true;
+  const parentId = state.replyTo?.id || null;
   try {
-    const { data, error } = await db.from('comments').insert({
-      target_type: t.type, target_id: t.id, user_id: state.profile.id, body,
-    }).select('id, user_id, body, created_at').single();
+    const insertObj = { target_type: t.type, target_id: t.id, user_id: state.profile.id, body };
+    if (parentId) insertObj.parent_id = parentId;
+    const { data, error } = await db.from('comments').insert(insertObj)
+      .select('id, user_id, body, created_at, parent_id').single();
     if (error) throw error;
     state.currentComments.push({
       ...data,
       author: { id: state.profile.id, name: state.profile.name, avatar: state.profile.avatar },
     });
+    insertMentions('comment', data.id, body);
     input.value = '';
+    cancelReply();
     renderComments();
     bumpCommentCount(t.type, t.id, 1);
     const inner = document.querySelector('#commentSheet .cd-sheet-inner');
@@ -4074,9 +4316,10 @@ async function deleteComment(id) {
   try {
     const { error } = await db.from('comments').delete().eq('id', id);
     if (error) throw error;
-    state.currentComments = state.currentComments.filter(c => c.id !== id);
+    const removed = state.currentComments.filter(c => c.id === id || c.parent_id === id).length;
+    state.currentComments = state.currentComments.filter(c => c.id !== id && c.parent_id !== id);
     renderComments();
-    if (t) bumpCommentCount(t.type, t.id, -1);
+    if (t) bumpCommentCount(t.type, t.id, -removed);
   } catch (e) {
     console.error('delete comment', e);
     toast('Delete failed');
@@ -4099,6 +4342,91 @@ function bumpCommentCount(type, id, delta) {
 document.getElementById('commentInput').addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); postComment(); }
 });
+setupMentionAutocomplete(document.getElementById('commentInput'), document.getElementById('commentMentionBox'));
+setupMentionAutocomplete(document.getElementById('cpContent'), document.getElementById('postMentionBox'));
+
+/* ---------- @MENTIONS ---------- */
+async function loadMentionableProfiles() {
+  try {
+    const { data } = await db.from('profiles').select('id, name, avatar');
+    state.allProfiles = data || [];
+  } catch (e) { console.warn('mentionable profiles', e); }
+}
+
+// Highlight @Name tokens in rendered text (escapes first, then wraps known names)
+function formatBody(text) {
+  const esc = escapeHtml(text || '');
+  const names = (state.allProfiles || []).map(p => p.name).filter(Boolean).sort((a, b) => b.length - a.length);
+  if (!names.length) return esc;
+  const pattern = names.map(n => escapeHtml(n).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  try {
+    const re = new RegExp('@(' + pattern + ')', 'g');
+    return esc.replace(re, '<span class="mention">@$1</span>');
+  } catch (e) { return esc; }
+}
+
+// Find which users were @mentioned in raw text (longest name first, consume to avoid dupes)
+function parseMentions(text) {
+  let t = ' ' + (text || '') + ' ';
+  const names = (state.allProfiles || [])
+    .filter(p => p.name && p.id !== state.profile?.id)
+    .sort((a, b) => b.name.length - a.name.length);
+  const found = [];
+  names.forEach(p => {
+    const token = '@' + p.name;
+    if (t.includes(token)) { found.push(p); t = t.split(token).join(' '); }
+  });
+  return found;
+}
+
+async function insertMentions(targetType, targetId, body) {
+  if (!state.profile) return;
+  const mentioned = parseMentions(body);
+  if (!mentioned.length) return;
+  const rows = mentioned.map(m => ({
+    target_type: targetType, target_id: targetId,
+    mentioned_user_id: m.id, author_id: state.profile.id,
+  }));
+  try { await db.from('mentions').insert(rows); } catch (e) { console.warn('mentions insert', e); }
+}
+
+// Lightweight @-autocomplete for an input/textarea + a suggestion box element
+function setupMentionAutocomplete(input, box) {
+  if (!input || !box) return;
+  const update = () => {
+    const val = input.value;
+    const pos = input.selectionStart ?? val.length;
+    const m = val.slice(0, pos).match(/@(\w*)$/);
+    if (!m) { box.style.display = 'none'; return; }
+    const q = m[1].toLowerCase();
+    const matches = (state.allProfiles || [])
+      .filter(p => p.name && p.id !== state.profile?.id &&
+        p.name.toLowerCase().split(/\s+/).some(tok => tok.startsWith(q)))
+      .slice(0, 5);
+    if (!matches.length) { box.style.display = 'none'; return; }
+    box.innerHTML = matches.map(p =>
+      `<button type="button" class="mention-opt" data-mname="${escapeHtml(p.name)}">
+        <span class="mention-opt-av">${avatarInner(p.avatar)}</span>${escapeHtml(p.name)}
+      </button>`).join('');
+    box.querySelectorAll('.mention-opt').forEach(b => {
+      b.addEventListener('mousedown', e => e.preventDefault());
+      b.addEventListener('click', () => {
+        const val2 = input.value;
+        const pos2 = input.selectionStart ?? val2.length;
+        const upto = val2.slice(0, pos2).replace(/@(\w*)$/, '@' + b.dataset.mname + ' ');
+        const after = val2.slice(pos2);
+        input.value = upto + after;
+        input.focus();
+        const np = upto.length;
+        try { input.setSelectionRange(np, np); } catch (e) {}
+        box.style.display = 'none';
+      });
+    });
+    box.style.display = 'block';
+  };
+  input.addEventListener('input', update);
+  input.addEventListener('blur', () => setTimeout(() => { box.style.display = 'none'; }, 180));
+}
 
 /* ---------- PROMOTE: flyer generation + share ---------- */
 let promoteState = null;
@@ -5240,7 +5568,7 @@ function renderChallengeDetail() {
     } else if (entry.media_type === 'audio' && entry.media_url) {
       mediaHtml = `<div class="cd-audio-wrap"><audio src="${entry.media_url}" controls></audio></div>`;
     } else if (entry.media_type === 'text') {
-      mediaHtml = `<div class="cd-text-entry">${escapeHtml(entry.caption || '')}</div>`;
+      mediaHtml = `<div class="cd-text-entry">${formatBody(entry.caption || '')}</div>`;
     }
 
     let actionsHtml = '';
@@ -5292,7 +5620,7 @@ function renderChallengeDetail() {
             <div class="avatar">${avatarInner(entry.submitter?.avatar)}</div>
             <span>${escapeHtml(entry.submitter?.name || 'Unknown')}${isMyEntry ? ' (you)' : (entry.user_id ? ' <span class="user-plus">+</span>' : '')}</span>
           </div>
-          ${entry.media_type !== 'text' && entry.caption ? `<div class="cd-entry-caption">${escapeHtml(entry.caption)}</div>` : ''}
+          ${entry.media_type !== 'text' && entry.caption ? `<div class="cd-entry-caption">${formatBody(entry.caption)}</div>` : ''}
           ${actionsHtml ? `<div class="cd-entry-actions">${actionsHtml}</div>` : ''}
           ${standingHtml}
         </div>
@@ -5500,14 +5828,16 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
       mediaUrl = pub.publicUrl;
     }
     btn.textContent = 'Submitting...';
-    const { error: entryError } = await db.from('entries').insert({
+    const captionText = ch.media_type === 'text' ? textEntry : (caption || null);
+    const { data: entryData, error: entryError } = await db.from('entries').insert({
       challenge_id: ch.id,
       user_id: state.profile.id,
       media_url: mediaUrl,
       media_type: ch.media_type,
-      caption: ch.media_type === 'text' ? textEntry : (caption || null),
-    });
+      caption: captionText,
+    }).select('id').single();
     if (entryError) throw new Error('Submit failed: ' + entryError.message);
+    if (entryData && captionText) insertMentions('entry', entryData.id, captionText);
 
     toast('🔥 Entry submitted!');
     closeSubmitEntry();
@@ -6270,7 +6600,7 @@ function renderPostCard(p) {
         </div>
         ${isMine ? `<button class="post-card-menu" data-pid="${p.id}" aria-label="Delete post">⋯</button>` : ''}
       </div>
-      <div class="post-card-content">${escapeHtml(p.content)}</div>
+      <div class="post-card-content">${formatBody(p.content)}</div>
       ${mediaHtml}
       <div class="post-card-actions">
         <button class="flame-btn${iLiked ? ' liked' : ''}" ${likeBtnAttrs}>
@@ -6454,6 +6784,9 @@ document.getElementById('createPostForm').addEventListener('submit', async e => 
     console.log('[post] insert response:', insertResp);
     if (insertResp.error) throw new Error('Post failed: ' + (insertResp.error.message || JSON.stringify(insertResp.error)));
 
+    const newPost = insertResp.data && insertResp.data[0];
+    if (newPost) insertMentions('post', newPost.id, content);
+
     closeCreatePost();
     // Fire-and-forget refresh so button always unlocks fast
     loadPosts().then(renderFeed).catch(e => console.error('refresh failed', e));
@@ -6612,7 +6945,7 @@ function renderProfileTab() {
       const likeCount = psState.postLikeCounts[p.id] || 0;
       return `
         <div class="post-card">
-          <div class="post-card-content">${escapeHtml(p.content)}</div>
+          <div class="post-card-content">${formatBody(p.content)}</div>
           ${mediaHtml}
           <div class="post-card-actions">
             <span class="flame-btn" style="cursor:default"><span class="flame-icon">🔥</span><span class="flame-count">${likeCount}</span></span>
