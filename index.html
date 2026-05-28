@@ -1216,6 +1216,101 @@ footer .links a:hover { color: var(--ember); }
   letter-spacing: 0.1em;
   margin-bottom: 18px;
 }
+.hc-tap {
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.hc-tap:active { transform: scale(0.96); }
+.heat-stat.hc-tap:hover { border-color: var(--ember); }
+.heat-ring.hc-tap:hover { box-shadow: 0 0 24px rgba(255,106,44,0.25); }
+
+/* Record sheet */
+.record-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 10px 16px 12px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.record-tab {
+  flex-shrink: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.record-tab.active {
+  background: var(--ember);
+  border-color: var(--ember);
+  color: #fff;
+}
+.record-tab .count {
+  margin-left: 6px;
+  opacity: 0.7;
+  font-weight: 500;
+}
+.record-list { padding: 8px 0 24px; }
+.record-loading, .record-empty {
+  padding: 32px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+.record-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.record-row:active { background: rgba(255,255,255,0.03); }
+.record-thumb {
+  width: 46px;
+  height: 46px;
+  border-radius: 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+.record-body { flex: 1; min-width: 0; }
+.record-title {
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.record-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.record-badge {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 5px 9px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.record-badge.won { background: rgba(255,200,87,0.18); color: var(--gold); border: 1px solid rgba(255,200,87,0.4); }
+.record-badge.lost { background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid var(--border); }
+.record-badge.pending { background: rgba(255,106,44,0.15); color: var(--ember); border: 1px solid rgba(255,106,44,0.4); }
+.record-badge.voided { background: rgba(255,45,31,0.12); color: #ff7a6e; border: 1px solid rgba(255,45,31,0.3); }
 .heat-ring-wrap {
   display: flex;
   align-items: center;
@@ -2624,25 +2719,25 @@ footer .links a:hover { color: var(--ember); }
 
     <div class="heat-check">
       <div class="heat-check-title">Heat Check</div>
-      <div class="heat-check-sub">Your performance</div>
+      <div class="heat-check-sub">Your performance · tap to see</div>
       <div class="heat-ring-wrap">
-        <div class="heat-ring" id="heatRing">
+        <div class="heat-ring hc-tap" id="heatRing" onclick="openRecordSheet('all')" role="button" tabindex="0">
           <div class="heat-ring-text"><span id="heatPct">0</span><span class="pct-sym">%</span></div>
         </div>
         <div class="heat-stats">
-          <div class="heat-stat">
+          <div class="heat-stat hc-tap" onclick="openRecordSheet('wins')" role="button" tabindex="0">
             <div class="label">🥇 Wins</div>
             <div class="val gold" id="heatWins">0</div>
           </div>
-          <div class="heat-stat">
+          <div class="heat-stat hc-tap" onclick="openRecordSheet('all')" role="button" tabindex="0">
             <div class="label">Entries</div>
             <div class="val" id="heatEntries">0</div>
           </div>
-          <div class="heat-stat">
+          <div class="heat-stat hc-tap" onclick="openRecordSheet('all')" role="button" tabindex="0">
             <div class="label">Points</div>
             <div class="val gold" id="heatPoints">0</div>
           </div>
-          <div class="heat-stat">
+          <div class="heat-stat hc-tap" onclick="openRecordSheet('all')" role="button" tabindex="0">
             <div class="label">Streak</div>
             <div class="val" id="heatStreak">0</div>
           </div>
@@ -2909,6 +3004,20 @@ footer .links a:hover { color: var(--ember); }
   </div>
   <div class="cd-sheet-inner">
     <div class="notif-list" id="notifList"></div>
+  </div>
+</div>
+
+<!-- MY RECORD SHEET -->
+<div class="cd-sheet" id="recordSheet" style="z-index:249">
+  <div class="cd-sheet-header">
+    <button class="cd-close" onclick="closeRecordSheet()" aria-label="Close">×</button>
+    <h2>My Record</h2>
+  </div>
+  <div class="record-tabs" id="recordTabs"></div>
+  <div class="cd-sheet-inner">
+    <div class="record-list" id="recordList">
+      <div class="record-loading">Loading your record…</div>
+    </div>
   </div>
 </div>
 
@@ -3434,7 +3543,7 @@ footer .links a:hover { color: var(--ember); }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v18 · notif-post-jump";
+const APP_VERSION = "v19 · heat-check-drill";
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
     persistSession: true,
@@ -4122,6 +4231,150 @@ function openNotifs() {
 function closeNotifs() {
   document.getElementById('notifSheet').classList.remove('open');
   document.body.style.overflow = '';
+}
+
+// =========================
+// MY RECORD (drill-down from Heat Check)
+// =========================
+function openRecordSheet(filter) {
+  state.recordFilter = filter || 'all';
+  document.getElementById('recordSheet').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  renderRecord();
+  // Always reload to reflect latest entry/vote state
+  loadMyRecord().then(renderRecord).catch(e => {
+    console.warn('record load failed', e);
+    const list = document.getElementById('recordList');
+    if (list) list.innerHTML = '<div class="record-empty">Couldn\'t load your record. Try again.</div>';
+  });
+}
+function closeRecordSheet() {
+  document.getElementById('recordSheet').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function computeChallengeStatusFromCh(ch, entryCount) {
+  const now = new Date();
+  if (ch.status === 'voided' || ch.voided_at) return 'voided';
+  const subEnd = ch.submission_deadline ? new Date(ch.submission_deadline) : null;
+  const voteEnd = ch.voting_end ? new Date(ch.voting_end) : null;
+  if (subEnd && now < subEnd) return 'submitting';
+  if (voteEnd && now < voteEnd) return entryCount <= 1 ? 'voided' : 'voting';
+  return entryCount <= 1 ? 'voided' : 'closed';
+}
+
+async function loadMyRecord() {
+  if (!state.profile) { state.myRecord = []; return; }
+  const me = state.profile.id;
+  // My entries
+  const meRes = await db.from('entries')
+    .select('id, challenge_id, created_at, caption, media_type, media_url, challenge:challenges!entries_challenge_id_fkey(id, title, category, submission_deadline, voting_end, is_public, creator_id, status, voided_at)')
+    .eq('user_id', me)
+    .order('created_at', { ascending: false });
+  const myEntries = (meRes.data || []).filter(e => e.challenge);
+  if (!myEntries.length) { state.myRecord = []; return; }
+  const challengeIds = [...new Set(myEntries.map(e => e.challenge_id))];
+  // All entries for those challenges (for ranking + entry counts)
+  const allRes = await db.from('entries').select('id, challenge_id, created_at').in('challenge_id', challengeIds);
+  const allEntries = allRes.data || [];
+  // Votes for those challenges
+  const voteRes = await db.from('entry_votes').select('entry_id, challenge_id').in('challenge_id', challengeIds);
+  const allVotes = voteRes.data || [];
+  const votesByEntry = {};
+  allVotes.forEach(v => { votesByEntry[v.entry_id] = (votesByEntry[v.entry_id] || 0) + 1; });
+  const entriesByChallenge = {};
+  allEntries.forEach(e => { (entriesByChallenge[e.challenge_id] = entriesByChallenge[e.challenge_id] || []).push(e); });
+  state.myRecord = myEntries.map(e => {
+    const ch = e.challenge;
+    const chEntries = entriesByChallenge[ch.id] || [];
+    const status = computeChallengeStatusFromCh(ch, chEntries.length);
+    let result = 'pending';
+    if (status === 'closed') {
+      const sorted = [...chEntries].sort((a, b) => {
+        const dv = (votesByEntry[b.id] || 0) - (votesByEntry[a.id] || 0);
+        if (dv !== 0) return dv;
+        return new Date(a.created_at) - new Date(b.created_at);
+      });
+      const winner = sorted[0];
+      result = winner && winner.id === e.id ? 'won' : 'lost';
+    } else if (status === 'voided') {
+      result = 'voided';
+    }
+    return { challenge: ch, myEntryId: e.id, myCreated: e.created_at, result, myVotes: votesByEntry[e.id] || 0, entryCount: chEntries.length };
+  });
+}
+
+function renderRecord() {
+  const list = document.getElementById('recordList');
+  const tabsEl = document.getElementById('recordTabs');
+  if (!list || !tabsEl) return;
+  const all = state.myRecord;
+  if (!all) {
+    list.innerHTML = '<div class="record-loading">Loading your record…</div>';
+    tabsEl.innerHTML = '';
+    return;
+  }
+  const counts = {
+    all: all.length,
+    wins: all.filter(r => r.result === 'won').length,
+    losses: all.filter(r => r.result === 'lost').length,
+    pending: all.filter(r => r.result === 'pending').length
+  };
+  const filter = state.recordFilter || 'all';
+  const tabs = [
+    { key: 'all', label: 'All' },
+    { key: 'wins', label: '🥇 Wins' },
+    { key: 'losses', label: 'Losses' },
+    { key: 'pending', label: 'Pending' }
+  ];
+  tabsEl.innerHTML = tabs.map(t =>
+    `<button class="record-tab ${filter === t.key ? 'active' : ''}" onclick="setRecordFilter('${t.key}')">${t.label}<span class="count">${counts[t.key]}</span></button>`
+  ).join('');
+  const filtered = filter === 'all' ? all : all.filter(r =>
+    filter === 'wins' ? r.result === 'won' :
+    filter === 'losses' ? r.result === 'lost' :
+    filter === 'pending' ? r.result === 'pending' : true
+  );
+  if (!filtered.length) {
+    const msg = filter === 'wins'
+      ? `No wins yet. Enter a challenge — your first 🥇 is waiting.`
+      : filter === 'losses'
+      ? `No losses on the record. Either you haven't been beat or you haven't been tested.`
+      : filter === 'pending'
+      ? `No active entries right now. Find a challenge and drop one in.`
+      : `You haven't entered any challenges yet. Tap the 🔥 tab to find one.`;
+    list.innerHTML = `<div class="record-empty">${msg}</div>`;
+    return;
+  }
+  const catIcon = { singing: '🎤', dunk: '🏀', drawing: '🎨', rap: '🎙️', fashion: '👗', other: '🔥' };
+  const badgeLabel = { won: '🥇 Won', lost: 'Lost', pending: 'Pending', voided: 'Void' };
+  list.innerHTML = filtered.map(r => {
+    const ch = r.challenge;
+    const icon = catIcon[ch.category] || '🔥';
+    const date = r.myCreated ? new Date(r.myCreated).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+    const voteLine = r.result === 'won' || r.result === 'lost' ? `${r.myVotes} vote${r.myVotes === 1 ? '' : 's'} · ${r.entryCount} entries` : '';
+    const meta = [date, voteLine].filter(Boolean).join(' · ');
+    return `<div class="record-row" onclick="openRecordRow('${ch.id}')">
+      <div class="record-thumb">${icon}</div>
+      <div class="record-body">
+        <div class="record-title">${escapeHtml(ch.title || 'Untitled')}</div>
+        <div class="record-meta">${escapeHtml(meta)}</div>
+      </div>
+      <div class="record-badge ${r.result}">${badgeLabel[r.result]}</div>
+    </div>`;
+  }).join('');
+}
+
+function setRecordFilter(f) {
+  state.recordFilter = f;
+  renderRecord();
+}
+
+function openRecordRow(challengeId) {
+  const ch = (state.challenges || []).find(c => c.id === challengeId);
+  closeRecordSheet();
+  if (ch) openChallenge(ch);
+  else switchView('challenges');
 }
 
 function renderNotifs() {
