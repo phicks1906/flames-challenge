@@ -1094,6 +1094,20 @@ footer .links a:hover { color: var(--ember); }
 .comment-send:disabled { opacity: 0.5; }
 .comment-send:active { transform: scale(0.96); }
 
+/* Promote / flyer modal */
+.promote-modal { max-width: 440px; }
+.promote-sub { font-size: 13px; color: var(--text-dim); margin-bottom: 14px; line-height: 1.45; }
+.promote-preview {
+  border-radius: 16px; overflow: hidden;
+  min-height: 220px; display: grid; place-items: center;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border, #2a221d);
+}
+.promote-flyer-img { width: 100%; display: block; }
+.promote-loading { padding: 70px 24px; color: var(--text-muted); font-size: 14px; text-align: center; line-height: 1.5; }
+.promote-actions { display: flex; gap: 10px; margin-top: 10px; }
+.promote-actions .btn { flex: 1; }
+
 /* Heat Check card */
 .heat-check {
   background: linear-gradient(180deg, var(--surface) 0%, var(--bg-2) 100%);
@@ -2303,6 +2317,17 @@ footer .links a:hover { color: var(--ember); }
 }
 .cd-status-row .ch-status { position: static; }
 .cd-countdown { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 13px; color: var(--text-dim); }
+.cd-share-btn {
+  margin-left: auto;
+  background: rgba(255,106,44,0.14);
+  border: 1px solid rgba(255,106,44,0.4);
+  color: var(--ember-bright, #ff8a4c);
+  border-radius: 100px;
+  padding: 7px 14px;
+  font-family: inherit; font-weight: 700; font-size: 13px;
+  cursor: pointer;
+}
+.cd-share-btn:active { transform: scale(0.95); }
 .cd-hero .ch-category { margin-bottom: 6px; }
 .cd-title {
   font-family: var(--font-display);
@@ -2814,6 +2839,22 @@ footer .links a:hover { color: var(--ember); }
   </div>
 </div>
 
+<!-- PROMOTE / FLYER MODAL -->
+<div class="modal-backdrop" id="promoteModal">
+  <div class="modal promote-modal">
+    <button class="modal-close-x" onclick="closePromote()" aria-label="Close">×</button>
+    <h2 id="promoteTitle">Promote your challenge</h2>
+    <p class="promote-sub">Tap Share to open your phone's share sheet — from there you can save the flyer to Photos or post it anywhere.</p>
+    <div class="promote-preview" id="promotePreview"></div>
+    <button class="btn btn-primary" style="width:100%;margin-top:16px" onclick="promoteShare()">Share</button>
+    <div class="promote-actions">
+      <button class="btn btn-ghost" onclick="promoteSave()">Save image</button>
+      <button class="btn btn-ghost" onclick="promoteCopy()">Copy link</button>
+    </div>
+    <button class="btn btn-ghost" style="width:100%;margin-top:8px" onclick="closePromote()">Later</button>
+  </div>
+</div>
+
 <!-- SUBMIT ENTRY SHEET -->
 <div class="cc-sheet" id="submitEntrySheet">
   <div class="cc-sheet-header">
@@ -2858,6 +2899,7 @@ footer .links a:hover { color: var(--ember); }
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openFindPeople()">🔍 Find People</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openGroupsModal()">👥 My Groups</button>
     <button class="btn btn-ghost" style="width:100%;color:#ff6a6a;border-color:#3a1f1a" onclick="signOut()">Sign out</button>
+    <div id="appVersion" style="text-align:center;margin-top:14px;font-size:11px;color:var(--text-muted);letter-spacing:0.05em"></div>
   </div>
 </div>
 
@@ -3288,6 +3330,7 @@ footer .links a:hover { color: var(--ember); }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
+const APP_VERSION = "v14 · promote";
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
     persistSession: true,
@@ -3533,6 +3576,7 @@ function hydrateApp() {
       await loadProfile();
       showApp();
       await loadAppData();
+      applyDeepLink();
     } catch (err) {
       console.error('hydrateApp failed', err);
     } finally {
@@ -4056,6 +4100,223 @@ document.getElementById('commentInput').addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); postComment(); }
 });
 
+/* ---------- PROMOTE: flyer generation + share ---------- */
+let promoteState = null;
+
+function flyerLink(type, id) {
+  const base = window.location.href.split('?')[0].split('#')[0];
+  return base + (type === 'poll' ? '?poll=' : '?c=') + id;
+}
+
+function _roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function _wrapCentered(ctx, text, cx, startY, maxW, lineH, fontSize, family) {
+  ctx.font = fontSize + 'px ' + family + ', sans-serif';
+  const words = String(text).split(/\s+/);
+  let line = '', lines = [];
+  words.forEach(w => {
+    const test = line ? line + ' ' + w : w;
+    if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; }
+    else line = test;
+  });
+  if (line) lines.push(line);
+  if (lines.length > 4) { lines = lines.slice(0, 4); lines[3] = lines[3] + '…'; }
+  let y = startY;
+  lines.forEach(l => { ctx.fillText(l, cx, y); y += lineH; });
+  return y - lineH;
+}
+
+async function generateFlyer(opts) {
+  try { await document.fonts.ready; } catch (e) {}
+  const W = 1080, H = 1620;
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d');
+
+  ctx.fillStyle = '#0a0807';
+  ctx.fillRect(0, 0, W, H);
+
+  let g = ctx.createRadialGradient(W / 2, 130, 40, W / 2, 130, 920);
+  g.addColorStop(0, 'rgba(255,80,30,0.38)');
+  g.addColorStop(1, 'rgba(255,80,30,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+  g = ctx.createRadialGradient(W / 2, H, 40, W / 2, H, 720);
+  g.addColorStop(0, 'rgba(255,45,31,0.32)');
+  g.addColorStop(1, 'rgba(255,45,31,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+  ctx.strokeStyle = 'rgba(255,106,44,0.40)';
+  ctx.lineWidth = 4;
+  _roundRect(ctx, 36, 36, W - 72, H - 72, 40); ctx.stroke();
+
+  ctx.textAlign = 'center';
+
+  ctx.font = '46px Anton, sans-serif';
+  ctx.fillStyle = '#ff6a2c';
+  ctx.fillText('🔥 FLAMESCHALLENGE', W / 2, 180);
+
+  ctx.font = '600 30px "DM Sans", sans-serif';
+  const kicker = (opts.kicker || '').toUpperCase();
+  const kw = ctx.measureText(kicker).width;
+  ctx.fillStyle = 'rgba(255,106,44,0.18)';
+  _roundRect(ctx, W / 2 - kw / 2 - 30, 236, kw + 60, 58, 29); ctx.fill();
+  ctx.fillStyle = '#ffb38a';
+  ctx.fillText(kicker, W / 2, 275);
+
+  ctx.fillStyle = '#f7f2ec';
+  let y = _wrapCentered(ctx, opts.title, W / 2, 470, W - 200, 108, 98, 'Anton');
+
+  let metaY = y + 70;
+  if (opts.sub) {
+    ctx.font = '500 34px "DM Sans", sans-serif';
+    ctx.fillStyle = '#9a8d80';
+    ctx.fillText(opts.sub, W / 2, metaY);
+    metaY += 70;
+  }
+
+  if (opts.deadlineText) {
+    ctx.font = '700 32px "DM Sans", sans-serif';
+    const dw = ctx.measureText(opts.deadlineText).width;
+    ctx.fillStyle = 'rgba(255,200,87,0.14)';
+    _roundRect(ctx, W / 2 - dw / 2 - 32, metaY, dw + 64, 66, 33); ctx.fill();
+    ctx.fillStyle = '#ffc857';
+    ctx.fillText(opts.deadlineText, W / 2, metaY + 45);
+  }
+
+  ctx.font = '700 46px "DM Sans", sans-serif';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(opts.ctaText, W / 2, H - 250);
+  ctx.font = '700 40px Anton, sans-serif';
+  ctx.fillStyle = '#ff6a2c';
+  ctx.fillText('FLAMESCHALLENGE', W / 2, H - 185);
+  ctx.font = '92px sans-serif';
+  ctx.fillText('🔥', W / 2, H - 85);
+
+  const dataUrl = cv.toDataURL('image/png');
+  const blob = await new Promise(res => cv.toBlob(res, 'image/png'));
+  return { dataUrl, blob };
+}
+
+async function openPromote(type, item) {
+  if (!item || !item.id) return;
+  const link = flyerLink(type, item.id);
+  let opts, modalTitle, shareText;
+
+  if (type === 'poll') {
+    opts = {
+      kicker: 'Live Poll',
+      title: item.question,
+      sub: '',
+      deadlineText: item.hours_remaining ? `⏱ ${item.hours_remaining}h left to vote` : '',
+      ctaText: 'Vote now on',
+    };
+    modalTitle = 'Promote this poll';
+    shareText = `🔥 "${item.question}" — vote on FlamesChallenge`;
+  } else {
+    const creatorName = item.creator?.name || state.profile?.name || '';
+    const status = computeChallengeStatus(item);
+    const phaseTxt = status === 'voting'
+      ? '🗳 Vote now'
+      : (status === 'submitting' ? `⏱ Enter by ${formatCountdown(item.submission_deadline)}` : '');
+    opts = {
+      kicker: item.category || 'Challenge',
+      title: item.title,
+      sub: creatorName ? `Created by ${creatorName}` : '',
+      deadlineText: phaseTxt,
+      ctaText: status === 'voting' ? 'Vote now on' : 'Enter now on',
+    };
+    modalTitle = 'Promote your challenge';
+    shareText = `🔥 ${item.title} — join the challenge on FlamesChallenge`;
+  }
+
+  promoteState = { type, id: item.id, link, shareText, blob: null };
+  document.getElementById('promoteTitle').textContent = modalTitle;
+  document.getElementById('promotePreview').innerHTML = '<div class="promote-loading">Designing your flyer…</div>';
+  document.getElementById('promoteModal').classList.add('open');
+
+  try {
+    const { dataUrl, blob } = await generateFlyer(opts);
+    if (!promoteState || promoteState.id !== item.id) return; // closed/changed
+    promoteState.blob = blob;
+    document.getElementById('promotePreview').innerHTML = `<img src="${dataUrl}" alt="Flyer" class="promote-flyer-img">`;
+  } catch (e) {
+    console.error('flyer error', e);
+    document.getElementById('promotePreview').innerHTML = '<div class="promote-loading">Couldn\'t build the flyer, but you can still share the link below.</div>';
+  }
+}
+
+function closePromote() {
+  document.getElementById('promoteModal').classList.remove('open');
+  promoteState = null;
+}
+
+async function promoteShare() {
+  const s = promoteState;
+  if (!s) return;
+  if (s.blob && navigator.canShare) {
+    const file = new File([s.blob], 'flameschallenge.png', { type: 'image/png' });
+    if (navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], text: s.shareText, url: s.link }); return; }
+      catch (e) { if (e.name === 'AbortError') return; }
+    }
+  }
+  if (navigator.share) {
+    try { await navigator.share({ title: 'FlamesChallenge', text: s.shareText, url: s.link }); return; }
+    catch (e) { if (e.name === 'AbortError') return; }
+  }
+  promoteCopy();
+}
+
+async function promoteSave() {
+  const s = promoteState;
+  if (!s || !s.blob) { toast('Flyer still loading…'); return; }
+  const file = new File([s.blob], 'flameschallenge-flyer.png', { type: 'image/png' });
+  // On iOS, sharing the file alone surfaces "Save Image"
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file] }); return; }
+    catch (e) { if (e.name === 'AbortError') return; }
+  }
+  const url = URL.createObjectURL(s.blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'flameschallenge-flyer.png';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  toast('Flyer saved');
+}
+
+async function promoteCopy() {
+  const s = promoteState;
+  if (!s) return;
+  try { await navigator.clipboard.writeText(s.link); toast('Link copied'); }
+  catch (e) { toast('Tap the address bar to copy the link'); }
+}
+
+// Open a challenge/poll directly when arriving via a shared link
+function applyDeepLink() {
+  let params;
+  try { params = new URLSearchParams(window.location.search); } catch (e) { return; }
+  const cid = params.get('c');
+  const pollId = params.get('poll');
+  if (cid) {
+    const ch = (state.challenges || []).find(c => c.id === cid);
+    if (ch) openChallenge(ch);
+  } else if (pollId) {
+    switchView('polls');
+  }
+  if (cid || pollId) {
+    try { history.replaceState({}, '', window.location.pathname); } catch (e) {}
+  }
+}
+
 function renderHeatCheck() {
   if (!state.profile) return;
   const wins = state.profile.wins || 0;
@@ -4354,13 +4615,7 @@ function renderLeaderboard() {
 
 /* ---------- SHARE ---------- */
 async function sharePoll(poll) {
-  const url = window.location.href.split('?')[0] + '?poll=' + poll.id;
-  const text = `🔥 "${poll.question}" — vote on FlamesChallenge`;
-  if (navigator.share) {
-    try { await navigator.share({ title: 'FlamesChallenge', text, url }); return; } catch(e) {}
-  }
-  try { await navigator.clipboard.writeText(text + ' ' + url); toast('Link copied'); }
-  catch(e) { toast('Tap the address bar to share'); }
+  openPromote('poll', poll);
 }
 
 /* ---------- TABS (for polls categories) ---------- */
@@ -4640,6 +4895,10 @@ document.getElementById('createChallengeForm').addEventListener('submit', async 
     state.cFilter = 'mine';
     document.querySelectorAll('#chTabs .ch-tab').forEach(x => x.classList.toggle('active', x.dataset.cfilter === 'mine'));
     switchView('challenges');
+    // Prompt the creator to promote it (skip for private — nothing public to share)
+    if (ccState.visibility === 'public') {
+      openPromote('challenge', { ...chData, creator: { name: state.profile?.name } });
+    }
   } catch (err) {
     console.error(err);
     showCcError(err.message);
@@ -4907,6 +5166,7 @@ function renderChallengeDetail() {
     <div class="cd-status-row">
       <span class="ch-status ${status}"><span class="dot"></span>${statusLabel}</span>
       ${countdownTarget ? `<span class="cd-countdown">⏱ ${formatCountdown(countdownTarget)}</span>` : ''}
+      ${ch.is_public && status !== 'closed' && status !== 'voided' ? `<button class="cd-share-btn" id="cdShareBtn">🔥 Share</button>` : ''}
     </div>
     <div class="ch-category">${escapeHtml(ch.category)}${ch.is_public ? '' : ' · 🔒 Private'}</div>
     <h1 class="cd-title">${escapeHtml(ch.title)}</h1>
@@ -4916,6 +5176,8 @@ function renderChallengeDetail() {
     </div>
     ${ch.rules ? `<div class="cd-rules"><strong>Rules:</strong> ${escapeHtml(ch.rules)}</div>` : ''}
   `;
+  const shareBtn = document.getElementById('cdShareBtn');
+  if (shareBtn) shareBtn.addEventListener('click', e => { e.stopPropagation(); openPromote('challenge', ch); });
   // Wire creator click
   if (creatorClickable) {
     const cEl = document.getElementById('cdHero').querySelector('[data-user-id]');
@@ -6630,6 +6892,9 @@ if ('serviceWorker' in navigator) {
 db.from('users').select('id').limit(1).then(() => {}, () => {});
 
 (async function boot() {
+  // Stamp the running version so it's easy to confirm what's live
+  const vEl = document.getElementById('appVersion');
+  if (vEl) vEl.textContent = 'FlamesChallenge · ' + APP_VERSION;
   // Get initial session
   const { data: { session } } = await db.auth.getSession();
   state.session = session;
