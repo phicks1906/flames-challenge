@@ -3926,23 +3926,32 @@ function closeChallengeDetail() {
 }
 
 async function loadChallengeDetail(challengeId) {
-  const { data: entries, error: entriesErr } = await db.from('entries')
-    .select('*, submitter:profiles!entries_user_id_fkey(id, name, avatar)')
-    .eq('challenge_id', challengeId);
-  if (entriesErr) {
-    console.error('entries load error', entriesErr);
+  // Timeout wrapper so a hung query can't freeze the sheet on "Loading..."
+  const withTimeout = (p, ms, label) => Promise.race([
+    p,
+    new Promise((_, rej) => setTimeout(() => rej(new Error(label + ' timed out (' + (ms/1000) + 's)')), ms))
+  ]);
+
+  const entriesRes = await withTimeout(
+    db.from('entries').select('*, submitter:profiles!entries_user_id_fkey(id, name, avatar)').eq('challenge_id', challengeId),
+    12000, 'Entries'
+  );
+  if (entriesRes.error) {
+    console.error('entries load error', entriesRes.error);
     state.currentEntries = [];
   } else {
-    state.currentEntries = entries || [];
+    state.currentEntries = entriesRes.data || [];
   }
-  const { data: votes, error: votesErr } = await db.from('entry_votes')
-    .select('id, entry_id, voter_id')
-    .eq('challenge_id', challengeId);
-  if (votesErr) {
-    console.error('votes load error', votesErr);
+
+  const votesRes = await withTimeout(
+    db.from('entry_votes').select('id, entry_id, voter_id').eq('challenge_id', challengeId),
+    12000, 'Votes'
+  );
+  if (votesRes.error) {
+    console.error('votes load error', votesRes.error);
     state.currentVotes = [];
   } else {
-    state.currentVotes = votes || [];
+    state.currentVotes = votesRes.data || [];
   }
   state.myCurrentVote = state.profile
     ? (state.currentVotes.find(v => v.voter_id === state.profile.id)?.entry_id || null)
@@ -3951,21 +3960,25 @@ async function loadChallengeDetail(challengeId) {
   // Load entry likes
   const entryIds = state.currentEntries.map(e => e.id);
   if (entryIds.length > 0) {
-    const { data: likes, error: likesErr } = await db.from('entry_likes')
-      .select('entry_id, user_id')
-      .in('entry_id', entryIds);
-    if (likesErr) {
-      console.error('entry likes load error', likesErr);
+    try {
+      const likesRes = await withTimeout(
+        db.from('entry_likes').select('entry_id, user_id').in('entry_id', entryIds),
+        12000, 'Entry likes'
+      );
+      if (likesRes.error) console.error('entry likes load error', likesRes.error);
+      const counts = {};
+      const mine = new Set();
+      (likesRes.data || []).forEach(l => {
+        counts[l.entry_id] = (counts[l.entry_id] || 0) + 1;
+        if (state.profile && l.user_id === state.profile.id) mine.add(l.entry_id);
+      });
+      Object.assign(state.entryLikeCounts, counts);
+      state.myEntryLikes = mine;
+    } catch (likeErr) {
+      // Likes are non-critical — don't block the whole view if they time out
+      console.error('entry likes timed out, continuing', likeErr);
+      state.myEntryLikes = new Set();
     }
-    const counts = {};
-    const mine = new Set();
-    (likes || []).forEach(l => {
-      counts[l.entry_id] = (counts[l.entry_id] || 0) + 1;
-      if (state.profile && l.user_id === state.profile.id) mine.add(l.entry_id);
-    });
-    // Update global state for entry likes (overlay onto existing)
-    Object.assign(state.entryLikeCounts, counts);
-    state.myEntryLikes = mine; // replace for current challenge view
   }
 }
 
