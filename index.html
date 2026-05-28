@@ -3116,12 +3116,16 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
   const btn = e.target.querySelector('button[type="submit"]');
   btn.disabled = true; const orig = btn.textContent; btn.textContent = 'Logging in...';
 
-  // Race login against a 30s timeout so the button never hangs forever
+  // Clear any stale/stuck local auth state first (a leftover session from a
+  // closed tab can otherwise jam the next sign-in). Local-only, fast.
+  try { await Promise.race([db.auth.signOut({ scope: 'local' }), new Promise(r => setTimeout(r, 2000))]); } catch (e) {}
+
+  // Race login against a 15s timeout so the button never hangs forever
   let result;
   try {
     result = await Promise.race([
       db.auth.signInWithPassword({ email, password }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Login is taking too long. Refresh and try again — the server may be waking up.')), 30000))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Login timed out. Pull down to refresh the page and try again.')), 15000))
     ]);
   } catch (err) {
     result = { error: err };
