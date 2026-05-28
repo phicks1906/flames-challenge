@@ -1084,6 +1084,13 @@ footer .links a:hover { color: var(--ember); }
 .comment-row.is-reply .comment-avatar { width: 30px; height: 30px; font-size: 15px; }
 .mention { color: var(--ember-bright, #ff8a4c); font-weight: 600; }
 
+/* Brief ember flash when a notification scrolls you to a post */
+.post-card.post-highlight { animation: postHighlight 2.6s ease-out; }
+@keyframes postHighlight {
+  0%   { box-shadow: 0 0 0 3px var(--ember), 0 0 50px rgba(255,106,44,0.55); border-color: var(--ember); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
 .reply-banner {
   display: flex; align-items: center; justify-content: space-between;
   padding: 8px 16px;
@@ -3427,7 +3434,7 @@ footer .links a:hover { color: var(--ember); }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v17 · mentions-replies-prefs";
+const APP_VERSION = "v18 · notif-post-jump";
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
     persistSession: true,
@@ -3916,7 +3923,7 @@ async function loadNotifications() {
       const rows = await sel('post_likes', 'post_id, user_id', q => q.in('post_id', myPostIds), 'post likes');
       rows.filter(r => r.user_id !== me).forEach(r => notifs.push({
         type: 'post_like', actorId: r.user_id, ts: r.created_at || null,
-        text: 'liked your post', target: { kind: 'feed' }
+        text: 'liked your post', target: { kind: 'post', id: r.post_id }
       }));
     } catch (e) { console.warn('notif post_likes', e); }
   }
@@ -3975,7 +3982,7 @@ async function loadNotifications() {
       const rows = await sel('comments', 'target_id, user_id', q => q.eq('target_type', 'post').in('target_id', myPostIds), 'post comments');
       rows.filter(r => r.user_id !== me).forEach(r => notifs.push({
         type: 'comment', actorId: r.user_id, ts: r.created_at || null,
-        text: 'commented on your post', target: { kind: 'feed' }
+        text: 'commented on your post', target: { kind: 'post', id: r.target_id }
       }));
     } catch (e) { console.warn('notif post comments', e); }
   }
@@ -4012,6 +4019,8 @@ async function loadNotifications() {
       if (r.target_type === 'entry') {
         const cid = entryChallenge[r.target_id];
         if (cid) { target = { kind: 'challenge', id: cid }; where = allChTitle[cid] ? ` in ${allChTitle[cid]}` : ''; }
+      } else if (r.target_type === 'post') {
+        target = { kind: 'post', id: r.target_id };
       }
       notifs.push({ type: 'mention', actorId: r.author_id, ts: r.created_at || null,
         text: `mentioned you${where}`, target });
@@ -4027,6 +4036,7 @@ async function loadNotifications() {
       replies.filter(r => r.user_id !== me).forEach(r => {
         let target = { kind: 'feed' };
         if (r.target_type === 'entry' && entryChallenge[r.target_id]) target = { kind: 'challenge', id: entryChallenge[r.target_id] };
+        else if (r.target_type === 'post') target = { kind: 'post', id: r.target_id };
         notifs.push({ type: 'reply', actorId: r.user_id, ts: r.created_at || null,
           text: 'replied to your comment', target });
       });
@@ -4153,7 +4163,20 @@ function openNotifTarget(n) {
   else if (t.kind === 'challenge' && t.id) {
     const ch = (state.challenges || []).find(c => c.id === t.id);
     if (ch) openChallenge(ch); else switchView('challenges');
+  } else if (t.kind === 'post' && t.id) {
+    switchView('feed');
+    setTimeout(() => scrollToPost(t.id), 150);
   } else switchView('feed');
+}
+
+function scrollToPost(postId) {
+  const card = document.querySelector(`.post-card[data-pid="${postId}"]`);
+  if (!card) return;
+  try { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
+  card.classList.remove('post-highlight'); // restart animation if same post
+  void card.offsetWidth;
+  card.classList.add('post-highlight');
+  setTimeout(() => card.classList.remove('post-highlight'), 2600);
 }
 
 /* ---------- COMMENTS (posts + entries) ---------- */
@@ -4295,7 +4318,7 @@ async function postComment() {
       ...data,
       author: { id: state.profile.id, name: state.profile.name, avatar: state.profile.avatar },
     });
-    insertMentions('comment', data.id, body);
+    insertMentions(t.type, t.id, body);
     input.value = '';
     cancelReply();
     renderComments();
