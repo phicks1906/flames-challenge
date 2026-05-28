@@ -1348,6 +1348,129 @@ footer .links a:hover { color: var(--ember); }
   text-shadow: 0 1px 2px rgba(0,0,0,0.2);
 }
 
+/* ============ FULL PROFILE SHEET ============ */
+.ps-hero { text-align: center; padding: 6px 0 22px; }
+.ps-avatar {
+  width: 92px; height: 92px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--ember), var(--coral));
+  display: grid; place-items: center;
+  font-size: 44px;
+  margin: 0 auto 14px;
+  box-shadow: 0 10px 30px -8px rgba(255, 80, 30, 0.5);
+}
+.ps-name {
+  font-family: var(--font-display);
+  font-size: clamp(28px, 8vw, 38px);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.ps-stats {
+  display: flex;
+  justify-content: center;
+  gap: 22px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+.ps-stat { text-align: center; min-width: 56px; }
+.ps-stat-val {
+  font-family: var(--font-display);
+  font-size: 26px;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+.ps-stat-val.gold { color: var(--gold); }
+.ps-stat-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-top: 5px;
+}
+.ps-follow-btn { min-width: 200px; }
+.ps-follow-btn.following {
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.ps-follow-btn.following:hover {
+  background: rgba(255, 80, 30, 0.15);
+  border-color: var(--ember);
+  color: var(--ember);
+}
+.ps-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 5px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  margin-bottom: 20px;
+}
+.ps-tab {
+  flex: 1;
+  padding: 10px;
+  border-radius: 100px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.ps-tab.active {
+  background: linear-gradient(135deg, var(--ember), var(--flame));
+  color: #fff;
+  box-shadow: 0 4px 12px -2px rgba(255, 80, 30, 0.4);
+}
+.ps-content { display: flex; flex-direction: column; gap: 14px; min-height: 120px; }
+.ps-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+  font-size: 14px;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+.ps-empty .icon { font-size: 30px; margin-bottom: 8px; opacity: 0.6; }
+/* compact entry/challenge row inside profile */
+.ps-row {
+  display: flex; gap: 12px; align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  cursor: pointer;
+  transition: border-color 0.2s, transform 0.1s;
+}
+.ps-row:active { transform: scale(0.99); }
+.ps-row:hover { border-color: var(--ember); }
+.ps-row-thumb {
+  width: 56px; height: 56px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #1a1410, #0a0805);
+  display: grid; place-items: center;
+  font-size: 24px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.ps-row-thumb img, .ps-row-thumb video { width: 100%; height: 100%; object-fit: cover; }
+.ps-row-info { flex: 1; min-width: 0; }
+.ps-row-label {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+  color: var(--ember); font-weight: 700; margin-bottom: 2px;
+}
+.ps-row-title {
+  font-weight: 600; font-size: 15px; margin-bottom: 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ps-row-meta { font-size: 12px; color: var(--text-muted); }
+
 /* Feed item: challenge tile (mini card style) */
 .feed-challenge-card {
   background: var(--surface);
@@ -2386,6 +2509,28 @@ footer .links a:hover { color: var(--ember); }
       <button class="btn btn-primary" id="cdAddEntryBtn" onclick="openSubmitEntry()" style="display:none">+ Submit your entry</button>
     </div>
     <div class="cd-entries-grid" id="cdEntriesGrid"></div>
+  </div>
+</div>
+
+<!-- FULL PROFILE SHEET -->
+<div class="cd-sheet" id="profileSheet" style="z-index:248">
+  <div class="cd-sheet-header">
+    <button class="cd-close" onclick="closeProfileSheet()" aria-label="Close">×</button>
+    <h2 id="psHeaderName">Profile</h2>
+  </div>
+  <div class="cd-sheet-inner">
+    <div class="ps-hero">
+      <div class="ps-avatar" id="psAvatar">🔥</div>
+      <div class="ps-name" id="psName">User</div>
+      <div class="ps-stats" id="psStats"></div>
+      <button class="btn btn-primary ps-follow-btn" id="psFollowBtn" style="display:none"></button>
+    </div>
+    <div class="ps-tabs">
+      <button class="ps-tab active" data-pstab="posts">Posts</button>
+      <button class="ps-tab" data-pstab="challenges">Challenges</button>
+      <button class="ps-tab" data-pstab="entries">Entries</button>
+    </div>
+    <div class="ps-content" id="psContent"></div>
   </div>
 </div>
 
@@ -4997,79 +5142,203 @@ async function loadFollows() {
 }
 
 let upmCurrentUserId = null;
+let psState = { userId: null, tab: 'posts', profile: null, posts: [], challenges: [], entries: [], postLikeCounts: {} };
 
 async function openUserProfile(userId) {
   if (!userId) { console.warn('[openUserProfile] no userId'); return; }
-  console.log('[openUserProfile] called with', userId);
-  upmCurrentUserId = userId;
+  console.log('[openUserProfile] opening', userId);
+  psState = { userId, tab: 'posts', profile: null, posts: [], challenges: [], entries: [], postLikeCounts: {} };
 
-  // If it's me, show my own profile modal instead
-  if (state.profile && userId === state.profile.id) {
-    closeModals();
-    openProfile();
+  // Open sheet with loading state immediately
+  document.getElementById('psHeaderName').textContent = 'Profile';
+  document.getElementById('psAvatar').textContent = '⏳';
+  document.getElementById('psName').textContent = 'Loading...';
+  document.getElementById('psStats').innerHTML = '';
+  document.getElementById('psFollowBtn').style.display = 'none';
+  document.getElementById('psContent').innerHTML = '<div class="ps-empty">Loading…</div>';
+  document.querySelectorAll('.ps-tab').forEach(t => t.classList.toggle('active', t.dataset.pstab === 'posts'));
+  document.getElementById('profileSheet').classList.add('open');
+  document.body.style.overflow = 'hidden';
+
+  try {
+    const [profRes, chRes, enRes, postRes] = await Promise.all([
+      db.from('profiles').select('id, name, avatar, points, streak').eq('id', userId).maybeSingle(),
+      db.from('challenges').select('*, creator:profiles!challenges_creator_id_fkey(id, name, avatar)').eq('creator_id', userId).order('created_at', { ascending: false }),
+      db.from('entries').select('*, challenge:challenges(id, title, media_type, submission_deadline, voting_end, is_public, creator_id, category, rules, created_at)').eq('user_id', userId).order('created_at', { ascending: false }),
+      db.from('posts').select('*, author:profiles!posts_user_id_fkey(id, name, avatar)').eq('user_id', userId).order('created_at', { ascending: false }),
+    ]);
+
+    if (profRes.error) throw profRes.error;
+    if (!profRes.data) {
+      document.getElementById('psName').textContent = 'User not found';
+      document.getElementById('psAvatar').textContent = '❓';
+      document.getElementById('psContent').innerHTML = '<div class="ps-empty">This profile could not be loaded.</div>';
+      return;
+    }
+
+    psState.profile = profRes.data;
+    psState.challenges = chRes.data || [];
+    psState.entries = enRes.data || [];
+    psState.posts = postRes.data || [];
+
+    // Like counts for their posts
+    const postIds = psState.posts.map(p => p.id);
+    if (postIds.length > 0) {
+      const { data: likes } = await db.from('post_likes').select('post_id').in('post_id', postIds);
+      const counts = {};
+      (likes || []).forEach(l => { counts[l.post_id] = (counts[l.post_id] || 0) + 1; });
+      psState.postLikeCounts = counts;
+    }
+
+    renderProfileSheet();
+  } catch (err) {
+    console.error('[openUserProfile] error', err);
+    document.getElementById('psName').textContent = 'Error';
+    document.getElementById('psContent').innerHTML = `<div class="ps-empty" style="color:#ff6b7a">${escapeHtml(err.message || String(err))}</div>`;
+  }
+}
+
+function renderProfileSheet() {
+  const prof = psState.profile;
+  if (!prof) return;
+  const isMe = state.profile && prof.id === state.profile.id;
+
+  document.getElementById('psHeaderName').textContent = prof.name || 'Profile';
+  document.getElementById('psAvatar').textContent = prof.avatar || '🔥';
+  document.getElementById('psName').textContent = (prof.name || 'User') + (isMe ? ' (you)' : '');
+
+  const followers = state.followerCounts[prof.id] || 0;
+  const following = state.followingCounts[prof.id] || 0;
+  document.getElementById('psStats').innerHTML = `
+    <div class="ps-stat"><div class="ps-stat-val gold">${formatNum(prof.points || 0)}</div><div class="ps-stat-label">Points</div></div>
+    <div class="ps-stat"><div class="ps-stat-val">${psState.entries.length}</div><div class="ps-stat-label">Entries</div></div>
+    <div class="ps-stat"><div class="ps-stat-val">${psState.challenges.length}</div><div class="ps-stat-label">Challenges</div></div>
+    <div class="ps-stat"><div class="ps-stat-val">${followers}</div><div class="ps-stat-label">Followers</div></div>
+    <div class="ps-stat"><div class="ps-stat-val">${following}</div><div class="ps-stat-label">Following</div></div>
+  `;
+
+  const btn = document.getElementById('psFollowBtn');
+  if (isMe) {
+    btn.style.display = 'none';
+  } else {
+    btn.style.display = 'inline-flex';
+    const isFollowing = state.myFollowing.has(prof.id);
+    btn.textContent = isFollowing ? '✓ Following' : '+ Follow';
+    btn.classList.toggle('following', isFollowing);
+    btn.onclick = () => toggleFollowFromSheet(prof.id);
+  }
+
+  renderProfileTab();
+}
+
+function renderProfileTab() {
+  const c = document.getElementById('psContent');
+  const tab = psState.tab;
+
+  if (tab === 'posts') {
+    if (psState.posts.length === 0) {
+      c.innerHTML = '<div class="ps-empty"><div class="icon">📝</div>No posts yet.</div>';
+      return;
+    }
+    c.innerHTML = psState.posts.map(p => {
+      let mediaHtml = '';
+      if (p.media_url) {
+        mediaHtml = p.media_type === 'video'
+          ? `<div class="post-card-media"><video src="${escapeHtml(p.media_url)}" controls playsinline preload="metadata"></video></div>`
+          : `<div class="post-card-media"><img src="${escapeHtml(p.media_url)}" alt="" loading="lazy"></div>`;
+      }
+      const likeCount = psState.postLikeCounts[p.id] || 0;
+      return `
+        <div class="post-card">
+          <div class="post-card-content">${escapeHtml(p.content)}</div>
+          ${mediaHtml}
+          <div class="post-card-actions">
+            <span class="flame-btn" style="cursor:default"><span class="flame-icon">🔥</span><span class="flame-count">${likeCount}</span></span>
+            <span class="post-card-time" style="margin-left:auto">${timeAgo(p.created_at)}</span>
+          </div>
+        </div>`;
+    }).join('');
     return;
   }
 
-  // Show modal IMMEDIATELY with loading state so user sees something happened
-  document.getElementById('upmAvatar').textContent = '⏳';
-  document.getElementById('upmName').textContent = 'Loading...';
-  document.getElementById('upmHandle').textContent = '';
-  document.getElementById('upmPoints').textContent = '0';
-  document.getElementById('upmWins').textContent = '0';
-  document.getElementById('upmFollowers').textContent = state.followerCounts[userId] || 0;
-  document.getElementById('upmFollowing').textContent = state.followingCounts[userId] || 0;
-  document.getElementById('upmFollowBtn').textContent = '...';
-  document.getElementById('userProfileModal').classList.add('open');
-
-  // Fetch user profile — use safe columns only, maybeSingle so empty doesn't error
-  try {
-    const { data: prof, error } = await db.from('profiles')
-      .select('id, name, avatar, points, streak')
-      .eq('id', userId)
-      .maybeSingle();
-    if (error) {
-      console.error('[openUserProfile] fetch error', error);
-      document.getElementById('upmName').textContent = 'Error loading';
-      toast('Profile load error: ' + (error.message || 'unknown'));
+  if (tab === 'challenges') {
+    if (psState.challenges.length === 0) {
+      c.innerHTML = '<div class="ps-empty"><div class="icon">🏆</div>No challenges created yet.</div>';
       return;
     }
-    if (!prof) {
-      document.getElementById('upmName').textContent = 'User not found';
+    c.innerHTML = psState.challenges.map(ch => {
+      const stat = computeChallengeStatus(ch);
+      const label = { submitting: 'OPEN', voting: 'VOTING', closed: 'CLOSED', voided: 'VOIDED' }[stat] || 'CHALLENGE';
+      const count = state.entryCounts[ch.id] || 0;
+      return `
+        <div class="ps-row" data-cid="${ch.id}">
+          <div class="ps-row-thumb">🏆</div>
+          <div class="ps-row-info">
+            <div class="ps-row-label">${label}${ch.is_public ? '' : ' · 🔒'}</div>
+            <div class="ps-row-title">${escapeHtml(ch.title)}</div>
+            <div class="ps-row-meta">${count} ${count === 1 ? 'entry' : 'entries'} · ${escapeHtml(ch.category)}</div>
+          </div>
+        </div>`;
+    }).join('');
+    wireProfileRows();
+    return;
+  }
+
+  if (tab === 'entries') {
+    if (psState.entries.length === 0) {
+      c.innerHTML = '<div class="ps-empty"><div class="icon">🎬</div>No entries yet.</div>';
       return;
     }
-
-    document.getElementById('upmAvatar').textContent = prof.avatar || '🔥';
-    document.getElementById('upmName').textContent = prof.name || 'User';
-    document.getElementById('upmHandle').textContent = '';
-    document.getElementById('upmPoints').textContent = prof.points || 0;
-    document.getElementById('upmWins').textContent = prof.wins || 0;
-    document.getElementById('upmFollowers').textContent = state.followerCounts[userId] || 0;
-    document.getElementById('upmFollowing').textContent = state.followingCounts[userId] || 0;
-
-    const btn = document.getElementById('upmFollowBtn');
-    const isFollowing = state.myFollowing.has(userId);
-    btn.textContent = isFollowing ? '✓ Following' : '+ Follow';
-    btn.classList.toggle('following', isFollowing);
-    btn.onclick = () => toggleFollow(userId);
-  } catch (err) {
-    console.error('[openUserProfile] threw', err);
-    document.getElementById('upmName').textContent = 'Error';
-    toast('Threw: ' + (err.message || String(err)));
+    c.innerHTML = psState.entries.map(en => {
+      const ch = en.challenge || {};
+      let thumb = '🎬';
+      if (en.media_type === 'photo' && en.media_url) thumb = `<img src="${escapeHtml(en.media_url)}" alt="">`;
+      else if (en.media_type === 'video' && en.media_url) thumb = `<video src="${escapeHtml(en.media_url)}" muted preload="metadata"></video>`;
+      else thumb = { photo:'📷', video:'🎬', audio:'🎵', text:'✍️' }[en.media_type] || '🎬';
+      return `
+        <div class="ps-row" data-cid="${ch.id || ''}">
+          <div class="ps-row-thumb">${thumb}</div>
+          <div class="ps-row-info">
+            <div class="ps-row-label">ENTRY</div>
+            <div class="ps-row-title">${escapeHtml(ch.title || 'Challenge')}</div>
+            <div class="ps-row-meta">${escapeHtml(en.caption || (en.media_type + ' entry'))}</div>
+          </div>
+        </div>`;
+    }).join('');
+    wireProfileRows();
+    return;
   }
 }
 
-function closeUserProfile() {
-  document.getElementById('userProfileModal').classList.remove('open');
-  upmCurrentUserId = null;
+function wireProfileRows() {
+  document.querySelectorAll('#psContent .ps-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const cid = row.dataset.cid;
+      if (!cid) return;
+      const ch = state.challenges.find(x => x.id === cid)
+        || psState.challenges.find(x => x.id === cid)
+        || (psState.entries.find(e => e.challenge?.id === cid)?.challenge);
+      if (ch) { closeProfileSheet(); openChallenge(ch); }
+    });
+  });
 }
 
-async function toggleFollow(userId) {
+function closeProfileSheet() {
+  document.getElementById('profileSheet').classList.remove('open');
+  document.body.style.overflow = '';
+  psState.userId = null;
+}
+
+// keep old name working for any leftover callers
+function closeUserProfile() { closeProfileSheet(); }
+
+async function toggleFollowFromSheet(userId) {
   if (!state.profile || !userId || userId === state.profile.id) return;
   const wasFollowing = state.myFollowing.has(userId);
-  const btn = document.getElementById('upmFollowBtn');
-
-  // Optimistic UI
+  const btn = document.getElementById('psFollowBtn');
   btn.disabled = true;
+
+  // Optimistic
   if (wasFollowing) {
     state.myFollowing.delete(userId);
     state.followerCounts[userId] = Math.max(0, (state.followerCounts[userId] || 1) - 1);
@@ -5081,21 +5350,16 @@ async function toggleFollow(userId) {
   }
   btn.textContent = !wasFollowing ? '✓ Following' : '+ Follow';
   btn.classList.toggle('following', !wasFollowing);
-  document.getElementById('upmFollowers').textContent = state.followerCounts[userId] || 0;
+  renderProfileSheet(); // refresh follower stat
 
   try {
     if (wasFollowing) {
-      const { error } = await db.from('follows')
-        .delete()
-        .eq('follower_id', state.profile.id)
-        .eq('followee_id', userId);
+      const { error } = await db.from('follows').delete().eq('follower_id', state.profile.id).eq('followee_id', userId);
       if (error) throw error;
     } else {
-      const { error } = await db.from('follows')
-        .insert({ follower_id: state.profile.id, followee_id: userId });
+      const { error } = await db.from('follows').insert({ follower_id: state.profile.id, followee_id: userId });
       if (error) throw error;
     }
-    // Re-render feed in case Following tab is active
     if (state.currentView === 'feed') renderFeed();
   } catch (err) {
     console.error('follow toggle error', err);
@@ -5109,14 +5373,21 @@ async function toggleFollow(userId) {
       state.followerCounts[userId] = Math.max(0, (state.followerCounts[userId] || 1) - 1);
       state.followingCounts[state.profile.id] = Math.max(0, (state.followingCounts[state.profile.id] || 1) - 1);
     }
-    btn.textContent = wasFollowing ? '✓ Following' : '+ Follow';
-    btn.classList.toggle('following', wasFollowing);
-    document.getElementById('upmFollowers').textContent = state.followerCounts[userId] || 0;
+    renderProfileSheet();
     toast('Follow failed');
   } finally {
-    btn.disabled = false;
+    document.getElementById('psFollowBtn').disabled = false;
   }
 }
+
+// Profile tab switching
+document.querySelectorAll('.ps-tab').forEach(t => {
+  t.addEventListener('click', () => {
+    psState.tab = t.dataset.pstab;
+    document.querySelectorAll('.ps-tab').forEach(x => x.classList.toggle('active', x.dataset.pstab === psState.tab));
+    renderProfileTab();
+  });
+});
 
 // Wire feed tab buttons
 document.querySelectorAll('.feed-tab').forEach(t => {
