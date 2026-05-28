@@ -1623,8 +1623,16 @@ footer .links a:hover { color: var(--ember); }
   letter-spacing: 0.5px;
   color: var(--ember);
   font-weight: 700;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
+.fcl-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; }
+.feed-challenge-label.submitting { color: #6effa6; }
+.feed-challenge-label.voting { color: var(--ember-bright); }
+.feed-challenge-label.closed { color: rgba(255,255,255,0.7); }
+.feed-challenge-label.voided { color: #ff8080; }
 .feed-challenge-title {
   font-weight: 600;
   font-size: 15px;
@@ -4422,6 +4430,16 @@ function computeChallengeStatus(ch) {
   return 'closed';
 }
 
+// One shared, action-first label set so every screen reads the same way.
+function challengePhase(stat) {
+  return ({
+    submitting: { label: 'OPEN TO ENTER', cls: 'submitting' },
+    voting:     { label: 'VOTE NOW',      cls: 'voting' },
+    closed:     { label: 'DECIDED',       cls: 'closed' },
+    voided:     { label: 'NO CONTEST',    cls: 'voided' },
+  })[stat] || { label: 'CHALLENGE', cls: '' };
+}
+
 function formatCountdown(targetDate) {
   const diff = new Date(targetDate) - new Date();
   if (diff <= 0) return 'just now';
@@ -4483,12 +4501,7 @@ function renderChallenges() {
       mediaHtml = `<div class="media-fallback">${icon}</div>`;
     }
 
-    const statusLabel = {
-      'submitting': 'Submitting',
-      'voting': 'Voting',
-      'closed': 'Closed',
-      'voided': 'Voided',
-    }[ch.computedStatus];
+    const statusLabel = challengePhase(ch.computedStatus).label;
 
     const countdownTarget = ch.computedStatus === 'submitting' ? ch.submission_deadline :
                             ch.computedStatus === 'voting' ? ch.voting_end : null;
@@ -4619,7 +4632,7 @@ function renderChallengeDetail() {
   if (!ch) return;
 
   const status = computeChallengeStatus(ch);
-  const statusLabel = { submitting:'Submitting', voting:'Voting', closed:'Closed', voided:'Voided' }[status];
+  const statusLabel = challengePhase(status).label;
   const countdownTarget = status === 'submitting' ? ch.submission_deadline : status === 'voting' ? ch.voting_end : null;
 
   // Hero
@@ -5708,20 +5721,20 @@ function renderPostCard(p) {
 }
 
 function renderFeedChallengeCard(ch) {
-  const statusLabels = { submitting: 'OPEN', voting: 'VOTING', closed: 'CLOSED', voided: 'VOIDED' };
-  const label = statusLabels[ch.computedStatus] || 'CHALLENGE';
+  const phase = challengePhase(ch.computedStatus);
   const creator = ch.creator || { name: 'Unknown' };
   const entryCount = state.entryCounts[ch.id] || 0;
+  const entryWord = entryCount === 1 ? 'entry' : 'entries';
   const meta = ch.computedStatus === 'submitting'
-    ? `${entryCount} ${entryCount === 1 ? 'entry' : 'entries'} · closes ${formatCountdown(ch.submission_deadline)}`
+    ? `${entryCount} ${entryWord} · enter by ${formatCountdown(ch.submission_deadline)}`
     : ch.computedStatus === 'voting'
-    ? `Vote now · ends ${formatCountdown(ch.voting_end)}`
-    : `${entryCount} ${entryCount === 1 ? 'entry' : 'entries'} · by ${escapeHtml(creator.name)}`;
+    ? `Tap to vote · voting ends ${formatCountdown(ch.voting_end)}`
+    : `${entryCount} ${entryWord} · by ${escapeHtml(creator.name)}`;
   return `
     <div class="feed-challenge-card" data-cid="${ch.id}">
       <div class="feed-challenge-thumb">🏆</div>
       <div class="feed-challenge-info">
-        <div class="feed-challenge-label">${label}</div>
+        <div class="feed-challenge-label ${phase.cls}"><span class="fcl-dot"></span>${phase.label}</div>
         <div class="feed-challenge-title">${escapeHtml(ch.title)}</div>
         <div class="feed-challenge-meta">${meta}</div>
       </div>
@@ -6052,7 +6065,7 @@ function renderProfileTab() {
     }
     c.innerHTML = psState.challenges.map(ch => {
       const stat = computeChallengeStatus(ch);
-      const label = { submitting: 'OPEN', voting: 'VOTING', closed: 'CLOSED', voided: 'VOIDED' }[stat] || 'CHALLENGE';
+      const label = challengePhase(stat).label;
       const count = state.entryCounts[ch.id] || 0;
       return `
         <div class="ps-row" data-cid="${ch.id}">
