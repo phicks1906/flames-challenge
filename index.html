@@ -1511,6 +1511,34 @@ footer .links a:hover { color: var(--ember); }
   flex-direction: column;
   gap: 14px;
 }
+
+/* "🔥 N new" pill that appears at the top when fresh items arrive */
+.feed-new-pill {
+  position: sticky;
+  top: 70px; /* below the nav */
+  z-index: 60;
+  align-self: center;
+  margin: 0 auto 14px;
+  background: linear-gradient(135deg, var(--ember), var(--flame));
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 10px 22px;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  box-shadow: 0 8px 28px -6px rgba(255,80,30,0.65), 0 0 0 4px rgba(255,106,44,0.12);
+  animation: pillIn 0.25s ease-out;
+  -webkit-tap-highlight-color: transparent;
+  width: max-content;
+  display: block;
+}
+.feed-new-pill:active { transform: scale(0.96); }
+@keyframes pillIn {
+  from { transform: translateY(-12px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
 .feed-empty {
   text-align: center;
   padding: 50px 20px;
@@ -2868,6 +2896,7 @@ footer .links a:hover { color: var(--ember); }
       <div class="composer-input">What's the heat? Share something...</div>
     </div>
 
+    <button id="feedNewPill" class="feed-new-pill" style="display:none" onclick="applyFeedNewItems()" aria-label="Show new items"></button>
     <div id="feedContainer" class="feed-container"></div>
   </div>
 </section>
@@ -3668,7 +3697,7 @@ footer .links a:hover { color: var(--ember); }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v24 · follow-plus-fix";
+const APP_VERSION = "v25 · live-updates";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -3914,6 +3943,7 @@ async function forgotPassword() {
 async function signOut() {
   if (!confirm("Sign out?")) return;
   closeModals();
+  stopLiveUpdates();
   // Optimistically swap views right away so the user gets immediate feedback
   state.session = null;
   state.profile = null;
@@ -4034,6 +4064,112 @@ async function loadAppData() {
   renderFeedHello();
   renderFeed();
   loadNotifications();
+  startLiveUpdates();
+}
+
+// =========================
+// LIVE UPDATES — polling tick, paused when tab hidden
+// =========================
+const LIVE_TICK_MS = 15000;
+let _liveTickHandle = null;
+let _liveTickRunning = false;
+state.feedBaselineTs = 0;       // newest ts at last renderFeed
+state.pendingFeedCount = 0;     // count of items newer than baseline
+
+function startLiveUpdates() {
+  if (_liveTickHandle) return;
+  _liveTickHandle = setInterval(liveTick, LIVE_TICK_MS);
+  document.addEventListener('visibilitychange', _liveVisHandler);
+}
+function stopLiveUpdates() {
+  if (_liveTickHandle) { clearInterval(_liveTickHandle); _liveTickHandle = null; }
+  document.removeEventListener('visibilitychange', _liveVisHandler);
+  hideFeedNewPill();
+}
+function _liveVisHandler() {
+  if (!document.hidden && state.profile) liveTick();
+}
+
+async function liveTick() {
+  if (_liveTickRunning) return;       // skip if previous still running
+  if (document.hidden) return;
+  if (!state.profile) return;
+  _liveTickRunning = true;
+  try {
+    // 1) Notifications (cheap, silent badge update)
+    try { await loadNotifications(); } catch (e) { /* silent */ }
+
+    // 2) Per-view refresh
+    if (state.currentView === 'feed') {
+      try {
+        await Promise.all([loadPosts(), loadFeedActivity(), loadChallenges()]);
+        checkForFeedNewItems();
+      } catch (e) { /* silent */ }
+    } else if (state.currentChallenge) {
+      try { await refreshChallengeVotes(state.currentChallenge.id); } catch (e) { /* silent */ }
+    }
+  } finally {
+    _liveTickRunning = false;
+  }
+}
+
+// Returns the sortKey timestamps for all items the feed would render right now.
+function _feedAllSortKeys() {
+  const ks = [];
+  const myId = state.profile?.id;
+  (state.posts || []).forEach(p => ks.push(new Date(p.created_at).getTime()));
+  // Challenges (active/voting, public or mine, last 14d) — matches renderFeed
+  const chCutoff = Date.now() - 14 * 86400000;
+  (state.challenges || []).forEach(ch => {
+    if (!(ch.is_public || ch.creator_id === myId)) return;
+    if (new Date(ch.created_at).getTime() < chCutoff) return;
+    const st = computeChallengeStatus(ch);
+    if (st === 'submitting' || st === 'voting') ks.push(new Date(ch.created_at).getTime());
+  });
+  // Entries (state.feedEntries)
+  (state.feedEntries || []).forEach(e => ks.push(new Date(e.created_at).getTime()));
+  // Winners (closed challenges' voting_end)
+  const winCutoff = Date.now() - 21 * 86400000;
+  (state.challenges || []).forEach(ch => {
+    if (computeChallengeStatus(ch) !== 'closed') return;
+    if (!(ch.is_public || ch.creator_id === myId)) return;
+    if (new Date(ch.voting_end).getTime() < winCutoff) return;
+    ks.push(new Date(ch.voting_end).getTime());
+  });
+  return ks;
+}
+
+function checkForFeedNewItems() {
+  if (state.currentView !== 'feed') return;
+  const baseline = state.feedBaselineTs || 0;
+  const ks = _feedAllSortKeys();
+  const newCount = ks.filter(t => t > baseline).length;
+  state.pendingFeedCount = newCount;
+  if (newCount > 0) showFeedNewPill(newCount);
+  else hideFeedNewPill();
+}
+
+function showFeedNewPill(n) {
+  const pill = document.getElementById('feedNewPill');
+  if (!pill) return;
+  pill.textContent = `🔥 ${n} new ${n === 1 ? 'item' : 'items'} — tap to refresh`;
+  pill.style.display = 'block';
+}
+function hideFeedNewPill() {
+  const pill = document.getElementById('feedNewPill');
+  if (pill) pill.style.display = 'none';
+}
+
+function applyFeedNewItems() {
+  hideFeedNewPill();
+  renderFeed();
+  state.pendingFeedCount = 0;
+  try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { window.scrollTo(0, 0); }
+}
+
+function updateFeedBaseline() {
+  const ks = _feedAllSortKeys();
+  state.feedBaselineTs = ks.length ? Math.max(...ks) : 0;
 }
 
 async function loadFeedActivity() {
@@ -7096,6 +7232,8 @@ function renderFeed() {
           Feed's quiet right now. Be the first to post or create a challenge.
         </div>`;
     }
+    updateFeedBaseline();
+    hideFeedNewPill();
     return;
   }
 
@@ -7106,6 +7244,9 @@ function renderFeed() {
     if (item.kind === 'winner') return renderFeedWinnerCard(item.data);
     return '';
   }).join('');
+
+  updateFeedBaseline();
+  hideFeedNewPill();
 
   // Wire up post menus
   c.querySelectorAll('.post-card-menu').forEach(btn => {
