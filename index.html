@@ -3116,19 +3116,47 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
   const btn = e.target.querySelector('button[type="submit"]');
   btn.disabled = true; const orig = btn.textContent; btn.textContent = 'Logging in...';
 
-  // Clear any stale/stuck local auth state first (a leftover session from a
-  // closed tab can otherwise jam the next sign-in). Local-only, fast.
-  try { await Promise.race([db.auth.signOut({ scope: 'local' }), new Promise(r => setTimeout(r, 2000))]); } catch (e) {}
-
-  // Race login against a 15s timeout so the button never hangs forever
+  const t0 = Date.now();
   let result;
   try {
     result = await Promise.race([
       db.auth.signInWithPassword({ email, password }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Login timed out. Pull down to refresh the page and try again.')), 15000))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('__SDK_TIMEOUT__')), 12000))
     ]);
   } catch (err) {
     result = { error: err };
+  }
+  const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+
+  // DIAGNOSTIC: if the SDK call hung, test the raw auth endpoint directly to
+  // see whether it's the network/server or the Supabase client library.
+  if (result.error && result.error.message === '__SDK_TIMEOUT__') {
+    btn.textContent = 'Testing connection...';
+    try {
+      const resp = await Promise.race([
+        fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+          body: JSON.stringify({ email, password }),
+        }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('raw-timeout')), 12000)),
+      ]);
+      const bodyText = await resp.text();
+      btn.disabled = false; btn.textContent = orig;
+      if (resp.ok) {
+        // The server logged us in fine — the SDK is the thing that's stuck.
+        showAuthError(`Server OK (HTTP ${resp.status}) but the app's login library hung after ${elapsed}s. This is a client bug — screenshot this and send it.`);
+      } else {
+        showAuthError(`Server responded HTTP ${resp.status}: ${bodyText.slice(0, 160)}`);
+      }
+      console.log('[login diag] raw status', resp.status, bodyText);
+      return;
+    } catch (rawErr) {
+      btn.disabled = false; btn.textContent = orig;
+      showAuthError(`Both the app and a direct test couldn't reach Supabase (${rawErr.message}). The Supabase project may be PAUSED — check your Supabase dashboard and tap "Restore"/"Resume" if it is.`);
+      console.log('[login diag] raw fetch failed', rawErr);
+      return;
+    }
   }
 
   btn.disabled = false; btn.textContent = orig;
@@ -3143,17 +3171,11 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
     return;
   }
 
-  // Manually swap to app (don't rely solely on auth state listener)
+  // Manually kick off app hydration (the deferred auth listener also calls this;
+  // hydrateApp is guarded so it only runs once).
   if (result.data?.session) {
     state.session = result.data.session;
-    try {
-      await loadProfile();
-      showApp();
-      await loadAppData();
-    } catch (err) {
-      console.error('Post-login load failed', err);
-      showAuthError('Logged in but failed to load data. Refresh the page.');
-    }
+    hydrateApp();
   }
 });
 
@@ -3226,18 +3248,36 @@ async function signOut() {
 }
 
 /* ---------- AUTH STATE LISTENER ---------- */
-db.auth.onAuthStateChange(async (event, session) => {
+// IMPORTANT: this callback must NOT be async and must NOT await Supabase calls
+// directly — doing so deadlocks the auth client (login hangs). We defer any DB
+// work with setTimeout(…, 0) to escape the auth callback context.
+let _appLoadInFlight = false;
+function hydrateApp() {
+  if (_appLoadInFlight || state.profile) return;
+  _appLoadInFlight = true;
+  (async () => {
+    try {
+      await loadProfile();
+      showApp();
+      await loadAppData();
+    } catch (err) {
+      console.error('hydrateApp failed', err);
+    } finally {
+      _appLoadInFlight = false;
+    }
+  })();
+}
+
+db.auth.onAuthStateChange((event, session) => {
   state.session = session;
-  if (session) {
-    // Logged in — load profile + show app
-    await loadProfile();
-    showApp();
-    await loadAppData();
-  } else {
-    // Logged out — show auth
+  if (!session) {
     state.profile = null;
+    _appLoadInFlight = false;
     showAuth();
+    return;
   }
+  // Defer DB work out of the callback to avoid deadlocking auth
+  setTimeout(hydrateApp, 0);
 });
 
 async function loadProfile() {
@@ -5704,9 +5744,7 @@ db.from('users').select('id').limit(1).then(() => {}, () => {});
   const { data: { session } } = await db.auth.getSession();
   state.session = session;
   if (session) {
-    await loadProfile();
-    showApp();
-    await loadAppData();
+    hydrateApp();
   } else {
     showAuth();
   }
