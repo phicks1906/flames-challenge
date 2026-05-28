@@ -1258,13 +1258,75 @@ footer .links a:hover { color: var(--ember); }
   color: var(--ember);
 }
 
+/* Find People search results */
+.fp-result {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  margin-bottom: 8px;
+  transition: background 0.15s;
+}
+.fp-result:hover { background: rgba(255,255,255,0.05); }
+.fp-result-avatar {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--ember), var(--coral));
+  display: grid; place-items: center;
+  font-size: 18px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.fp-result-name {
+  flex: 1;
+  font-weight: 600;
+  font-size: 15px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.fp-result-name:hover { color: var(--ember); }
+.fp-result-follow {
+  background: linear-gradient(135deg, var(--ember), var(--flame));
+  border: none;
+  color: #fff;
+  padding: 6px 14px;
+  border-radius: 100px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.fp-result-follow.following {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+.fp-result-follow:active { transform: scale(0.95); }
+
 /* Clickable user element */
 .user-clickable {
   cursor: pointer;
-  transition: opacity 0.2s;
+  transition: opacity 0.2s, color 0.2s;
+}
+.user-clickable:hover .post-card-name,
+.user-clickable:hover {
+  color: var(--ember);
 }
 .user-clickable:active {
-  opacity: 0.7;
+  opacity: 0.6;
+}
+.post-card-name.user-clickable,
+.post-card-name[data-user-id] {
+  cursor: pointer;
+}
+.post-card-name[data-user-id]:hover {
+  color: var(--ember);
 }
 
 /* Feed item: challenge tile (mini card style) */
@@ -2348,6 +2410,7 @@ footer .links a:hover { color: var(--ember); }
     <h2 id="profileName">You</h2>
     <p id="profileStats" style="margin-bottom:24px"></p>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="closeModals()">Keep voting</button>
+    <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openFindPeople()">🔍 Find People</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openGroupsModal()">👥 My Groups</button>
     <button class="btn btn-ghost" style="width:100%;color:#ff6a6a;border-color:#3a1f1a" onclick="signOut()">Sign out</button>
   </div>
@@ -2383,6 +2446,17 @@ footer .links a:hover { color: var(--ember); }
       </div>
     </div>
     <button class="btn btn-primary upm-follow-btn" id="upmFollowBtn">Follow</button>
+  </div>
+</div>
+
+<!-- FIND PEOPLE MODAL -->
+<div class="modal-backdrop" id="findPeopleModal">
+  <div class="modal groups-modal-content">
+    <button class="modal-close-x" onclick="closeFindPeople()" aria-label="Close">×</button>
+    <h2>🔍 Find People</h2>
+    <p style="color:var(--text-muted);margin-bottom:14px;font-size:14px">Search by handle or name. Follow to see their stuff in your feed.</p>
+    <input id="fpSearchInput" type="text" placeholder="Search users..." autocomplete="off" class="cc-invite-search" />
+    <div class="ge-search-results" id="fpSearchResults" style="margin-top:14px;max-height:50vh;overflow-y:auto"></div>
   </div>
 </div>
 
@@ -5000,6 +5074,112 @@ document.querySelectorAll('.feed-tab').forEach(t => {
     document.querySelectorAll('.feed-tab').forEach(x => x.classList.toggle('active', x.dataset.feedtab === state.feedTab));
     renderFeed();
   });
+});
+
+/* ============================================
+   FIND PEOPLE (User Search)
+   ============================================ */
+
+let fpSearchTimer = null;
+
+function openFindPeople() {
+  closeModals();
+  document.getElementById('fpSearchInput').value = '';
+  document.getElementById('fpSearchResults').innerHTML = '<div class="empty-state-mini" style="color:var(--text-muted)">Type a name to find people...</div>';
+  document.getElementById('findPeopleModal').classList.add('open');
+  setTimeout(() => document.getElementById('fpSearchInput').focus(), 100);
+}
+
+function closeFindPeople() {
+  document.getElementById('findPeopleModal').classList.remove('open');
+}
+
+async function renderFindPeopleResults(query) {
+  const wrap = document.getElementById('fpSearchResults');
+  if (!query || query.length < 2) {
+    wrap.innerHTML = '<div class="empty-state-mini" style="color:var(--text-muted)">Type a name to find people...</div>';
+    return;
+  }
+  wrap.innerHTML = '<div class="empty-state-mini">Searching...</div>';
+  try {
+    const { data, error } = await db.from('profiles')
+      .select('id, name, avatar')
+      .ilike('name', `%${query}%`)
+      .limit(20);
+    if (error) {
+      wrap.innerHTML = `<div class="empty-state-mini" style="color:#ff6b7a">Error: ${escapeHtml(error.message)}</div>`;
+      return;
+    }
+    const myId = state.profile?.id;
+    const results = (data || []).filter(p => p.id !== myId);
+    if (results.length === 0) {
+      wrap.innerHTML = `<div class="empty-state-mini">No matches for "${escapeHtml(query)}"</div>`;
+      return;
+    }
+    wrap.innerHTML = results.map(p => {
+      const isFollowing = state.myFollowing.has(p.id);
+      return `
+        <div class="fp-result" data-uid="${p.id}">
+          <div class="fp-result-avatar" data-open-uid="${p.id}">${escapeHtml(p.avatar || '🔥')}</div>
+          <div class="fp-result-name" data-open-uid="${p.id}">${escapeHtml(p.name)}</div>
+          <button class="fp-result-follow${isFollowing ? ' following' : ''}" data-toggle-uid="${p.id}">${isFollowing ? '✓ Following' : '+ Follow'}</button>
+        </div>`;
+    }).join('');
+
+    // Avatar/name → open profile
+    wrap.querySelectorAll('[data-open-uid]').forEach(el => {
+      el.addEventListener('click', () => {
+        closeFindPeople();
+        openUserProfile(el.dataset.openUid);
+      });
+    });
+    // Inline follow toggle
+    wrap.querySelectorAll('[data-toggle-uid]').forEach(btn => {
+      btn.addEventListener('click', async e => {
+        e.stopPropagation();
+        const uid = btn.dataset.toggleUid;
+        const wasFollowing = state.myFollowing.has(uid);
+        btn.disabled = true;
+        try {
+          if (wasFollowing) {
+            const { error } = await db.from('follows')
+              .delete()
+              .eq('follower_id', state.profile.id)
+              .eq('followee_id', uid);
+            if (error) throw error;
+            state.myFollowing.delete(uid);
+            state.followerCounts[uid] = Math.max(0, (state.followerCounts[uid] || 1) - 1);
+            state.followingCounts[state.profile.id] = Math.max(0, (state.followingCounts[state.profile.id] || 1) - 1);
+            btn.textContent = '+ Follow';
+            btn.classList.remove('following');
+          } else {
+            const { error } = await db.from('follows')
+              .insert({ follower_id: state.profile.id, followee_id: uid });
+            if (error) throw error;
+            state.myFollowing.add(uid);
+            state.followerCounts[uid] = (state.followerCounts[uid] || 0) + 1;
+            state.followingCounts[state.profile.id] = (state.followingCounts[state.profile.id] || 0) + 1;
+            btn.textContent = '✓ Following';
+            btn.classList.add('following');
+          }
+          if (state.currentView === 'feed') renderFeed();
+        } catch (err) {
+          console.error('follow toggle from search error', err);
+          toast('Follow failed');
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
+  } catch (err) {
+    wrap.innerHTML = `<div class="empty-state-mini" style="color:#ff6b7a">Threw: ${escapeHtml(err.message || String(err))}</div>`;
+  }
+}
+
+document.getElementById('fpSearchInput').addEventListener('input', e => {
+  clearTimeout(fpSearchTimer);
+  const q = e.target.value.trim();
+  fpSearchTimer = setTimeout(() => renderFindPeopleResults(q), 250);
 });
 
 /* ---------- BOOT ---------- */
