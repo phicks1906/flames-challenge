@@ -5531,6 +5531,14 @@ document.getElementById('fpSearchInput').addEventListener('input', e => {
 });
 
 /* ---------- BOOT ---------- */
+// Register the service worker so new deploys show up on a normal reload
+// (no cache-clearing, no private tabs needed — which keeps you logged in).
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW registration failed', err));
+  });
+}
+
 // Fire-and-forget warm-up ping to wake Supabase up before the user does anything
 db.from('users').select('id').limit(1).then(() => {}, () => {});
 
