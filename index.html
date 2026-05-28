@@ -555,7 +555,7 @@ main, header, footer, section { position: relative; z-index: 2; }
   position: fixed; inset: 0;
   background: rgba(0, 0, 0, 0.85);
   backdrop-filter: blur(10px);
-  z-index: 200;
+  z-index: 260;
   display: none;
   align-items: center; justify-content: center;
   padding: 20px;
@@ -4969,7 +4969,8 @@ async function loadFollows() {
 let upmCurrentUserId = null;
 
 async function openUserProfile(userId) {
-  if (!userId) return;
+  if (!userId) { console.warn('[openUserProfile] no userId'); return; }
+  console.log('[openUserProfile] called with', userId);
   upmCurrentUserId = userId;
 
   // If it's me, show my own profile modal instead
@@ -4979,32 +4980,52 @@ async function openUserProfile(userId) {
     return;
   }
 
-  // Fetch user profile
-  const { data: prof, error } = await db.from('profiles')
-    .select('id, name, avatar, points, wins, losses, streak')
-    .eq('id', userId)
-    .single();
-  if (error || !prof) {
-    console.error('user profile fetch error', error);
-    toast('Could not load profile');
-    return;
-  }
-
-  document.getElementById('upmAvatar').textContent = prof.avatar || '🔥';
-  document.getElementById('upmName').textContent = prof.name || 'User';
+  // Show modal IMMEDIATELY with loading state so user sees something happened
+  document.getElementById('upmAvatar').textContent = '⏳';
+  document.getElementById('upmName').textContent = 'Loading...';
   document.getElementById('upmHandle').textContent = '';
-  document.getElementById('upmPoints').textContent = prof.points || 0;
-  document.getElementById('upmWins').textContent = prof.wins || 0;
+  document.getElementById('upmPoints').textContent = '0';
+  document.getElementById('upmWins').textContent = '0';
   document.getElementById('upmFollowers').textContent = state.followerCounts[userId] || 0;
   document.getElementById('upmFollowing').textContent = state.followingCounts[userId] || 0;
-
-  const btn = document.getElementById('upmFollowBtn');
-  const isFollowing = state.myFollowing.has(userId);
-  btn.textContent = isFollowing ? '✓ Following' : '+ Follow';
-  btn.classList.toggle('following', isFollowing);
-  btn.onclick = () => toggleFollow(userId);
-
+  document.getElementById('upmFollowBtn').textContent = '...';
   document.getElementById('userProfileModal').classList.add('open');
+
+  // Fetch user profile — use safe columns only, maybeSingle so empty doesn't error
+  try {
+    const { data: prof, error } = await db.from('profiles')
+      .select('id, name, avatar, points, streak')
+      .eq('id', userId)
+      .maybeSingle();
+    if (error) {
+      console.error('[openUserProfile] fetch error', error);
+      document.getElementById('upmName').textContent = 'Error loading';
+      toast('Profile load error: ' + (error.message || 'unknown'));
+      return;
+    }
+    if (!prof) {
+      document.getElementById('upmName').textContent = 'User not found';
+      return;
+    }
+
+    document.getElementById('upmAvatar').textContent = prof.avatar || '🔥';
+    document.getElementById('upmName').textContent = prof.name || 'User';
+    document.getElementById('upmHandle').textContent = '';
+    document.getElementById('upmPoints').textContent = prof.points || 0;
+    document.getElementById('upmWins').textContent = prof.wins || 0;
+    document.getElementById('upmFollowers').textContent = state.followerCounts[userId] || 0;
+    document.getElementById('upmFollowing').textContent = state.followingCounts[userId] || 0;
+
+    const btn = document.getElementById('upmFollowBtn');
+    const isFollowing = state.myFollowing.has(userId);
+    btn.textContent = isFollowing ? '✓ Following' : '+ Follow';
+    btn.classList.toggle('following', isFollowing);
+    btn.onclick = () => toggleFollow(userId);
+  } catch (err) {
+    console.error('[openUserProfile] threw', err);
+    document.getElementById('upmName').textContent = 'Error';
+    toast('Threw: ' + (err.message || String(err)));
+  }
 }
 
 function closeUserProfile() {
@@ -5100,20 +5121,34 @@ async function renderFindPeopleResults(query) {
     wrap.innerHTML = '<div class="empty-state-mini" style="color:var(--text-muted)">Type a name to find people...</div>';
     return;
   }
+  console.log('[find people] searching for:', query);
   wrap.innerHTML = '<div class="empty-state-mini">Searching...</div>';
+
+  if (!state.profile || !state.profile.id) {
+    wrap.innerHTML = '<div class="empty-state-mini" style="color:#ff6b7a">Not logged in</div>';
+    return;
+  }
+
   try {
-    const { data, error } = await db.from('profiles')
-      .select('id, name, avatar')
-      .ilike('name', `%${query}%`)
-      .limit(20);
+    // Race the query against a 12s timeout so it can't hang forever
+    const result = await Promise.race([
+      db.from('profiles').select('id, name, avatar').ilike('name', `%${query}%`).limit(20),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('Search timed out (12s)')), 12000))
+    ]);
+    const { data, error } = result;
+    console.log('[find people] result:', { rows: (data || []).length, error });
+
     if (error) {
       wrap.innerHTML = `<div class="empty-state-mini" style="color:#ff6b7a">Error: ${escapeHtml(error.message)}</div>`;
       return;
     }
     const myId = state.profile?.id;
+    const totalCount = (data || []).length;
     const results = (data || []).filter(p => p.id !== myId);
+    console.log('[find people] filtered:', results.length, 'of', totalCount);
     if (results.length === 0) {
-      wrap.innerHTML = `<div class="empty-state-mini">No matches for "${escapeHtml(query)}"</div>`;
+      const note = totalCount > 0 ? ` (${totalCount} matched, but only you)` : '';
+      wrap.innerHTML = `<div class="empty-state-mini">No matches for "${escapeHtml(query)}"${note}</div>`;
       return;
     }
     wrap.innerHTML = results.map(p => {
@@ -5172,7 +5207,8 @@ async function renderFindPeopleResults(query) {
       });
     });
   } catch (err) {
-    wrap.innerHTML = `<div class="empty-state-mini" style="color:#ff6b7a">Threw: ${escapeHtml(err.message || String(err))}</div>`;
+    console.error('[find people] threw', err);
+    wrap.innerHTML = `<div class="empty-state-mini" style="color:#ff6b7a">${escapeHtml(err.message || String(err))}</div>`;
   }
 }
 
@@ -5189,7 +5225,7 @@ db.from('users').select('id').limit(1).then(() => {}, () => {});
 (async function boot() {
   // Get initial session
   const { data: { session } } = await db.auth.getSession();
-  state.session = session;
+  state.session = session; 
   if (session) {
     await loadProfile();
     showApp();
