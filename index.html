@@ -6,6 +6,10 @@
 <meta name="theme-color" content="#000000" />
 <meta name="color-scheme" content="dark" />
 <meta name="supported-color-schemes" content="dark" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Flames" />
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
@@ -3015,7 +3019,18 @@ footer .links a:hover { color: var(--ember); }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    // Safari/iOS can leave the default navigator.locks lock stuck after a tab
+    // closes or you log out, which makes the NEXT login hang forever. Using a
+    // no-op lock (just run the function) bypasses Web Locks entirely. Safe for
+    // a single-tab mobile app.
+    lock: async (_name, _acquireTimeout, fn) => await fn(),
+  },
+});
 
 const AVATARS = ["🔥","⚡","🦊","🐺","🦅","🐉","🦁","🐯","🦈","🐧","🐙","🦉","🦄","🐝","🦖","🐢","🦋","🌶️","⭐","💎","🎯","🎲","🚀","👑"];
 
