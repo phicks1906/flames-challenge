@@ -1515,6 +1515,35 @@ footer .links a:hover { color: var(--ember); }
   color: var(--text-muted);
 }
 
+/* Feed activity cards: "X submitted to Y" / "X won Y" */
+.feed-activity-card {
+  display: flex; gap: 12px; align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  cursor: pointer;
+  transition: border-color 0.2s, transform 0.1s;
+}
+.feed-activity-card:active { transform: scale(0.99); }
+.feed-activity-card:hover { border-color: var(--ember); }
+.feed-activity-card.winner {
+  border-color: rgba(255,200,87,0.3);
+  background: linear-gradient(180deg, rgba(255,200,87,0.06), var(--surface));
+}
+.fa-avatar {
+  width: 42px; height: 42px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--ember), var(--coral));
+  display: grid; place-items: center; font-size: 20px; flex-shrink: 0;
+}
+.fa-avatar.gold { background: linear-gradient(135deg, var(--gold), #e0a020); }
+.fa-body { flex: 1; min-width: 0; }
+.fa-text { font-size: 14px; line-height: 1.4; color: var(--text-dim); }
+.fa-name { font-weight: 700; color: var(--text); }
+.fa-target { font-weight: 600; color: var(--ember); }
+.feed-activity-card.winner .fa-target { color: var(--gold); }
+.fa-time { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+
 /* Compact nav links */
 .nav-links {
   display: flex;
@@ -3255,6 +3284,7 @@ async function loadAppData() {
   await loadChallenges();
   await loadPosts();
   await loadFollows();
+  await loadFeedActivity();
   state.loading = false;
   renderPolls();
   renderLeaderboard();
@@ -3262,6 +3292,33 @@ async function loadAppData() {
   renderHeatCheck();
   renderFeedHello();
   renderFeed();
+}
+
+async function loadFeedActivity() {
+  // Recent entries (with submitter) + vote counts, used to build
+  // "submitted to" and "won" activity items in the feed.
+  const cutoff = new Date(Date.now() - 21 * 86400000).toISOString();
+  try {
+    const withTimeout = (p, ms, label) => Promise.race([
+      p, new Promise((_, rej) => setTimeout(() => rej(new Error(label + ' timeout')), ms))
+    ]);
+    const [entriesRes, votesRes] = await Promise.all([
+      withTimeout(db.from('entries')
+        .select('id, challenge_id, user_id, created_at, submitter:profiles!entries_user_id_fkey(id, name, avatar)')
+        .gte('created_at', cutoff)
+        .order('created_at', { ascending: false })
+        .limit(200), 12000, 'Feed entries'),
+      withTimeout(db.from('entry_votes').select('entry_id'), 12000, 'Feed votes'),
+    ]);
+    state.feedEntries = entriesRes.data || [];
+    const vc = {};
+    (votesRes.data || []).forEach(v => { vc[v.entry_id] = (vc[v.entry_id] || 0) + 1; });
+    state.feedVoteCounts = vc;
+  } catch (err) {
+    console.error('feed activity load error', err);
+    state.feedEntries = state.feedEntries || [];
+    state.feedVoteCounts = state.feedVoteCounts || {};
+  }
 }
 
 async function loadLeaderboard() {
@@ -4856,11 +4913,13 @@ function renderFeed() {
   }
   const postItems = posts.map(p => ({ kind: 'post', sortKey: p.created_at, data: p }));
 
-  // Include recent public challenges (active or voting) — last 14 days
+  // Include recent public challenges that are still active/voting — last 14 days.
+  // Closed challenges are represented by "winner" activity cards instead.
   const cutoff = new Date(Date.now() - 14 * 86400000);
   let challenges = (state.challenges || [])
     .filter(ch => ch.is_public || ch.creator_id === myId)
-    .filter(ch => new Date(ch.created_at) >= cutoff);
+    .filter(ch => new Date(ch.created_at) >= cutoff)
+    .filter(ch => ['submitting', 'voting'].includes(computeChallengeStatus(ch)));
   if (followingMode && myId) {
     challenges = challenges.filter(ch => ch.creator_id === myId || state.myFollowing.has(ch.creator_id));
   }
@@ -4870,7 +4929,43 @@ function renderFeed() {
     data: { ...ch, computedStatus: computeChallengeStatus(ch) },
   }));
 
-  const mixed = [...postItems, ...challengeItems].sort((a, b) =>
+  // Entry events — "X submitted to [challenge]" (skip the creator's founding entry)
+  let entryEvents = (state.feedEntries || [])
+    .map(e => {
+      const ch = state.challenges.find(c => c.id === e.challenge_id);
+      return ch ? { e, ch } : null;
+    })
+    .filter(Boolean)
+    .filter(({ ch }) => ch.is_public || ch.creator_id === myId)
+    .filter(({ e, ch }) => e.user_id !== ch.creator_id);
+  if (followingMode && myId) {
+    entryEvents = entryEvents.filter(({ e }) => e.user_id === myId || state.myFollowing.has(e.user_id));
+  }
+  const entryItems = entryEvents.map(({ e, ch }) => ({
+    kind: 'entry', sortKey: e.created_at, data: { entry: e, challenge: ch },
+  }));
+
+  // Winner events — closed challenges (recently) with a clear top-voted entry
+  const recentClosedCutoff = Date.now() - 21 * 86400000;
+  let winnerEvents = [];
+  (state.challenges || []).forEach(ch => {
+    if (computeChallengeStatus(ch) !== 'closed') return;
+    if (!(ch.is_public || ch.creator_id === myId)) return;
+    if (new Date(ch.voting_end).getTime() < recentClosedCutoff) return;
+    const chEntries = (state.feedEntries || []).filter(e => e.challenge_id === ch.id);
+    if (chEntries.length < 2) return; // voided / not enough
+    let winner = null, max = 0;
+    chEntries.forEach(e => { const v = state.feedVoteCounts[e.id] || 0; if (v > max) { max = v; winner = e; } });
+    if (winner && max > 0) winnerEvents.push({ ch, entry: winner });
+  });
+  if (followingMode && myId) {
+    winnerEvents = winnerEvents.filter(({ entry }) => entry.user_id === myId || state.myFollowing.has(entry.user_id));
+  }
+  const winnerItems = winnerEvents.map(({ ch, entry }) => ({
+    kind: 'winner', sortKey: ch.voting_end, data: { challenge: ch, entry },
+  }));
+
+  const mixed = [...postItems, ...challengeItems, ...entryItems, ...winnerItems].sort((a, b) =>
     new Date(b.sortKey) - new Date(a.sortKey)
   );
 
@@ -4894,7 +4989,10 @@ function renderFeed() {
 
   c.innerHTML = mixed.map(item => {
     if (item.kind === 'post') return renderPostCard(item.data);
-    return renderFeedChallengeCard(item.data);
+    if (item.kind === 'challenge') return renderFeedChallengeCard(item.data);
+    if (item.kind === 'entry') return renderFeedEntryCard(item.data);
+    if (item.kind === 'winner') return renderFeedWinnerCard(item.data);
+    return '';
   }).join('');
 
   // Wire up post menus
@@ -4921,6 +5019,14 @@ function renderFeed() {
   });
   // Wire up challenge clicks
   c.querySelectorAll('.feed-challenge-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const id = card.dataset.cid;
+      const ch = state.challenges.find(x => x.id === id);
+      if (ch && typeof openChallenge === 'function') openChallenge(ch);
+    });
+  });
+  // Wire up activity card clicks (entry / winner events → open the challenge)
+  c.querySelectorAll('.feed-activity-card').forEach(card => {
     card.addEventListener('click', () => {
       const id = card.dataset.cid;
       const ch = state.challenges.find(x => x.id === id);
@@ -4985,6 +5091,38 @@ function renderFeedChallengeCard(ch) {
         <div class="feed-challenge-label">${label}</div>
         <div class="feed-challenge-title">${escapeHtml(ch.title)}</div>
         <div class="feed-challenge-meta">${meta}</div>
+      </div>
+    </div>`;
+}
+
+function renderFeedEntryCard({ entry, challenge }) {
+  const s = entry.submitter || { name: 'Someone', avatar: '🔥', id: null };
+  const isMine = s.id === state.profile?.id;
+  const clickable = s.id && !isMine;
+  const userAttr = clickable ? `data-user-id="${s.id}" class="user-clickable"` : '';
+  const plus = clickable ? ' <span class="user-plus">+</span>' : '';
+  return `
+    <div class="feed-activity-card" data-cid="${challenge.id}">
+      <div class="fa-avatar" ${userAttr}>${escapeHtml(s.avatar || '🔥')}</div>
+      <div class="fa-body">
+        <div class="fa-text"><span class="fa-name" ${userAttr}>${escapeHtml(s.name)}${isMine ? ' (you)' : ''}${plus}</span> submitted to <span class="fa-target">${escapeHtml(challenge.title)}</span></div>
+        <div class="fa-time">🎬 ${timeAgo(entry.created_at)}</div>
+      </div>
+    </div>`;
+}
+
+function renderFeedWinnerCard({ challenge, entry }) {
+  const s = entry.submitter || { name: 'Someone', avatar: '🔥', id: null };
+  const isMine = s.id === state.profile?.id;
+  const clickable = s.id && !isMine;
+  const userAttr = clickable ? `data-user-id="${s.id}" class="user-clickable"` : '';
+  const plus = clickable ? ' <span class="user-plus">+</span>' : '';
+  return `
+    <div class="feed-activity-card winner" data-cid="${challenge.id}">
+      <div class="fa-avatar gold" ${userAttr}>${escapeHtml(s.avatar || '🔥')}</div>
+      <div class="fa-body">
+        <div class="fa-text">🥇 <span class="fa-name" ${userAttr}>${escapeHtml(s.name)}${isMine ? ' (you)' : ''}${plus}</span> won <span class="fa-target">${escapeHtml(challenge.title)}</span></div>
+        <div class="fa-time">${timeAgo(challenge.voting_end)}</div>
       </div>
     </div>`;
 }
