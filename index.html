@@ -1023,6 +1023,77 @@ footer .links a:hover { color: var(--ember); }
 }
 .notif-empty .icon { font-size: 44px; margin-bottom: 12px; }
 
+/* Comment button (sits beside the flame/like button) */
+.comment-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--surface-2, rgba(255,255,255,0.04));
+  border: 1px solid var(--border, #2a221d);
+  color: var(--text-muted);
+  border-radius: 100px;
+  padding: 6px 12px;
+  font-family: inherit; font-size: 13px; font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s, transform 0.1s;
+}
+.comment-btn:active { transform: scale(0.95); }
+.comment-btn:hover { border-color: var(--ember); color: var(--text); }
+.comment-icon { font-size: 14px; }
+
+/* Comment sheet */
+#commentSheet.open { display: flex; flex-direction: column; }
+#commentSheet .cd-sheet-inner { flex: 1 1 auto; overflow-y: auto; width: 100%; padding-bottom: 16px; }
+.comment-list { display: flex; flex-direction: column; gap: 2px; padding-bottom: 12px; }
+.comment-row {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--border, #1f1a16);
+}
+.comment-avatar {
+  width: 38px; height: 38px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--ember), var(--coral));
+  display: grid; place-items: center; font-size: 18px; overflow: hidden;
+  flex-shrink: 0;
+}
+.comment-main { flex: 1; min-width: 0; }
+.comment-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.comment-name { font-weight: 700; font-size: 14px; color: var(--text); }
+.comment-time { font-size: 12px; color: var(--text-muted); }
+.comment-body { font-size: 14px; line-height: 1.45; color: var(--text-dim); margin-top: 3px; word-wrap: break-word; }
+.comment-del {
+  background: none; border: none; color: var(--text-muted);
+  font-size: 12px; cursor: pointer; padding: 2px 6px; flex-shrink: 0;
+}
+.comment-del:hover { color: #ff8080; }
+.comment-empty { text-align: center; padding: 50px 20px; color: var(--text-dim); }
+.comment-empty .icon { font-size: 40px; margin-bottom: 10px; }
+
+/* Sticky compose bar at the bottom of the comment sheet */
+.comment-compose {
+  position: sticky; bottom: 0;
+  display: flex; gap: 10px; align-items: center;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  background: var(--bg, #0a0807);
+  border-top: 1px solid var(--border, #2a221d);
+}
+.comment-compose input {
+  flex: 1; min-width: 0;
+  background: var(--surface-2, rgba(255,255,255,0.05));
+  border: 1px solid var(--border, #2a221d);
+  border-radius: 100px;
+  padding: 11px 16px;
+  color: var(--text); font-family: inherit; font-size: 15px;
+}
+.comment-compose input:focus { outline: none; border-color: var(--ember); }
+.comment-send {
+  background: linear-gradient(135deg, var(--ember), var(--flame));
+  border: none; color: #fff;
+  border-radius: 100px; padding: 11px 20px;
+  font-family: inherit; font-weight: 700; font-size: 14px;
+  cursor: pointer; flex-shrink: 0;
+}
+.comment-send:disabled { opacity: 0.5; }
+.comment-send:active { transform: scale(0.96); }
+
 /* Heat Check card */
 .heat-check {
   background: linear-gradient(180deg, var(--surface) 0%, var(--bg-2) 100%);
@@ -2728,6 +2799,21 @@ footer .links a:hover { color: var(--ember); }
   </div>
 </div>
 
+<!-- COMMENTS SHEET (posts + entries) -->
+<div class="cd-sheet" id="commentSheet" style="z-index:251">
+  <div class="cd-sheet-header">
+    <button class="cd-close" onclick="closeComments()" aria-label="Close">×</button>
+    <h2 id="commentSheetTitle">Comments</h2>
+  </div>
+  <div class="cd-sheet-inner">
+    <div class="comment-list" id="commentList"></div>
+  </div>
+  <div class="comment-compose">
+    <input id="commentInput" type="text" maxlength="500" placeholder="Add a comment..." autocomplete="off" />
+    <button class="comment-send" id="commentSend" onclick="postComment()">Post</button>
+  </div>
+</div>
+
 <!-- SUBMIT ENTRY SHEET -->
 <div class="cc-sheet" id="submitEntrySheet">
   <div class="cc-sheet-header">
@@ -3232,6 +3318,10 @@ let state = {
   myPostLikes: new Set(),
   entryLikeCounts: {},
   myEntryLikes: new Set(),
+  postCommentCounts: {},     // postId -> count
+  entryCommentCounts: {},    // entryId -> count
+  currentComments: [],       // comments in the open comment sheet
+  commentTarget: null,       // { type: 'post'|'entry', id }
   myFollowing: new Set(),    // user IDs I follow
   followerCounts: {},        // userId -> count
   followingCounts: {},       // userId -> count
@@ -3734,7 +3824,33 @@ async function loadNotifications() {
     } catch (e) { console.warn('notif challenge entries', e); }
   }
 
-  // 6. My challenges that have closed
+  // 6. Comments on my posts
+  if (myPostIds.length) {
+    try {
+      const rows = await sel('comments', 'target_id, user_id', q => q.eq('target_type', 'post').in('target_id', myPostIds), 'post comments');
+      rows.filter(r => r.user_id !== me).forEach(r => notifs.push({
+        type: 'comment', actorId: r.user_id, ts: r.created_at || null,
+        text: 'commented on your post', target: { kind: 'feed' }
+      }));
+    } catch (e) { console.warn('notif post comments', e); }
+  }
+
+  // 7. Comments on my entries
+  if (myEntryIds.length) {
+    try {
+      const rows = await sel('comments', 'target_id, user_id', q => q.eq('target_type', 'entry').in('target_id', myEntryIds), 'entry comments');
+      rows.filter(r => r.user_id !== me).forEach(r => {
+        const cid = entryChallenge[r.target_id];
+        notifs.push({
+          type: 'comment', actorId: r.user_id, ts: r.created_at || null,
+          text: 'commented on your entry' + (allChTitle[cid] ? ` in ${allChTitle[cid]}` : ''),
+          target: { kind: 'challenge', id: cid }
+        });
+      });
+    } catch (e) { console.warn('notif entry comments', e); }
+  }
+
+  // 8. My challenges that have closed
   myChallenges.forEach(c => {
     if (computeChallengeStatus(c) === 'closed') notifs.push({
       type: 'challenge_closed', actorId: null, ts: c.voting_end || null,
@@ -3769,7 +3885,7 @@ function renderNotifs() {
     list.innerHTML = `<div class="notif-empty"><div class="icon">🔔</div>No notifications yet.<br>When people like, follow, vote, or join your challenges, it'll show up here.</div>`;
     return;
   }
-  const kindIcon = { post_like: '🔥', entry_like: '🔥', follow: '👤', vote: '🗳️', entry: '🎬', challenge_closed: '🏁' };
+  const kindIcon = { post_like: '🔥', entry_like: '🔥', follow: '👤', vote: '🗳️', entry: '🎬', comment: '💬', challenge_closed: '🏁' };
   list.innerHTML = notifs.map((n, i) => {
     const unread = isNotifUnread(n);
     const av = n.actor ? avatarInner(n.actor.avatar) : '🏁';
@@ -3802,6 +3918,143 @@ function openNotifTarget(n) {
     if (ch) openChallenge(ch); else switchView('challenges');
   } else switchView('feed');
 }
+
+/* ---------- COMMENTS (posts + entries) ---------- */
+async function openComments(type, id) {
+  if (!state.profile) { toast('Sign in to comment'); return; }
+  state.commentTarget = { type, id };
+  state.currentComments = [];
+  document.getElementById('commentSheetTitle').textContent = 'Comments';
+  document.getElementById('commentInput').value = '';
+  document.getElementById('commentList').innerHTML = '<div class="comment-empty">Loading…</div>';
+  document.getElementById('commentSheet').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  await loadComments();
+}
+
+function closeComments() {
+  document.getElementById('commentSheet').classList.remove('open');
+  document.body.style.overflow = '';
+  state.commentTarget = null;
+}
+
+async function loadComments() {
+  const t = state.commentTarget;
+  if (!t) return;
+  try {
+    const res = await Promise.race([
+      db.from('comments')
+        .select('id, user_id, body, created_at, author:profiles!comments_user_id_fkey(id, name, avatar)')
+        .eq('target_type', t.type).eq('target_id', t.id)
+        .order('created_at', { ascending: true }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 12000)),
+    ]);
+    if (res.error) throw res.error;
+    // Make sure the user hasn't closed/switched the sheet while loading
+    if (!state.commentTarget || state.commentTarget.id !== t.id) return;
+    state.currentComments = res.data || [];
+    renderComments();
+  } catch (e) {
+    console.error('load comments', e);
+    const list = document.getElementById('commentList');
+    if (list) list.innerHTML = '<div class="comment-empty">Couldn\'t load comments. Pull down to refresh.</div>';
+  }
+}
+
+function renderComments() {
+  const list = document.getElementById('commentList');
+  if (!list) return;
+  const comments = state.currentComments || [];
+  if (!comments.length) {
+    list.innerHTML = '<div class="comment-empty"><div class="icon">💬</div>No comments yet. Be the first!</div>';
+    return;
+  }
+  const me = state.profile?.id;
+  list.innerHTML = comments.map(c => {
+    const a = c.author || { name: 'Unknown', avatar: '🔥', id: null };
+    const mine = c.user_id === me;
+    const clickable = a.id && a.id !== me;
+    return `<div class="comment-row">
+      <div class="comment-avatar" ${clickable ? `data-open-uid="${a.id}"` : ''}>${avatarInner(a.avatar)}</div>
+      <div class="comment-main">
+        <div class="comment-head">
+          <span class="comment-name" ${clickable ? `data-open-uid="${a.id}"` : ''}>${escapeHtml(a.name)}</span>
+          <span class="comment-time">${timeAgo(c.created_at)}</span>
+        </div>
+        <div class="comment-body">${escapeHtml(c.body)}</div>
+      </div>
+      ${mine ? `<button class="comment-del" data-del-comment="${c.id}">Delete</button>` : ''}
+    </div>`;
+  }).join('');
+  list.querySelectorAll('[data-open-uid]').forEach(el => {
+    el.addEventListener('click', () => { closeComments(); openUserProfile(el.dataset.openUid); });
+  });
+  list.querySelectorAll('[data-del-comment]').forEach(btn => {
+    btn.addEventListener('click', () => deleteComment(btn.dataset.delComment));
+  });
+}
+
+async function postComment() {
+  const t = state.commentTarget;
+  if (!t || !state.profile) return;
+  const input = document.getElementById('commentInput');
+  const body = input.value.trim();
+  if (!body) return;
+  const btn = document.getElementById('commentSend');
+  btn.disabled = true;
+  try {
+    const { data, error } = await db.from('comments').insert({
+      target_type: t.type, target_id: t.id, user_id: state.profile.id, body,
+    }).select('id, user_id, body, created_at').single();
+    if (error) throw error;
+    state.currentComments.push({
+      ...data,
+      author: { id: state.profile.id, name: state.profile.name, avatar: state.profile.avatar },
+    });
+    input.value = '';
+    renderComments();
+    bumpCommentCount(t.type, t.id, 1);
+    const inner = document.querySelector('#commentSheet .cd-sheet-inner');
+    if (inner) inner.scrollTop = inner.scrollHeight;
+  } catch (e) {
+    console.error('post comment', e);
+    toast('Comment failed: ' + (e.message || 'unknown'));
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function deleteComment(id) {
+  if (!confirm('Delete this comment?')) return;
+  const t = state.commentTarget;
+  try {
+    const { error } = await db.from('comments').delete().eq('id', id);
+    if (error) throw error;
+    state.currentComments = state.currentComments.filter(c => c.id !== id);
+    renderComments();
+    if (t) bumpCommentCount(t.type, t.id, -1);
+  } catch (e) {
+    console.error('delete comment', e);
+    toast('Delete failed');
+  }
+}
+
+// Keep cached counts + the visible button badge in sync
+function bumpCommentCount(type, id, delta) {
+  if (type === 'post') {
+    state.postCommentCounts[id] = Math.max(0, (state.postCommentCounts[id] || 0) + delta);
+    const el = document.querySelector(`[data-comment-post="${id}"] .comment-count`);
+    if (el) el.textContent = state.postCommentCounts[id];
+  } else {
+    state.entryCommentCounts[id] = Math.max(0, (state.entryCommentCounts[id] || 0) + delta);
+    const el = document.querySelector(`[data-comment-entry="${id}"] .comment-count`);
+    if (el) el.textContent = state.entryCommentCounts[id];
+  }
+}
+
+document.getElementById('commentInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); postComment(); }
+});
 
 function renderHeatCheck() {
   if (!state.profile) return;
@@ -4624,6 +4877,19 @@ async function loadChallengeDetail(challengeId) {
       console.error('entry likes timed out, continuing', likeErr);
       state.myEntryLikes = new Set();
     }
+
+    // Entry comment counts (non-critical)
+    try {
+      const commentsRes = await withTimeout(
+        db.from('comments').select('target_id').eq('target_type', 'entry').in('target_id', entryIds),
+        12000, 'Entry comments'
+      );
+      const ccounts = {};
+      (commentsRes.data || []).forEach(c => { ccounts[c.target_id] = (ccounts[c.target_id] || 0) + 1; });
+      state.entryCommentCounts = ccounts;
+    } catch (cErr) {
+      console.error('entry comment counts timed out, continuing', cErr);
+    }
   }
 }
 
@@ -4750,8 +5016,10 @@ function renderChallengeDetail() {
       ? 'disabled aria-label="Cannot like your own entry"'
       : `data-like-entry="${entry.id}"`;
     const likeBtnHtml = `<button class="flame-btn${iLikedEntry ? ' liked' : ''}" ${eLikeBtnAttrs}><span class="flame-icon">🔥</span><span class="flame-count">${eLikeCount}</span></button>`;
+    const eCommentCount = state.entryCommentCounts[entry.id] || 0;
+    const commentBtnHtml = `<button class="comment-btn" data-comment-entry="${entry.id}"><span class="comment-icon">💬</span><span class="comment-count">${eCommentCount}</span></button>`;
 
-    actionsHtml = (actionsHtml ? actionsHtml + ' ' : '') + likeBtnHtml;
+    actionsHtml = (actionsHtml ? actionsHtml + ' ' : '') + likeBtnHtml + commentBtnHtml;
 
     return `
       <div class="cd-entry${iVoted ? ' voted' : ''}${winnerClass}">
@@ -4785,6 +5053,13 @@ function renderChallengeDetail() {
     btn.addEventListener('click', e => {
       e.stopPropagation();
       toggleEntryLike(btn.dataset.likeEntry, btn);
+    });
+  });
+  // Attach comment handlers
+  grid.querySelectorAll('[data-comment-entry]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      openComments('entry', btn.dataset.commentEntry);
     });
   });
   // Attach user profile clicks (entry submitters)
@@ -5396,6 +5671,23 @@ async function loadPosts() {
   }
   state.posts = posts || [];
   await loadPostLikes();
+  await loadPostCommentCounts();
+}
+
+async function loadPostCommentCounts() {
+  state.postCommentCounts = {};
+  if (!state.posts || state.posts.length === 0) return;
+  const postIds = state.posts.map(p => p.id);
+  try {
+    const { data, error } = await db.from('comments')
+      .select('target_id')
+      .eq('target_type', 'post')
+      .in('target_id', postIds);
+    if (error) { console.error('post comment counts', error); return; }
+    const counts = {};
+    (data || []).forEach(c => { counts[c.target_id] = (counts[c.target_id] || 0) + 1; });
+    state.postCommentCounts = counts;
+  } catch (e) { console.error('post comment counts', e); }
 }
 
 async function loadPostLikes() {
@@ -5656,6 +5948,13 @@ function renderFeed() {
       togglePostLike(btn.dataset.likePost, btn);
     });
   });
+  // Wire up post comments
+  c.querySelectorAll('[data-comment-post]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      openComments('post', btn.dataset.commentPost);
+    });
+  });
   // Wire up user profile clicks (post authors)
   c.querySelectorAll('[data-user-id]').forEach(el => {
     el.addEventListener('click', e => {
@@ -5715,6 +6014,10 @@ function renderPostCard(p) {
         <button class="flame-btn${iLiked ? ' liked' : ''}" ${likeBtnAttrs}>
           <span class="flame-icon">🔥</span>
           <span class="flame-count">${likeCount}</span>
+        </button>
+        <button class="comment-btn" data-comment-post="${p.id}">
+          <span class="comment-icon">💬</span>
+          <span class="comment-count">${state.postCommentCounts[p.id] || 0}</span>
         </button>
       </div>
     </div>`;
