@@ -3668,7 +3668,7 @@ footer .links a:hover { color: var(--ember); }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v23 · screen-fit";
+const APP_VERSION = "v24 · follow-plus-fix";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -5532,6 +5532,14 @@ document.querySelectorAll('.tab').forEach(t => {
 
 /* ---------- HELPERS ---------- */
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+// Returns true if the "+ follow hint" badge should show next to this user's name.
+// False when: no userId, it's me, or I already follow them.
+function needsFollowPlus(userId) {
+  if (!userId) return false;
+  if (state.profile && userId === state.profile.id) return false;
+  return !state.myFollowing || !state.myFollowing.has(userId);
+}
 function formatNum(n) { return n >= 1000 ? (n/1000).toFixed(n>=10000?0:1) + 'k' : n.toString(); }
 // Avatar can be an emoji OR an uploaded photo URL. Returns the inner HTML for an avatar circle.
 function isAvatarUrl(a) { return typeof a === 'string' && /^https?:\/\//.test(a); }
@@ -6074,7 +6082,7 @@ function renderChallengeDetail() {
     <h1 class="cd-title">${escapeHtml(ch.title)}</h1>
     <div class="cd-creator${creatorClickable ? ' user-clickable' : ''}" ${creatorClickable ? `data-user-id="${ch.creator.id}"` : ''}>
       <div class="avatar">${avatarInner(ch.creator?.avatar)}</div>
-      <span>by ${escapeHtml(ch.creator?.name || 'Unknown')}${creatorClickable ? ' <span class="user-plus">+</span>' : ''}</span>
+      <span>by ${escapeHtml(ch.creator?.name || 'Unknown')}${needsFollowPlus(ch.creator?.id) ? ' <span class="user-plus">+</span>' : ''}</span>
     </div>
     ${ch.rules ? `<div class="cd-rules"><strong>Rules:</strong> ${escapeHtml(ch.rules)}</div>` : ''}
   `;
@@ -6192,7 +6200,7 @@ function renderChallengeDetail() {
         <div class="cd-entry-body">
           <div class="cd-entry-submitter ${entry.user_id && entry.user_id !== state.profile?.id ? 'user-clickable' : ''}" ${entry.user_id && entry.user_id !== state.profile?.id ? `data-user-id="${entry.user_id}"` : ''}>
             <div class="avatar">${avatarInner(entry.submitter?.avatar)}</div>
-            <span>${escapeHtml(entry.submitter?.name || 'Unknown')}${isMyEntry ? ' (you)' : (entry.user_id ? ' <span class="user-plus">+</span>' : '')}</span>
+            <span>${escapeHtml(entry.submitter?.name || 'Unknown')}${isMyEntry ? ' (you)' : (needsFollowPlus(entry.user_id) ? ' <span class="user-plus">+</span>' : '')}</span>
           </div>
           ${entry.media_type !== 'text' && entry.caption ? `<div class="cd-entry-caption">${formatBody(entry.caption)}</div>` : ''}
           ${actionsHtml ? `<div class="cd-entry-actions">${actionsHtml}</div>` : ''}
@@ -7163,7 +7171,7 @@ function renderPostCard(p) {
   const likeBtnAttrs = isMine ? 'disabled aria-label="You can\'t like your own post"' : `data-like-post="${p.id}"`;
   const isClickableUser = p.user_id && !isMine;
   const userClickAttr = isClickableUser ? `data-user-id="${p.user_id}" class="user-clickable"` : '';
-  const plusBadge = isClickableUser ? ' <span class="user-plus">+</span>' : '';
+  const plusBadge = needsFollowPlus(p.user_id) ? ' <span class="user-plus">+</span>' : '';
   return `
     <div class="post-card" data-pid="${p.id}">
       <div class="post-card-header">
@@ -7215,7 +7223,7 @@ function renderFeedEntryCard({ entry, challenge }) {
   const isMine = s.id === state.profile?.id;
   const clickable = s.id && !isMine;
   const userAttr = clickable ? `data-user-id="${s.id}" class="user-clickable"` : '';
-  const plus = clickable ? ' <span class="user-plus">+</span>' : '';
+  const plus = needsFollowPlus(s.id) ? ' <span class="user-plus">+</span>' : '';
   return `
     <div class="feed-activity-card" data-cid="${challenge.id}">
       <div class="fa-avatar" ${userAttr}>${avatarInner(s.avatar)}</div>
@@ -7231,7 +7239,7 @@ function renderFeedWinnerCard({ challenge, entry }) {
   const isMine = s.id === state.profile?.id;
   const clickable = s.id && !isMine;
   const userAttr = clickable ? `data-user-id="${s.id}" class="user-clickable"` : '';
-  const plus = clickable ? ' <span class="user-plus">+</span>' : '';
+  const plus = needsFollowPlus(s.id) ? ' <span class="user-plus">+</span>' : '';
   return `
     <div class="feed-activity-card winner" data-cid="${challenge.id}">
       <div class="fa-avatar gold" ${userAttr}>${avatarInner(s.avatar)}</div>
@@ -7630,6 +7638,7 @@ async function toggleFollowFromSheet(userId) {
       if (error) throw error;
     }
     if (state.currentView === 'feed') renderFeed();
+    if (state.currentChallenge) { try { renderChallengeDetail(); } catch (e) {} }
   } catch (err) {
     console.error('follow toggle error', err);
     // Revert
@@ -7766,6 +7775,7 @@ async function renderFindPeopleResults(query) {
             btn.classList.add('following');
           }
           if (state.currentView === 'feed') renderFeed();
+          if (state.currentChallenge) { try { renderChallengeDetail(); } catch (e) {} }
         } catch (err) {
           console.error('follow toggle from search error', err);
           toast('Follow failed');
