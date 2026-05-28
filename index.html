@@ -2297,6 +2297,16 @@ footer .links a:hover { color: var(--ember); }
 .btn-vote.not-voted:hover { background: rgba(255,107,53,0.12); border-color: var(--ember); }
 .btn-vote.is-voted { background: linear-gradient(135deg, var(--ember), var(--flame)); border: 1px solid transparent; color: white; box-shadow: 0 4px 14px -4px rgba(255,80,30,0.5); }
 
+/* Live voting standings (revealed after you vote, like polls) */
+.cd-standing { margin-top: 10px; }
+.cd-standing-bar { height: 8px; background: rgba(255,255,255,0.06); border-radius: 100px; overflow: hidden; }
+.cd-standing-fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--ember), var(--flame)); border-radius: 100px; transition: width 0.45s cubic-bezier(0.4,0,0.2,1); }
+.cd-standing.leading .cd-standing-fill { background: linear-gradient(90deg, var(--gold), #ffb347); }
+.cd-standing-meta { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; font-size: 12px; color: var(--text-dim); }
+.cd-standing-rank { font-weight: 700; color: var(--text); }
+.cd-standing.mine .cd-standing-rank { color: var(--ember); }
+.cd-standing-votes { font-variant-numeric: tabular-nums; }
+
 </style>
 </head>
 <body>
@@ -4646,10 +4656,15 @@ function renderChallengeDetail() {
 
   const voteCountByEntry = {};
   state.currentVotes.forEach(v => { voteCountByEntry[v.entry_id] = (voteCountByEntry[v.entry_id] || 0) + 1; });
+  const totalVotes = state.currentVotes.length;
 
   const isClosed = status === 'closed';
+  const iHaveVoted = !!state.myCurrentVote;
+  // Standings are revealed once the challenge closes OR once you've cast your vote (like polls)
+  const revealStandings = isClosed || (status === 'voting' && iHaveVoted);
+
   const sortedEntries = [...state.currentEntries].sort((a, b) => {
-    if (isClosed) {
+    if (revealStandings) {
       const diff = (voteCountByEntry[b.id] || 0) - (voteCountByEntry[a.id] || 0);
       if (diff !== 0) return diff;
       return new Date(a.created_at) - new Date(b.created_at); // earlier wins ties
@@ -4694,10 +4709,25 @@ function renderChallengeDetail() {
       } else if (state.profile) {
         actionsHtml = `<button class="btn-vote ${iVoted ? 'is-voted' : 'not-voted'}" data-vote-entry="${entry.id}">${iVoted ? '✓ Voted' : '🔥 Vote'}</button>`;
       }
-    } else if (isClosed) {
-      actionsHtml = `<span><span class="cd-vote-count">${voteCount}</span><span class="cd-vote-count-label">${voteCount === 1 ? 'vote' : 'votes'}</span></span>`;
     } else if (status === 'submitting' && isMyEntry) {
       actionsHtml = '<span class="cd-entry-tag">Your entry</span>';
+    }
+    // (Closed challenges show the tally in the standings bar below, not as separate text.)
+
+    // Live standings bar — revealed after you vote, or once the challenge closes
+    let standingHtml = '';
+    if (revealStandings) {
+      const pct = totalVotes > 0 ? Math.round((voteCount / totalVotes) * 100) : 0;
+      const leading = idx === 0 && voteCount > 0;
+      const rankLabel = status === 'voting' ? `#${idx + 1}` : '';
+      standingHtml = `
+        <div class="cd-standing${iVoted ? ' mine' : ''}${leading ? ' leading' : ''}">
+          <div class="cd-standing-bar"><div class="cd-standing-fill" data-pct="${pct}" style="width:0"></div></div>
+          <div class="cd-standing-meta">
+            <span class="cd-standing-rank">${rankLabel}${iVoted ? (rankLabel ? ' · ' : '') + 'Your pick' : ''}</span>
+            <span class="cd-standing-votes">${voteCount} ${voteCount === 1 ? 'vote' : 'votes'} · ${pct}%</span>
+          </div>
+        </div>`;
     }
 
     // Flame (like) button — always show, disabled on your own entry (matches post behavior)
@@ -4721,6 +4751,7 @@ function renderChallengeDetail() {
           </div>
           ${entry.media_type !== 'text' && entry.caption ? `<div class="cd-entry-caption">${escapeHtml(entry.caption)}</div>` : ''}
           ${actionsHtml ? `<div class="cd-entry-actions">${actionsHtml}</div>` : ''}
+          ${standingHtml}
         </div>
       </div>
     `;
@@ -4729,6 +4760,12 @@ function renderChallengeDetail() {
   // Attach vote handlers
   grid.querySelectorAll('[data-vote-entry]').forEach(btn => {
     btn.addEventListener('click', () => voteOnEntry(btn.dataset.voteEntry));
+  });
+  // Animate standing bars from 0 up to their tally (fire "charge-up")
+  requestAnimationFrame(() => {
+    grid.querySelectorAll('.cd-standing-fill').forEach(f => {
+      f.style.width = (f.dataset.pct || 0) + '%';
+    });
   });
   // Attach like handlers
   grid.querySelectorAll('[data-like-entry]').forEach(btn => {
@@ -4751,29 +4788,60 @@ async function voteOnEntry(entryId) {
   if (state.myCurrentVote === entryId) return;
 
   const challengeId = state.currentChallenge.id;
+  const me = state.profile.id;
   const previousVote = state.myCurrentVote;
+
+  // Optimistic: reflect the vote locally and reveal standings immediately
+  state.currentVotes = state.currentVotes.filter(v => v.voter_id !== me);
+  state.currentVotes.push({ entry_id: entryId, voter_id: me });
+  state.myCurrentVote = entryId;
+  renderChallengeDetail();
 
   try {
     if (previousVote) {
       const { error: delErr } = await db.from('entry_votes')
         .delete()
         .eq('challenge_id', challengeId)
-        .eq('voter_id', state.profile.id);
+        .eq('voter_id', me);
       if (delErr) throw delErr;
     }
     const { error: insErr } = await db.from('entry_votes').insert({
       challenge_id: challengeId,
       entry_id: entryId,
-      voter_id: state.profile.id,
+      voter_id: me,
     });
     if (insErr) throw insErr;
 
-    await loadChallengeDetail(challengeId);
-    renderChallengeDetail();
     toast(previousVote ? '🔥 Vote changed' : '🔥 Vote cast');
+    // Reconcile with the server in the background (also catches others' new votes)
+    refreshChallengeVotes(challengeId);
   } catch (err) {
     console.error('vote error', err);
+    // Revert optimistic change
+    state.currentVotes = state.currentVotes.filter(v => v.voter_id !== me);
+    if (previousVote) state.currentVotes.push({ entry_id: previousVote, voter_id: me });
+    state.myCurrentVote = previousVote || null;
+    renderChallengeDetail();
     toast('Vote failed: ' + (err.message || 'unknown'));
+  }
+}
+
+// Lightweight background refresh of just the vote tallies (no full reload)
+async function refreshChallengeVotes(challengeId) {
+  try {
+    const res = await Promise.race([
+      db.from('entry_votes').select('id, entry_id, voter_id').eq('challenge_id', challengeId),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 12000)),
+    ]);
+    if (res.error || !res.data) return;
+    if (!state.currentChallenge || state.currentChallenge.id !== challengeId) return;
+    state.currentVotes = res.data;
+    state.myCurrentVote = state.profile
+      ? (state.currentVotes.find(v => v.voter_id === state.profile.id)?.entry_id || null)
+      : null;
+    renderChallengeDetail();
+  } catch (e) {
+    // Keep optimistic state if the refresh fails
   }
 }
 
