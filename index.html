@@ -1153,6 +1153,120 @@ footer .links a:hover { color: var(--ember); }
   animation: flamePop 0.35s ease;
 }
 
+/* ============ FEED TABS ============ */
+.feed-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  padding: 4px;
+}
+.feed-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  padding: 10px 14px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  border-radius: 100px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.feed-tab.active {
+  background: linear-gradient(135deg, var(--ember), var(--flame));
+  color: #fff;
+  box-shadow: 0 4px 12px -2px rgba(255, 80, 30, 0.4);
+}
+
+/* ============ USER PROFILE MODAL (mini popover) ============ */
+.user-profile-modal {
+  max-width: 400px;
+  width: 100%;
+}
+.upm-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.upm-avatar {
+  width: 64px; height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--ember), var(--coral));
+  display: grid; place-items: center;
+  font-size: 30px;
+  flex-shrink: 0;
+}
+.upm-name-block { flex: 1; min-width: 0; }
+.upm-name {
+  font-family: var(--font-bricolage);
+  font-weight: 700;
+  font-size: 22px;
+  margin-bottom: 2px;
+  line-height: 1.1;
+}
+.upm-handle {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.upm-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.upm-stat {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 6px;
+  text-align: center;
+}
+.upm-stat-val {
+  font-family: var(--font-bricolage);
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--text);
+  line-height: 1.2;
+}
+.upm-stat-val.gold { color: var(--gold); }
+.upm-stat-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+}
+.upm-follow-btn {
+  width: 100%;
+  margin-bottom: 8px;
+}
+.upm-follow-btn.following {
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  border-color: var(--border);
+}
+.upm-follow-btn.following:hover {
+  background: rgba(255, 80, 30, 0.15);
+  border-color: var(--ember);
+  color: var(--ember);
+}
+
+/* Clickable user element */
+.user-clickable {
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.user-clickable:active {
+  opacity: 0.7;
+}
+
 /* Feed item: challenge tile (mini card style) */
 .feed-challenge-card {
   background: var(--surface);
@@ -1967,6 +2081,11 @@ footer .links a:hover { color: var(--ember); }
       </div>
     </div>
 
+    <div class="feed-tabs" role="tablist">
+      <button class="feed-tab active" data-feedtab="discover" role="tab">Discover</button>
+      <button class="feed-tab" data-feedtab="following" role="tab">Following</button>
+    </div>
+
     <div class="composer" onclick="openCreatePost()" role="button" tabindex="0">
       <div class="avatar" id="composerAvatar">🔥</div>
       <div class="composer-input">What's the heat? Share something...</div>
@@ -2231,6 +2350,39 @@ footer .links a:hover { color: var(--ember); }
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="closeModals()">Keep voting</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openGroupsModal()">👥 My Groups</button>
     <button class="btn btn-ghost" style="width:100%;color:#ff6a6a;border-color:#3a1f1a" onclick="signOut()">Sign out</button>
+  </div>
+</div>
+
+<!-- USER PROFILE MODAL (tap any user) -->
+<div class="modal-backdrop" id="userProfileModal">
+  <div class="modal user-profile-modal">
+    <button class="modal-close-x" onclick="closeUserProfile()" aria-label="Close">×</button>
+    <div class="upm-header">
+      <div class="upm-avatar" id="upmAvatar">🔥</div>
+      <div class="upm-name-block">
+        <div class="upm-name" id="upmName">User</div>
+        <div class="upm-handle" id="upmHandle"></div>
+      </div>
+    </div>
+    <div class="upm-stats">
+      <div class="upm-stat">
+        <div class="upm-stat-val gold" id="upmPoints">0</div>
+        <div class="upm-stat-label">Points</div>
+      </div>
+      <div class="upm-stat">
+        <div class="upm-stat-val gold" id="upmWins">0</div>
+        <div class="upm-stat-label">Wins</div>
+      </div>
+      <div class="upm-stat">
+        <div class="upm-stat-val" id="upmFollowers">0</div>
+        <div class="upm-stat-label">Followers</div>
+      </div>
+      <div class="upm-stat">
+        <div class="upm-stat-val" id="upmFollowing">0</div>
+        <div class="upm-stat-label">Following</div>
+      </div>
+    </div>
+    <button class="btn btn-primary upm-follow-btn" id="upmFollowBtn">Follow</button>
   </div>
 </div>
 
@@ -2615,6 +2767,10 @@ let state = {
   myPostLikes: new Set(),
   entryLikeCounts: {},
   myEntryLikes: new Set(),
+  myFollowing: new Set(),    // user IDs I follow
+  followerCounts: {},        // userId -> count
+  followingCounts: {},       // userId -> count
+  feedTab: 'discover',       // 'following' | 'discover'
   filter: "trending",
   currentView: "feed",
   loading: true,
@@ -2860,6 +3016,7 @@ async function loadAppData() {
   await loadLeaderboard();
   await loadChallenges();
   await loadPosts();
+  await loadFollows();
   state.loading = false;
   renderPolls();
   renderLeaderboard();
@@ -3048,7 +3205,7 @@ function renderLeaderboard() {
     const isYou = state.profile && u.id === state.profile.id;
     const isDemo = !u.isReal;
     const row = document.createElement('div');
-    row.className = 'lb-row' + (isYou ? ' you' : '');
+    row.className = 'lb-row' + (isYou ? ' you' : '') + (u.isReal ? ' user-clickable' : '');
     row.innerHTML = `
       <div class="lb-rank">#${i+1}</div>
       <div class="lb-user">
@@ -3063,6 +3220,9 @@ function renderLeaderboard() {
         <div class="lb-points-label">points</div>
       </div>
     `;
+    if (u.isReal) {
+      row.addEventListener('click', () => openUserProfile(u.id));
+    }
     list.appendChild(row);
   });
 }
@@ -3666,7 +3826,7 @@ function renderChallengeDetail() {
         ${medalBadge}
         <div class="cd-entry-media">${mediaHtml}</div>
         <div class="cd-entry-body">
-          <div class="cd-entry-submitter">
+          <div class="cd-entry-submitter ${entry.user_id ? 'user-clickable' : ''}" ${entry.user_id ? `data-user-id="${entry.user_id}"` : ''}>
             <div class="avatar">${escapeHtml(entry.submitter?.avatar || '🔥')}</div>
             <span>${escapeHtml(entry.submitter?.name || 'Unknown')}${isMyEntry ? ' (you)' : ''}</span>
           </div>
@@ -3686,6 +3846,13 @@ function renderChallengeDetail() {
     btn.addEventListener('click', e => {
       e.stopPropagation();
       toggleEntryLike(btn.dataset.likeEntry, btn);
+    });
+  });
+  // Attach user profile clicks (entry submitters)
+  grid.querySelectorAll('[data-user-id]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      openUserProfile(el.dataset.userId);
     });
   });
 }
@@ -4412,34 +4579,49 @@ function renderFeed() {
     return;
   }
 
+  const myId = state.profile?.id;
+  const followingMode = state.feedTab === 'following';
+
   // Build mixed feed: posts + recent active/voting challenges
-  const posts = (state.posts || []).map(p => ({
-    kind: 'post',
-    sortKey: p.created_at,
-    data: p,
-  }));
+  let posts = (state.posts || []);
+  if (followingMode && myId) {
+    posts = posts.filter(p => p.user_id === myId || state.myFollowing.has(p.user_id));
+  }
+  const postItems = posts.map(p => ({ kind: 'post', sortKey: p.created_at, data: p }));
 
   // Include recent public challenges (active or voting) — last 14 days
   const cutoff = new Date(Date.now() - 14 * 86400000);
-  const challenges = (state.challenges || [])
-    .filter(ch => ch.is_public || ch.creator_id === state.profile?.id)
-    .filter(ch => new Date(ch.created_at) >= cutoff)
-    .map(ch => ({
-      kind: 'challenge',
-      sortKey: ch.created_at,
-      data: { ...ch, computedStatus: computeChallengeStatus(ch) },
-    }));
+  let challenges = (state.challenges || [])
+    .filter(ch => ch.is_public || ch.creator_id === myId)
+    .filter(ch => new Date(ch.created_at) >= cutoff);
+  if (followingMode && myId) {
+    challenges = challenges.filter(ch => ch.creator_id === myId || state.myFollowing.has(ch.creator_id));
+  }
+  const challengeItems = challenges.map(ch => ({
+    kind: 'challenge',
+    sortKey: ch.created_at,
+    data: { ...ch, computedStatus: computeChallengeStatus(ch) },
+  }));
 
-  const mixed = [...posts, ...challenges].sort((a, b) =>
+  const mixed = [...postItems, ...challengeItems].sort((a, b) =>
     new Date(b.sortKey) - new Date(a.sortKey)
   );
 
   if (mixed.length === 0) {
-    c.innerHTML = `
-      <div class="feed-empty">
-        <div class="icon">🔥</div>
-        Feed's quiet right now. Be the first to post or create a challenge.
-      </div>`;
+    if (followingMode) {
+      c.innerHTML = `
+        <div class="feed-empty">
+          <div class="icon">👥</div>
+          <strong style="color:var(--text);display:block;margin-bottom:6px">Nothing from your follows yet</strong>
+          Tap names on posts, entries, or the leaderboard to find people to follow.
+        </div>`;
+    } else {
+      c.innerHTML = `
+        <div class="feed-empty">
+          <div class="icon">🔥</div>
+          Feed's quiet right now. Be the first to post or create a challenge.
+        </div>`;
+    }
     return;
   }
 
@@ -4463,6 +4645,13 @@ function renderFeed() {
       togglePostLike(btn.dataset.likePost, btn);
     });
   });
+  // Wire up user profile clicks (post authors)
+  c.querySelectorAll('[data-user-id]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      openUserProfile(el.dataset.userId);
+    });
+  });
   // Wire up challenge clicks
   c.querySelectorAll('.feed-challenge-card').forEach(card => {
     card.addEventListener('click', () => {
@@ -4474,7 +4663,7 @@ function renderFeed() {
 }
 
 function renderPostCard(p) {
-  const author = p.author || { name: 'Unknown', avatar: '🔥' };
+  const author = p.author || { name: 'Unknown', avatar: '🔥', id: null };
   const isMine = p.user_id === state.profile?.id;
   let mediaHtml = '';
   if (p.media_url) {
@@ -4488,12 +4677,13 @@ function renderPostCard(p) {
   const iLiked = state.myPostLikes.has(p.id);
   // Can't like your own post
   const likeBtnAttrs = isMine ? 'disabled aria-label="You can\'t like your own post"' : `data-like-post="${p.id}"`;
+  const userClickAttr = p.user_id ? `data-user-id="${p.user_id}" class="user-clickable"` : '';
   return `
     <div class="post-card" data-pid="${p.id}">
       <div class="post-card-header">
-        <div class="post-card-avatar">${escapeHtml(author.avatar || '🔥')}</div>
+        <div class="post-card-avatar" ${userClickAttr}>${escapeHtml(author.avatar || '🔥')}</div>
         <div class="post-card-meta">
-          <div class="post-card-name">${escapeHtml(author.name)}</div>
+          <div class="post-card-name" ${userClickAttr}>${escapeHtml(author.name)}</div>
           <div class="post-card-time">${timeAgo(p.created_at)}</div>
         </div>
         ${isMine ? `<button class="post-card-menu" data-pid="${p.id}" aria-label="Delete post">⋯</button>` : ''}
@@ -4667,6 +4857,143 @@ async function deletePost(postId) {
   await loadPosts();
   renderFeed();
 }
+
+/* ============================================
+   PHASE 5: FOLLOWS
+   ============================================ */
+
+async function loadFollows() {
+  // Get all follow rows so we can compute counts and my following
+  const { data: follows, error } = await db.from('follows').select('follower_id, followee_id');
+  if (error) {
+    console.error('follows load error', error);
+    state.myFollowing = new Set();
+    state.followerCounts = {};
+    state.followingCounts = {};
+    return;
+  }
+  const mine = new Set();
+  const followers = {}; // followee -> count
+  const following = {}; // follower -> count
+  (follows || []).forEach(f => {
+    if (state.profile && f.follower_id === state.profile.id) mine.add(f.followee_id);
+    followers[f.followee_id] = (followers[f.followee_id] || 0) + 1;
+    following[f.follower_id] = (following[f.follower_id] || 0) + 1;
+  });
+  state.myFollowing = mine;
+  state.followerCounts = followers;
+  state.followingCounts = following;
+}
+
+let upmCurrentUserId = null;
+
+async function openUserProfile(userId) {
+  if (!userId) return;
+  upmCurrentUserId = userId;
+
+  // If it's me, show my own profile modal instead
+  if (state.profile && userId === state.profile.id) {
+    closeModals();
+    openProfile();
+    return;
+  }
+
+  // Fetch user profile
+  const { data: prof, error } = await db.from('profiles')
+    .select('id, name, avatar, points, wins, losses, streak')
+    .eq('id', userId)
+    .single();
+  if (error || !prof) {
+    console.error('user profile fetch error', error);
+    toast('Could not load profile');
+    return;
+  }
+
+  document.getElementById('upmAvatar').textContent = prof.avatar || '🔥';
+  document.getElementById('upmName').textContent = prof.name || 'User';
+  document.getElementById('upmHandle').textContent = '';
+  document.getElementById('upmPoints').textContent = prof.points || 0;
+  document.getElementById('upmWins').textContent = prof.wins || 0;
+  document.getElementById('upmFollowers').textContent = state.followerCounts[userId] || 0;
+  document.getElementById('upmFollowing').textContent = state.followingCounts[userId] || 0;
+
+  const btn = document.getElementById('upmFollowBtn');
+  const isFollowing = state.myFollowing.has(userId);
+  btn.textContent = isFollowing ? '✓ Following' : '+ Follow';
+  btn.classList.toggle('following', isFollowing);
+  btn.onclick = () => toggleFollow(userId);
+
+  document.getElementById('userProfileModal').classList.add('open');
+}
+
+function closeUserProfile() {
+  document.getElementById('userProfileModal').classList.remove('open');
+  upmCurrentUserId = null;
+}
+
+async function toggleFollow(userId) {
+  if (!state.profile || !userId || userId === state.profile.id) return;
+  const wasFollowing = state.myFollowing.has(userId);
+  const btn = document.getElementById('upmFollowBtn');
+
+  // Optimistic UI
+  btn.disabled = true;
+  if (wasFollowing) {
+    state.myFollowing.delete(userId);
+    state.followerCounts[userId] = Math.max(0, (state.followerCounts[userId] || 1) - 1);
+    state.followingCounts[state.profile.id] = Math.max(0, (state.followingCounts[state.profile.id] || 1) - 1);
+  } else {
+    state.myFollowing.add(userId);
+    state.followerCounts[userId] = (state.followerCounts[userId] || 0) + 1;
+    state.followingCounts[state.profile.id] = (state.followingCounts[state.profile.id] || 0) + 1;
+  }
+  btn.textContent = !wasFollowing ? '✓ Following' : '+ Follow';
+  btn.classList.toggle('following', !wasFollowing);
+  document.getElementById('upmFollowers').textContent = state.followerCounts[userId] || 0;
+
+  try {
+    if (wasFollowing) {
+      const { error } = await db.from('follows')
+        .delete()
+        .eq('follower_id', state.profile.id)
+        .eq('followee_id', userId);
+      if (error) throw error;
+    } else {
+      const { error } = await db.from('follows')
+        .insert({ follower_id: state.profile.id, followee_id: userId });
+      if (error) throw error;
+    }
+    // Re-render feed in case Following tab is active
+    if (state.currentView === 'feed') renderFeed();
+  } catch (err) {
+    console.error('follow toggle error', err);
+    // Revert
+    if (wasFollowing) {
+      state.myFollowing.add(userId);
+      state.followerCounts[userId] = (state.followerCounts[userId] || 0) + 1;
+      state.followingCounts[state.profile.id] = (state.followingCounts[state.profile.id] || 0) + 1;
+    } else {
+      state.myFollowing.delete(userId);
+      state.followerCounts[userId] = Math.max(0, (state.followerCounts[userId] || 1) - 1);
+      state.followingCounts[state.profile.id] = Math.max(0, (state.followingCounts[state.profile.id] || 1) - 1);
+    }
+    btn.textContent = wasFollowing ? '✓ Following' : '+ Follow';
+    btn.classList.toggle('following', wasFollowing);
+    document.getElementById('upmFollowers').textContent = state.followerCounts[userId] || 0;
+    toast('Follow failed');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Wire feed tab buttons
+document.querySelectorAll('.feed-tab').forEach(t => {
+  t.addEventListener('click', () => {
+    state.feedTab = t.dataset.feedtab;
+    document.querySelectorAll('.feed-tab').forEach(x => x.classList.toggle('active', x.dataset.feedtab === state.feedTab));
+    renderFeed();
+  });
+});
 
 /* ---------- BOOT ---------- */
 // Fire-and-forget warm-up ping to wake Supabase up before the user does anything
