@@ -1329,6 +1329,24 @@ footer .links a:hover { color: var(--ember); }
   color: var(--ember);
 }
 
+/* "+" hint badge that indicates a name is tappable to follow */
+.user-plus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(255, 80, 30, 0.18);
+  color: var(--ember);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  margin-left: 6px;
+  border: 1px solid rgba(255, 80, 30, 0.5);
+  vertical-align: -2px;
+}
+
 /* Feed item: challenge tile (mini card style) */
 .feed-challenge-card {
   background: var(--surface);
@@ -3814,6 +3832,7 @@ function renderChallengeDetail() {
   const countdownTarget = status === 'submitting' ? ch.submission_deadline : status === 'voting' ? ch.voting_end : null;
 
   // Hero
+  const creatorClickable = ch.creator?.id && ch.creator.id !== state.profile?.id;
   document.getElementById('cdHero').innerHTML = `
     <div class="cd-status-row">
       <span class="ch-status ${status}"><span class="dot"></span>${statusLabel}</span>
@@ -3821,12 +3840,20 @@ function renderChallengeDetail() {
     </div>
     <div class="ch-category">${escapeHtml(ch.category)}${ch.is_public ? '' : ' · 🔒 Private'}</div>
     <h1 class="cd-title">${escapeHtml(ch.title)}</h1>
-    <div class="cd-creator">
+    <div class="cd-creator${creatorClickable ? ' user-clickable' : ''}" ${creatorClickable ? `data-user-id="${ch.creator.id}"` : ''}>
       <div class="avatar">${escapeHtml(ch.creator?.avatar || '🔥')}</div>
-      <span>by ${escapeHtml(ch.creator?.name || 'Unknown')}</span>
+      <span>by ${escapeHtml(ch.creator?.name || 'Unknown')}${creatorClickable ? ' <span class="user-plus">+</span>' : ''}</span>
     </div>
     ${ch.rules ? `<div class="cd-rules"><strong>Rules:</strong> ${escapeHtml(ch.rules)}</div>` : ''}
   `;
+  // Wire creator click
+  if (creatorClickable) {
+    const cEl = document.getElementById('cdHero').querySelector('[data-user-id]');
+    if (cEl) cEl.addEventListener('click', e => {
+      e.stopPropagation();
+      openUserProfile(cEl.dataset.userId);
+    });
+  }
 
   // Submit button visibility
   const userHasEntered = state.profile && state.currentEntries.some(e => e.user_id === state.profile.id);
@@ -3907,9 +3934,9 @@ function renderChallengeDetail() {
         ${medalBadge}
         <div class="cd-entry-media">${mediaHtml}</div>
         <div class="cd-entry-body">
-          <div class="cd-entry-submitter ${entry.user_id ? 'user-clickable' : ''}" ${entry.user_id ? `data-user-id="${entry.user_id}"` : ''}>
+          <div class="cd-entry-submitter ${entry.user_id && entry.user_id !== state.profile?.id ? 'user-clickable' : ''}" ${entry.user_id && entry.user_id !== state.profile?.id ? `data-user-id="${entry.user_id}"` : ''}>
             <div class="avatar">${escapeHtml(entry.submitter?.avatar || '🔥')}</div>
-            <span>${escapeHtml(entry.submitter?.name || 'Unknown')}${isMyEntry ? ' (you)' : ''}</span>
+            <span>${escapeHtml(entry.submitter?.name || 'Unknown')}${isMyEntry ? ' (you)' : (entry.user_id ? ' <span class="user-plus">+</span>' : '')}</span>
           </div>
           ${entry.media_type !== 'text' && entry.caption ? `<div class="cd-entry-caption">${escapeHtml(entry.caption)}</div>` : ''}
           ${actionsHtml ? `<div class="cd-entry-actions">${actionsHtml}</div>` : ''}
@@ -4758,13 +4785,15 @@ function renderPostCard(p) {
   const iLiked = state.myPostLikes.has(p.id);
   // Can't like your own post
   const likeBtnAttrs = isMine ? 'disabled aria-label="You can\'t like your own post"' : `data-like-post="${p.id}"`;
-  const userClickAttr = p.user_id ? `data-user-id="${p.user_id}" class="user-clickable"` : '';
+  const isClickableUser = p.user_id && !isMine;
+  const userClickAttr = isClickableUser ? `data-user-id="${p.user_id}" class="user-clickable"` : '';
+  const plusBadge = isClickableUser ? ' <span class="user-plus">+</span>' : '';
   return `
     <div class="post-card" data-pid="${p.id}">
       <div class="post-card-header">
         <div class="post-card-avatar" ${userClickAttr}>${escapeHtml(author.avatar || '🔥')}</div>
         <div class="post-card-meta">
-          <div class="post-card-name" ${userClickAttr}>${escapeHtml(author.name)}</div>
+          <div class="post-card-name" ${userClickAttr}>${escapeHtml(author.name)}${plusBadge}</div>
           <div class="post-card-time">${timeAgo(p.created_at)}</div>
         </div>
         ${isMine ? `<button class="post-card-menu" data-pid="${p.id}" aria-label="Delete post">⋯</button>` : ''}
@@ -5132,7 +5161,7 @@ async function renderFindPeopleResults(query) {
   try {
     // Race the query against a 12s timeout so it can't hang forever
     const result = await Promise.race([
-      db.from('profiles').select('id, name, avatar').ilike('name', `%${query}%`).limit(20),
+      db.from('profiles').select('id, name, avatar').ilike('name', `%${query}%`).neq('id', state.profile.id).limit(20),
       new Promise((_, rej) => setTimeout(() => rej(new Error('Search timed out (12s)')), 12000))
     ]);
     const { data, error } = result;
@@ -5142,13 +5171,11 @@ async function renderFindPeopleResults(query) {
       wrap.innerHTML = `<div class="empty-state-mini" style="color:#ff6b7a">Error: ${escapeHtml(error.message)}</div>`;
       return;
     }
-    const myId = state.profile?.id;
     const totalCount = (data || []).length;
-    const results = (data || []).filter(p => p.id !== myId);
-    console.log('[find people] filtered:', results.length, 'of', totalCount);
+    const results = data || [];
+    console.log('[find people] results:', results.length);
     if (results.length === 0) {
-      const note = totalCount > 0 ? ` (${totalCount} matched, but only you)` : '';
-      wrap.innerHTML = `<div class="empty-state-mini">No matches for "${escapeHtml(query)}"${note}</div>`;
+      wrap.innerHTML = `<div class="empty-state-mini">No matches for "${escapeHtml(query)}"</div>`;
       return;
     }
     wrap.innerHTML = results.map(p => {
@@ -5225,7 +5252,7 @@ db.from('users').select('id').limit(1).then(() => {}, () => {});
 (async function boot() {
   // Get initial session
   const { data: { session } } = await db.auth.getSession();
-  state.session = session; 
+  state.session = session;
   if (session) {
     await loadProfile();
     showApp();
