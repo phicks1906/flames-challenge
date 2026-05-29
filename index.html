@@ -1291,8 +1291,109 @@ footer .links a:hover { color: var(--ember); }
   -webkit-tap-highlight-color: transparent;
 }
 .hc-tap:active { transform: scale(0.96); }
-.heat-stat.hc-tap:hover { border-color: var(--ember); }
-.heat-ring.hc-tap:hover { box-shadow: 0 0 24px rgba(255,106,44,0.25); }
+
+/* ============ FIRE VS ICE GAUGE ============ */
+.hc-gauge-stage {
+  position: relative;
+  height: 290px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.hc-gauge-stage:active { transform: scale(0.985); transition: transform 0.12s ease; }
+.hc-gauge-svg { display: block; overflow: visible; }
+.hc-needle {
+  transform-origin: 140px 140px;
+  transition: transform 0.9s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.hc-fire-side, .hc-ice-side { transition: opacity 0.6s ease; }
+
+@keyframes hcEmberRise {
+  0% { transform: translate(0, 0) scale(1); opacity: 0; }
+  15% { opacity: 1; }
+  100% { transform: translate(var(--dx, 8px), -80px) scale(0.2); opacity: 0; }
+}
+@keyframes hcSnowDrift {
+  0% { transform: translate(0, 0) rotate(0); opacity: 0; }
+  20% { opacity: 0.9; }
+  100% { transform: translate(var(--dx, -10px), 60px) rotate(180deg); opacity: 0; }
+}
+@keyframes hcCorePulse {
+  0%, 100% { filter: drop-shadow(0 0 6px rgba(255, 106, 44, 0.4)) drop-shadow(0 0 6px rgba(79, 195, 247, 0.3)); }
+  50% { filter: drop-shadow(0 0 12px rgba(255, 106, 44, 0.65)) drop-shadow(0 0 12px rgba(79, 195, 247, 0.55)); }
+}
+.hc-arc-glow { animation: hcCorePulse 2.4s ease-in-out infinite; }
+
+#hcFireParticles, #hcIceParticles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.hc-particle {
+  position: absolute;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+.hc-ember {
+  width: 4px; height: 4px;
+  background: radial-gradient(circle, #fff4d4 0%, #ffc857 30%, #ff6a2c 70%, transparent 100%);
+  border-radius: 50%;
+  animation: hcEmberRise 2.8s ease-out infinite;
+}
+.hc-snow {
+  width: 8px; height: 8px;
+  color: #b3e5fc;
+  text-align: center;
+  font-size: 9px;
+  line-height: 8px;
+  animation: hcSnowDrift 3.6s linear infinite;
+}
+
+/* Three-tile row below the gauge */
+.hc-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 4px;
+}
+.hc-tile {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 6px;
+  text-align: center;
+}
+.hc-tile.fire {
+  border-color: rgba(255, 106, 44, 0.3);
+  background: rgba(255, 80, 30, 0.08);
+}
+.hc-tile.hc-tap:hover { border-color: var(--ember); }
+.hc-tile-val {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.hc-tile-val.gold { color: var(--gold); }
+.hc-tile-lbl {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-top: 5px;
+}
+
+/* Light-mode adjustments — softer halos */
+body.theme-light .hc-arc-glow {
+  animation: none;
+  filter: drop-shadow(0 0 6px rgba(255, 106, 44, 0.25)) drop-shadow(0 0 6px rgba(26, 143, 196, 0.2));
+}
+body.theme-light .hc-pct-text { fill: #1a1714; }
+body.theme-light .hc-pct-label { fill: #7a716a; }
 
 /* Record sheet */
 .record-tabs {
@@ -1380,6 +1481,36 @@ footer .links a:hover { color: var(--ember); }
 .record-badge.lost { background: var(--overlay-2); color: var(--text-muted); border: 1px solid var(--border); }
 .record-badge.pending { background: rgba(255,106,44,0.15); color: var(--ember); border: 1px solid rgba(255,106,44,0.4); }
 .record-badge.voided { background: rgba(255,45,31,0.12); color: #ff7a6e; border: 1px solid rgba(255,45,31,0.3); }
+.record-badge.tied { background: rgba(79,195,247,0.15); color: #b3e5fc; border: 1px solid rgba(79,195,247,0.4); }
+
+/* Profile sheet: record line (W-L-T) shown for self */
+.ps-record-line {
+  margin: 0 0 14px;
+  padding: 10px 16px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--text);
+}
+.ps-record-num { font-variant-numeric: tabular-nums; font-weight: 800; font-size: 17px; }
+.ps-record-num.gold { color: var(--gold); }
+.ps-record-lbl {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+  margin-left: -2px;
+}
+.ps-record-pct {
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: 4px;
+}
 
 /* Theme toggle in profile menu */
 .theme-toggle-row {
@@ -2861,27 +2992,89 @@ footer .links a:hover { color: var(--ember); }
     <div class="heat-check">
       <div class="heat-check-title">Heat Check</div>
       <div class="heat-check-sub">Your performance · tap to see</div>
-      <div class="heat-ring-wrap">
-        <div class="heat-ring hc-tap" id="heatRing" onclick="openRecordSheet('all')" role="button" tabindex="0">
-          <div class="heat-ring-text"><span id="heatPct">0</span><span class="pct-sym">%</span></div>
+
+      <div class="hc-gauge-stage" id="hcGaugeStage" onclick="openRecordSheet('all')" role="button" tabindex="0">
+        <svg width="290" height="290" viewBox="0 0 290 290" class="hc-gauge-svg">
+          <defs>
+            <linearGradient id="hcArcGrad" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%"  stop-color="#1a8fc4"/>
+              <stop offset="20%" stop-color="#4fc3f7"/>
+              <stop offset="42%" stop-color="#b3e5fc"/>
+              <stop offset="50%" stop-color="#ffffff"/>
+              <stop offset="58%" stop-color="#ffe4b5"/>
+              <stop offset="78%" stop-color="#ff6a2c"/>
+              <stop offset="100%" stop-color="#ff2d1f"/>
+            </linearGradient>
+            <filter id="hcBigGlow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="3" result="b1"/>
+              <feGaussianBlur stdDeviation="9" result="b2"/>
+              <feMerge><feMergeNode in="b2"/><feMergeNode in="b1"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+            <radialGradient id="hcHubGrad" cx="0.5" cy="0.5" r="0.5">
+              <stop offset="0%" stop-color="#fff"/>
+              <stop offset="40%" stop-color="#ffe4b5"/>
+              <stop offset="100%" stop-color="#ff6a2c"/>
+            </radialGradient>
+            <radialGradient id="hcIceHalo" cx="0.5" cy="0.5" r="0.5">
+              <stop offset="0%" stop-color="#4fc3f7" stop-opacity="0.5"/>
+              <stop offset="100%" stop-color="#1a8fc4" stop-opacity="0"/>
+            </radialGradient>
+            <radialGradient id="hcFireHalo" cx="0.5" cy="0.5" r="0.5">
+              <stop offset="0%" stop-color="#ff6a2c" stop-opacity="0.55"/>
+              <stop offset="100%" stop-color="#ff2d1f" stop-opacity="0"/>
+            </radialGradient>
+          </defs>
+          <ellipse class="hc-ice-side" id="hcIceHaloEl" cx="60" cy="135" rx="80" ry="120" fill="url(#hcIceHalo)" opacity="0.5"/>
+          <ellipse class="hc-fire-side" id="hcFireHaloEl" cx="230" cy="135" rx="80" ry="120" fill="url(#hcFireHalo)" opacity="0.5"/>
+          <path d="M 77.8 212.2 A 95 95 0 1 1 212.2 212.2"
+            stroke="#1a1512" stroke-width="16" fill="none" stroke-linecap="round" opacity="0.7"/>
+          <path class="hc-arc-glow"
+            d="M 77.8 212.2 A 95 95 0 1 1 212.2 212.2"
+            stroke="url(#hcArcGrad)" stroke-width="14" fill="none" stroke-linecap="round"/>
+          <g id="hcTicks"></g>
+          <text x="62" y="240" text-anchor="middle" fill="#4fc3f7" font-size="11" font-weight="700">0%</text>
+          <text x="145" y="36" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">50%</text>
+          <text x="228" y="240" text-anchor="middle" fill="#ff6a2c" font-size="11" font-weight="700">100%</text>
+          <g class="hc-needle" id="hcNeedle" transform="rotate(225 140 140)">
+            <line x1="140" y1="140" x2="140" y2="55" stroke="#fff" stroke-width="3" stroke-linecap="round" filter="url(#hcBigGlow)"/>
+            <polygon points="140,50 134,64 146,64" fill="#fff"/>
+            <line x1="140" y1="140" x2="140" y2="158" stroke="#888" stroke-width="2.5" stroke-linecap="round"/>
+          </g>
+          <circle cx="140" cy="140" r="8" fill="url(#hcHubGrad)" stroke="#fff" stroke-width="1.5"/>
+          <circle cx="140" cy="140" r="2.5" fill="#fff"/>
+          <text x="145" y="225" text-anchor="middle" font-size="56" font-weight="900" fill="#fff" filter="url(#hcBigGlow)" class="hc-pct-text">
+            <tspan id="heatPct">—</tspan><tspan dx="2" font-size="30" fill="#ffc857" id="heatPctSym">%</tspan>
+          </text>
+          <text x="145" y="252" text-anchor="middle" font-size="10" font-weight="700" fill="#6a605a" class="hc-pct-label">WIN RATE</text>
+        </svg>
+        <div class="hc-fire-side" id="hcFireParticles">
+          <span class="hc-particle hc-ember" style="top:22%; right:14%; --dx: -6px; animation-delay: 0s;"></span>
+          <span class="hc-particle hc-ember" style="top:32%; right:20%; --dx: 10px; animation-delay: 0.5s;"></span>
+          <span class="hc-particle hc-ember" style="top:45%; right:10%; --dx: 14px; animation-delay: 1.0s;"></span>
+          <span class="hc-particle hc-ember" style="top:55%; right:18%; --dx: -8px; animation-delay: 1.6s;"></span>
+          <span class="hc-particle hc-ember" style="top:25%; right:30%; --dx: 4px; animation-delay: 2.0s;"></span>
         </div>
-        <div class="heat-stats">
-          <div class="heat-stat hc-tap" onclick="openRecordSheet('wins')" role="button" tabindex="0">
-            <div class="label">🥇 Wins</div>
-            <div class="val gold" id="heatWins">0</div>
-          </div>
-          <div class="heat-stat hc-tap" onclick="openRecordSheet('all')" role="button" tabindex="0">
-            <div class="label">Entries</div>
-            <div class="val" id="heatEntries">0</div>
-          </div>
-          <div class="heat-stat hc-tap" onclick="openRecordSheet('all')" role="button" tabindex="0">
-            <div class="label">Points</div>
-            <div class="val gold" id="heatPoints">0</div>
-          </div>
-          <div class="heat-stat hc-tap" onclick="openRecordSheet('all')" role="button" tabindex="0">
-            <div class="label">Streak</div>
-            <div class="val" id="heatStreak">0</div>
-          </div>
+        <div class="hc-ice-side" id="hcIceParticles">
+          <span class="hc-particle hc-snow" style="top:22%; left:14%; --dx: -6px; animation-delay: 0s;">❄</span>
+          <span class="hc-particle hc-snow" style="top:32%; left:20%; --dx: -12px; animation-delay: 0.8s;">❄</span>
+          <span class="hc-particle hc-snow" style="top:45%; left:10%; --dx: -4px; animation-delay: 1.4s;">❄</span>
+          <span class="hc-particle hc-snow" style="top:55%; left:18%; --dx: -8px; animation-delay: 2.2s;">❄</span>
+          <span class="hc-particle hc-snow" style="top:25%; left:30%; --dx: -10px; animation-delay: 2.8s;">❄</span>
+        </div>
+      </div>
+
+      <div class="hc-tiles">
+        <div class="hc-tile hc-tap fire" onclick="openRecordSheet('wins')" role="button" tabindex="0">
+          <div class="hc-tile-val gold" id="heatWins">0</div>
+          <div class="hc-tile-lbl">🥇 Wins</div>
+        </div>
+        <div class="hc-tile hc-tap" onclick="openRecordSheet('all')" role="button" tabindex="0">
+          <div class="hc-tile-val" id="heatEntries">0</div>
+          <div class="hc-tile-lbl">🎬 Entries</div>
+        </div>
+        <div class="hc-tile hc-tap" onclick="openRecordSheet('all')" role="button" tabindex="0">
+          <div class="hc-tile-val" id="heatStreak">0</div>
+          <div class="hc-tile-lbl">🔥 Streak</div>
         </div>
       </div>
     </div>
@@ -3125,6 +3318,7 @@ footer .links a:hover { color: var(--ember); }
     <div class="ps-hero">
       <div class="ps-avatar" id="psAvatar">🔥</div>
       <div class="ps-name" id="psName">User</div>
+      <div class="ps-record-line" id="psRecordLine" style="display:none"></div>
       <div class="ps-stats" id="psStats"></div>
       <button class="btn btn-primary ps-follow-btn" id="psFollowBtn" style="display:none"></button>
     </div>
@@ -3697,7 +3891,7 @@ footer .links a:hover { color: var(--ember); }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v25 · live-updates";
+const APP_VERSION = "v26 · fire-vs-ice";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -4056,6 +4250,7 @@ async function loadAppData() {
   await loadFollows();
   await loadFeedActivity();
   await loadMentionableProfiles();
+  await loadMyRecord();
   state.loading = false;
   renderPolls();
   renderLeaderboard();
@@ -4107,6 +4302,15 @@ async function liveTick() {
       } catch (e) { /* silent */ }
     } else if (state.currentChallenge) {
       try { await refreshChallengeVotes(state.currentChallenge.id); } catch (e) { /* silent */ }
+    }
+
+    // 3) Heat Check record — refresh every other tick (30s) to save bandwidth
+    state._tickCount = (state._tickCount || 0) + 1;
+    if (state._tickCount % 2 === 0) {
+      try {
+        await loadMyRecord();
+        if (state.currentView === 'feed') renderHeatCheck();
+      } catch (e) { /* silent */ }
     }
   } finally {
     _liveTickRunning = false;
@@ -4574,13 +4778,21 @@ async function loadMyRecord() {
     const status = computeChallengeStatusFromCh(ch, chEntries.length);
     let result = 'pending';
     if (status === 'closed') {
-      const sorted = [...chEntries].sort((a, b) => {
-        const dv = (votesByEntry[b.id] || 0) - (votesByEntry[a.id] || 0);
-        if (dv !== 0) return dv;
-        return new Date(a.created_at) - new Date(b.created_at);
-      });
-      const winner = sorted[0];
-      result = winner && winner.id === e.id ? 'won' : 'lost';
+      // Find the max vote count across all entries in this challenge
+      const counts = chEntries.map(en => votesByEntry[en.id] || 0);
+      const maxVotes = counts.length ? Math.max(...counts) : 0;
+      const myVotes = votesByEntry[e.id] || 0;
+      // Count how many entries share the top vote count
+      const topCount = counts.filter(c => c === maxVotes).length;
+      if (maxVotes === 0) {
+        // No votes at all — call it voided (not a real result)
+        result = 'voided';
+      } else if (myVotes === maxVotes) {
+        // I'm tied for first or sole winner
+        result = topCount > 1 ? 'tied' : 'won';
+      } else {
+        result = 'lost';
+      }
     } else if (status === 'voided') {
       result = 'voided';
     }
@@ -4602,6 +4814,7 @@ function renderRecord() {
     all: all.length,
     wins: all.filter(r => r.result === 'won').length,
     losses: all.filter(r => r.result === 'lost').length,
+    ties: all.filter(r => r.result === 'tied').length,
     pending: all.filter(r => r.result === 'pending').length
   };
   const filter = state.recordFilter || 'all';
@@ -4609,6 +4822,7 @@ function renderRecord() {
     { key: 'all', label: 'All' },
     { key: 'wins', label: '🥇 Wins' },
     { key: 'losses', label: 'Losses' },
+    { key: 'ties', label: '🤝 Ties' },
     { key: 'pending', label: 'Pending' }
   ];
   tabsEl.innerHTML = tabs.map(t =>
@@ -4617,6 +4831,7 @@ function renderRecord() {
   const filtered = filter === 'all' ? all : all.filter(r =>
     filter === 'wins' ? r.result === 'won' :
     filter === 'losses' ? r.result === 'lost' :
+    filter === 'ties' ? r.result === 'tied' :
     filter === 'pending' ? r.result === 'pending' : true
   );
   if (!filtered.length) {
@@ -4624,6 +4839,8 @@ function renderRecord() {
       ? `No wins yet. Enter a challenge — your first 🥇 is waiting.`
       : filter === 'losses'
       ? `No losses on the record. Either you haven't been beat or you haven't been tested.`
+      : filter === 'ties'
+      ? `No ties — every challenge had a clear outcome.`
       : filter === 'pending'
       ? `No active entries right now. Find a challenge and drop one in.`
       : `You haven't entered any challenges yet. Tap the 🔥 tab to find one.`;
@@ -4631,7 +4848,7 @@ function renderRecord() {
     return;
   }
   const catIcon = { singing: '🎤', dunk: '🏀', drawing: '🎨', rap: '🎙️', fashion: '👗', other: '🔥' };
-  const badgeLabel = { won: '🥇 Won', lost: 'Lost', pending: 'Pending', voided: 'Void' };
+  const badgeLabel = { won: '🥇 Won', lost: 'Lost', tied: '🤝 Tied', pending: 'Pending', voided: 'Void' };
   list.innerHTML = filtered.map(r => {
     const ch = r.challenge;
     const icon = catIcon[ch.category] || '🔥';
@@ -5357,19 +5574,84 @@ function applyDeepLink() {
 
 function renderHeatCheck() {
   if (!state.profile) return;
-  const wins = state.profile.wins || 0;
-  const losses = state.profile.losses || 0;
-  const total = wins + losses;
-  const pct = total ? Math.round((wins / total) * 100) : 0;
-  document.getElementById('heatPct').textContent = pct;
-  document.getElementById('heatWins').textContent = wins;
-  document.getElementById('heatEntries').textContent = total;
-  document.getElementById('heatPoints').textContent = state.profile.points || 0;
-  document.getElementById('heatStreak').textContent = state.profile.streak || 0;
-  // Update ring fill
-  const ring = document.getElementById('heatRing');
-  const deg = (pct / 100) * 360;
-  ring.style.background = `conic-gradient(var(--ember) 0deg, var(--ember) ${deg}deg, var(--overlay-2) ${deg}deg)`;
+  // Pull from state.myRecord if loaded; otherwise show zeros + kick off a load
+  const record = state.myRecord;
+  let wins = 0, losses = 0, ties = 0, entries = 0, streak = 0;
+  if (record && record.length) {
+    record.forEach(r => {
+      if (r.result === 'won') wins++;
+      else if (r.result === 'lost') losses++;
+      else if (r.result === 'tied') ties++;
+    });
+    entries = record.length;
+    // Win streak = consecutive 'won' going back from the most recent decided entry
+    // record is sorted newest-first by myCreated, so we walk forward
+    for (const r of record) {
+      if (r.result === 'won') streak++;
+      else if (r.result === 'lost' || r.result === 'tied') break; // a non-win breaks the streak
+      // pending / voided are skipped (don't count, don't break)
+    }
+  }
+  // Stash for profile sheet to display W-L-T
+  state.myWLT = { wins, losses, ties, entries, streak };
+
+  const decided = wins + losses;
+  const winPct = decided ? (wins / decided) * 100 : null;
+
+  // Update tiles
+  const wEl = document.getElementById('heatWins');     if (wEl) wEl.textContent = wins;
+  const eEl = document.getElementById('heatEntries');  if (eEl) eEl.textContent = entries;
+  const sEl = document.getElementById('heatStreak');   if (sEl) sEl.textContent = streak;
+  // Update big % text + needle + halos
+  const pctEl = document.getElementById('heatPct');
+  const pctSymEl = document.getElementById('heatPctSym');
+  if (pctEl) pctEl.textContent = winPct == null ? '—' : Math.round(winPct);
+  if (pctSymEl) pctSymEl.style.opacity = winPct == null ? '0.4' : '1';
+
+  const needle = document.getElementById('hcNeedle');
+  if (needle) {
+    const pctForNeedle = winPct == null ? 50 : winPct;
+    const angle = 225 + (270 * pctForNeedle / 100);
+    needle.setAttribute('transform', `rotate(${angle} 140 140)`);
+  }
+  // Effects intensity scales with win %
+  const fireOp = winPct == null ? 0.4 : (0.25 + 0.75 * winPct / 100);
+  const iceOp = winPct == null ? 0.4 : (0.25 + 0.75 * (1 - winPct / 100));
+  document.querySelectorAll('.hc-fire-side').forEach(el => el.style.opacity = fireOp);
+  document.querySelectorAll('.hc-ice-side').forEach(el => el.style.opacity = iceOp);
+
+  // Build ticks once (idempotent: only if not yet built)
+  const ticksG = document.getElementById('hcTicks');
+  if (ticksG && !ticksG.childNodes.length) buildHeatCheckTicks(ticksG);
+
+  // If we haven't loaded record yet, kick off a background load and re-render when ready
+  if (!record) {
+    loadMyRecord().then(() => renderHeatCheck()).catch(e => console.warn('heat record load', e));
+  }
+}
+
+function buildHeatCheckTicks(g) {
+  const cx = 140, cy = 140, rOuter = 105, rInner = 90;
+  for (let i = 0; i <= 10; i++) {
+    const pct = i * 10;
+    const angle = 225 + (270 * pct / 100);
+    const rad = (angle - 90) * Math.PI / 180;
+    const x1 = cx + rOuter * Math.cos(rad), y1 = cy + rOuter * Math.sin(rad);
+    const x2 = cx + rInner * Math.cos(rad), y2 = cy + rInner * Math.sin(rad);
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+    line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+    let color = '#4a3a2c';
+    if (i % 5 === 0) {
+      if (pct < 50) color = '#4fc3f7';
+      else if (pct > 50) color = '#ff6a2c';
+      else color = '#ffffff';
+    }
+    line.setAttribute('stroke', color);
+    line.setAttribute('stroke-width', i % 5 === 0 ? '3' : '2');
+    line.setAttribute('stroke-linecap', 'round');
+    g.appendChild(line);
+  }
 }
 
 /* ---------- PROFILE MODAL ---------- */
@@ -7627,6 +7909,19 @@ function renderProfileSheet() {
 
   const followers = state.followerCounts[prof.id] || 0;
   const following = state.followingCounts[prof.id] || 0;
+  // Record line (W-L-T) — only on your own profile
+  const recordHostEl = document.getElementById('psRecordLine');
+  if (recordHostEl) {
+    if (isMe && state.myWLT) {
+      const w = state.myWLT.wins, l = state.myWLT.losses, t = state.myWLT.ties;
+      const decided = w + l;
+      const pct = decided ? Math.round((w / decided) * 100) : null;
+      recordHostEl.innerHTML = `<span class="ps-record-num gold">${w}</span> <span class="ps-record-lbl">W</span> · <span class="ps-record-num">${l}</span> <span class="ps-record-lbl">L</span> · <span class="ps-record-num" style="color:#b3e5fc">${t}</span> <span class="ps-record-lbl">T</span>${pct != null ? ` <span class="ps-record-pct">· ${pct}% win rate</span>` : ''}`;
+      recordHostEl.style.display = 'block';
+    } else {
+      recordHostEl.style.display = 'none';
+    }
+  }
   document.getElementById('psStats').innerHTML = `
     <div class="ps-stat"><div class="ps-stat-val gold">${formatNum(prof.points || 0)}</div><div class="ps-stat-label">Points</div></div>
     <div class="ps-stat"><div class="ps-stat-val">${psState.entries.length}</div><div class="ps-stat-label">Entries</div></div>
