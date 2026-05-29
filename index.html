@@ -14,7 +14,7 @@
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
 <title>Flames Challenge — Where Opinions Ignite</title>
-<meta name="description" content="Vote on trending, local, and national issues. Challenge your friends. Climb the leaderboard." />
+<meta name="description" content="Vote on trending polls. Challenge your friends. Climb the leaderboard." />
 
 <meta property="og:title" content="Flames Challenge — Where Opinions Ignite" />
 <meta property="og:description" content="Vote on what matters. Challenge your friends. Climb the leaderboard." />
@@ -3123,11 +3123,6 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
         <p class="section-sub">Pick a side. Make it count.</p>
       </div>
     </div>
-    <div class="tabs" role="tablist">
-      <button class="tab active" data-filter="trending">🔥 Trending</button>
-      <button class="tab" data-filter="local">📍 Local</button>
-      <button class="tab" data-filter="national">🇺🇸 National</button>
-    </div>
     <div class="polls-grid" id="pollsGrid"></div>
   </div>
 </section>
@@ -3891,7 +3886,7 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v29 · one-vote-per-challenge";
+const APP_VERSION = "v30 · poll-cleanup";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -5660,10 +5655,11 @@ function openProfile() {
   const avatarPrefix = isAvatarUrl(state.profile.avatar) ? '🔥' : (state.profile.avatar || '🔥');
   document.getElementById('profileName').textContent = avatarPrefix + ' ' + state.profile.name;
   const voteCount = Object.keys(state.myVotes).length;
+  const winStreak = state.myWLT?.streak ?? 0;
   document.getElementById('profileStats').innerHTML =
-    `<strong style="color:var(--gold)">${state.profile.points}</strong> points · ` +
+    `<strong style="color:var(--gold)">${state.profile.points || 0}</strong> points · ` +
     `<strong>${voteCount}</strong> votes · ` +
-    `<strong>${state.profile.streak}</strong>-day streak`;
+    `<strong>${winStreak}</strong>-win streak`;
   document.getElementById('profileModal').classList.add('open');
 }
 
@@ -5801,7 +5797,7 @@ function renderPolls() {
     return;
   }
   grid.innerHTML = '';
-  const filtered = state.polls.filter(p => p.category === state.filter);
+  const filtered = state.polls;
   filtered.forEach(poll => {
     const realCounts = state.voteCountsByPoll[poll.id] || {};
     const optionsWithCounts = poll.options.map((opt, i) => ({
@@ -5814,10 +5810,8 @@ function renderPolls() {
 
     const card = document.createElement('article');
     card.className = 'poll-card' + (voted ? ' voted' : '');
-    const tagLabel = { trending:'🔥 Trending', local:'📍 Local', national:'🇺🇸 National' }[poll.category];
     card.innerHTML = `
       <div class="poll-meta">
-        <span class="poll-tag ${poll.category}">${tagLabel}</span>
         <span class="poll-time">⏱ ${poll.hours_remaining}h left</span>
       </div>
       <h3 class="poll-question">${escapeHtml(poll.question)}</h3>
@@ -5859,15 +5853,6 @@ async function castVote(pollId, optionIdx) {
   state.voteCountsByPoll[pollId][optionIdx] = (state.voteCountsByPoll[pollId][optionIdx] || 0) + 1;
   renderPolls();
 
-  const poll = state.polls.find(p => p.id === pollId);
-  let pointsEarned = 10;
-  if (poll) {
-    const realCounts = state.voteCountsByPoll[pollId];
-    const totals = poll.options.map((opt, i) => (opt.seed_votes || 0) + (realCounts[i] || 0));
-    const max = Math.max(...totals);
-    if (totals[optionIdx] === max) pointsEarned += 5;
-  }
-
   const { error: voteError } = await db.from('votes').insert({
     poll_id: pollId,
     user_id: state.profile.id,
@@ -5882,18 +5867,7 @@ async function castVote(pollId, optionIdx) {
     return;
   }
 
-  const newPoints = (state.profile.points || 0) + pointsEarned;
-  const newStreak = Math.min(99, (state.profile.streak || 0) + 1);
-  const { error: updErr } = await db.from('profiles').update({ points: newPoints, streak: newStreak }).eq('id', state.profile.id);
-  if (!updErr) {
-    state.profile.points = newPoints;
-    state.profile.streak = newStreak;
-  }
-  renderProfileChip();
-  renderHeatCheck();
-  await loadLeaderboard();
-  renderLeaderboard();
-  toast(`+${pointsEarned} points · ${newPoints} total`);
+  toast('🔥 Vote cast');
 }
 
 /* ---------- LEADERBOARD ---------- */
@@ -5919,7 +5893,6 @@ function renderLeaderboard() {
         <div class="lb-avatar">${avatarInner(u.avatar)}</div>
         <div style="min-width:0">
           <div class="lb-name">${escapeHtml(u.name)}${isYou ? ' (you)' : ''}${isDemo ? ' <span class="demo-badge">DEMO</span>' : ''}</div>
-          <div class="lb-streak">🔥 ${u.streak}-day streak</div>
         </div>
       </div>
       <div>
@@ -5938,16 +5911,6 @@ function renderLeaderboard() {
 async function sharePoll(poll) {
   openPromote('poll', poll);
 }
-
-/* ---------- TABS (for polls categories) ---------- */
-document.querySelectorAll('.tab').forEach(t => {
-  t.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
-    t.classList.add('active');
-    state.filter = t.dataset.filter;
-    renderPolls();
-  });
-});
 
 /* ---------- HELPERS ---------- */
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
