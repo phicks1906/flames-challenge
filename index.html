@@ -2805,9 +2805,37 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
 .cd-rules strong { color: var(--text); font-weight: 600; }
 .cd-entries-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
 .cd-entries-header .count { font-family: var(--font-display); font-size: 22px; text-transform: uppercase; letter-spacing: 0.04em; }
-.cd-entries-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
-@media (min-width: 600px) { .cd-entries-grid { grid-template-columns: 1fr 1fr; } }
+.cd-entries-grid {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: visible;
+  scroll-snap-type: x mandatory;
+  scroll-snap-stop: always;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  gap: 12px;
+  padding-bottom: 8px;
+  scrollbar-width: none;
+}
+.cd-entries-grid::-webkit-scrollbar { display: none; }
+.cd-entries-pager-empty { width: 100%; padding: 30px 16px; text-align: center; color: var(--text-dim); font-size: 14px; }
+.cd-entries-dots {
+  display: flex; justify-content: center; gap: 6px;
+  margin: 12px 0 4px;
+  flex-wrap: wrap;
+}
+.cd-entries-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--border-bright); opacity: 0.45;
+  transition: opacity 0.2s, transform 0.2s, background 0.2s;
+}
+.cd-entries-dot.active { background: var(--ember); opacity: 1; transform: scale(1.4); }
+.cd-entries-counter { text-align: center; font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
 .cd-entry {
+  flex: 0 0 calc(100% - 8px);
+  max-width: 520px;
+  scroll-snap-align: center;
   background: linear-gradient(180deg, var(--surface), var(--bg-2));
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -3395,6 +3423,8 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
       <button class="btn btn-primary" id="cdAddEntryBtn" onclick="openSubmitEntry()" style="display:none">+ Submit your entry</button>
     </div>
     <div class="cd-entries-grid" id="cdEntriesGrid"></div>
+    <div class="cd-entries-counter" id="cdEntriesCounter" style="display:none"></div>
+    <div class="cd-entries-dots" id="cdEntriesDots" style="display:none"></div>
   </div>
 </div>
 
@@ -3981,7 +4011,7 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v33 · admin-db";
+const APP_VERSION = "v34 · entries-pager";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -6486,7 +6516,7 @@ let seState = {
 async function openChallenge(ch) {
   state.currentChallenge = ch;
   document.getElementById('cdHeaderTitle').textContent = ch.title;
-  document.getElementById('cdEntriesGrid').innerHTML = '<div class="empty-state-mini" style="grid-column:1/-1">Loading...</div>';
+  document.getElementById('cdEntriesGrid').innerHTML = '<div class="cd-entries-pager-empty">Loading…</div>';
   document.getElementById('challengeDetailSheet').classList.add('open');
   document.body.style.overflow = 'hidden';
   try {
@@ -6494,7 +6524,7 @@ async function openChallenge(ch) {
   } catch (err) {
     console.error('challenge detail load error', err);
     document.getElementById('cdEntriesGrid').innerHTML =
-      `<div class="empty-state-mini" style="grid-column:1/-1;color:#ff6b7a">Couldn't load: ${escapeHtml(err.message || String(err))}</div>`;
+      `<div class="cd-entries-pager-empty" style="color:#ff6b7a">Couldn't load: ${escapeHtml(err.message || String(err))}</div>`;
     return;
   }
   renderChallengeDetail();
@@ -6641,8 +6671,12 @@ function renderChallengeDetail() {
   });
 
   const grid = document.getElementById('cdEntriesGrid');
+  const counterEl = document.getElementById('cdEntriesCounter');
+  const dotsEl = document.getElementById('cdEntriesDots');
   if (sortedEntries.length === 0) {
-    grid.innerHTML = '<div class="empty-state-mini" style="grid-column:1/-1">No entries yet. Be the first!</div>';
+    grid.innerHTML = '<div class="cd-entries-pager-empty">No entries yet. Be the first!</div>';
+    if (counterEl) counterEl.style.display = 'none';
+    if (dotsEl) dotsEl.style.display = 'none';
     return;
   }
 
@@ -6726,6 +6760,55 @@ function renderChallengeDetail() {
       </div>
     `;
   }).join('');
+
+  // Pager dots + counter (horizontal scroll-snap pager UI)
+  const total = sortedEntries.length;
+  if (counterEl) {
+    counterEl.textContent = `1 of ${total}`;
+    counterEl.style.display = total > 1 ? 'block' : 'none';
+  }
+  if (dotsEl) {
+    if (total > 1) {
+      dotsEl.innerHTML = sortedEntries.map((_, i) =>
+        `<span class="cd-entries-dot${i === 0 ? ' active' : ''}" data-pager-dot="${i}"></span>`
+      ).join('');
+      dotsEl.style.display = 'flex';
+    } else {
+      dotsEl.innerHTML = '';
+      dotsEl.style.display = 'none';
+    }
+  }
+  // Track which entry is "current" via scroll position; debounce updates
+  const cards = Array.from(grid.querySelectorAll('.cd-entry'));
+  const dots = Array.from((dotsEl || document.createElement('div')).querySelectorAll('[data-pager-dot]'));
+  let scrollRaf = 0;
+  function updateActiveEntry() {
+    if (!cards.length) return;
+    const gridRect = grid.getBoundingClientRect();
+    const center = gridRect.left + gridRect.width / 2;
+    let bestIdx = 0;
+    let bestDist = Infinity;
+    cards.forEach((card, i) => {
+      const r = card.getBoundingClientRect();
+      const cardCenter = r.left + r.width / 2;
+      const d = Math.abs(cardCenter - center);
+      if (d < bestDist) { bestDist = d; bestIdx = i; }
+    });
+    dots.forEach((dot, i) => dot.classList.toggle('active', i === bestIdx));
+    if (counterEl && total > 1) counterEl.textContent = `${bestIdx + 1} of ${total}`;
+  }
+  grid.onscroll = () => {
+    if (scrollRaf) cancelAnimationFrame(scrollRaf);
+    scrollRaf = requestAnimationFrame(updateActiveEntry);
+  };
+  // Tap dots to scroll to that entry
+  dots.forEach(dot => {
+    dot.addEventListener('click', () => {
+      const idx = parseInt(dot.dataset.pagerDot, 10);
+      const card = cards[idx];
+      if (card) card.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    });
+  });
 
   // Attach vote handlers
   grid.querySelectorAll('[data-vote-entry]').forEach(btn => {
