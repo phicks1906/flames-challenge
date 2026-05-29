@@ -3886,7 +3886,7 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v30 · poll-cleanup";
+const APP_VERSION = "v31 · wins-display";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -4399,21 +4399,54 @@ async function loadFeedActivity() {
 }
 
 async function loadLeaderboard() {
-  // Union profiles (real users) + users (seed users) by points
-  const [profilesRes, seedRes] = await Promise.all([
-    db.from('profiles').select('id, name, avatar, points, streak'),
-    db.from('users').select('id, name, avatar, points, streak'),
+  // Union profiles (real users) + users (seed users). Rank by live-computed challenge wins.
+  const [profilesRes, seedRes, entriesRes, votesRes] = await Promise.all([
+    db.from('profiles').select('id, name, avatar'),
+    db.from('users').select('id, name, avatar'),
+    db.from('entries').select('id, challenge_id, user_id'),
+    db.from('entry_votes').select('entry_id'),
   ]);
-  const profs = (profilesRes.data || []).map(p => ({ ...p, isReal: true }));
-  const seeds = (seedRes.data || []).map(s => ({ ...s, isReal: false }));
-  state.leaders = [...profs, ...seeds].sort((a, b) => b.points - a.points).slice(0, 10);
+
+  // Tally votes per entry
+  const votesByEntry = {};
+  (votesRes.data || []).forEach(v => {
+    votesByEntry[v.entry_id] = (votesByEntry[v.entry_id] || 0) + 1;
+  });
+
+  // Group entries by challenge
+  const entriesByCh = {};
+  (entriesRes.data || []).forEach(e => {
+    if (!entriesByCh[e.challenge_id]) entriesByCh[e.challenge_id] = [];
+    entriesByCh[e.challenge_id].push(e);
+  });
+
+  // Per challenge: a "win" requires a unique top vote count > 0 (ties don't count)
+  const winsByUser = {};
+  Object.values(entriesByCh).forEach(entries => {
+    let max = 0;
+    let topEntries = [];
+    entries.forEach(e => {
+      const v = votesByEntry[e.id] || 0;
+      if (v > max) { max = v; topEntries = [e]; }
+      else if (v === max) { topEntries.push(e); }
+    });
+    if (max > 0 && topEntries.length === 1) {
+      const winner = topEntries[0].user_id;
+      if (winner) winsByUser[winner] = (winsByUser[winner] || 0) + 1;
+    }
+  });
+
+  const profs = (profilesRes.data || []).map(p => ({ ...p, wins: winsByUser[p.id] || 0, isReal: true }));
+  const seeds = (seedRes.data || []).map(s => ({ ...s, wins: winsByUser[s.id] || 0, isReal: false }));
+  state.leaders = [...profs, ...seeds].sort((a, b) => b.wins - a.wins).slice(0, 10);
 }
 
 /* ---------- RENDER: chip, feed, heat check ---------- */
 function renderProfileChip() {
   if (!state.profile) return;
   document.getElementById('chipAvatar').innerHTML = avatarInner(state.profile.avatar);
-  document.getElementById('chipPoints').textContent = state.profile.points + ' pts';
+  const wins = state.myWLT?.wins ?? 0;
+  document.getElementById('chipPoints').textContent = wins + ' wins';
   document.getElementById('composerAvatar').innerHTML = avatarInner(state.profile.avatar);
 }
 
@@ -5656,8 +5689,9 @@ function openProfile() {
   document.getElementById('profileName').textContent = avatarPrefix + ' ' + state.profile.name;
   const voteCount = Object.keys(state.myVotes).length;
   const winStreak = state.myWLT?.streak ?? 0;
+  const winCount = state.myWLT?.wins ?? 0;
   document.getElementById('profileStats').innerHTML =
-    `<strong style="color:var(--gold)">${state.profile.points || 0}</strong> points · ` +
+    `<strong style="color:var(--gold)">${winCount}</strong> wins · ` +
     `<strong>${voteCount}</strong> votes · ` +
     `<strong>${winStreak}</strong>-win streak`;
   document.getElementById('profileModal').classList.add('open');
@@ -5896,8 +5930,8 @@ function renderLeaderboard() {
         </div>
       </div>
       <div>
-        <div class="lb-points">${formatNum(u.points)}</div>
-        <div class="lb-points-label">points</div>
+        <div class="lb-points">🥇 ${formatNum(u.wins || 0)}</div>
+        <div class="lb-points-label">wins</div>
       </div>
     `;
     if (u.isReal) {
