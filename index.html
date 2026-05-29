@@ -2864,6 +2864,78 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
 .cd-standing.mine .cd-standing-rank { color: var(--ember); }
 .cd-standing-votes { font-variant-numeric: tabular-nums; }
 
+/* ADMIN PAGE */
+.admin-tabs { display: flex; gap: 8px; margin: 16px 0; overflow-x: auto; padding-bottom: 4px; }
+.admin-tab {
+  padding: 10px 14px; border-radius: var(--radius-sm);
+  background: var(--surface-2); color: var(--text-dim);
+  border: 1px solid var(--border); font-weight: 600;
+  cursor: pointer; white-space: nowrap; font-size: 14px;
+  font-family: inherit;
+}
+.admin-tab.active { background: var(--ember); color: #fff; border-color: var(--ember); }
+.admin-panel { display: block; }
+.admin-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.admin-stat {
+  background: var(--surface); padding: 16px;
+  border-radius: var(--radius); border: 1px solid var(--border);
+}
+.admin-stat-num { font-family: var(--font-display); font-size: 32px; color: var(--ember); line-height: 1; }
+.admin-stat-lbl { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 6px; }
+.admin-row {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--surface); padding: 12px;
+  border-radius: var(--radius-sm); border: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+.admin-row-avatar {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: var(--surface-2); display: grid; place-items: center;
+  overflow: hidden; flex-shrink: 0; font-size: 20px;
+}
+.admin-row-main { flex: 1; min-width: 0; overflow: hidden; }
+.admin-row-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.admin-row-meta { font-size: 12px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.admin-row-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.admin-btn {
+  padding: 6px 10px; border-radius: 8px;
+  background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--border); font-size: 12px;
+  cursor: pointer; font-weight: 600; font-family: inherit;
+  white-space: nowrap;
+}
+.admin-btn.danger { background: rgba(255,45,31,0.15); color: var(--flame); border-color: rgba(255,45,31,0.4); }
+.admin-content-subtabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+.admin-content-subtab {
+  padding: 6px 12px; border-radius: 8px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  font-size: 12px; cursor: pointer; color: var(--text-dim); font-weight: 600;
+  font-family: inherit;
+}
+.admin-content-subtab.active { background: var(--ember); color: #fff; border-color: var(--ember); }
+.admin-flag-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px; background: var(--surface);
+  border-radius: var(--radius-sm); border: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+.admin-flag-toggle {
+  width: 48px; height: 28px; border-radius: 14px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  position: relative; cursor: pointer; flex-shrink: 0;
+  transition: background 0.2s, border-color 0.2s;
+}
+.admin-flag-toggle.on { background: var(--ember); border-color: var(--ember); }
+.admin-flag-toggle::after {
+  content: ''; position: absolute; top: 2px; left: 2px;
+  width: 22px; height: 22px; border-radius: 50%; background: #fff;
+  transition: transform 0.2s;
+}
+.admin-flag-toggle.on::after { transform: translateX(20px); }
+.admin-empty { padding: 20px; color: var(--text-dim); text-align: center; }
+.admin-error { padding: 20px; color: var(--flame); }
+.admin-loading { padding: 20px; color: var(--text-dim); }
+
 </style>
 </head>
 <body>
@@ -2953,6 +3025,7 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
       <button class="nav-link" data-view="challenges" onclick="switchView('challenges')">Challenges</button>
       <button class="nav-link" data-view="polls" onclick="switchView('polls')">Polls</button>
       <button class="nav-link" data-view="leaderboard" onclick="switchView('leaderboard')">Ranks</button>
+      <button class="nav-link" data-view="admin" id="navAdmin" onclick="switchView('admin')" style="display:none">🛡️ Admin</button>
     </div>
     <div class="nav-actions">
       <button id="notifBell" class="notif-bell" onclick="openNotifs()" aria-label="Notifications">
@@ -3137,6 +3210,28 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
       </div>
     </div>
     <div class="leaderboard" id="lbList"></div>
+  </div>
+</section>
+
+<!-- ADMIN VIEW -->
+<section id="adminViewSection" class="app-section" style="display:none">
+  <div class="section">
+    <div class="section-head">
+      <div>
+        <h2 class="section-title">🛡️ Admin</h2>
+        <p class="section-sub">Manage users, content, and settings.</p>
+      </div>
+    </div>
+    <div class="admin-tabs">
+      <button class="admin-tab active" data-admin-tab="overview">📊 Overview</button>
+      <button class="admin-tab" data-admin-tab="users">👥 Users</button>
+      <button class="admin-tab" data-admin-tab="content">📝 Content</button>
+      <button class="admin-tab" data-admin-tab="flags">🚩 Flags</button>
+    </div>
+    <div class="admin-panel" id="adminOverview"></div>
+    <div class="admin-panel" id="adminUsers" style="display:none"></div>
+    <div class="admin-panel" id="adminContent" style="display:none"></div>
+    <div class="admin-panel" id="adminFlags" style="display:none"></div>
   </div>
 </section>
 
@@ -3886,7 +3981,7 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v31 · wins-display";
+const APP_VERSION = "v32 · admin-page";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -4158,6 +4253,7 @@ function hydrateApp() {
     try {
       await loadProfile();
       showApp();
+      showAdminNav();
       await loadAppData();
       applyDeepLink();
     } catch (err) {
@@ -4211,14 +4307,19 @@ function showApp() {
 
 /* ---------- VIEW SWITCHER ---------- */
 function switchView(view) {
+  // Admin view gated to admin user only
+  if (view === 'admin' && !isAdmin()) { toast('Not authorized'); return; }
   state.currentView = view;
   document.querySelectorAll('.nav-link').forEach(l => l.classList.toggle('active', l.dataset.view === view));
   document.getElementById('feedView').style.display = view === 'feed' ? 'block' : 'none';
   document.getElementById('challengesViewSection').style.display = view === 'challenges' ? 'block' : 'none';
   document.getElementById('pollsViewSection').style.display = view === 'polls' ? 'block' : 'none';
   document.getElementById('leaderboardViewSection').style.display = view === 'leaderboard' ? 'block' : 'none';
+  const adminSection = document.getElementById('adminViewSection');
+  if (adminSection) adminSection.style.display = view === 'admin' ? 'block' : 'none';
   if (view === 'challenges') renderChallenges();
   if (view === 'feed') renderFeed();
+  if (view === 'admin') renderAdminOverview();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -8247,6 +8348,321 @@ db.from('users').select('id').limit(1).then(() => {}, () => {});
     showAuth();
   }
 })();
+
+/* ============================================================
+   ADMIN PAGE
+   Top-level view, gated to admin user ID.
+   Tabs: Overview, Users, Content, Flags.
+   ============================================================ */
+const ADMIN_USER_ID = '24c26d06-52c9-4134-8589-a2889d7ddfc0';
+const FEATURE_FLAGS = [
+  { key: 'fc_flag_polls',      label: 'Polls enabled',             def: true  },
+  { key: 'fc_flag_posts',      label: 'Post creation enabled',     def: true  },
+  { key: 'fc_flag_challenges', label: 'Challenge creation enabled',def: true  },
+  { key: 'fc_flag_signup',     label: 'New user signup enabled',   def: true  },
+];
+
+function isAdmin() {
+  return !!(state.profile && state.profile.id === ADMIN_USER_ID);
+}
+function showAdminNav() {
+  const btn = document.getElementById('navAdmin');
+  if (!btn) return;
+  btn.style.display = isAdmin() ? '' : 'none';
+}
+function getFlag(key) {
+  const f = FEATURE_FLAGS.find(x => x.key === key);
+  if (!f) return false;
+  const v = localStorage.getItem(key);
+  return v === null ? f.def : v === 'true';
+}
+function setFlag(key, value) { localStorage.setItem(key, value ? 'true' : 'false'); }
+
+let _adminContentTab = 'posts';
+
+async function renderAdminOverview() {
+  if (!isAdmin()) return;
+  const panel = document.getElementById('adminOverview');
+  if (!panel) return;
+  panel.innerHTML = '<div class="admin-loading">Loading stats…</div>';
+  try {
+    const [usersRes, postsRes, challengesRes, entriesRes, votesRes, pollVotesRes] = await Promise.all([
+      db.from('profiles').select('id', { count: 'exact', head: true }),
+      db.from('posts').select('id', { count: 'exact', head: true }),
+      db.from('challenges').select('id', { count: 'exact', head: true }),
+      db.from('entries').select('id', { count: 'exact', head: true }),
+      db.from('entry_votes').select('id', { count: 'exact', head: true }),
+      db.from('votes').select('id', { count: 'exact', head: true }),
+    ]);
+    const cutoff = new Date(Date.now() - 24*60*60*1000).toISOString();
+    const [rp, rv, re] = await Promise.all([
+      db.from('posts').select('user_id').gte('created_at', cutoff),
+      db.from('entry_votes').select('voter_id').gte('created_at', cutoff),
+      db.from('entries').select('user_id').gte('created_at', cutoff),
+    ]);
+    const active = new Set();
+    (rp.data || []).forEach(x => x.user_id && active.add(x.user_id));
+    (rv.data || []).forEach(x => x.voter_id && active.add(x.voter_id));
+    (re.data || []).forEach(x => x.user_id && active.add(x.user_id));
+    panel.innerHTML = `
+      <div class="admin-stat-grid">
+        <div class="admin-stat"><div class="admin-stat-num">${usersRes.count || 0}</div><div class="admin-stat-lbl">Total users</div></div>
+        <div class="admin-stat"><div class="admin-stat-num">${active.size}</div><div class="admin-stat-lbl">Active 24h</div></div>
+        <div class="admin-stat"><div class="admin-stat-num">${postsRes.count || 0}</div><div class="admin-stat-lbl">Posts</div></div>
+        <div class="admin-stat"><div class="admin-stat-num">${challengesRes.count || 0}</div><div class="admin-stat-lbl">Challenges</div></div>
+        <div class="admin-stat"><div class="admin-stat-num">${entriesRes.count || 0}</div><div class="admin-stat-lbl">Entries</div></div>
+        <div class="admin-stat"><div class="admin-stat-num">${(votesRes.count || 0) + (pollVotesRes.count || 0)}</div><div class="admin-stat-lbl">Votes (all)</div></div>
+      </div>
+    `;
+  } catch (err) {
+    panel.innerHTML = '<div class="admin-error">Error: ' + escapeHtml(err.message || String(err)) + '</div>';
+  }
+}
+
+async function renderAdminUsers() {
+  if (!isAdmin()) return;
+  const panel = document.getElementById('adminUsers');
+  if (!panel) return;
+  panel.innerHTML = '<div class="admin-loading">Loading users…</div>';
+  try {
+    const { data: users, error } = await db.from('profiles')
+      .select('id, name, avatar, created_at, banned_at')
+      .order('created_at', { ascending: false });
+    if (error && !error.message.includes('banned_at')) throw error;
+    // If banned_at column doesn't exist yet, refetch without it
+    let list = users;
+    if (error && error.message.includes('banned_at')) {
+      const r2 = await db.from('profiles').select('id, name, avatar, created_at').order('created_at', { ascending: false });
+      list = (r2.data || []).map(u => ({ ...u, banned_at: null }));
+    }
+    if (!list || list.length === 0) {
+      panel.innerHTML = '<div class="admin-empty">No users yet.</div>';
+      return;
+    }
+    panel.innerHTML = list.map(u => {
+      const banned = u.banned_at ? ' <span style="color:var(--flame);font-size:11px">BANNED</span>' : '';
+      const isYou = u.id === state.profile.id;
+      const banBtn = u.banned_at
+        ? `<button class="admin-btn" data-admin-act="unban" data-id="${u.id}">Unban</button>`
+        : `<button class="admin-btn danger" data-admin-act="ban" data-id="${u.id}">Ban</button>`;
+      return `
+        <div class="admin-row">
+          <div class="admin-row-avatar">${avatarInner(u.avatar)}</div>
+          <div class="admin-row-main">
+            <div class="admin-row-name">${escapeHtml(u.name || 'Unnamed')}${isYou ? ' (you)' : ''}${banned}</div>
+            <div class="admin-row-meta">Joined ${new Date(u.created_at).toLocaleDateString()}</div>
+          </div>
+          <div class="admin-row-actions">
+            <button class="admin-btn" data-admin-act="edit" data-id="${u.id}" data-name="${escapeHtml(u.name || '').replace(/"/g,'&quot;')}">Edit</button>
+            ${!isYou ? banBtn : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    panel.innerHTML = '<div class="admin-error">Error: ' + escapeHtml(err.message || String(err)) + '</div>';
+  }
+}
+
+async function adminBan(userId) {
+  if (!confirm('Ban this user? They will not be able to use the app.')) return;
+  const { error } = await db.from('profiles').update({ banned_at: new Date().toISOString() }).eq('id', userId);
+  if (error) {
+    if ((error.message || '').includes('banned_at')) {
+      alert("Ban needs a 'banned_at' column on profiles. Run this in Supabase:\n\nALTER TABLE profiles ADD COLUMN banned_at timestamptz;");
+    } else {
+      toast('Ban failed: ' + error.message);
+    }
+    return;
+  }
+  toast('User banned');
+  renderAdminUsers();
+}
+async function adminUnban(userId) {
+  const { error } = await db.from('profiles').update({ banned_at: null }).eq('id', userId);
+  if (error) { toast('Unban failed: ' + error.message); return; }
+  toast('User unbanned');
+  renderAdminUsers();
+}
+async function adminEditUserName(userId, currentName) {
+  const newName = prompt('Edit name:', currentName || '');
+  if (newName === null) return;
+  const trimmed = newName.trim();
+  if (!trimmed || trimmed === currentName) return;
+  const { error } = await db.from('profiles').update({ name: trimmed }).eq('id', userId);
+  if (error) { toast('Edit failed: ' + error.message); return; }
+  toast('User updated');
+  renderAdminUsers();
+}
+
+function renderAdminContent() {
+  if (!isAdmin()) return;
+  const panel = document.getElementById('adminContent');
+  if (!panel) return;
+  panel.innerHTML = `
+    <div class="admin-content-subtabs">
+      <button class="admin-content-subtab ${_adminContentTab==='posts'?'active':''}" data-acsub="posts">Posts</button>
+      <button class="admin-content-subtab ${_adminContentTab==='entries'?'active':''}" data-acsub="entries">Entries</button>
+      <button class="admin-content-subtab ${_adminContentTab==='challenges'?'active':''}" data-acsub="challenges">Challenges</button>
+      <button class="admin-content-subtab ${_adminContentTab==='comments'?'active':''}" data-acsub="comments">Comments</button>
+    </div>
+    <div id="adminContentList"><div class="admin-loading">Loading…</div></div>
+  `;
+  loadAdminContentList();
+}
+async function loadAdminContentList() {
+  const list = document.getElementById('adminContentList');
+  if (!list) return;
+  try {
+    if (_adminContentTab === 'posts') {
+      const { data, error } = await db.from('posts')
+        .select('id, body, created_at, author:profiles!posts_user_id_fkey(name)')
+        .order('created_at', { ascending: false }).limit(50);
+      if (error) throw error;
+      list.innerHTML = (data && data.length) ? data.map(p => `
+        <div class="admin-row">
+          <div class="admin-row-main">
+            <div class="admin-row-name">${escapeHtml((p.author && p.author.name) || 'Unknown')}</div>
+            <div class="admin-row-meta">${escapeHtml((p.body || '').slice(0, 80))}${(p.body || '').length > 80 ? '…' : ''}</div>
+            <div class="admin-row-meta">${new Date(p.created_at).toLocaleString()}</div>
+          </div>
+          <div class="admin-row-actions">
+            <button class="admin-btn danger" data-admin-act="del-post" data-id="${p.id}">Delete</button>
+          </div>
+        </div>
+      `).join('') : '<div class="admin-empty">No posts.</div>';
+    } else if (_adminContentTab === 'entries') {
+      const { data, error } = await db.from('entries')
+        .select('id, created_at, submitter:profiles!entries_user_id_fkey(name), challenge:challenges(title)')
+        .order('created_at', { ascending: false }).limit(50);
+      if (error) throw error;
+      list.innerHTML = (data && data.length) ? data.map(e => `
+        <div class="admin-row">
+          <div class="admin-row-main">
+            <div class="admin-row-name">${escapeHtml((e.submitter && e.submitter.name) || 'Unknown')}</div>
+            <div class="admin-row-meta">${escapeHtml((e.challenge && e.challenge.title) || 'Unknown challenge')}</div>
+            <div class="admin-row-meta">${new Date(e.created_at).toLocaleString()}</div>
+          </div>
+          <div class="admin-row-actions">
+            <button class="admin-btn danger" data-admin-act="del-entry" data-id="${e.id}">Delete</button>
+          </div>
+        </div>
+      `).join('') : '<div class="admin-empty">No entries.</div>';
+    } else if (_adminContentTab === 'challenges') {
+      const { data, error } = await db.from('challenges')
+        .select('id, title, created_at, creator:profiles!challenges_creator_id_fkey(name)')
+        .order('created_at', { ascending: false }).limit(50);
+      if (error) throw error;
+      list.innerHTML = (data && data.length) ? data.map(c => `
+        <div class="admin-row">
+          <div class="admin-row-main">
+            <div class="admin-row-name">${escapeHtml(c.title || 'Untitled')}</div>
+            <div class="admin-row-meta">by ${escapeHtml((c.creator && c.creator.name) || 'Unknown')}</div>
+            <div class="admin-row-meta">${new Date(c.created_at).toLocaleString()}</div>
+          </div>
+          <div class="admin-row-actions">
+            <button class="admin-btn danger" data-admin-act="del-challenge" data-id="${c.id}">Delete</button>
+          </div>
+        </div>
+      `).join('') : '<div class="admin-empty">No challenges.</div>';
+    } else if (_adminContentTab === 'comments') {
+      const { data, error } = await db.from('comments')
+        .select('id, body, created_at, author:profiles!comments_user_id_fkey(name)')
+        .order('created_at', { ascending: false }).limit(50);
+      if (error) throw error;
+      list.innerHTML = (data && data.length) ? data.map(c => `
+        <div class="admin-row">
+          <div class="admin-row-main">
+            <div class="admin-row-name">${escapeHtml((c.author && c.author.name) || 'Unknown')}</div>
+            <div class="admin-row-meta">${escapeHtml((c.body || '').slice(0, 80))}${(c.body || '').length > 80 ? '…' : ''}</div>
+            <div class="admin-row-meta">${new Date(c.created_at).toLocaleString()}</div>
+          </div>
+          <div class="admin-row-actions">
+            <button class="admin-btn danger" data-admin-act="del-comment" data-id="${c.id}">Delete</button>
+          </div>
+        </div>
+      `).join('') : '<div class="admin-empty">No comments.</div>';
+    }
+  } catch (err) {
+    list.innerHTML = '<div class="admin-error">Error: ' + escapeHtml(err.message || String(err)) + '</div>';
+  }
+}
+
+async function adminDelete(table, id, label) {
+  if (!confirm('Delete this ' + label + '?')) return;
+  const { error } = await db.from(table).delete().eq('id', id);
+  if (error) { toast('Delete failed: ' + error.message); return; }
+  toast(label.charAt(0).toUpperCase() + label.slice(1) + ' deleted');
+  loadAdminContentList();
+}
+
+function renderAdminFlags() {
+  if (!isAdmin()) return;
+  const panel = document.getElementById('adminFlags');
+  if (!panel) return;
+  panel.innerHTML = `
+    <div style="padding:0 0 12px;color:var(--text-dim);font-size:13px">
+      Feature toggles. Stored on this device only for now. (Server-synced flags coming later.)
+    </div>
+  ` + FEATURE_FLAGS.map(f => {
+    const on = getFlag(f.key);
+    return `
+      <div class="admin-flag-row">
+        <div style="min-width:0">
+          <div style="font-weight:600">${escapeHtml(f.label)}</div>
+          <div style="font-size:11px;color:var(--text-muted);font-family:monospace">${f.key}</div>
+        </div>
+        <div class="admin-flag-toggle ${on?'on':''}" data-admin-flag="${f.key}"></div>
+      </div>
+    `;
+  }).join('');
+}
+
+// Delegated click handler for admin tabs and row actions
+document.addEventListener('click', (e) => {
+  const tab = e.target.closest('[data-admin-tab]');
+  if (tab) {
+    document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    const which = tab.dataset.adminTab;
+    ['Overview','Users','Content','Flags'].forEach(name => {
+      const p = document.getElementById('admin' + name);
+      if (p) p.style.display = name.toLowerCase() === which ? '' : 'none';
+    });
+    if (which === 'overview') renderAdminOverview();
+    if (which === 'users') renderAdminUsers();
+    if (which === 'content') renderAdminContent();
+    if (which === 'flags') renderAdminFlags();
+    return;
+  }
+  const sub = e.target.closest('[data-acsub]');
+  if (sub) {
+    _adminContentTab = sub.dataset.acsub;
+    renderAdminContent();
+    return;
+  }
+  const flag = e.target.closest('[data-admin-flag]');
+  if (flag) {
+    const key = flag.dataset.adminFlag;
+    setFlag(key, !getFlag(key));
+    renderAdminFlags();
+    toast('Flag updated');
+    return;
+  }
+  const act = e.target.closest('[data-admin-act]');
+  if (act) {
+    const id = act.dataset.id;
+    switch (act.dataset.adminAct) {
+      case 'ban':           adminBan(id); break;
+      case 'unban':         adminUnban(id); break;
+      case 'edit':          adminEditUserName(id, act.dataset.name || ''); break;
+      case 'del-post':      adminDelete('posts', id, 'post'); break;
+      case 'del-entry':     adminDelete('entries', id, 'entry'); break;
+      case 'del-challenge': adminDelete('challenges', id, 'challenge'); break;
+      case 'del-comment':   adminDelete('comments', id, 'comment'); break;
+    }
+  }
+});
 
 </script>
 </body>
