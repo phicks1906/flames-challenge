@@ -3981,7 +3981,7 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v32 · admin-page";
+const APP_VERSION = "v33 · admin-db";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -8351,10 +8351,10 @@ db.from('users').select('id').limit(1).then(() => {}, () => {});
 
 /* ============================================================
    ADMIN PAGE
-   Top-level view, gated to admin user ID.
+   Top-level view, gated to admins (profiles.is_admin = true).
    Tabs: Overview, Users, Content, Flags.
    ============================================================ */
-const ADMIN_USER_ID = '24c26d06-52c9-4134-8589-a2889d7ddfc0';
+const ADMIN_BOOTSTRAP_UUID = '24c26d06-52c9-4134-8589-a2889d7ddfc0'; // fallback if is_admin column missing
 const FEATURE_FLAGS = [
   { key: 'fc_flag_polls',      label: 'Polls enabled',             def: true  },
   { key: 'fc_flag_posts',      label: 'Post creation enabled',     def: true  },
@@ -8363,7 +8363,12 @@ const FEATURE_FLAGS = [
 ];
 
 function isAdmin() {
-  return !!(state.profile && state.profile.id === ADMIN_USER_ID);
+  if (!state.profile) return false;
+  // Primary: check is_admin column (v33+)
+  if (state.profile.is_admin === true) return true;
+  // Fallback: hardcoded bootstrap UUID (works until is_admin column is added)
+  if (state.profile.is_admin === undefined && state.profile.id === ADMIN_BOOTSTRAP_UUID) return true;
+  return false;
 }
 function showAdminNav() {
   const btn = document.getElementById('navAdmin');
@@ -8426,14 +8431,15 @@ async function renderAdminUsers() {
   panel.innerHTML = '<div class="admin-loading">Loading users…</div>';
   try {
     const { data: users, error } = await db.from('profiles')
-      .select('id, name, avatar, created_at, banned_at')
+      .select('id, name, avatar, created_at, banned_at, is_admin')
       .order('created_at', { ascending: false });
-    if (error && !error.message.includes('banned_at')) throw error;
-    // If banned_at column doesn't exist yet, refetch without it
     let list = users;
-    if (error && error.message.includes('banned_at')) {
+    // Fall back gracefully if banned_at or is_admin columns don't exist yet
+    if (error && (error.message.includes('banned_at') || error.message.includes('is_admin'))) {
       const r2 = await db.from('profiles').select('id, name, avatar, created_at').order('created_at', { ascending: false });
-      list = (r2.data || []).map(u => ({ ...u, banned_at: null }));
+      list = (r2.data || []).map(u => ({ ...u, banned_at: null, is_admin: u.id === ADMIN_BOOTSTRAP_UUID }));
+    } else if (error) {
+      throw error;
     }
     if (!list || list.length === 0) {
       panel.innerHTML = '<div class="admin-empty">No users yet.</div>';
@@ -8441,19 +8447,24 @@ async function renderAdminUsers() {
     }
     panel.innerHTML = list.map(u => {
       const banned = u.banned_at ? ' <span style="color:var(--flame);font-size:11px">BANNED</span>' : '';
+      const adminBadge = u.is_admin ? ' <span style="color:var(--gold);font-size:11px">ADMIN</span>' : '';
       const isYou = u.id === state.profile.id;
       const banBtn = u.banned_at
         ? `<button class="admin-btn" data-admin-act="unban" data-id="${u.id}">Unban</button>`
         : `<button class="admin-btn danger" data-admin-act="ban" data-id="${u.id}">Ban</button>`;
+      const adminBtn = u.is_admin
+        ? `<button class="admin-btn" data-admin-act="demote" data-id="${u.id}">Remove admin</button>`
+        : `<button class="admin-btn" data-admin-act="promote" data-id="${u.id}">Make admin</button>`;
       return `
         <div class="admin-row">
           <div class="admin-row-avatar">${avatarInner(u.avatar)}</div>
           <div class="admin-row-main">
-            <div class="admin-row-name">${escapeHtml(u.name || 'Unnamed')}${isYou ? ' (you)' : ''}${banned}</div>
+            <div class="admin-row-name">${escapeHtml(u.name || 'Unnamed')}${isYou ? ' (you)' : ''}${adminBadge}${banned}</div>
             <div class="admin-row-meta">Joined ${new Date(u.created_at).toLocaleDateString()}</div>
           </div>
           <div class="admin-row-actions">
             <button class="admin-btn" data-admin-act="edit" data-id="${u.id}" data-name="${escapeHtml(u.name || '').replace(/"/g,'&quot;')}">Edit</button>
+            ${!isYou ? adminBtn : ''}
             ${!isYou ? banBtn : ''}
           </div>
         </div>
@@ -8492,6 +8503,28 @@ async function adminEditUserName(userId, currentName) {
   const { error } = await db.from('profiles').update({ name: trimmed }).eq('id', userId);
   if (error) { toast('Edit failed: ' + error.message); return; }
   toast('User updated');
+  renderAdminUsers();
+}
+
+async function adminPromote(userId) {
+  if (!confirm('Make this user an admin? They will have full admin access.')) return;
+  const { error } = await db.from('profiles').update({ is_admin: true }).eq('id', userId);
+  if (error) {
+    if ((error.message || '').includes('is_admin')) {
+      alert("Promote needs an 'is_admin' column on profiles. Run this in Supabase:\n\nALTER TABLE profiles ADD COLUMN is_admin boolean NOT NULL DEFAULT false;");
+    } else {
+      toast('Promote failed: ' + error.message);
+    }
+    return;
+  }
+  toast('User promoted to admin');
+  renderAdminUsers();
+}
+async function adminDemote(userId) {
+  if (!confirm('Remove admin access from this user?')) return;
+  const { error } = await db.from('profiles').update({ is_admin: false }).eq('id', userId);
+  if (error) { toast('Demote failed: ' + error.message); return; }
+  toast('Admin access removed');
   renderAdminUsers();
 }
 
@@ -8656,6 +8689,8 @@ document.addEventListener('click', (e) => {
       case 'ban':           adminBan(id); break;
       case 'unban':         adminUnban(id); break;
       case 'edit':          adminEditUserName(id, act.dataset.name || ''); break;
+      case 'promote':       adminPromote(id); break;
+      case 'demote':        adminDemote(id); break;
       case 'del-post':      adminDelete('posts', id, 'post'); break;
       case 'del-entry':     adminDelete('entries', id, 'entry'); break;
       case 'del-challenge': adminDelete('challenges', id, 'challenge'); break;
