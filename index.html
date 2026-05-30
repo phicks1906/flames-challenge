@@ -4404,7 +4404,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v56 · light-auth-fix";
+const APP_VERSION = "v57 · results-follow";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -7588,11 +7588,12 @@ function renderChallengeResults() {
     const isLeading = i === 0 && votes > 0;
     const isMyPick = state.myCurrentVote === e.id;
     const rankLabel = votes > 0 ? rankLabels[i] || ('#' + (i+1)) : 'No votes';
+    const canFollow = e.user_id && e.user_id !== state.profile?.id;
     return `<div class="cd-results-row${isLeading ? ' leading' : ''}${isMyPick ? ' my-pick' : ''}">
       <div class="cd-results-rank">${medals[i] || '#' + (i+1)}</div>
-      <div class="cd-results-avatar">${avatarInner(sub.avatar)}</div>
+      <div class="cd-results-avatar${canFollow ? ' user-clickable' : ''}" ${canFollow ? `data-open-uid="${e.user_id}"` : ''}>${avatarInner(sub.avatar)}</div>
       <div class="cd-results-info">
-        <div class="cd-results-name">${escapeHtml(sub.name)}${isMyPick ? ' <span style="color:var(--ember);font-size:11px;font-weight:400">· your pick</span>' : ''}</div>
+        <div class="cd-results-name${canFollow ? ' user-clickable' : ''}" ${canFollow ? `data-open-uid="${e.user_id}"` : ''}>${escapeHtml(sub.name)}${isMyPick ? ' <span style="color:var(--ember);font-size:11px;font-weight:400">· your pick</span>' : ''}${needsFollowPlus(e.user_id) ? ' <span class="user-plus">+</span>' : ''}</div>
         <div class="cd-results-rank-label${isLeading ? ' leading' : ''}">${rankLabel}</div>
       </div>
       <div class="cd-results-bar-wrap"><div class="cd-results-bar" style="width:0" data-pct="${pct}"></div></div>
@@ -7612,6 +7613,11 @@ function renderChallengeResults() {
     panel.querySelectorAll('.cd-results-bar').forEach(b => {
       b.style.width = (b.dataset.pct || 0) + '%';
     });
+  });
+
+  // Wire profile clicks in results panel
+  panel.querySelectorAll('[data-open-uid]').forEach(el => {
+    el.addEventListener('click', () => openUserProfile(el.dataset.openUid));
   });
 }
 
@@ -8736,8 +8742,7 @@ function renderPostCard(p) {
   }
   const likeCount = state.postLikeCounts[p.id] || 0;
   const iLiked = state.myPostLikes.has(p.id);
-  // Can't like your own post
-  const likeBtnAttrs = isMine ? 'disabled aria-label="You can\'t like your own post"' : `data-like-post="${p.id}"`;
+  const likeBtnAttrs = `data-like-post="${p.id}"`;
   const isClickableUser = p.user_id && !isMine;
   const userClickAttr = isClickableUser ? `data-user-id="${p.user_id}" class="user-clickable"` : '';
   const plusBadge = needsFollowPlus(p.user_id) ? ' <span class="user-plus">+</span>' : '';
