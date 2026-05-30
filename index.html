@@ -3001,6 +3001,71 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
 .btn-vote.is-voted { background: linear-gradient(135deg, var(--ember), var(--flame)); border: 1px solid transparent; color: white; box-shadow: 0 4px 14px -4px rgba(255,80,30,0.5); }
 
 /* Live voting standings (revealed after you vote, like polls) */
+.cd-results-panel {
+  margin-top: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  animation: fadeUp 0.35s ease;
+}
+.cd-results-title {
+  font-family: var(--font-display);
+  font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-muted); margin-bottom: 12px;
+}
+.cd-results-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.cd-results-row:last-child { border-bottom: none; }
+.cd-results-rank { font-family: var(--font-display); font-size: 18px; width: 28px; flex-shrink: 0; }
+.cd-results-avatar {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--ember), var(--coral));
+  display: grid; place-items: center; font-size: 16px; overflow: hidden; flex-shrink: 0;
+}
+.cd-results-name { flex: 1; font-weight: 600; font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cd-results-bar-wrap { flex: 0 0 80px; height: 6px; background: var(--overlay-2); border-radius: 100px; overflow: hidden; }
+.cd-results-bar { height: 100%; background: linear-gradient(90deg, var(--ember), var(--flame)); border-radius: 100px; transition: width 0.6s cubic-bezier(0.16,1,0.3,1); }
+.cd-results-row.leading .cd-results-bar { background: linear-gradient(90deg, var(--gold), #ffb347); }
+.cd-results-pct { font-size: 12px; font-weight: 700; color: var(--text-muted); width: 34px; text-align: right; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.cd-results-row.leading .cd-results-pct { color: var(--gold); }
+.cd-results-row.my-pick .cd-results-name::after { content: " · your pick"; color: var(--ember); font-weight: 400; font-size: 12px; }
+
+.cd-results-info { flex: 1; min-width: 0; }
+.cd-results-rank-label { font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 1px; }
+.cd-results-rank-label.leading { color: var(--gold); }
+
+/* Poll top answer card */
+.poll-top-answer {
+  background: linear-gradient(135deg, rgba(255,200,87,0.12), rgba(255,106,44,0.08));
+  border: 1px solid rgba(255,200,87,0.35);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  animation: fadeUp 0.4s ease;
+}
+.pta-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gold); margin-bottom: 6px; }
+.pta-answer { font-family: var(--font-bricolage); font-weight: 700; font-size: 18px; color: var(--text); margin-bottom: 8px; }
+.pta-bar-wrap { height: 6px; background: var(--overlay-2); border-radius: 100px; overflow: hidden; margin-bottom: 6px; }
+.pta-bar { height: 100%; background: linear-gradient(90deg, var(--gold), var(--ember)); border-radius: 100px; transition: width 0.7s cubic-bezier(0.16,1,0.3,1); }
+.pta-meta { font-size: 12px; color: var(--text-muted); }
+
+/* Poll counting state */
+.poll-card.poll-counting .poll-question { opacity: 0.6; }
+.poll-card.poll-counting::after {
+  content: "Counting votes...";
+  display: block;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ember);
+  padding: 8px 0 4px;
+  letter-spacing: 0.04em;
+}
+
 .cd-standing { margin-top: 10px; }
 .cd-standing-bar { height: 8px; background: var(--overlay-2); border-radius: 100px; overflow: hidden; }
 .cd-standing-fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--ember), var(--flame)); border-radius: 100px; transition: width 0.45s cubic-bezier(0.4,0,0.2,1); }
@@ -3739,6 +3804,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     <div class="cd-entries-grid" id="cdEntriesGrid"></div>
     <div class="cd-entries-counter" id="cdEntriesCounter" style="display:none"></div>
     <div class="cd-entries-dots" id="cdEntriesDots" style="display:none"></div>
+    <div id="cdResultsPanel" style="display:none"></div>
   </div>
 </div>
 
@@ -4337,7 +4403,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v52 · phase4-polish";
+const APP_VERSION = "v54 · vote-reveal";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -6481,6 +6547,7 @@ function renderPolls() {
 
     const card = document.createElement('article');
     card.className = 'poll-card' + (voted ? ' voted' : '');
+    card.dataset.pid = poll.id;
     card.innerHTML = `
       <div class="poll-meta">
         <span class="poll-time">⏱ ${poll.hours_remaining}h left</span>
@@ -6519,10 +6586,24 @@ async function castVote(pollId, optionIdx) {
   if (!state.profile) return;
   if (state.myVotes[pollId] !== undefined) return;
 
+  // Optimistic — mark voted but don't reveal results yet
   state.myVotes[pollId] = optionIdx;
   if (!state.voteCountsByPoll[pollId]) state.voteCountsByPoll[pollId] = {};
   state.voteCountsByPoll[pollId][optionIdx] = (state.voteCountsByPoll[pollId][optionIdx] || 0) + 1;
+
+  // Dramatic pause — show a "counting..." state for 1.2s before revealing
+  const pollCard = document.querySelector(`.poll-card[data-pid="${pollId}"]`);
+  if (pollCard) {
+    pollCard.classList.add('poll-counting');
+    pollCard.querySelector('.poll-options')?.querySelectorAll('button').forEach(b => b.disabled = true);
+  }
+
+  await new Promise(res => setTimeout(res, 1200));
+
   renderPolls();
+
+  // After renderPolls re-renders, inject the top answer card
+  setTimeout(() => injectPollTopAnswer(pollId), 50);
 
   const { error: voteError } = await db.from('votes').insert({
     poll_id: pollId,
@@ -6539,6 +6620,46 @@ async function castVote(pollId, optionIdx) {
   }
 
   toast('🔥 Vote cast');
+}
+
+function injectPollTopAnswer(pollId) {
+  const card = document.querySelector(`.poll-card[data-pid="${pollId}"]`);
+  if (!card) return;
+  const poll = state.polls.find(p => p.id === pollId);
+  if (!poll) return;
+  const counts = state.voteCountsByPoll[pollId] || {};
+  const options = (poll.options || []).map((opt, i) => ({
+    label: opt.label,
+    votes: (opt.seed_votes || 0) + (counts[i] || 0),
+    i,
+  }));
+  const total = options.reduce((s, o) => s + o.votes, 0);
+  const top = [...options].sort((a, b) => b.votes - a.votes)[0];
+  if (!top || total === 0) return;
+  const pct = Math.round((top.votes / total) * 100);
+  const myVote = state.myVotes[pollId];
+  const myLabel = myVote !== undefined ? options[myVote]?.label : null;
+  const agree = myVote === top.i;
+
+  const existing = card.querySelector('.poll-top-answer');
+  if (existing) existing.remove();
+
+  const el = document.createElement('div');
+  el.className = 'poll-top-answer';
+  el.innerHTML = `
+    <div class="pta-label">🏆 Top answer</div>
+    <div class="pta-answer">${escapeHtml(top.label)}</div>
+    <div class="pta-bar-wrap"><div class="pta-bar" style="width:0" data-pct="${pct}"></div></div>
+    <div class="pta-meta">${pct}% of votes${agree ? ' · <span style="color:var(--ember)">✓ Your pick</span>' : myLabel ? ` · You picked "${escapeHtml(myLabel)}"` : ''}</div>
+  `;
+  // Insert before poll-options
+  const optsBox = card.querySelector('.poll-options');
+  if (optsBox) card.insertBefore(el, optsBox);
+
+  // Animate bar
+  requestAnimationFrame(() => {
+    el.querySelector('.pta-bar').style.width = pct + '%';
+  });
 }
 
 /* ---------- LEADERBOARD ---------- */
@@ -7110,6 +7231,7 @@ async function openChallenge(ch) {
     return;
   }
   renderChallengeDetail();
+  renderChallengeResults();
 }
 
 function closeChallengeDetail() {
@@ -7120,6 +7242,7 @@ function closeChallengeDetail() {
   state.currentVotes = [];
   state.myCurrentVote = null;
   updateComposerContext(null);
+  const rp = document.getElementById('cdResultsPanel'); if (rp) { rp.style.display = 'none'; rp.innerHTML = ''; }
 }
 
 async function loadChallengeDetail(challengeId) {
@@ -7432,6 +7555,63 @@ function renderChallengeDetail() {
   });
 }
 
+function renderChallengeResults() {
+  const panel = document.getElementById('cdResultsPanel');
+  if (!panel) return;
+  const ch = state.currentChallenge;
+  if (!ch || !state.currentEntries || !state.currentEntries.length) {
+    panel.style.display = 'none';
+    return;
+  }
+  const status = computeChallengeStatus(ch);
+  const iHaveVoted = !!state.myCurrentVote;
+  const isClosed = status === 'closed';
+  if (!iHaveVoted && !isClosed) { panel.style.display = 'none'; return; }
+
+  const voteCountByEntry = {};
+  state.currentVotes.forEach(v => { voteCountByEntry[v.entry_id] = (voteCountByEntry[v.entry_id] || 0) + 1; });
+  const totalVotes = state.currentVotes.length;
+
+  const sorted = [...state.currentEntries]
+    .map(e => ({ e, votes: voteCountByEntry[e.id] || 0 }))
+    .sort((a, b) => b.votes - a.votes)
+    .slice(0, 3);
+
+  const medals = ['🥇', '🥈', '🥉'];
+  const rankLabels = ['Leading', '2nd', '3rd'];
+  const rowsHtml = sorted.map(({ e, votes }, i) => {
+    const pct = totalVotes > 0 ? Math.round((votes / totalVotes) * 100) : 0;
+    const sub = e.submitter || { name: 'Unknown', avatar: '🔥' };
+    const isLeading = i === 0 && votes > 0;
+    const isMyPick = state.myCurrentVote === e.id;
+    const rankLabel = votes > 0 ? rankLabels[i] || ('#' + (i+1)) : 'No votes';
+    return `<div class="cd-results-row${isLeading ? ' leading' : ''}${isMyPick ? ' my-pick' : ''}">
+      <div class="cd-results-rank">${medals[i] || '#' + (i+1)}</div>
+      <div class="cd-results-avatar">${avatarInner(sub.avatar)}</div>
+      <div class="cd-results-info">
+        <div class="cd-results-name">${escapeHtml(sub.name)}${isMyPick ? ' <span style="color:var(--ember);font-size:11px;font-weight:400">· your pick</span>' : ''}</div>
+        <div class="cd-results-rank-label${isLeading ? ' leading' : ''}">${rankLabel}</div>
+      </div>
+      <div class="cd-results-bar-wrap"><div class="cd-results-bar" style="width:0" data-pct="${pct}"></div></div>
+      <div class="cd-results-pct">${pct}%</div>
+    </div>`;
+  }).join('');
+
+  panel.innerHTML = `<div class="cd-results-panel">
+    <div class="cd-results-title">🏆 Current standings</div>
+    ${rowsHtml}
+    <div style="font-size:12px;color:var(--text-muted);margin-top:10px;text-align:center">${totalVotes} vote${totalVotes === 1 ? '' : 's'} total · ${state.currentEntries.length} ${state.currentEntries.length === 1 ? 'entry' : 'entries'}</div>
+  </div>`;
+  panel.style.display = 'block';
+
+  // Animate bars
+  requestAnimationFrame(() => {
+    panel.querySelectorAll('.cd-results-bar').forEach(b => {
+      b.style.width = (b.dataset.pct || 0) + '%';
+    });
+  });
+}
+
 async function voteOnEntry(entryId) {
   if (!state.profile || !state.currentChallenge) return;
   if (state.myCurrentVote === entryId) return;
@@ -7440,11 +7620,28 @@ async function voteOnEntry(entryId) {
   const me = state.profile.id;
   const previousVote = state.myCurrentVote;
 
-  // Optimistic: reflect the vote locally and reveal standings immediately
+  // Optimistic: reflect the vote locally — but wait before revealing results
   state.currentVotes = state.currentVotes.filter(v => v.voter_id !== me);
   state.currentVotes.push({ entry_id: entryId, voter_id: me });
   state.myCurrentVote = entryId;
+
+  // Show a "counting votes..." flash on the voted button before reveal
+  const votedBtn = document.querySelector(`[data-vote-entry="${entryId}"]`);
+  if (votedBtn) {
+    votedBtn.textContent = '⏳ Counting...';
+    votedBtn.disabled = true;
+  }
+
+  // Dramatic pause — 1.2s before results reveal
+  await new Promise(res => setTimeout(res, 1200));
+
   renderChallengeDetail();
+  // Scroll entry grid to beginning so standings are visible
+  setTimeout(() => {
+    const grid = document.getElementById('cdEntriesGrid');
+    if (grid) grid.scrollLeft = 0;
+    renderChallengeResults();
+  }, 50);
 
   try {
     const { error: upErr } = await db.from('entry_votes').upsert(
