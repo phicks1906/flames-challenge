@@ -3152,6 +3152,11 @@ body.theme-light .cc-upload { background: var(--overlay-1); }
       </div>
       <div>
         <label>Pick an avatar</label>
+        <div style="text-align:center;margin-bottom:8px">
+          <div class="ep-avatar-preview" id="signupAvatarPreview" style="width:72px;height:72px;font-size:34px;margin:0 auto 8px">🔥</div>
+          <input type="file" id="signupAvatarFile" accept="image/*" style="display:none" />
+          <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('signupAvatarFile').click()">📷 Upload photo instead</button>
+        </div>
         <div class="avatar-picker" id="signupAvatarPicker"></div>
       </div>
       <div>
@@ -3232,15 +3237,6 @@ body.theme-light .cc-upload { background: var(--overlay-1); }
       </div>
     </div>
 
-    <div class="cust-hint" id="customizeHint" style="display:none">
-      <div class="cust-hint-icon">📸</div>
-      <div class="cust-hint-body">
-        <strong>Make it yours</strong>
-        <span>Add a profile photo so people recognize you.</span>
-      </div>
-      <button class="cust-hint-btn" onclick="openEditProfile()">Add</button>
-      <button class="cust-hint-x" onclick="dismissCustomizeHint()" aria-label="Dismiss">×</button>
-    </div>
 
     <div class="heat-check">
       <div class="heat-check-title">Heat Check</div>
@@ -4175,7 +4171,7 @@ body.theme-light .cc-upload { background: var(--overlay-1); }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v44 · pw-toggle";
+const APP_VERSION = "v45 · signup-avatar";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -4283,6 +4279,9 @@ document.querySelectorAll('.auth-tab').forEach(t => {
 });
 
 // Build avatar picker
+// pickedAvatarFile holds a pending photo upload from signup (null = use emoji)
+let pickedAvatarFile = null;
+
 function buildAvatarPicker() {
   const picker = document.getElementById('signupAvatarPicker');
   picker.innerHTML = '';
@@ -4293,13 +4292,30 @@ function buildAvatarPicker() {
     el.textContent = a;
     el.onclick = () => {
       pickedAvatar = a;
+      pickedAvatarFile = null;
       picker.querySelectorAll('.avatar-opt').forEach(n => n.classList.remove('selected'));
       el.classList.add('selected');
+      const prev = document.getElementById('signupAvatarPreview');
+      if (prev) prev.innerHTML = a;
     };
     picker.appendChild(el);
   });
 }
 buildAvatarPicker();
+
+// Handle photo upload at signup
+document.getElementById('signupAvatarFile').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) { toast('Please pick an image.'); return; }
+  if (file.size > 10 * 1024 * 1024) { toast('Photo too large. Max 10MB.'); e.target.value = ''; return; }
+  pickedAvatarFile = file;
+  const url = URL.createObjectURL(file);
+  const prev = document.getElementById('signupAvatarPreview');
+  if (prev) prev.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+  // Deselect all emoji options
+  document.querySelectorAll('#signupAvatarPicker .avatar-opt').forEach(n => n.classList.remove('selected'));
+});
 
 /* ---------- LOGIN ---------- */
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
@@ -4386,6 +4402,22 @@ document.getElementById('signupForm').addEventListener('submit', async (e) => {
   }
   const btn = e.target.querySelector('button[type="submit"]');
   btn.disabled = true; const orig = btn.textContent; btn.textContent = 'Creating account...';
+
+  // If a photo was chosen, stash it as base64 in localStorage — we'll upload
+  // it on first login (the profile row doesn't exist until after email verify).
+  if (pickedAvatarFile) {
+    try {
+      const b64 = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(r.result);
+        r.onerror = rej;
+        r.readAsDataURL(pickedAvatarFile);
+      });
+      localStorage.setItem('fc_pending_avatar', b64);
+    } catch (e) { console.warn('pending avatar store failed', e); }
+  } else {
+    localStorage.removeItem('fc_pending_avatar');
+  }
 
   const { data, error } = await db.auth.signUp({
     email,
@@ -4583,6 +4615,26 @@ async function loadProfile() {
       }
     }
   } catch(e) { console.warn("interests apply", e); }
+
+  // Apply pending avatar photo from signup if this is a fresh login
+  try {
+    const pendingAvatar = localStorage.getItem("fc_pending_avatar");
+    if (pendingAvatar && state.profile) {
+      localStorage.removeItem("fc_pending_avatar");
+      // Convert base64 data URL to a File and upload to storage
+      const res = await fetch(pendingAvatar);
+      const blob = await res.blob();
+      const ext = blob.type.includes('png') ? 'png' : 'jpg';
+      const filename = `avatars/${state.profile.id}/${Date.now()}.${ext}`;
+      const up = await db.storage.from('challenge-media').upload(filename, blob, { cacheControl: '3600', upsert: false });
+      if (!up.error) {
+        const { data: pub } = db.storage.from('challenge-media').getPublicUrl(filename);
+        const avatarUrl = pub.publicUrl;
+        await db.from("profiles").update({ avatar: avatarUrl }).eq("id", state.profile.id);
+        state.profile.avatar = avatarUrl;
+      }
+    }
+  } catch(e) { console.warn("avatar apply", e); }
 }
 
 function showAuth() {
@@ -4846,23 +4898,9 @@ function renderProfileChip() {
 function renderFeedHello() {
   if (!state.profile) return;
   document.getElementById('feedHello').textContent = `Welcome back, ${state.profile.name}`;
-  updateCustomizeHint();
 }
 
-function customizeHintKey() { return 'fc_customize_dismissed_' + (state.profile?.id || 'anon'); }
-function updateCustomizeHint() {
-  const el = document.getElementById('customizeHint');
-  if (!el || !state.profile) return;
-  let dismissed = false;
-  try { dismissed = localStorage.getItem(customizeHintKey()) === '1'; } catch (e) {}
-  const hasPhoto = isAvatarUrl(state.profile.avatar);
-  el.style.display = (!hasPhoto && !dismissed) ? 'flex' : 'none';
-}
-function dismissCustomizeHint() {
-  try { localStorage.setItem(customizeHintKey(), '1'); } catch (e) {}
-  const el = document.getElementById('customizeHint');
-  if (el) el.style.display = 'none';
-}
+
 
 /* ---------- NOTIFICATIONS (computed from existing data) ---------- */
 function notifLastSeenKey() { return 'fc_notifs_seen_' + (state.profile?.id || 'anon'); }
@@ -6203,7 +6241,6 @@ async function saveProfileEdits() {
     renderProfileChip();
     renderHeatCheck();
     renderFeedHello();
-    updateCustomizeHint();
     if (state.currentView === 'feed') renderFeed();
     closeEditProfile();
     toast('🔥 Profile updated');
