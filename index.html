@@ -4111,7 +4111,7 @@ body.theme-light .cc-upload { background: var(--overlay-1); }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v39 · compact-dates-b";
+const APP_VERSION = "v40 · cleaner-feed";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -7738,42 +7738,31 @@ function renderFeed() {
   }));
 
   // Entry events — "X submitted to [challenge]" (skip the creator's founding entry)
-  let entryEvents = (state.feedEntries || [])
-    .map(e => {
-      const ch = state.challenges.find(c => c.id === e.challenge_id);
-      return ch ? { e, ch } : null;
-    })
-    .filter(Boolean)
-    .filter(({ ch }) => ch.is_public || ch.creator_id === myId)
-    .filter(({ e, ch }) => e.user_id !== ch.creator_id);
-  if (followingMode && myId) {
-    entryEvents = entryEvents.filter(({ e }) => e.user_id === myId || state.myFollowing.has(e.user_id));
-  }
-  const entryItems = entryEvents.map(({ e, ch }) => ({
-    kind: 'entry', sortKey: e.created_at, data: { entry: e, challenge: ch },
-  }));
-
-  // Winner events — closed challenges (recently) with a clear top-voted entry
+  // Submission cards removed from feed — they're noisy and already in the bell.
+  // Winner events — only show if you follow the winner or entered that challenge yourself.
   const recentClosedCutoff = Date.now() - 21 * 86400000;
+  const myEntryChallengIds = new Set((state.myRecord || []).map(r => r.challenge?.id).filter(Boolean));
   let winnerEvents = [];
   (state.challenges || []).forEach(ch => {
     if (computeChallengeStatus(ch) !== 'closed') return;
     if (!(ch.is_public || ch.creator_id === myId)) return;
     if (new Date(ch.voting_end).getTime() < recentClosedCutoff) return;
     const chEntries = (state.feedEntries || []).filter(e => e.challenge_id === ch.id);
-    if (chEntries.length < 2) return; // voided / not enough
+    if (chEntries.length < 2) return;
     let winner = null, max = 0;
     chEntries.forEach(e => { const v = state.feedVoteCounts[e.id] || 0; if (v > max) { max = v; winner = e; } });
-    if (winner && max > 0) winnerEvents.push({ ch, entry: winner });
+    if (!winner || max === 0) return;
+    // Only show winner card if you follow the winner, entered this challenge, or are the winner
+    const relevant = winner.user_id === myId
+      || state.myFollowing.has(winner.user_id)
+      || myEntryChallengIds.has(ch.id);
+    if (relevant) winnerEvents.push({ ch, entry: winner });
   });
-  if (followingMode && myId) {
-    winnerEvents = winnerEvents.filter(({ entry }) => entry.user_id === myId || state.myFollowing.has(entry.user_id));
-  }
   const winnerItems = winnerEvents.map(({ ch, entry }) => ({
     kind: 'winner', sortKey: ch.voting_end, data: { challenge: ch, entry },
   }));
 
-  const mixed = [...postItems, ...challengeItems, ...entryItems, ...winnerItems].sort((a, b) =>
+  const mixed = [...postItems, ...challengeItems, ...winnerItems].sort((a, b) =>
     new Date(b.sortKey) - new Date(a.sortKey)
   );
 
