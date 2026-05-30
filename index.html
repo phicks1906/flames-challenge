@@ -610,6 +610,56 @@ body.theme-light .nav { background: rgba(255, 255, 255, 0.85); border-bottom-col
   text-transform: uppercase; letter-spacing: 0.1em;
   text-align: right; margin-top: 2px;
 }
+/* ── Champion leaderboard styles ── */
+.lb-champion-banner {
+  display: flex; align-items: center; gap: 14px;
+  background: linear-gradient(135deg, rgba(255,200,87,0.15), rgba(255,106,44,0.08));
+  border: 1px solid rgba(255,200,87,0.4);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 16px;
+  animation: fadeUp 0.3s ease;
+}
+.lb-champ-crown { font-size: 32px; flex-shrink: 0; }
+.lb-champ-avatar {
+  width: 52px; height: 52px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--ember), var(--coral));
+  display: grid; place-items: center; font-size: 24px;
+  flex-shrink: 0; overflow: hidden;
+  border: 2px solid rgba(255,200,87,0.6);
+}
+.lb-champ-info { flex: 1; min-width: 0; }
+.lb-champ-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--gold); margin-bottom: 2px; }
+.lb-champ-name { font-family: var(--font-bricolage); font-weight: 700; font-size: 18px; color: var(--text); }
+.lb-champ-stat { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.lb-champ-dot {
+  position: absolute; bottom: -2px; right: -4px;
+  font-size: 14px; line-height: 1;
+}
+.lb-champ-tag {
+  display: inline-block;
+  background: rgba(255,200,87,0.2);
+  color: var(--gold);
+  border: 1px solid rgba(255,200,87,0.4);
+  border-radius: 100px;
+  padding: 1px 7px;
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  vertical-align: middle; margin-left: 4px;
+}
+
+/* Profile sheet champion badge */
+.ps-champ-badge-row { text-align: center; margin: -6px 0 10px; }
+.ps-champ-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(255,200,87,0.15);
+  border: 1px solid rgba(255,200,87,0.4);
+  color: var(--gold);
+  border-radius: 100px;
+  padding: 4px 12px;
+  font-size: 12px; font-weight: 700;
+}
+
 .lb-follow-btn {
   background: linear-gradient(135deg, var(--ember), var(--flame));
   border: none; color: #fff;
@@ -3614,9 +3664,11 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     <div class="section-head">
       <div>
         <h2 class="section-title">Leaderboard</h2>
-        <p class="section-sub">Top voters this week</p>
+        <p class="section-sub">Rolling 30-day wins · updated live</p>
       </div>
     </div>
+    <div id="lbChampionBanner" style="display:none"></div>
+    <div class="ch-tabs" id="lbCategoryTabs" style="margin-bottom:20px"></div>
     <div class="leaderboard" id="lbList"></div>
   </div>
 </section>
@@ -4404,7 +4456,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v57 · results-follow";
+const APP_VERSION = "v58 · category-leaderboard";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -5111,46 +5163,110 @@ async function loadFeedActivity() {
 }
 
 async function loadLeaderboard() {
-  // Union profiles (real users) + users (seed users). Rank by live-computed challenge wins.
-  const [profilesRes, seedRes, entriesRes, votesRes] = await Promise.all([
+  const THIRTY_DAYS_AGO = new Date(Date.now() - 30 * 86400000).toISOString();
+
+  const [profilesRes, entriesRes, votesRes, challengesRes] = await Promise.all([
     db.from('profiles').select('id, name, avatar'),
-    db.from('users').select('id, name, avatar'),
     db.from('entries').select('id, challenge_id, user_id'),
-    db.from('entry_votes').select('entry_id'),
+    db.from('entry_votes').select('entry_id, created_at'),
+    db.from('challenges').select('id, category, voting_end'),
   ]);
 
-  // Tally votes per entry
-  const votesByEntry = {};
-  (votesRes.data || []).forEach(v => {
-    votesByEntry[v.entry_id] = (votesByEntry[v.entry_id] || 0) + 1;
-  });
+  const allProfiles = profilesRes.data || [];
+  const allEntries = entriesRes.data || [];
+  const allVotes = votesRes.data || [];
+  const allChallenges = challengesRes.data || [];
+
+  // Map challenge_id → category and voting_end
+  const chInfo = {};
+  allChallenges.forEach(c => { chInfo[c.id] = { category: c.category, votingEnd: c.voting_end }; });
+
+  // Only count votes cast in the last 30 days for the rolling leaderboard
+  const recentVotes = allVotes.filter(v => v.created_at && v.created_at >= THIRTY_DAYS_AGO);
+
+  // Tally recent votes per entry
+  const recentVotesByEntry = {};
+  recentVotes.forEach(v => { recentVotesByEntry[v.entry_id] = (recentVotesByEntry[v.entry_id] || 0) + 1; });
+
+  // All-time votes per entry (for global all-time board)
+  const allVotesByEntry = {};
+  allVotes.forEach(v => { allVotesByEntry[v.entry_id] = (allVotesByEntry[v.entry_id] || 0) + 1; });
 
   // Group entries by challenge
   const entriesByCh = {};
-  (entriesRes.data || []).forEach(e => {
+  allEntries.forEach(e => {
     if (!entriesByCh[e.challenge_id]) entriesByCh[e.challenge_id] = [];
     entriesByCh[e.challenge_id].push(e);
   });
 
-  // Per challenge: a "win" requires a unique top vote count > 0 (ties don't count)
+  // Compute wins per user — both all-time and 30-day, per category
+  // winsByUser[userId] = { allTime: N, byCategory: { Photography: N, ... }, rolling30: N }
   const winsByUser = {};
-  Object.values(entriesByCh).forEach(entries => {
-    let max = 0;
-    let topEntries = [];
+  const ensureUser = id => {
+    if (!winsByUser[id]) winsByUser[id] = { allTime: 0, rolling30: 0, byCategory: {}, rolling30ByCategory: {} };
+  };
+
+  Object.entries(entriesByCh).forEach(([chId, entries]) => {
+    const info = chInfo[chId] || {};
+    const cat = info.category || 'Other';
+
+    // All-time winner
+    let max = 0, topEntries = [];
     entries.forEach(e => {
-      const v = votesByEntry[e.id] || 0;
+      const v = allVotesByEntry[e.id] || 0;
       if (v > max) { max = v; topEntries = [e]; }
-      else if (v === max) { topEntries.push(e); }
+      else if (v === max && v > 0) topEntries.push(e);
     });
     if (max > 0 && topEntries.length === 1) {
-      const winner = topEntries[0].user_id;
-      if (winner) winsByUser[winner] = (winsByUser[winner] || 0) + 1;
+      const uid = topEntries[0].user_id;
+      ensureUser(uid);
+      winsByUser[uid].allTime++;
+      winsByUser[uid].byCategory[cat] = (winsByUser[uid].byCategory[cat] || 0) + 1;
+    }
+
+    // Rolling 30-day winner (only for recently-voted challenges)
+    let rmax = 0, rtopEntries = [];
+    entries.forEach(e => {
+      const v = recentVotesByEntry[e.id] || 0;
+      if (v > rmax) { rmax = v; rtopEntries = [e]; }
+      else if (v === rmax && v > 0) rtopEntries.push(e);
+    });
+    if (rmax > 0 && rtopEntries.length === 1) {
+      const uid = rtopEntries[0].user_id;
+      ensureUser(uid);
+      winsByUser[uid].rolling30++;
+      winsByUser[uid].rolling30ByCategory[cat] = (winsByUser[uid].rolling30ByCategory[cat] || 0) + 1;
     }
   });
 
-  const profs = (profilesRes.data || []).map(p => ({ ...p, wins: winsByUser[p.id] || 0, isReal: true }));
-  const seeds = (seedRes.data || []).map(s => ({ ...s, wins: winsByUser[s.id] || 0, isReal: false }));
-  state.leaders = [...profs, ...seeds].sort((a, b) => b.wins - a.wins).slice(0, 10);
+  // Build ranked user list with all stats
+  const users = allProfiles.map(p => ({
+    ...p,
+    isReal: true,
+    wins: winsByUser[p.id]?.allTime || 0,
+    rolling30: winsByUser[p.id]?.rolling30 || 0,
+    byCategory: winsByUser[p.id]?.byCategory || {},
+    rolling30ByCategory: winsByUser[p.id]?.rolling30ByCategory || {},
+  }));
+
+  // Determine champion per category (most rolling30 wins in that category)
+  const CATEGORIES_LB = ['All', ...CATEGORIES];
+  const champions = {}; // category → user
+  CATEGORIES.forEach(cat => {
+    const ranked = [...users]
+      .filter(u => (u.rolling30ByCategory[cat] || 0) > 0)
+      .sort((a, b) => (b.rolling30ByCategory[cat] || 0) - (a.rolling30ByCategory[cat] || 0));
+    if (ranked.length > 0) champions[cat] = ranked[0].id;
+  });
+  // Overall champion = most rolling30 wins
+  const overallRanked = [...users].filter(u => u.rolling30 > 0).sort((a, b) => b.rolling30 - a.rolling30);
+  if (overallRanked.length > 0) champions['All'] = overallRanked[0].id;
+
+  state.leaderboardData = { users, champions };
+  state.lbCategory = state.lbCategory || 'All';
+
+  // Keep backward compat — state.leaders used elsewhere
+  state.leaders = users.sort((a, b) => b.rolling30 - a.rolling30).slice(0, 10);
 }
 
 /* ---------- RENDER: chip, feed, heat check ---------- */
@@ -6666,59 +6782,125 @@ function injectPollTopAnswer(pollId) {
 /* ---------- LEADERBOARD ---------- */
 function renderLeaderboard() {
   const list = document.getElementById('lbList');
-  list.innerHTML = '';
+  const tabsEl = document.getElementById('lbCategoryTabs');
+  const bannerEl = document.getElementById('lbChampionBanner');
+  if (!list) return;
+
   if (state.loading) {
     list.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted)">Loading...</div>`;
     return;
   }
-  if (state.leaders.length === 0) {
-    list.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted)">No voters yet — be the first!</div>`;
+
+  const data = state.leaderboardData;
+  if (!data) { list.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted)">No data yet</div>`; return; }
+
+  const cat = state.lbCategory || 'All';
+
+  // ── Category tabs ──
+  const allCats = ['All', ...CATEGORIES];
+  if (tabsEl) {
+    tabsEl.innerHTML = allCats.map(c =>
+      `<button class="ch-tab${c === cat ? ' active' : ''}" data-lb-cat="${c}">${c}</button>`
+    ).join('');
+    tabsEl.querySelectorAll('[data-lb-cat]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.lbCategory = btn.dataset.lbCat;
+        renderLeaderboard();
+      });
+    });
+  }
+
+  // ── Rank users for this category ──
+  const users = data.users || [];
+  const ranked = [...users]
+    .map(u => ({
+      ...u,
+      catWins: cat === 'All' ? (u.rolling30 || 0) : (u.rolling30ByCategory[cat] || 0),
+      catAllTime: cat === 'All' ? (u.wins || 0) : (u.byCategory[cat] || 0),
+    }))
+    .filter(u => u.catWins > 0 || u.catAllTime > 0)
+    .sort((a, b) => b.catWins - a.catWins || b.catAllTime - a.catAllTime)
+    .slice(0, 10);
+
+  // ── Champion banner ──
+  const championId = data.champions[cat];
+  const champion = championId ? users.find(u => u.id === championId) : null;
+  if (bannerEl) {
+    if (champion && champion.catWins > 0) {
+      const isYouChamp = state.profile && champion.id === state.profile.id;
+      bannerEl.style.display = 'block';
+      bannerEl.innerHTML = `<div class="lb-champion-banner">
+        <div class="lb-champ-crown">👑</div>
+        <div class="lb-champ-avatar">${avatarInner(champion.avatar)}</div>
+        <div class="lb-champ-info">
+          <div class="lb-champ-title">${cat === 'All' ? 'Overall Champion' : cat + ' Champion'}</div>
+          <div class="lb-champ-name">${escapeHtml(champion.name)}${isYouChamp ? ' (you)' : ''}</div>
+          <div class="lb-champ-stat">${champion.catWins} win${champion.catWins === 1 ? '' : 's'} this month · ${champion.catAllTime} all-time</div>
+        </div>
+        ${!isYouChamp ? `<button class="lb-follow-btn${state.myFollowing.has(champion.id) ? ' following' : ''}" data-lb-follow="${champion.id}">${state.myFollowing.has(champion.id) ? '✓' : '+ Follow'}</button>` : ''}
+      </div>`;
+      bannerEl.querySelector('[data-lb-follow]')?.addEventListener('click', async e => {
+        e.stopPropagation();
+        await lbToggleFollow(e.target.closest('[data-lb-follow]'));
+      });
+    } else {
+      bannerEl.style.display = 'none';
+      bannerEl.innerHTML = '';
+    }
+  }
+
+  // ── Rows ──
+  list.innerHTML = '';
+  if (ranked.length === 0) {
+    list.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted)">No wins in ${cat} yet — be the first!</div>`;
     return;
   }
-  state.leaders.forEach((u, i) => {
+
+  ranked.forEach((u, i) => {
     const isYou = state.profile && u.id === state.profile.id;
-    const isDemo = !u.isReal;
+    const isChamp = u.id === championId;
     const isFollowing = state.myFollowing.has(u.id);
     const row = document.createElement('div');
     row.className = 'lb-row' + (isYou ? ' you' : '');
     row.innerHTML = `
-      <div class="lb-rank">#${i+1}</div>
-      <div class="lb-user" style="cursor:${u.isReal ? 'pointer' : 'default'}" data-lb-uid="${u.isReal ? u.id : ''}">
-        <div class="lb-avatar">${avatarInner(u.avatar)}</div>
+      <div class="lb-rank">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '#' + (i+1)}</div>
+      <div class="lb-user" style="cursor:pointer" data-lb-uid="${u.id}">
+        <div class="lb-avatar" style="position:relative">
+          ${avatarInner(u.avatar)}
+          ${isChamp ? '<span class="lb-champ-dot">👑</span>' : ''}
+        </div>
         <div style="min-width:0">
-          <div class="lb-name">${escapeHtml(u.name)}${isYou ? ' (you)' : ''}${isDemo ? ' <span class="demo-badge">DEMO</span>' : ''}</div>
-          <div class="lb-streak" style="font-size:11px;color:var(--text-muted)">🥇 ${formatNum(u.wins || 0)} wins</div>
+          <div class="lb-name">${escapeHtml(u.name)}${isYou ? ' (you)' : ''}${isChamp ? ' <span class="lb-champ-tag">Champion</span>' : ''}</div>
+          <div class="lb-streak" style="font-size:11px;color:var(--text-muted)">${u.catWins} this month · ${u.catAllTime} all-time</div>
         </div>
       </div>
-      ${u.isReal && !isYou ? `<button class="lb-follow-btn${isFollowing ? ' following' : ''}" data-lb-follow="${u.id}">${isFollowing ? '✓' : '+ Follow'}</button>` : `<div><div class="lb-points">🥇 ${formatNum(u.wins || 0)}</div><div class="lb-points-label">wins</div></div>`}
+      ${!isYou ? `<button class="lb-follow-btn${isFollowing ? ' following' : ''}" data-lb-follow="${u.id}">${isFollowing ? '✓' : '+ Follow'}</button>` : '<div></div>'}
     `;
-    if (u.isReal) {
-      row.querySelector('[data-lb-uid]')?.addEventListener('click', () => openUserProfile(u.id));
-    }
+    row.querySelector('[data-lb-uid]')?.addEventListener('click', () => openUserProfile(u.id));
     const followBtn = row.querySelector('[data-lb-follow]');
-    if (followBtn) {
-      followBtn.addEventListener('click', async e => {
-        e.stopPropagation();
-        const uid = followBtn.dataset.lbFollow;
-        const wasFollowing = state.myFollowing.has(uid);
-        followBtn.disabled = true;
-        try {
-          if (wasFollowing) {
-            await db.from('follows').delete().eq('follower_id', state.profile.id).eq('followee_id', uid);
-            state.myFollowing.delete(uid);
-          } else {
-            await db.from('follows').insert({ follower_id: state.profile.id, followee_id: uid });
-            state.myFollowing.add(uid);
-          }
-          followBtn.textContent = state.myFollowing.has(uid) ? '✓' : '+ Follow';
-          followBtn.classList.toggle('following', state.myFollowing.has(uid));
-          if (state.currentView === 'feed') renderFeed();
-        } catch(err) { toast('Follow failed'); }
-        finally { followBtn.disabled = false; }
-      });
-    }
+    if (followBtn) followBtn.addEventListener('click', async e => { e.stopPropagation(); await lbToggleFollow(followBtn); });
     list.appendChild(row);
   });
+}
+
+async function lbToggleFollow(btn) {
+  if (!btn || !state.profile) return;
+  const uid = btn.dataset.lbFollow;
+  const wasFollowing = state.myFollowing.has(uid);
+  btn.disabled = true;
+  try {
+    if (wasFollowing) {
+      await db.from('follows').delete().eq('follower_id', state.profile.id).eq('followee_id', uid);
+      state.myFollowing.delete(uid);
+    } else {
+      await db.from('follows').insert({ follower_id: state.profile.id, followee_id: uid });
+      state.myFollowing.add(uid);
+    }
+    btn.textContent = state.myFollowing.has(uid) ? '✓' : '+ Follow';
+    btn.classList.toggle('following', state.myFollowing.has(uid));
+    if (state.currentView === 'feed') renderFeed();
+  } catch(err) { toast('Follow failed'); }
+  finally { btn.disabled = false; }
 }
 
 /* ---------- SHARE ---------- */
@@ -9087,7 +9269,22 @@ function renderProfileSheet() {
 
   document.getElementById('psHeaderName').textContent = prof.name || 'Profile';
   document.getElementById('psAvatar').innerHTML = avatarInner(prof.avatar || '🔥');
+  // Check if this user is a champion in any category
+  const champCategories = Object.entries(state.leaderboardData?.champions || {})
+    .filter(([cat, uid]) => uid === prof.id)
+    .map(([cat]) => cat);
+  const champLine = champCategories.length > 0
+    ? ` <span class="ps-champ-badge">👑 ${champCategories.filter(c => c !== 'All').join(' · ') || 'Overall'} Champion</span>`
+    : '';
   document.getElementById('psName').textContent = (prof.name || 'User') + (isMe ? ' (you)' : '');
+  // Inject champion badge after name
+  const psNameEl = document.getElementById('psName');
+  if (champCategories.length > 0) {
+    psNameEl.insertAdjacentHTML('afterend', `<div class="ps-champ-badge-row">${champLine}</div>`);
+  } else {
+    const existing = psNameEl.nextElementSibling;
+    if (existing && existing.classList.contains('ps-champ-badge-row')) existing.remove();
+  }
 
   const followers = state.followerCounts[prof.id] || 0;
   const following = state.followingCounts[prof.id] || 0;
