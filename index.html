@@ -4157,7 +4157,7 @@ body.theme-light .cc-upload { background: var(--overlay-1); }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v41 · interests";
+const APP_VERSION = "v42 · scored-feed";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -7905,19 +7905,78 @@ function renderFeed() {
   const myInterests = new Set(state.profile?.interests || []);
   const hasInterests = myInterests.size > 0;
 
-  // Score each item: recency base + interest match bonus (Discover only)
-  function itemScore(item) {
-    const age = Date.now() - new Date(item.sortKey).getTime();
-    const recency = Math.max(0, 1 - age / (14 * 86400000)); // 0-1 over 14 days
-    let interest = 0;
-    if (!followingMode && hasInterests) {
-      const cat = item.data?.category || item.data?.challenge?.category || item.data?.ch?.category;
-      if (cat && myInterests.has(cat)) interest = 0.5;
-    }
-    return recency + interest;
+  // ── Phase 2: Scored Discover feed ──────────────────────────────────────────
+  // Following tab stays chronological (personal, no algorithm).
+  // Discover tab scores each item and caps at 25.
+  //
+  // score = recencyScore (0-1)
+  //       + interestMatch (0.5 if category matches your interests)
+  //       + engagementScore (0-0.4, based on entry/vote count)
+  //       + smallRandom (0-0.15, exploration factor)
+  //
+  function getItemCategory(item) {
+    return item.data?.category
+      || item.data?.challenge?.category
+      || item.data?.ch?.category
+      || null;
   }
 
-  const mixed = [...postItems, ...challengeItems, ...winnerItems].sort((a, b) => itemScore(b) - itemScore(a));
+  function getEngagement(item) {
+    // Challenges/winners: entry count + vote count signals activity
+    if (item.kind === 'challenge') {
+      const entryCount = state.entryCounts[item.data?.id] || 0;
+      return Math.min(entryCount / 10, 1); // normalize: 10 entries = max
+    }
+    if (item.kind === 'winner') {
+      const chId = item.data?.challenge?.id;
+      const entryCount = chId ? (state.entryCounts[chId] || 0) : 0;
+      const voteCount = chId
+        ? (state.feedEntries || []).filter(e => e.challenge_id === chId).reduce((s, e) => s + (state.feedVoteCounts[e.id] || 0), 0)
+        : 0;
+      return Math.min((entryCount + voteCount) / 20, 1);
+    }
+    // Posts: no engagement signal yet (no view counts)
+    return 0;
+  }
+
+  function itemScore(item) {
+    const age = Date.now() - new Date(item.sortKey).getTime();
+    const recency = Math.max(0, 1 - age / (14 * 86400000));
+    const cat = getItemCategory(item);
+    const interest = (!followingMode && hasInterests && cat && myInterests.has(cat)) ? 0.5 : 0;
+    const engagement = !followingMode ? getEngagement(item) * 0.4 : 0;
+    // Small random factor for exploration — seeded per item so it's stable within a session
+    const rand = !followingMode ? (Math.sin(item.sortKey ? new Date(item.sortKey).getTime() : 0) * 0.5 + 0.5) * 0.15 : 0;
+    return recency + interest + engagement + rand;
+  }
+
+  let allItems = [...postItems, ...challengeItems, ...winnerItems];
+  allItems.sort((a, b) => itemScore(b) - itemScore(a));
+
+  let mixed;
+  if (followingMode) {
+    // Following: full chronological list, no cap
+    mixed = allItems;
+  } else {
+    // Discover: cap at 25, enforce content diversity (max 3 same-category in a row)
+    const capped = [];
+    const categoryCounts = {};
+    let sameRunCat = null, sameRunLen = 0;
+    for (const item of allItems) {
+      if (capped.length >= 25) break;
+      const cat = getItemCategory(item) || '__none__';
+      // Never show more than 3 consecutive same-category items
+      if (cat === sameRunCat) {
+        sameRunLen++;
+        if (sameRunLen > 3) continue;
+      } else {
+        sameRunCat = cat;
+        sameRunLen = 1;
+      }
+      capped.push(item);
+    }
+    mixed = capped;
+  }
 
   if (mixed.length === 0) {
     if (followingMode) {
