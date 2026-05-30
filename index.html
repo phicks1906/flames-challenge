@@ -4403,7 +4403,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v54 · vote-reveal-b";
+const APP_VERSION = "v55 · vote-open";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -7182,7 +7182,7 @@ function renderChallenges() {
     card.innerHTML = `
       <div class="media">
         ${mediaHtml}
-        <span class="ch-status ${ch.computedStatus}"><span class="dot"></span>${statusLabel}</span>
+        <span class="ch-status ${ch.computedStatus || 'submitting'}"><span class="dot"></span>${statusLabel || 'OPEN TO ENTER'}</span>
       </div>
       <div class="body">
         <div class="ch-category">${escapeHtml(ch.category)}${ch.is_public ? '' : ' · 🔒 Private'}</div>
@@ -7368,8 +7368,9 @@ function renderChallengeDetail() {
 
   const isClosed = status === 'closed';
   const iHaveVoted = !!state.myCurrentVote;
-  // Standings are revealed once the challenge closes OR once you've cast your vote (like polls)
-  const revealStandings = isClosed || (status === 'voting' && iHaveVoted);
+  const canVote = status === 'voting' || status === 'submitting';
+  // Standings are revealed once the challenge closes OR once you've cast your vote
+  const revealStandings = isClosed || (canVote && iHaveVoted);
 
   const sortedEntries = [...state.currentEntries].sort((a, b) => {
     if (revealStandings) {
@@ -7417,7 +7418,7 @@ function renderChallengeDetail() {
     }
 
     let actionsHtml = '';
-    if (status === 'voting') {
+    if (status === 'voting' || status === 'submitting') {
       if (isMyEntry) {
         actionsHtml = '<span class="cd-entry-tag">Your entry</span>';
       } else if (state.profile) {
@@ -7566,7 +7567,7 @@ function renderChallengeResults() {
   const status = computeChallengeStatus(ch);
   const iHaveVoted = !!state.myCurrentVote;
   const isClosed = status === 'closed';
-  console.log('[results] iHaveVoted:', iHaveVoted, 'isClosed:', isClosed, 'status:', status, 'myCurrentVote:', state.myCurrentVote);
+  const canVoteStatus = status === 'voting' || status === 'submitting';
   if (!iHaveVoted && !isClosed) { panel.style.display = 'none'; return; }
 
   const voteCountByEntry = {};
