@@ -4157,7 +4157,7 @@ body.theme-light .cc-upload { background: var(--overlay-1); }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v42 · scored-feed";
+const APP_VERSION = "v43 · feed-phase3";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -7905,14 +7905,13 @@ function renderFeed() {
   const myInterests = new Set(state.profile?.interests || []);
   const hasInterests = myInterests.size > 0;
 
-  // ── Phase 2: Scored Discover feed ──────────────────────────────────────────
-  // Following tab stays chronological (personal, no algorithm).
-  // Discover tab scores each item and caps at 25.
-  //
-  // score = recencyScore (0-1)
-  //       + interestMatch (0.5 if category matches your interests)
-  //       + engagementScore (0-0.4, based on entry/vote count)
-  //       + smallRandom (0-0.15, exploration factor)
+  // ── Phase 3: Freshness + diversity rules ────────────────────────────────────
+  // Builds on Phase 2 scoring. New in Phase 3:
+  //   1. Age penalty — items older than 7 days get a score haircut
+  //   2. Challenge deduplication — a challenge can only appear once
+  //      (active card wins over winner card if still open; winner wins if closed)
+  //   3. Tighter diversity — max 2 same-category items in a row (down from 3)
+  //   4. Following tab: chronological but deduped by challenge too
   //
   function getItemCategory(item) {
     return item.data?.category
@@ -7921,54 +7920,74 @@ function renderFeed() {
       || null;
   }
 
+  function getItemChallengeId(item) {
+    if (item.kind === 'challenge') return item.data?.id || null;
+    if (item.kind === 'winner')    return item.data?.challenge?.id || null;
+    return null; // posts don't dedupe by challenge
+  }
+
   function getEngagement(item) {
-    // Challenges/winners: entry count + vote count signals activity
     if (item.kind === 'challenge') {
       const entryCount = state.entryCounts[item.data?.id] || 0;
-      return Math.min(entryCount / 10, 1); // normalize: 10 entries = max
+      return Math.min(entryCount / 10, 1);
     }
     if (item.kind === 'winner') {
       const chId = item.data?.challenge?.id;
       const entryCount = chId ? (state.entryCounts[chId] || 0) : 0;
       const voteCount = chId
-        ? (state.feedEntries || []).filter(e => e.challenge_id === chId).reduce((s, e) => s + (state.feedVoteCounts[e.id] || 0), 0)
+        ? (state.feedEntries || []).filter(e => e.challenge_id === chId)
+            .reduce((s, e) => s + (state.feedVoteCounts[e.id] || 0), 0)
         : 0;
       return Math.min((entryCount + voteCount) / 20, 1);
     }
-    // Posts: no engagement signal yet (no view counts)
     return 0;
   }
 
   function itemScore(item) {
     const age = Date.now() - new Date(item.sortKey).getTime();
+    // Recency: linear decay over 14 days
     const recency = Math.max(0, 1 - age / (14 * 86400000));
+    // Phase 3 — freshness penalty: items older than 7 days lose 0.25 points
+    const freshnessPenalty = age > 7 * 86400000 ? 0.25 : 0;
     const cat = getItemCategory(item);
     const interest = (!followingMode && hasInterests && cat && myInterests.has(cat)) ? 0.5 : 0;
     const engagement = !followingMode ? getEngagement(item) * 0.4 : 0;
-    // Small random factor for exploration — seeded per item so it's stable within a session
-    const rand = !followingMode ? (Math.sin(item.sortKey ? new Date(item.sortKey).getTime() : 0) * 0.5 + 0.5) * 0.15 : 0;
-    return recency + interest + engagement + rand;
+    // Exploration randomizer — seeded per sortKey so stable within a render
+    const rand = !followingMode
+      ? (Math.sin(item.sortKey ? new Date(item.sortKey).getTime() : 0) * 0.5 + 0.5) * 0.15
+      : 0;
+    return recency - freshnessPenalty + interest + engagement + rand;
   }
 
-  let allItems = [...postItems, ...challengeItems, ...winnerItems];
-  allItems.sort((a, b) => itemScore(b) - itemScore(a));
+  // Deduplicate by challenge: keep the best-scored item per challenge ID
+  const allRaw = [...postItems, ...challengeItems, ...winnerItems];
+  allRaw.sort((a, b) => itemScore(b) - itemScore(a));
+
+  const seenChallengeIds = new Set();
+  const dedupedItems = [];
+  for (const item of allRaw) {
+    const cid = getItemChallengeId(item);
+    if (cid) {
+      if (seenChallengeIds.has(cid)) continue; // already showing this challenge
+      seenChallengeIds.add(cid);
+    }
+    dedupedItems.push(item);
+  }
 
   let mixed;
   if (followingMode) {
-    // Following: full chronological list, no cap
-    mixed = allItems;
+    // Following: deduped but not capped, sorted by recency
+    mixed = dedupedItems.sort((a, b) => new Date(b.sortKey) - new Date(a.sortKey));
   } else {
-    // Discover: cap at 25, enforce content diversity (max 3 same-category in a row)
+    // Discover: cap at 25, max 2 same-category items in a row
     const capped = [];
-    const categoryCounts = {};
     let sameRunCat = null, sameRunLen = 0;
-    for (const item of allItems) {
+    for (const item of dedupedItems) {
       if (capped.length >= 25) break;
       const cat = getItemCategory(item) || '__none__';
-      // Never show more than 3 consecutive same-category items
       if (cat === sameRunCat) {
         sameRunLen++;
-        if (sameRunLen > 3) continue;
+        if (sameRunLen > 2) continue; // tighter than Phase 2's 3
       } else {
         sameRunCat = cat;
         sameRunLen = 1;
