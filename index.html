@@ -610,6 +610,21 @@ body.theme-light .nav { background: rgba(255, 255, 255, 0.85); border-bottom-col
   text-transform: uppercase; letter-spacing: 0.1em;
   text-align: right; margin-top: 2px;
 }
+.lb-follow-btn {
+  background: linear-gradient(135deg, var(--ember), var(--flame));
+  border: none; color: #fff;
+  padding: 7px 14px; border-radius: 100px;
+  font-family: inherit; font-weight: 700; font-size: 13px;
+  cursor: pointer; flex-shrink: 0; white-space: nowrap;
+  transition: opacity 0.15s;
+}
+.lb-follow-btn.following {
+  background: var(--overlay-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.lb-follow-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.lb-follow-btn:active { transform: scale(0.95); }
 
 /* ============ HOW IT WORKS ============ */
 .how {
@@ -2251,6 +2266,55 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
 .feed-activity-card.winner .fa-target { color: var(--gold); }
 .fa-time { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
 
+/* ── Feed poll card ── */
+.feed-poll-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.feed-poll-card:hover { border-color: rgba(167, 139, 250, 0.5); }
+.feed-poll-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.feed-poll-tag { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #a78bfa; text-transform: uppercase; }
+.feed-poll-time { font-size: 12px; color: var(--text-muted); }
+.feed-poll-question { font-family: var(--font-bricolage); font-weight: 600; font-size: 17px; line-height: 1.3; margin-bottom: 12px; color: var(--text); }
+.feed-poll-options { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.feed-poll-opt {
+  position: relative; overflow: hidden;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 11px 14px;
+  display: flex; align-items: center; justify-content: space-between;
+  font-family: inherit; font-size: 14px; font-weight: 500;
+  color: var(--text); text-align: left; width: 100%; cursor: pointer;
+  transition: border-color 0.15s;
+}
+.feed-poll-opt:hover:not(:disabled) { border-color: #a78bfa; }
+.feed-poll-opt:disabled { cursor: default; }
+.feed-poll-opt.voted { border-color: #a78bfa; background: rgba(167,139,250,0.1); }
+.feed-poll-fill {
+  position: absolute; inset: 0; width: 0;
+  background: rgba(167,139,250,0.15);
+  border-right: 2px solid #a78bfa;
+  transition: width 0.6s cubic-bezier(0.16,1,0.3,1);
+  z-index: 0;
+}
+.feed-poll-label { position: relative; z-index: 1; }
+.feed-poll-pct { position: relative; z-index: 1; font-variant-numeric: tabular-nums; font-weight: 700; font-size: 13px; color: #a78bfa; }
+.feed-poll-footer { font-size: 12px; color: var(--text-muted); }
+
+/* ── Card type differentiation ── */
+/* Posts: subtle left blue accent */
+.post-card { border-left: 3px solid rgba(79, 195, 247, 0.4); }
+/* Challenge tiles: ember left accent */
+.feed-challenge-card { border-left: 3px solid rgba(255, 106, 44, 0.5); }
+/* Winner cards: gold left accent */
+.feed-activity-card.winner { border-left: 3px solid rgba(255, 200, 87, 0.6); }
+/* Poll cards in feed: purple accent */
+.feed-poll-card { border-left: 3px solid rgba(167, 139, 250, 0.5); }
+
 /* Compact nav links */
 .nav-links {
   display: flex;
@@ -2870,16 +2934,21 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
 .cd-entries-grid::-webkit-scrollbar { display: none; }
 .cd-entries-pager-empty { width: 100%; padding: 30px 16px; text-align: center; color: var(--text-dim); font-size: 14px; }
 .cd-entries-dots {
-  display: flex; justify-content: center; gap: 6px;
+  display: flex; justify-content: center; gap: 4px;
   margin: 12px 0 4px;
   flex-wrap: wrap;
 }
 .cd-entries-dot {
-  width: 6px; height: 6px; border-radius: 50%;
+  /* Visual dot is small but tap target is 44px via padding */
+  width: 8px; height: 8px; border-radius: 50%;
   background: var(--border-bright); opacity: 0.45;
   transition: opacity 0.2s, transform 0.2s, background 0.2s;
+  padding: 18px;
+  margin: -18px;
+  background-clip: content-box;
+  cursor: pointer;
 }
-.cd-entries-dot.active { background: var(--ember); opacity: 1; transform: scale(1.4); }
+.cd-entries-dot.active { background: var(--ember); background-clip: content-box; opacity: 1; transform: scale(1.4); }
 .cd-entries-counter { text-align: center; font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
 .cd-entry {
   flex: 0 0 calc(100% - 8px);
@@ -3432,7 +3501,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
     <div class="composer" onclick="openCreatePost()" role="button" tabindex="0">
       <div class="avatar" id="composerAvatar">🔥</div>
-      <div class="composer-input">What's the heat? Share something...</div>
+      <div class="composer-input" id="composerPrompt">What's the heat? Share something...</div>
     </div>
 
     <button id="feedNewPill" class="feed-new-pill" style="display:none" onclick="applyFeedNewItems()" aria-label="Show new items"></button>
@@ -4268,7 +4337,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v51 · video-posters";
+const APP_VERSION = "v52 · phase4-polish";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -5024,6 +5093,12 @@ function renderProfileChip() {
   const wins = state.myWLT?.wins ?? 0;
   document.getElementById('chipPoints').textContent = wins > 0 ? wins + ' wins' : state.profile.name;
   document.getElementById('composerAvatar').innerHTML = avatarInner(state.profile.avatar);
+}
+
+function updateComposerContext(hint) {
+  const el = document.getElementById('composerPrompt');
+  if (!el) return;
+  el.textContent = hint || "What's the heat? Share something...";
 }
 
 function renderFeedHello() {
@@ -6481,23 +6556,44 @@ function renderLeaderboard() {
   state.leaders.forEach((u, i) => {
     const isYou = state.profile && u.id === state.profile.id;
     const isDemo = !u.isReal;
+    const isFollowing = state.myFollowing.has(u.id);
     const row = document.createElement('div');
-    row.className = 'lb-row' + (isYou ? ' you' : '') + (u.isReal ? ' user-clickable' : '');
+    row.className = 'lb-row' + (isYou ? ' you' : '');
     row.innerHTML = `
       <div class="lb-rank">#${i+1}</div>
-      <div class="lb-user">
+      <div class="lb-user" style="cursor:${u.isReal ? 'pointer' : 'default'}" data-lb-uid="${u.isReal ? u.id : ''}">
         <div class="lb-avatar">${avatarInner(u.avatar)}</div>
         <div style="min-width:0">
           <div class="lb-name">${escapeHtml(u.name)}${isYou ? ' (you)' : ''}${isDemo ? ' <span class="demo-badge">DEMO</span>' : ''}</div>
+          <div class="lb-streak" style="font-size:11px;color:var(--text-muted)">🥇 ${formatNum(u.wins || 0)} wins</div>
         </div>
       </div>
-      <div>
-        <div class="lb-points">🥇 ${formatNum(u.wins || 0)}</div>
-        <div class="lb-points-label">wins</div>
-      </div>
+      ${u.isReal && !isYou ? `<button class="lb-follow-btn${isFollowing ? ' following' : ''}" data-lb-follow="${u.id}">${isFollowing ? '✓' : '+ Follow'}</button>` : `<div><div class="lb-points">🥇 ${formatNum(u.wins || 0)}</div><div class="lb-points-label">wins</div></div>`}
     `;
     if (u.isReal) {
-      row.addEventListener('click', () => openUserProfile(u.id));
+      row.querySelector('[data-lb-uid]')?.addEventListener('click', () => openUserProfile(u.id));
+    }
+    const followBtn = row.querySelector('[data-lb-follow]');
+    if (followBtn) {
+      followBtn.addEventListener('click', async e => {
+        e.stopPropagation();
+        const uid = followBtn.dataset.lbFollow;
+        const wasFollowing = state.myFollowing.has(uid);
+        followBtn.disabled = true;
+        try {
+          if (wasFollowing) {
+            await db.from('follows').delete().eq('follower_id', state.profile.id).eq('followee_id', uid);
+            state.myFollowing.delete(uid);
+          } else {
+            await db.from('follows').insert({ follower_id: state.profile.id, followee_id: uid });
+            state.myFollowing.add(uid);
+          }
+          followBtn.textContent = state.myFollowing.has(uid) ? '✓' : '+ Follow';
+          followBtn.classList.toggle('following', state.myFollowing.has(uid));
+          if (state.currentView === 'feed') renderFeed();
+        } catch(err) { toast('Follow failed'); }
+        finally { followBtn.disabled = false; }
+      });
     }
     list.appendChild(row);
   });
@@ -7023,6 +7119,7 @@ function closeChallengeDetail() {
   state.currentEntries = [];
   state.currentVotes = [];
   state.myCurrentVote = null;
+  updateComposerContext(null);
 }
 
 async function loadChallengeDetail(challengeId) {
@@ -7357,6 +7454,7 @@ async function voteOnEntry(entryId) {
     if (upErr) throw upErr;
 
     toast(previousVote ? '🔥 Vote changed' : '🔥 Vote cast');
+    updateComposerContext(`Just voted in "${state.currentChallenge?.title}" — share your take`);
     // Reconcile with the server in the background (also catches others' new votes)
     refreshChallengeVotes(challengeId);
   } catch (err) {
@@ -8181,6 +8279,11 @@ function renderFeed() {
   }
   const postItems = posts.map(p => ({ kind: 'post', sortKey: p.created_at, data: p }));
 
+  // Include open polls in Discover feed (not Following — polls are community-wide)
+  const pollItems = !followingMode ? (state.polls || []).map(poll => ({
+    kind: 'poll', sortKey: poll.created_at || new Date(Date.now() - (poll.hours_remaining || 0) * 3600000).toISOString(), data: poll
+  })) : [];
+
   // Include recent public challenges that are still active/voting — last 14 days.
   // Closed challenges are represented by "winner" activity cards instead.
   const cutoff = new Date(Date.now() - 14 * 86400000);
@@ -8283,7 +8386,7 @@ function renderFeed() {
   }
 
   // Deduplicate by challenge: keep the best-scored item per challenge ID
-  const allRaw = [...postItems, ...challengeItems, ...winnerItems];
+  const allRaw = [...postItems, ...challengeItems, ...winnerItems, ...pollItems];
   allRaw.sort((a, b) => itemScore(b) - itemScore(a));
 
   const seenChallengeIds = new Set();
@@ -8345,6 +8448,7 @@ function renderFeed() {
     if (item.kind === 'challenge') return renderFeedChallengeCard(item.data);
     if (item.kind === 'entry') return renderFeedEntryCard(item.data);
     if (item.kind === 'winner') return renderFeedWinnerCard(item.data);
+    if (item.kind === 'poll') return renderFeedPollCard(item.data);
     return '';
   }).join('');
 
@@ -8388,6 +8492,20 @@ function renderFeed() {
       if (ch && typeof openChallenge === 'function') openChallenge(ch);
     });
   });
+  // Wire up feed poll cards — tap to go to polls view
+  c.querySelectorAll('.feed-poll-card').forEach(card => {
+    card.addEventListener('click', () => switchView('polls'));
+    // Wire inline vote buttons
+    card.querySelectorAll('[data-feed-poll-vote]').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const [pollId, idx] = btn.dataset.feedPollVote.split(':');
+        castVote(pollId, parseInt(idx));
+        setTimeout(() => renderFeed(), 300);
+      });
+    });
+  });
+
   // Wire up activity card clicks (entry / winner events → open the challenge)
   c.querySelectorAll('.feed-activity-card').forEach(card => {
     card.addEventListener('click', () => {
@@ -8492,6 +8610,37 @@ function renderFeedWinnerCard({ challenge, entry }) {
         <div class="fa-time">${timeAgo(challenge.voting_end)}</div>
       </div>
     </div>`;
+}
+
+function renderFeedPollCard(poll) {
+  const counts = state.voteCountsByPoll[poll.id] || {};
+  const userVote = state.myVotes[poll.id];
+  const voted = userVote !== undefined;
+  const options = (poll.options || []).map((opt, i) => {
+    const votes = (opt.seed_votes || 0) + (counts[i] || 0);
+    return { label: opt.label, votes, i };
+  });
+  const total = options.reduce((s, o) => s + o.votes, 0);
+
+  const optionsHtml = options.map(o => {
+    const pct = total ? Math.round((o.votes / total) * 100) : 0;
+    const isVoted = userVote === o.i;
+    return `<button class="feed-poll-opt${isVoted ? ' voted' : ''}" ${voted ? 'disabled' : `data-feed-poll-vote="${poll.id}:${o.i}"`}>
+      <span class="feed-poll-fill" style="width:${voted ? pct : 0}%"></span>
+      <span class="feed-poll-label">${escapeHtml(o.label)}</span>
+      ${voted ? `<span class="feed-poll-pct">${pct}%</span>` : ''}
+    </button>`;
+  }).join('');
+
+  return `<div class="feed-poll-card" data-pid="${poll.id}">
+    <div class="feed-poll-header">
+      <span class="feed-poll-tag">🗳️ POLL</span>
+      <span class="feed-poll-time">⏱ ${poll.hours_remaining}h left</span>
+    </div>
+    <div class="feed-poll-question">${escapeHtml(poll.question)}</div>
+    <div class="feed-poll-options">${optionsHtml}</div>
+    ${voted ? `<div class="feed-poll-footer">👥 ${formatNum(total)} votes · tap to see all polls</div>` : '<div class="feed-poll-footer">Tap an option to vote</div>'}
+  </div>`;
 }
 
 /* ---------- CREATE POST SHEET ---------- */
