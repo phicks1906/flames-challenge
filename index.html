@@ -3506,7 +3506,7 @@ body.theme-light .cc-upload { background: var(--overlay-1); }
       <div class="cc-field" id="ccInviteField" style="display:none">
         <label>Who can see this? <span class="hint">(pick groups, individuals, or both)</span></label>
 
-        <div class="cc-section-label">Your groups</div>
+        <div class="cc-section-label" style="display:flex;align-items:center;justify-content:space-between">Your groups <button type="button" class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:12px" onclick="openInlineGroupEditor()">+ New Group</button></div>
         <div class="cc-groups-list" id="ccGroupsList"></div>
 
         <div class="cc-section-label" style="margin-top:14px">Add individuals</div>
@@ -4171,7 +4171,7 @@ body.theme-light .cc-upload { background: var(--overlay-1); }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v45 · signup-avatar";
+const APP_VERSION = "v46 · inline-group";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -7614,7 +7614,7 @@ function renderInviteGroups() {
   const list = document.getElementById('ccGroupsList');
   if (!list) return;
   if (!groupsState.groups || groupsState.groups.length === 0) {
-    list.innerHTML = '<div class="empty-state-mini">No groups yet. Create one from your profile menu.</div>';
+    list.innerHTML = '<div class="empty-state-mini">No groups yet. Tap + New Group above to create one.</div>';
     return;
   }
   list.innerHTML = groupsState.groups.map(g => {
@@ -7638,6 +7638,62 @@ function renderInviteGroups() {
       renderInvitees();
     });
   });
+}
+
+// Opens the group editor modal from within the challenge creation screen.
+// On save, reloads groups and refreshes the invite list without closing cc sheet.
+async function openInlineGroupEditor() {
+  // Reset editor state for a new group
+  groupsState.editingGroupId = null;
+  groupsState.editingMembers = [];
+  document.getElementById('geError').classList.remove('show');
+  document.getElementById('geSearch').value = '';
+  document.getElementById('geSearchResults').innerHTML = '';
+  document.getElementById('groupEditorTitle').textContent = 'New Group';
+  document.getElementById('geName').value = '';
+  document.getElementById('geDeleteBtn').style.display = 'none';
+  renderGroupMembers();
+
+  // Override the save button to refresh invite groups on completion
+  const saveBtn = document.getElementById('geSaveBtn');
+  const origOnclick = saveBtn.onclick;
+  saveBtn.onclick = async () => {
+    const name = document.getElementById('geName').value.trim();
+    const errBox = document.getElementById('geError');
+    errBox.classList.remove('show');
+    if (!name) { errBox.textContent = 'Group needs a name.'; errBox.classList.add('show'); return; }
+    saveBtn.disabled = true;
+    const origText = saveBtn.textContent;
+    saveBtn.textContent = 'Saving...';
+    try {
+      const { data, error } = await db.from('user_groups').insert({
+        owner_id: state.profile.id, name
+      }).select().single();
+      if (error) throw error;
+      const groupId = data.id;
+      if (groupsState.editingMembers.length > 0) {
+        const rows = groupsState.editingMembers.map(m => ({ group_id: groupId, user_id: m.id }));
+        const { error: me } = await db.from('user_group_members').insert(rows);
+        if (me) throw me;
+      }
+      // Auto-select the new group
+      ccInviteState.selectedGroupIds.add(groupId);
+      await loadGroups();
+      document.getElementById('groupEditorModal').classList.remove('open');
+      saveBtn.onclick = origOnclick;
+      renderInviteGroups();
+      renderInvitees();
+      toast('🔥 Group created');
+    } catch (err) {
+      errBox.textContent = err.message || 'Save failed';
+      errBox.classList.add('show');
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = origText;
+    }
+  };
+
+  document.getElementById('groupEditorModal').classList.add('open');
 }
 
 function renderInvitees() {
