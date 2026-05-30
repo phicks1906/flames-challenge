@@ -3042,6 +3042,68 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
   .cd-sheet-inner { max-width: 760px; }
 }
 
+/* ============ BOTTOM NAV BAR ============ */
+.bottom-nav {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 120;
+  display: flex; align-items: center;
+  background: rgba(10, 8, 7, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid var(--border);
+  padding: 8px 0 max(12px, env(safe-area-inset-bottom));
+  gap: 0;
+}
+body.theme-light .bottom-nav {
+  background: rgba(255, 255, 255, 0.92);
+}
+.bnav-btn {
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  background: none; border: none; cursor: pointer;
+  padding: 6px 4px;
+  color: var(--text-muted);
+  transition: color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.bnav-btn:active { transform: scale(0.92); }
+.bnav-btn.active { color: var(--ember); }
+.bnav-icon { font-size: 22px; line-height: 1; }
+.bnav-label { font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; font-family: var(--font-body); }
+.bnav-create {
+  flex: 1;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: none; cursor: pointer;
+  padding: 4px;
+  -webkit-tap-highlight-color: transparent;
+}
+.bnav-create-icon {
+  width: 50px; height: 50px;
+  background: linear-gradient(135deg, var(--ember), var(--flame));
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px; font-weight: 300; color: #fff; line-height: 1;
+  box-shadow: 0 6px 20px -4px rgba(255, 80, 30, 0.7);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.bnav-create:active .bnav-create-icon { transform: scale(0.92); box-shadow: 0 3px 10px -4px rgba(255, 80, 30, 0.5); }
+
+/* Add bottom padding to main content so bottom nav doesn't cover it */
+main { padding-bottom: 80px; }
+
+/* Notification badge on bottom nav bell — reuse existing badge style */
+.bnav-btn .notif-badge {
+  position: absolute;
+  top: 2px; right: 50%;
+  margin-right: -18px;
+}
+.bnav-btn { position: relative; }
+
+/* ============ WELCOME BANNER DISMISS ============ */
+#welcomeBanner { transition: opacity 0.3s, max-height 0.4s; }
+#welcomeBanner.dismissed { display: none; }
+
 /* LIGHT-MODE FIXES — create/post/entry sheets had hardcoded dark values */
 body.theme-light .cc-sheet { background: rgba(246, 245, 243, 0.97); }
 body.theme-light .cc-sheet-header { background: rgba(246, 245, 243, 0.95); }
@@ -3214,17 +3276,8 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       <span class="brand-mark">🔥</span>
       <span class="brand-name">Flames<span>Challenge</span></span>
     </a>
-    <div class="nav-links">
-      <button class="nav-link active" data-view="feed" onclick="switchView('feed')">Feed</button>
-      <button class="nav-link" data-view="challenges" onclick="switchView('challenges')">Challenges</button>
-      <button class="nav-link" data-view="polls" onclick="switchView('polls')">Polls</button>
-      <button class="nav-link" data-view="leaderboard" onclick="switchView('leaderboard')">Ranks</button>
-      <button class="nav-link" data-view="admin" id="navAdmin" onclick="switchView('admin')" style="display:none">🛡️ Admin</button>
-    </div>
     <div class="nav-actions">
-      <button id="notifBell" class="notif-bell" onclick="openNotifs()" aria-label="Notifications">
-        🔔<span class="notif-badge" id="notifBadge" style="display:none">0</span>
-      </button>
+      <button class="nav-link" data-view="admin" id="navAdmin" onclick="switchView('admin')" style="display:none">🛡️ Admin</button>
       <div id="userChip" class="user-chip" onclick="openProfile()">
         <span class="avatar" id="chipAvatar">🔥</span>
         <span class="points" id="chipPoints">0</span>
@@ -3233,17 +3286,52 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
   </div>
 </header>
 
+<!-- BOTTOM NAV BAR -->
+<nav class="bottom-nav" id="bottomNav">
+  <button class="bnav-btn active" data-view="feed" onclick="switchView('feed')">
+    <span class="bnav-icon">🏠</span>
+    <span class="bnav-label">Feed</span>
+  </button>
+  <button class="bnav-btn" data-view="challenges" onclick="switchView('challenges')">
+    <span class="bnav-icon">🏆</span>
+    <span class="bnav-label">Challenges</span>
+  </button>
+  <button class="bnav-create" onclick="openCreateSheet()">
+    <span class="bnav-create-icon">+</span>
+  </button>
+  <button class="bnav-btn" data-view="polls" onclick="switchView('polls')">
+    <span class="bnav-icon">🗳️</span>
+    <span class="bnav-label">Polls</span>
+  </button>
+  <button class="bnav-btn" data-view="leaderboard" onclick="switchView('leaderboard')">
+    <span class="bnav-icon">📊</span>
+    <span class="bnav-label">Ranks</span>
+  </button>
+</nav>
+
+<!-- CREATE CHOICE SHEET -->
+<div class="modal-backdrop" id="createSheet" onclick="if(event.target===this)closeCreateSheet()">
+  <div class="modal" style="max-width:360px;text-align:center">
+    <h2 style="margin-bottom:6px">Create</h2>
+    <p style="margin-bottom:24px;color:var(--text-dim);font-size:14px">What do you want to post?</p>
+    <button class="btn btn-primary" style="width:100%;margin-bottom:12px" onclick="closeCreateSheet();openCreatePost()">📝 Post something</button>
+    <button class="btn btn-ghost" style="width:100%;margin-bottom:12px" onclick="closeCreateSheet();openCreateChallenge()">🏆 Start a challenge</button>
+    <button class="btn btn-ghost" style="width:100%" onclick="closeCreateSheet()">Cancel</button>
+  </div>
+</div>
+
 <main>
 
 <!-- FEED VIEW -->
 <section id="feedView" class="app-section">
   <div class="feed-wrap">
-    <div class="welcome-banner">
+    <div class="welcome-banner" id="welcomeBanner">
       <div class="icon">🔥</div>
       <div>
         <h3 id="feedHello">Welcome back</h3>
         <p>Here's what's heating up in the community.</p>
       </div>
+      <button style="background:none;border:none;color:var(--text-muted);font-size:20px;cursor:pointer;padding:4px 8px;margin-left:auto;line-height:1" onclick="dismissWelcomeBanner()" aria-label="Dismiss">×</button>
     </div>
 
 
@@ -4180,7 +4268,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v49 · pw-icon-reset";
+const APP_VERSION = "v50 · bottom-nav";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -4670,6 +4758,9 @@ function switchView(view) {
   // Admin view gated to admin user only
   if (view === 'admin' && !isAdmin()) { toast('Not authorized'); return; }
   state.currentView = view;
+  // Sync bottom nav active state
+  document.querySelectorAll('.bnav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  // Keep old nav-link sync for admin button
   document.querySelectorAll('.nav-link').forEach(l => l.classList.toggle('active', l.dataset.view === view));
   document.getElementById('feedView').style.display = view === 'feed' ? 'block' : 'none';
   document.getElementById('challengesViewSection').style.display = view === 'challenges' ? 'block' : 'none';
@@ -4681,6 +4772,30 @@ function switchView(view) {
   if (view === 'feed') renderFeed();
   if (view === 'admin') renderAdminOverview();
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+/* ---------- CREATE SHEET ---------- */
+function openCreateSheet() {
+  document.getElementById('createSheet').classList.add('open');
+}
+function closeCreateSheet() {
+  document.getElementById('createSheet').classList.remove('open');
+}
+
+/* ---------- WELCOME BANNER ---------- */
+function welcomeBannerKey() { return 'fc_welcome_dismissed_' + (state.profile?.id || 'anon'); }
+function updateWelcomeBanner() {
+  const el = document.getElementById('welcomeBanner');
+  if (!el) return;
+  try {
+    const dismissed = localStorage.getItem(welcomeBannerKey()) === '1';
+    el.style.display = dismissed ? 'none' : 'flex';
+  } catch(e) {}
+}
+function dismissWelcomeBanner() {
+  try { localStorage.setItem(welcomeBannerKey(), '1'); } catch(e) {}
+  const el = document.getElementById('welcomeBanner');
+  if (el) el.style.display = 'none';
 }
 
 /* ---------- APP DATA LOAD ---------- */
@@ -4907,13 +5022,14 @@ function renderProfileChip() {
   if (!state.profile) return;
   document.getElementById('chipAvatar').innerHTML = avatarInner(state.profile.avatar);
   const wins = state.myWLT?.wins ?? 0;
-  document.getElementById('chipPoints').textContent = wins + ' wins';
+  document.getElementById('chipPoints').textContent = wins > 0 ? wins + ' wins' : state.profile.name;
   document.getElementById('composerAvatar').innerHTML = avatarInner(state.profile.avatar);
 }
 
 function renderFeedHello() {
   if (!state.profile) return;
   document.getElementById('feedHello').textContent = `Welcome back, ${state.profile.name}`;
+  updateWelcomeBanner();
 }
 
 
