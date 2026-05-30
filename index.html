@@ -610,6 +610,49 @@ body.theme-light .nav { background: rgba(255, 255, 255, 0.85); border-bottom-col
   text-transform: uppercase; letter-spacing: 0.1em;
   text-align: right; margin-top: 2px;
 }
+/* ── How it works card ── */
+.lb-how-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+.lb-how-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.lb-how-header:hover { background: var(--overlay-1); }
+.lb-how-title { font-weight: 700; font-size: 15px; color: var(--text); }
+.lb-how-chevron { color: var(--text-muted); font-size: 16px; }
+.lb-how-body { padding: 0 16px 16px; display: flex; flex-direction: column; gap: 12px; }
+.lb-how-item { display: flex; gap: 12px; align-items: flex-start; font-size: 14px; color: var(--text-dim); line-height: 1.5; }
+.lb-how-item strong { color: var(--text); }
+.lb-how-icon { font-size: 20px; flex-shrink: 0; width: 28px; text-align: center; }
+
+/* ── Championship tab redesign ── */
+.lb-champ-current {
+  background: linear-gradient(135deg, rgba(255,200,87,0.1), rgba(255,106,44,0.06));
+  border: 1px solid rgba(255,200,87,0.3);
+  border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 10px;
+}
+.lb-champ-current-empty {
+  background: var(--overlay-1); border-color: var(--border);
+  color: var(--text-muted); font-size: 13px; text-align: center;
+}
+.lb-champ-current-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gold); margin-bottom: 8px; }
+.lb-champ-current-row { display: flex; align-items: center; gap: 12px; }
+.lb-champ-my-status {
+  font-size: 13px; font-weight: 600; padding: 10px 12px;
+  border-radius: var(--radius-sm); margin-bottom: 10px; line-height: 1.4;
+}
+.lb-champ-my-status.qualify { background: rgba(74,222,128,0.12); color: #4ade80; border: 1px solid rgba(74,222,128,0.3); }
+.lb-champ-my-status.defending { background: rgba(255,200,87,0.12); color: var(--gold); border: 1px solid rgba(255,200,87,0.3); }
+.lb-champ-my-status.progress { background: rgba(255,106,44,0.1); color: var(--ember); border: 1px solid rgba(255,106,44,0.25); }
+.lb-champ-my-status.none { background: var(--overlay-1); color: var(--text-muted); border: 1px solid var(--border); }
+.lb-champ-list-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 8px; }
+
 /* ── Hall of Fame ── */
 .lb-hof-empty, .lb-champ-empty {
   text-align: center; padding: 50px 20px;
@@ -3820,6 +3863,35 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
         <p class="section-sub">Rolling 30-day wins · updated live</p>
       </div>
     </div>
+    <div class="lb-how-card" id="lbHowCard">
+      <div class="lb-how-header" onclick="toggleLbHow()">
+        <span class="lb-how-title">ℹ️ How it works</span>
+        <span class="lb-how-chevron" id="lbHowChevron">▾</span>
+      </div>
+      <div class="lb-how-body" id="lbHowBody" style="display:none">
+        <div class="lb-how-item">
+          <div class="lb-how-icon">🏆</div>
+          <div><strong>Win challenges</strong> — Enter and win challenges in any category. Every win counts toward your rank.</div>
+        </div>
+        <div class="lb-how-item">
+          <div class="lb-how-icon">📅</div>
+          <div><strong>30-day rolling window</strong> — Rankings reset every month. New users have just as much chance to reach #1 as veterans.</div>
+        </div>
+        <div class="lb-how-item">
+          <div class="lb-how-icon">👑</div>
+          <div><strong>Become Champion</strong> — The #1 ranked player in each category earns the Champion title and crown badge on their profile.</div>
+        </div>
+        <div class="lb-how-item">
+          <div class="lb-how-icon">⚡</div>
+          <div><strong>Championship Challenge</strong> — Each month, the top 5 players in a category are invited to a head-to-head Championship Challenge. Win it to claim or defend the Champion title.</div>
+        </div>
+        <div class="lb-how-item">
+          <div class="lb-how-icon">🌟</div>
+          <div><strong>Hall of Fame</strong> — Your championship titles are recorded permanently. Winning the title multiple times earns you an "Nx Champion" badge on your profile forever.</div>
+        </div>
+      </div>
+    </div>
+
     <div class="feed-tabs" style="margin-bottom:16px" id="lbMainTabs">
       <button class="feed-tab active" data-lbtab="rankings">🏆 Rankings</button>
       <button class="feed-tab" data-lbtab="halloffame">🌟 Hall of Fame</button>
@@ -4628,7 +4700,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v61 · hall-of-fame";
+const APP_VERSION = "v62 · champ-redesign";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -7185,6 +7257,15 @@ async function lbToggleFollow(btn) {
 /* ---------- LEADERBOARD TABS ---------- */
 let _lbTab = 'rankings';
 
+function toggleLbHow() {
+  const body = document.getElementById('lbHowBody');
+  const chevron = document.getElementById('lbHowChevron');
+  if (!body) return;
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  if (chevron) chevron.textContent = isOpen ? '▾' : '▴';
+}
+
 function initLbTabs() {
   document.querySelectorAll('#lbMainTabs .feed-tab').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -7342,57 +7423,85 @@ function renderChampionshipTab() {
 
   const now = new Date();
   const monthLabel = now.toLocaleString('default', { month: 'long', year: 'numeric' });
+  const myId = state.profile?.id;
 
-  // For each category, find top 5 by rolling30 wins
+  // Build sections — top 5 per category
   const sections = CATEGORIES.map(cat => {
-    const contenders = [...(data.users || [])]
+    const allInCat = [...(data.users || [])]
       .filter(u => (u.rolling30ByCategory[cat] || 0) > 0)
-      .sort((a, b) => (b.rolling30ByCategory[cat] || 0) - (a.rolling30ByCategory[cat] || 0))
-      .slice(0, 5);
-    return { cat, contenders };
-  }).filter(s => s.contenders.length >= 2); // need at least 2 to hold a championship
+      .sort((a, b) => (b.rolling30ByCategory[cat] || 0) - (a.rolling30ByCategory[cat] || 0));
+    const top5 = allInCat.slice(0, 5);
+    const championId = data.champions[cat];
+    const champion = championId ? (data.users || []).find(u => u.id === championId) : null;
+    // My rank in this category (across all players, not just top 5)
+    const myRank = myId ? allInCat.findIndex(u => u.id === myId) + 1 : 0;
+    const myWins = myId ? (data.users || []).find(u => u.id === myId)?.rolling30ByCategory[cat] || 0 : 0;
+    return { cat, top5, champion, myRank, myWins, totalInCat: allInCat.length };
+  }).filter(s => s.totalInCat >= 1);
 
   if (!sections.length) {
     el.innerHTML = `<div class="lb-champ-empty">
       <div style="font-size:48px;margin-bottom:12px">⚡</div>
-      <div style="font-weight:700;font-size:18px;margin-bottom:6px">Championship Challenges</div>
-      <div style="color:var(--text-muted);font-size:14px;line-height:1.5">Once enough players have wins in a category, the top performers will be invited to a Championship Challenge. Keep competing!</div>
+      <div style="font-weight:700;font-size:18px;margin-bottom:6px">No championships yet</div>
+      <div style="color:var(--text-muted);font-size:14px;line-height:1.5">Win challenges to start climbing the rankings. The top 5 in each category qualify for a Championship Challenge each month.</div>
     </div>`;
     return;
   }
 
-  el.innerHTML = `
-    <div class="lb-champ-intro">
-      <div class="lb-champ-intro-icon">⚡</div>
-      <div>
-        <div class="lb-champ-intro-title">${monthLabel} Championships</div>
-        <div class="lb-champ-intro-sub">The top performers in each category. ${isAdmin() ? 'As admin you can launch a Championship Challenge.' : 'Earn wins to qualify.'}</div>
+  el.innerHTML = sections.map(({ cat, top5, champion, myRank, myWins, totalInCat }) => {
+    const iQualify = myRank > 0 && myRank <= 5;
+    const isChamp = myId && champion?.id === myId;
+
+    // My status message
+    let myStatus = '';
+    if (myId) {
+      if (isChamp) {
+        myStatus = `<div class="lb-champ-my-status defending">👑 You are the current ${cat} Champion — defend your title!</div>`;
+      } else if (iQualify) {
+        myStatus = `<div class="lb-champ-my-status qualify">✅ You're #${myRank} — you qualify for the Championship Challenge this month.</div>`;
+      } else if (myWins > 0) {
+        myStatus = `<div class="lb-champ-my-status progress">You're #${myRank} with ${myWins} win${myWins > 1 ? 's' : ''}. Reach top 5 to qualify for the Championship Challenge.</div>`;
+      } else {
+        myStatus = `<div class="lb-champ-my-status none">Win a ${cat} challenge to start climbing toward the Championship.</div>`;
+      }
+    }
+
+    // Current champion block
+    const champBlock = champion ? `
+      <div class="lb-champ-current">
+        <div class="lb-champ-current-label">👑 Current Champion</div>
+        <div class="lb-champ-current-row">
+          <div class="lb-champ-cav" style="width:40px;height:40px;font-size:20px">${avatarInner(champion.avatar)}</div>
+          <div style="flex:1;min-width:0">
+            <div class="lb-champ-cname" style="font-size:16px">${escapeHtml(champion.name)}${champion.id === myId ? ' (you)' : ''}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${champion.rolling30ByCategory[cat] || 0} wins this month · defending title</div>
+          </div>
+        </div>
+      </div>` : `<div class="lb-champ-current lb-champ-current-empty">🏆 No champion yet — be the first to win this month</div>`;
+
+    return `<div class="lb-champ-section">
+      <div class="lb-champ-section-head">
+        <span class="lb-champ-section-cat">${cat}</span>
+        ${isAdmin() && top5.length >= 2 ? `<button class="lb-champ-launch-btn" data-launch-cat="${cat}">⚡ Launch</button>` : ''}
       </div>
-    </div>
-    ${sections.map(({ cat, contenders }) => {
-      const myId = state.profile?.id;
-      const iQualify = contenders.some(u => u.id === myId);
-      return `<div class="lb-champ-section">
-        <div class="lb-champ-section-head">
-          <span class="lb-champ-section-cat">${cat}</span>
-          <span class="lb-champ-qualifiers">${contenders.length} qualifier${contenders.length > 1 ? 's' : ''}</span>
-          ${isAdmin() ? `<button class="lb-champ-launch-btn" data-launch-cat="${cat}">⚡ Launch</button>` : ''}
-        </div>
-        <div class="lb-champ-list">
-          ${contenders.map((u, i) => {
-            const isYou = u.id === myId;
-            return `<div class="lb-champ-contender${isYou ? ' you' : ''}">
-              <div class="lb-champ-rank">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '#'+(i+1)}</div>
-              <div class="lb-champ-cav">${avatarInner(u.avatar)}</div>
-              <div class="lb-champ-cname">${escapeHtml(u.name)}${isYou ? ' (you)' : ''}</div>
-              <div class="lb-champ-cwins">${u.rolling30ByCategory[cat]} win${u.rolling30ByCategory[cat] > 1 ? 's' : ''}</div>
-            </div>`;
-          }).join('')}
-        </div>
-        ${iQualify ? '<div class="lb-champ-qualify-badge">✅ You qualify for this championship</div>' : ''}
-      </div>`;
-    }).join('')}
-  `;
+      ${champBlock}
+      ${myStatus}
+      <div class="lb-champ-list-label">Top 5 Qualifiers</div>
+      <div class="lb-champ-list">
+        ${top5.map((u, i) => {
+          const isYou = u.id === myId;
+          const wins = u.rolling30ByCategory[cat];
+          return `<div class="lb-champ-contender${isYou ? ' you' : ''}">
+            <div class="lb-champ-rank">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '#'+(i+1)}</div>
+            <div class="lb-champ-cav">${avatarInner(u.avatar)}</div>
+            <div class="lb-champ-cname">${escapeHtml(u.name)}${isYou ? ' <span style="color:var(--ember);font-size:11px">(you)</span>' : ''}</div>
+            <div class="lb-champ-cwins">${wins} win${wins > 1 ? 's' : ''}</div>
+          </div>`;
+        }).join('')}
+        ${top5.length < 5 ? `<div style="padding:8px 0;font-size:12px;color:var(--text-muted);text-align:center">${5 - top5.length} spot${5 - top5.length > 1 ? 's' : ''} open — win a challenge to claim one</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
 
   // Wire admin launch buttons
   el.querySelectorAll('[data-launch-cat]').forEach(btn => {
