@@ -3006,6 +3006,61 @@ body.theme-light .cc-field textarea { background: #ffffff; }
 body.theme-light .cc-pill { background: var(--overlay-2); }
 body.theme-light .cc-upload { background: var(--overlay-1); }
 
+/* CHALLENGE TIMELINE (v38) */
+.cd-timeline {
+  margin: 14px 0;
+  padding: 14px 16px;
+  background: var(--overlay-1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.cd-tl-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 14px; }
+.cd-tl-label { color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; font-size: 11px; font-weight: 600; }
+.cd-tl-val { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.cd-count-btn {
+  background: none; border: none; cursor: pointer;
+  color: inherit; font-family: var(--font-display);
+  font-size: 22px; text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 0; display: inline-flex; align-items: center; gap: 6px;
+  transition: color 0.15s;
+}
+.cd-count-btn::after { content: "›"; font-family: inherit; color: var(--ember); font-size: 24px; }
+.cd-count-btn:hover { color: var(--ember); }
+
+/* ENTRANTS POP-OUT SHEET (v38) */
+.entrants-backdrop {
+  position: fixed; inset: 0; z-index: 300;
+  background: rgba(0,0,0,0.55);
+  display: none; align-items: flex-end; justify-content: center;
+}
+.entrants-backdrop.open { display: flex; animation: fadeIn 0.2s ease; }
+.entrants-sheet {
+  background: var(--surface); width: 100%; max-width: 560px;
+  border-radius: 20px 20px 0 0;
+  max-height: 78vh; overflow-y: auto;
+  padding: 4px 16px 28px;
+  animation: entrantsUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes entrantsUp { from { transform: translateY(40px); opacity: 0.6; } to { transform: translateY(0); opacity: 1; } }
+.entrants-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 4px 12px; position: sticky; top: 0;
+  background: var(--surface); z-index: 1;
+}
+.entrants-header h3 { font-family: var(--font-display); font-size: 20px; text-transform: uppercase; letter-spacing: 0.04em; }
+.entrant-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 8px; border-radius: 12px;
+  cursor: pointer; transition: background 0.15s;
+}
+.entrant-row:hover { background: var(--overlay-1); }
+.entrant-rank { width: 30px; text-align: center; font-weight: 700; font-size: 15px; color: var(--text-muted); flex-shrink: 0; }
+.entrant-avatar { width: 42px; height: 42px; border-radius: 50%; overflow: hidden; display: grid; place-items: center; background: var(--surface-2); flex-shrink: 0; font-size: 20px; }
+.entrant-main { flex: 1; min-width: 0; }
+.entrant-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.entrant-votes { font-size: 13px; color: var(--text-muted); }
+
 </style>
 </head>
 <body>
@@ -3461,12 +3516,23 @@ body.theme-light .cc-upload { background: var(--overlay-1); }
   <div class="cd-sheet-inner">
     <div class="cd-hero" id="cdHero"></div>
     <div class="cd-entries-header">
-      <span class="count" id="cdEntriesCount">0 entries</span>
+      <button class="count cd-count-btn" id="cdEntriesCount" onclick="openEntrantsSheet()">0 entries</button>
       <button class="btn btn-primary" id="cdAddEntryBtn" onclick="openSubmitEntry()" style="display:none">+ Submit your entry</button>
     </div>
     <div class="cd-entries-grid" id="cdEntriesGrid"></div>
     <div class="cd-entries-counter" id="cdEntriesCounter" style="display:none"></div>
     <div class="cd-entries-dots" id="cdEntriesDots" style="display:none"></div>
+  </div>
+</div>
+
+<!-- ENTRANTS POP-OUT SHEET -->
+<div class="entrants-backdrop" id="entrantsSheet" onclick="if(event.target===this)closeEntrantsSheet()">
+  <div class="entrants-sheet">
+    <div class="entrants-header">
+      <h3 id="entrantsTitle">Entrants</h3>
+      <button class="cc-close" onclick="closeEntrantsSheet()">×</button>
+    </div>
+    <div class="entrants-list" id="entrantsList"></div>
   </div>
 </div>
 
@@ -4053,7 +4119,7 @@ body.theme-light .cc-upload { background: var(--overlay-1); }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v37 · light-mode-forms";
+const APP_VERSION = "v38 · challenge-info";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -6661,6 +6727,7 @@ function renderChallengeDetail() {
 
   // Hero
   const creatorClickable = ch.creator?.id && ch.creator.id !== state.profile?.id;
+  const fmtD = (d) => d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—';
   document.getElementById('cdHero').innerHTML = `
     <div class="cd-status-row">
       <span class="ch-status ${status}"><span class="dot"></span>${statusLabel}</span>
@@ -6672,6 +6739,11 @@ function renderChallengeDetail() {
     <div class="cd-creator${creatorClickable ? ' user-clickable' : ''}" ${creatorClickable ? `data-user-id="${ch.creator.id}"` : ''}>
       <div class="avatar">${avatarInner(ch.creator?.avatar)}</div>
       <span>by ${escapeHtml(ch.creator?.name || 'Unknown')}${needsFollowPlus(ch.creator?.id) ? ' <span class="user-plus">+</span>' : ''}</span>
+    </div>
+    <div class="cd-timeline">
+      ${ch.created_at ? `<div class="cd-tl-row"><span class="cd-tl-label">Started</span><span class="cd-tl-val">${fmtD(ch.created_at)}</span></div>` : ''}
+      <div class="cd-tl-row"><span class="cd-tl-label">Submissions close</span><span class="cd-tl-val">${fmtD(ch.submission_deadline)}</span></div>
+      <div class="cd-tl-row"><span class="cd-tl-label">Voting ends</span><span class="cd-tl-val">${fmtD(ch.voting_end)}</span></div>
     </div>
     ${ch.rules ? `<div class="cd-rules"><strong>Rules:</strong> ${escapeHtml(ch.rules)}</div>` : ''}
   `;
@@ -6787,7 +6859,7 @@ function renderChallengeDetail() {
     actionsHtml = (actionsHtml ? actionsHtml + ' ' : '') + likeBtnHtml + commentBtnHtml;
 
     return `
-      <div class="cd-entry${iVoted ? ' voted' : ''}${winnerClass}">
+      <div class="cd-entry${iVoted ? ' voted' : ''}${winnerClass}" data-entry-id="${entry.id}">
         ${medalBadge}
         <div class="cd-entry-media">${mediaHtml}</div>
         <div class="cd-entry-body">
@@ -8473,6 +8545,57 @@ db.from('users').select('id').limit(1).then(() => {}, () => {});
     showAuth();
   }
 })();
+
+/* ============================================================
+   ENTRANTS POP-OUT SHEET (v38)
+   Tap the entry count → list of entrants with vote counts,
+   medals on closed challenges, tap a row to jump to that entry.
+   ============================================================ */
+function openEntrantsSheet() {
+  const ch = state.currentChallenge;
+  if (!ch || !state.currentEntries || state.currentEntries.length === 0) return;
+  const status = computeChallengeStatus(ch);
+  const isClosed = status === 'closed';
+
+  const voteCounts = {};
+  (state.currentVotes || []).forEach(v => { voteCounts[v.entry_id] = (voteCounts[v.entry_id] || 0) + 1; });
+
+  const sorted = [...state.currentEntries].sort((a, b) => (voteCounts[b.id] || 0) - (voteCounts[a.id] || 0));
+  const medals = ['🥇', '🥈', '🥉'];
+
+  document.getElementById('entrantsTitle').textContent = `Entrants (${sorted.length})`;
+  document.getElementById('entrantsList').innerHTML = sorted.map((e, i) => {
+    const votes = voteCounts[e.id] || 0;
+    const sub = e.submitter || {};
+    const showMedal = isClosed && i < 3 && votes > 0 && sorted.length > 1;
+    const rank = showMedal ? medals[i] : (i + 1);
+    const isYou = state.profile && e.user_id === state.profile.id;
+    return `
+      <div class="entrant-row" data-jump-entry="${e.id}">
+        <div class="entrant-rank">${rank}</div>
+        <div class="entrant-avatar">${avatarInner(sub.avatar)}</div>
+        <div class="entrant-main">
+          <div class="entrant-name">${escapeHtml(sub.name || 'Unknown')}${isYou ? ' (you)' : ''}</div>
+          <div class="entrant-votes">${votes} ${votes === 1 ? 'vote' : 'votes'}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  document.querySelectorAll('#entrantsList [data-jump-entry]').forEach(row => {
+    row.addEventListener('click', () => {
+      const eid = row.dataset.jumpEntry;
+      closeEntrantsSheet();
+      const card = document.querySelector(`.cd-entry[data-entry-id="${eid}"]`);
+      if (card) card.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    });
+  });
+
+  document.getElementById('entrantsSheet').classList.add('open');
+}
+function closeEntrantsSheet() {
+  document.getElementById('entrantsSheet').classList.remove('open');
+}
 
 /* ============================================================
    ADMIN PAGE
