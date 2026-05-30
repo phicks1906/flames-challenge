@@ -4403,7 +4403,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v54 · vote-reveal";
+const APP_VERSION = "v54 · vote-reveal-b";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -7566,6 +7566,7 @@ function renderChallengeResults() {
   const status = computeChallengeStatus(ch);
   const iHaveVoted = !!state.myCurrentVote;
   const isClosed = status === 'closed';
+  console.log('[results] iHaveVoted:', iHaveVoted, 'isClosed:', isClosed, 'status:', status, 'myCurrentVote:', state.myCurrentVote);
   if (!iHaveVoted && !isClosed) { panel.style.display = 'none'; return; }
 
   const voteCountByEntry = {};
@@ -7641,6 +7642,13 @@ async function voteOnEntry(entryId) {
     const grid = document.getElementById('cdEntriesGrid');
     if (grid) grid.scrollLeft = 0;
     renderChallengeResults();
+    // Scroll the sheet so the results panel is visible
+    setTimeout(() => {
+      const panel = document.getElementById('cdResultsPanel');
+      if (panel && panel.style.display !== 'none') {
+        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
   }, 50);
 
   try {
