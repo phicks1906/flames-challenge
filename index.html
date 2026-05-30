@@ -962,6 +962,39 @@ footer .links a:hover { color: var(--ember); }
   .auth-form .avatar-picker { grid-template-columns: repeat(6, 1fr); }
 }
 
+/* Interest picker (signup step 2) */
+.interest-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin: 8px 0 16px;
+}
+.interest-opt {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-family: inherit; font-size: 14px; font-weight: 600;
+  color: var(--text-dim);
+  cursor: pointer; transition: all 0.15s;
+  text-align: left;
+}
+.interest-opt:hover { border-color: var(--border-bright); color: var(--text); }
+.interest-opt.selected {
+  background: rgba(255,106,44,0.15);
+  border-color: var(--ember);
+  color: var(--text);
+}
+.interest-opt .iopt-icon { font-size: 20px; flex-shrink: 0; }
+.interest-skip {
+  background: none; border: none;
+  color: var(--text-muted); font-family: inherit;
+  font-size: 13px; cursor: pointer; padding: 4px;
+  text-align: center; width: 100%;
+}
+.interest-skip:hover { color: var(--text-dim); }
+
 /* ============ FEED VIEW ============ */
 .feed-wrap {
   max-width: 720px;
@@ -3117,6 +3150,18 @@ body.theme-light .cc-upload { background: var(--overlay-1); }
       <button type="submit" class="btn btn-primary submit-btn">Light it up →</button>
     </form>
 
+    <!-- INTEREST PICKER (shown after signup form submits) -->
+    <div id="interestPicker" style="display:none">
+      <div style="text-align:center;margin-bottom:18px">
+        <div style="font-size:36px;margin-bottom:8px">🔥</div>
+        <h3 style="font-family:var(--font-bricolage);font-weight:700;font-size:20px;margin-bottom:6px">What are you into?</h3>
+        <p style="font-size:14px;color:var(--text-dim)">Pick your interests — we'll show you the best challenges.</p>
+      </div>
+      <div class="interest-grid" id="interestGrid"></div>
+      <button class="btn btn-primary" style="width:100%;margin-bottom:10px" onclick="submitInterests()">Let's go 🔥</button>
+      <button class="interest-skip" onclick="submitInterests(true)">Skip for now</button>
+    </div>
+
     <!-- EMAIL VERIFY SUCCESS -->
     <div id="verifySuccess" class="auth-success" style="display:none">
       <div style="font-size:42px;margin-bottom:10px">📧</div>
@@ -3671,6 +3716,7 @@ body.theme-light .cc-upload { background: var(--overlay-1); }
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="closeModals()">Keep voting</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openEditProfile()">✏️ Edit Profile</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openFindPeople()">🔍 Find People</button>
+    <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openInterestEditor()">🎯 My Interests</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openGroupsModal()">👥 My Groups</button>
     <div class="theme-toggle-row" id="themeToggleRow" onclick="toggleTheme()" role="button" tabindex="0">
       <div class="theme-toggle-label">
@@ -4111,7 +4157,7 @@ body.theme-light .cc-upload { background: var(--overlay-1); }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v40 · cleaner-feed-b";
+const APP_VERSION = "v41 · interests";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -4332,13 +4378,92 @@ document.getElementById('signupForm').addEventListener('submit', async (e) => {
     return;
   }
 
-  // Show verify-your-email message
-  document.getElementById('loginForm').classList.add('hidden');
-  document.getElementById('signupForm').classList.add('hidden');
-  document.getElementById('verifyEmail').textContent = email;
-  document.getElementById('verifySuccess').style.display = 'block';
+  // Show interest picker first, then verify screen
+  _pendingVerifyEmail = email;
+  document.getElementById("loginForm").classList.add("hidden");
+  document.getElementById("signupForm").classList.add("hidden");
+  showInterestPicker();
 });
 
+
+/* ---------- INTEREST PICKER ---------- */
+const INTEREST_DEFS = [
+  { key: "Art",         icon: "🎨" },
+  { key: "Photography", icon: "📷" },
+  { key: "Music",       icon: "🎵" },
+  { key: "Writing",     icon: "✍️" },
+  { key: "Cooking",     icon: "🍳" },
+  { key: "Style",       icon: "👗" },
+  { key: "Sports",      icon: "🏆" },
+  { key: "Fitness",     icon: "💪" },
+  { key: "Comedy",      icon: "😂" },
+  { key: "Other",       icon: "🔥" },
+];
+let _pickedInterests = new Set();
+let _pendingVerifyEmail = "";
+
+function showInterestPicker() {
+  _pickedInterests = new Set();
+  const grid = document.getElementById("interestGrid");
+  grid.innerHTML = INTEREST_DEFS.map(d =>
+    `<button type="button" class="interest-opt" data-ikey="${d.key}">`+
+    `<span class="iopt-icon">${d.icon}</span>${d.key}</button>`
+  ).join("");
+  grid.querySelectorAll(".interest-opt").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const k = btn.dataset.ikey;
+      if (_pickedInterests.has(k)) { _pickedInterests.delete(k); btn.classList.remove("selected"); }
+      else { _pickedInterests.add(k); btn.classList.add("selected"); }
+    });
+  });
+  document.getElementById("interestPicker").style.display = "block";
+}
+
+async function submitInterests(skip) {
+  document.getElementById("interestPicker").style.display = "none";
+  // Save interests to localStorage keyed by email — profile may not exist yet
+  // (user still needs to verify email). We will apply it on first login.
+  const interests = skip ? [] : Array.from(_pickedInterests);
+  try { localStorage.setItem("fc_pending_interests", JSON.stringify(interests)); } catch(e) {}
+  // Now show the verify email screen
+  document.getElementById("verifyEmail").textContent = _pendingVerifyEmail;
+  document.getElementById("verifySuccess").style.display = "block";
+}
+
+async function openInterestEditor() {
+  closeModals();
+  // Reuse the interest picker inside a simple modal overlay
+  const current = new Set(state.profile?.interests || []);
+  _pickedInterests = new Set(current);
+  const grid = document.getElementById("interestGrid");
+  grid.innerHTML = INTEREST_DEFS.map(d =>
+    `<button type="button" class="interest-opt${current.has(d.key) ? " selected" : ""}" data-ikey="${d.key}">`+
+    `<span class="iopt-icon">${d.icon}</span>${d.key}</button>`
+  ).join("");
+  grid.querySelectorAll(".interest-opt").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const k = btn.dataset.ikey;
+      if (_pickedInterests.has(k)) { _pickedInterests.delete(k); btn.classList.remove("selected"); }
+      else { _pickedInterests.add(k); btn.classList.add("selected"); }
+    });
+  });
+  // Swap the picker buttons to a Save mode
+  const picker = document.getElementById("interestPicker");
+  picker.querySelector(".interest-skip").textContent = "Cancel";
+  picker.querySelector(".interest-skip").onclick = () => { picker.style.display = "none"; };
+  picker.querySelector(".btn-primary").textContent = "Save interests";
+  picker.querySelector(".btn-primary").onclick = async () => {
+    const interests = Array.from(_pickedInterests);
+    picker.style.display = "none";
+    try {
+      await db.from("profiles").update({ interests }).eq("id", state.profile.id);
+      state.profile.interests = interests;
+      toast("Interests saved");
+      if (state.currentView === "feed") renderFeed();
+    } catch(e) { toast("Save failed"); }
+  };
+  picker.style.display = "block";
+}
 /* ---------- FORGOT PASSWORD ---------- */
 async function forgotPassword() {
   const email = document.getElementById('loginEmail').value.trim();
@@ -4421,6 +4546,18 @@ async function loadProfile() {
     }).select().single();
     state.profile = newProf;
   }
+  // Apply pending interests from signup if this is a fresh login
+  try {
+    const pending = localStorage.getItem("fc_pending_interests");
+    if (pending !== null && state.profile) {
+      const interests = JSON.parse(pending);
+      localStorage.removeItem("fc_pending_interests");
+      if (interests.length > 0) {
+        await db.from("profiles").update({ interests }).eq("id", state.profile.id);
+        state.profile.interests = interests;
+      }
+    }
+  } catch(e) { console.warn("interests apply", e); }
 }
 
 function showAuth() {
@@ -7765,9 +7902,22 @@ function renderFeed() {
     kind: 'winner', sortKey: ch.voting_end, data: { challenge: ch, entry },
   }));
 
-  const mixed = [...postItems, ...challengeItems, ...winnerItems].sort((a, b) =>
-    new Date(b.sortKey) - new Date(a.sortKey)
-  );
+  const myInterests = new Set(state.profile?.interests || []);
+  const hasInterests = myInterests.size > 0;
+
+  // Score each item: recency base + interest match bonus (Discover only)
+  function itemScore(item) {
+    const age = Date.now() - new Date(item.sortKey).getTime();
+    const recency = Math.max(0, 1 - age / (14 * 86400000)); // 0-1 over 14 days
+    let interest = 0;
+    if (!followingMode && hasInterests) {
+      const cat = item.data?.category || item.data?.challenge?.category || item.data?.ch?.category;
+      if (cat && myInterests.has(cat)) interest = 0.5;
+    }
+    return recency + interest;
+  }
+
+  const mixed = [...postItems, ...challengeItems, ...winnerItems].sort((a, b) => itemScore(b) - itemScore(a));
 
   if (mixed.length === 0) {
     if (followingMode) {
