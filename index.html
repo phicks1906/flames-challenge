@@ -995,6 +995,18 @@ footer .links a:hover { color: var(--ember); }
 }
 .interest-skip:hover { color: var(--text-dim); }
 
+/* Password show/hide toggle */
+.pw-wrap { position: relative; }
+.pw-wrap input { padding-right: 48px; }
+.pw-toggle {
+  position: absolute; right: 12px; top: 50%;
+  transform: translateY(-50%);
+  background: none; border: none;
+  color: var(--text-muted); font-size: 18px;
+  cursor: pointer; padding: 4px; line-height: 1;
+}
+.pw-toggle:hover { color: var(--text); }
+
 /* ============ FEED VIEW ============ */
 .feed-wrap {
   max-width: 720px;
@@ -3120,7 +3132,10 @@ body.theme-light .cc-upload { background: var(--overlay-1); }
       </div>
       <div>
         <label for="loginPassword">Password</label>
-        <input id="loginPassword" type="password" autocomplete="current-password" required />
+        <div class="pw-wrap">
+          <input id="loginPassword" type="password" autocomplete="current-password" required />
+          <button type="button" class="pw-toggle" onclick="togglePw('loginPassword', this)" aria-label="Show password">👁</button>
+        </div>
       </div>
       <div class="field-row">
         <span></span>
@@ -3145,7 +3160,10 @@ body.theme-light .cc-upload { background: var(--overlay-1); }
       </div>
       <div>
         <label for="signupPassword">Password (min 8 chars)</label>
-        <input id="signupPassword" type="password" autocomplete="new-password" minlength="8" required />
+        <div class="pw-wrap">
+          <input id="signupPassword" type="password" autocomplete="new-password" minlength="8" required />
+          <button type="button" class="pw-toggle" onclick="togglePw('signupPassword', this)" aria-label="Show password">👁</button>
+        </div>
       </div>
       <button type="submit" class="btn btn-primary submit-btn">Light it up →</button>
     </form>
@@ -4157,7 +4175,7 @@ body.theme-light .cc-upload { background: var(--overlay-1); }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v43 · feed-phase3";
+const APP_VERSION = "v44 · pw-toggle";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -4236,6 +4254,13 @@ function showAuthError(msg) {
   el.classList.add('show');
 }
 function clearAuthError() {
+function togglePw(id, btn) {
+  const input = document.getElementById(id);
+  const show = input.type === "password";
+  input.type = show ? "text" : "password";
+  btn.textContent = show ? "🙈" : "👁";
+}
+
   document.getElementById('authError').classList.remove('show');
 }
 
