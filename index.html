@@ -4268,7 +4268,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v50 · bottom-nav-b";
+const APP_VERSION = "v51 · video-posters";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -4957,7 +4957,7 @@ async function loadFeedActivity() {
     ]);
     const [entriesRes, votesRes] = await Promise.all([
       withTimeout(db.from('entries')
-        .select('id, challenge_id, user_id, created_at, submitter:profiles!entries_user_id_fkey(id, name, avatar)')
+        .select('id, challenge_id, user_id, created_at, poster_url, submitter:profiles!entries_user_id_fkey(id, name, avatar)')
         .gte('created_at', cutoff)
         .order('created_at', { ascending: false })
         .limit(200), 12000, 'Feed entries'),
@@ -6701,6 +6701,40 @@ function showCcError(msg) {
   errBox.classList.add('show');
 }
 
+// Captures a thumbnail from a video file at ~0.5s using canvas.
+// Returns a { blob, ext } or null if capture fails.
+async function captureVideoPoster(file) {
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.muted = true;
+    video.playsInline = true;
+    video.crossOrigin = 'anonymous';
+    const cleanup = () => { try { URL.revokeObjectURL(url); } catch(e) {} };
+    video.onerror = () => { cleanup(); resolve(null); };
+    video.onloadeddata = () => {
+      video.currentTime = Math.min(0.5, video.duration * 0.1 || 0.5);
+    };
+    video.onseeked = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.min(video.videoWidth, 720);
+        canvas.height = Math.round(canvas.width * (video.videoHeight / video.videoWidth));
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(blob => {
+          cleanup();
+          resolve(blob ? { blob, ext: 'jpg' } : null);
+        }, 'image/jpeg', 0.82);
+      } catch(e) { cleanup(); resolve(null); }
+    };
+    video.src = url;
+    // Fallback timeout — give up after 10s
+    setTimeout(() => { cleanup(); resolve(null); }, 10000);
+  });
+}
+
 document.getElementById('createChallengeForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!state.profile) return;
@@ -6733,6 +6767,7 @@ document.getElementById('createChallengeForm').addEventListener('submit', async 
 
   try {
     let mediaUrl = null;
+    let posterUrl = null;
     if (ccState.mediaType !== 'text') {
       btn.textContent = 'Uploading...';
       const ext = (ccState.file.name.split('.').pop() || 'bin').toLowerCase();
@@ -6743,6 +6778,20 @@ document.getElementById('createChallengeForm').addEventListener('submit', async 
       if (uploadError) throw new Error('Upload failed: ' + uploadError.message);
       const { data: pub } = db.storage.from('challenge-media').getPublicUrl(filename);
       mediaUrl = pub.publicUrl;
+      // Capture poster frame for videos
+      if (ccState.mediaType === 'video') {
+        try {
+          const poster = await captureVideoPoster(ccState.file);
+          if (poster) {
+            const pf = `${state.profile.id}/${Date.now()}_poster.${poster.ext}`;
+            const pu = await db.storage.from('challenge-media').upload(pf, poster.blob, { cacheControl: '86400', upsert: false });
+            if (!pu.error) {
+              const { data: ppub } = db.storage.from('challenge-media').getPublicUrl(pf);
+              posterUrl = ppub.publicUrl;
+            }
+          }
+        } catch(e) { console.warn('poster capture failed', e); }
+      }
     }
 
     btn.textContent = 'Creating...';
@@ -6766,6 +6815,7 @@ document.getElementById('createChallengeForm').addEventListener('submit', async 
       media_url: mediaUrl,
       media_type: ccState.mediaType,
       caption: ccState.mediaType === 'text' ? textEntry : (caption || null),
+      poster_url: posterUrl,
     });
     if (entryError) throw new Error('Entry create failed: ' + entryError.message);
 
@@ -6807,7 +6857,7 @@ async function loadChallenges() {
   }
   state.challenges = challenges || [];
 
-  const { data: entries } = await db.from('entries').select('challenge_id, user_id, media_url, media_type, caption');
+  const { data: entries } = await db.from('entries').select('challenge_id, user_id, media_url, media_type, caption, poster_url');
   state.entryCounts = {};
   state.creatorEntries = {};
   (entries || []).forEach(e => {
@@ -6895,7 +6945,12 @@ function renderChallenges() {
     if (ch.media_type === 'photo' && creatorEntry?.media_url) {
       mediaHtml = `<img src="${creatorEntry.media_url}" alt="" loading="lazy">`;
     } else if (ch.media_type === 'video' && creatorEntry?.media_url) {
-      mediaHtml = `<video src="${creatorEntry.media_url}" muted preload="metadata"></video>`;
+      const catIcon = {Art:'🎨',Photography:'📷',Music:'🎵',Writing:'✍️',Cooking:'🍳',Style:'👗',Sports:'🏆',Fitness:'💪',Comedy:'😂'}[ch.category] || '🎬';
+      if (creatorEntry.poster_url) {
+        mediaHtml = `<img src="${creatorEntry.poster_url}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover">`;
+      } else {
+        mediaHtml = `<div class="media-fallback">${catIcon}</div>`;
+      }
     } else {
       const icon = { photo: '📷', video: '🎬', audio: '🎵', text: '✍️' }[ch.media_type] || '🔥';
       mediaHtml = `<div class="media-fallback">${icon}</div>`;
@@ -6978,7 +7033,7 @@ async function loadChallengeDetail(challengeId) {
   ]);
 
   const entriesRes = await withTimeout(
-    db.from('entries').select('*, submitter:profiles!entries_user_id_fkey(id, name, avatar)').eq('challenge_id', challengeId),
+    db.from('entries').select('*, poster_url, submitter:profiles!entries_user_id_fkey(id, name, avatar)').eq('challenge_id', challengeId),
     12000, 'Entries'
   );
   if (entriesRes.error) {
@@ -7132,7 +7187,9 @@ function renderChallengeDetail() {
     if (entry.media_type === 'photo' && entry.media_url) {
       mediaHtml = `<img src="${entry.media_url}" alt="" loading="lazy">`;
     } else if (entry.media_type === 'video' && entry.media_url) {
-      mediaHtml = `<video src="${entry.media_url}" controls preload="metadata"></video>`;
+      const posterAttr = entry.poster_url ? `poster="${entry.poster_url}"` : '';
+      const fallbackIcon = !entry.poster_url ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:48px;opacity:0.5;pointer-events:none">${{Art:'🎨',Photography:'📷',Music:'🎵',Writing:'✍️',Cooking:'🍳',Style:'👗',Sports:'🏆',Fitness:'💪',Comedy:'😂'}[state.currentChallenge?.category] || '🎬'}</div>` : '';
+      mediaHtml = `<div style="position:relative">${fallbackIcon}<video src="${entry.media_url}" ${posterAttr} controls preload="metadata"></video></div>`;
     } else if (entry.media_type === 'audio' && entry.media_url) {
       mediaHtml = `<div class="cd-audio-wrap"><audio src="${entry.media_url}" controls></audio></div>`;
     } else if (entry.media_type === 'text') {
@@ -7425,6 +7482,7 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
 
   try {
     let mediaUrl = null;
+    let posterUrl = null;
     if (ch.media_type !== 'text') {
       btn.textContent = 'Uploading...';
       const ext = (seState.file.name.split('.').pop() || 'bin').toLowerCase();
@@ -7435,6 +7493,20 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
       if (uploadError) throw new Error('Upload failed: ' + uploadError.message);
       const { data: pub } = db.storage.from('challenge-media').getPublicUrl(filename);
       mediaUrl = pub.publicUrl;
+      // Capture poster frame for videos
+      if (ch.media_type === 'video') {
+        try {
+          const poster = await captureVideoPoster(seState.file);
+          if (poster) {
+            const pf = `${state.profile.id}/${Date.now()}_poster.${poster.ext}`;
+            const pu = await db.storage.from('challenge-media').upload(pf, poster.blob, { cacheControl: '86400', upsert: false });
+            if (!pu.error) {
+              const { data: ppub } = db.storage.from('challenge-media').getPublicUrl(pf);
+              posterUrl = ppub.publicUrl;
+            }
+          }
+        } catch(e) { console.warn('poster capture failed', e); }
+      }
     }
     btn.textContent = 'Submitting...';
     const captionText = ch.media_type === 'text' ? textEntry : (caption || null);
@@ -7444,6 +7516,7 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
       media_url: mediaUrl,
       media_type: ch.media_type,
       caption: captionText,
+      poster_url: posterUrl,
     }).select('id').single();
     if (entryError) throw new Error('Submit failed: ' + entryError.message);
     if (entryData && captionText) insertMentions('entry', entryData.id, captionText);
