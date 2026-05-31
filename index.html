@@ -653,6 +653,24 @@ body.theme-light .nav { background: rgba(255, 255, 255, 0.85); border-bottom-col
 .lb-champ-my-status.none { background: var(--overlay-1); color: var(--text-muted); border: 1px solid var(--border); }
 .lb-champ-list-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 8px; }
 
+/* Leader tag in rows */
+.lb-leader-tag {
+  display: inline-block;
+  background: rgba(255,106,44,0.15);
+  color: var(--ember);
+  border: 1px solid rgba(255,106,44,0.35);
+  border-radius: 100px;
+  padding: 1px 7px;
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  vertical-align: middle; margin-left: 4px;
+}
+/* Leader banner variant */
+.lb-banner-leader {
+  background: linear-gradient(135deg, rgba(255,106,44,0.12), rgba(255,80,30,0.06));
+  border-color: rgba(255,106,44,0.35);
+}
+
 /* ── Hall of Fame ── */
 .lb-hof-empty, .lb-champ-empty {
   text-align: center; padding: 50px 20px;
@@ -4704,7 +4722,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v62 · champ-redesign-b";
+const APP_VERSION = "v63 · leader-vs-champ";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -5313,6 +5331,9 @@ function switchView(view) {
     initLbTabs();
     renderLeaderboard();
     recordCurrentChampions();
+    detectChampionshipWinners().then(() => {
+      if (state.currentView === 'leaderboard') renderLeaderboard();
+    }).catch(e => console.warn('championship detect', e));
   }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -5604,23 +5625,23 @@ async function loadLeaderboard() {
     rolling30ByCategory: winsByUser[p.id]?.rolling30ByCategory || {},
   }));
 
-  // Determine champion per category (most rolling30 wins in that category)
-  const CATEGORIES_LB = ['All', ...CATEGORIES];
-  const champions = {}; // category → user
+  // Determine leader per category (most rolling30 wins) — NOT champion
+  const leaders = {}; // category → userId of current #1
   CATEGORIES.forEach(cat => {
     const ranked = [...users]
       .filter(u => (u.rolling30ByCategory[cat] || 0) > 0)
       .sort((a, b) => (b.rolling30ByCategory[cat] || 0) - (a.rolling30ByCategory[cat] || 0));
-    if (ranked.length > 0) champions[cat] = ranked[0].id;
+    if (ranked.length > 0) leaders[cat] = ranked[0].id;
   });
-  // Overall champion = most rolling30 wins
   const overallRanked = [...users].filter(u => u.rolling30 > 0).sort((a, b) => b.rolling30 - a.rolling30);
-  if (overallRanked.length > 0) champions['All'] = overallRanked[0].id;
+  if (overallRanked.length > 0) leaders['All'] = overallRanked[0].id;
 
-  state.leaderboardData = { users, champions };
+  // Champions are determined by Championship Challenge results (stored separately)
+  // detectChampionshipWinners() will populate state.leaderboardData.champions
+  state.leaderboardData = { users, leaders, champions: {} };
   state.lbCategory = state.lbCategory || 'All';
 
-  // Keep backward compat — state.leaders used elsewhere
+  // Keep backward compat
   state.leaders = users.sort((a, b) => b.rolling30 - a.rolling30).slice(0, 10);
 }
 
@@ -7178,25 +7199,51 @@ function renderLeaderboard() {
     .slice(0, 10);
 
   // ── Champion banner ──
-  const championId = data.champions[cat];
-  const champion = championId ? users.find(u => u.id === championId) : null;
+  // Leader = current #1 on rolling 30-day board
+  const leaderId = data.leaders?.[cat];
+  const leader = leaderId ? users.find(u => u.id === leaderId) : null;
+  // Champion = won the Championship Challenge this month
+  const champTitles = getChampTitles();
+  const now2 = new Date();
+  const curMonth = `${now2.getFullYear()}-${String(now2.getMonth()+1).padStart(2,'0')}`;
+  const champTitle = champTitles[`${cat}-${curMonth}`];
+  const champion = champTitle ? users.find(u => u.id === champTitle.userId) : null;
+
   if (bannerEl) {
-    if (champion && champion.catWins > 0) {
+    const parts = [];
+    // Champion banner (from Championship Challenge result)
+    if (champion) {
       const isYouChamp = state.profile && champion.id === state.profile.id;
-      bannerEl.style.display = 'block';
-      bannerEl.innerHTML = `<div class="lb-champion-banner">
+      parts.push(`<div class="lb-champion-banner lb-banner-champ">
         <div class="lb-champ-crown">👑</div>
         <div class="lb-champ-avatar">${avatarInner(champion.avatar)}</div>
         <div class="lb-champ-info">
           <div class="lb-champ-title">${cat === 'All' ? 'Overall Champion' : cat + ' Champion'}</div>
           <div class="lb-champ-name">${escapeHtml(champion.name)}${isYouChamp ? ' (you)' : ''}</div>
-          <div class="lb-champ-stat">${champion.catWins} win${champion.catWins === 1 ? '' : 's'} this month · ${champion.catAllTime} all-time</div>
+          <div class="lb-champ-stat">Won the Championship Challenge</div>
         </div>
         ${!isYouChamp ? `<button class="lb-follow-btn${state.myFollowing.has(champion.id) ? ' following' : ''}" data-lb-follow="${champion.id}">${state.myFollowing.has(champion.id) ? '✓' : '+ Follow'}</button>` : ''}
-      </div>`;
-      bannerEl.querySelector('[data-lb-follow]')?.addEventListener('click', async e => {
-        e.stopPropagation();
-        await lbToggleFollow(e.target.closest('[data-lb-follow]'));
+      </div>`);
+    }
+    // Leader banner (current #1 on leaderboard)
+    if (leader && leader.catWins > 0) {
+      const isYouLeader = state.profile && leader.id === state.profile.id;
+      parts.push(`<div class="lb-champion-banner lb-banner-leader">
+        <div class="lb-champ-crown">🔥</div>
+        <div class="lb-champ-avatar">${avatarInner(leader.avatar)}</div>
+        <div class="lb-champ-info">
+          <div class="lb-champ-title" style="color:var(--ember)">${cat === 'All' ? 'Overall Leader' : cat + ' Leader'}</div>
+          <div class="lb-champ-name">${escapeHtml(leader.name)}${isYouLeader ? ' (you)' : ''}</div>
+          <div class="lb-champ-stat">${leader.catWins} win${leader.catWins === 1 ? '' : 's'} this month · leading the pack</div>
+        </div>
+        ${!isYouLeader ? `<button class="lb-follow-btn${state.myFollowing.has(leader.id) ? ' following' : ''}" data-lb-follow="${leader.id}">${state.myFollowing.has(leader.id) ? '✓' : '+ Follow'}</button>` : ''}
+      </div>`);
+    }
+    if (parts.length) {
+      bannerEl.style.display = 'block';
+      bannerEl.innerHTML = parts.join('');
+      bannerEl.querySelectorAll('[data-lb-follow]').forEach(btn => {
+        btn.addEventListener('click', async e => { e.stopPropagation(); await lbToggleFollow(btn); });
       });
     } else {
       bannerEl.style.display = 'none';
@@ -7213,7 +7260,8 @@ function renderLeaderboard() {
 
   ranked.forEach((u, i) => {
     const isYou = state.profile && u.id === state.profile.id;
-    const isChamp = u.id === championId;
+    const isLeader = u.id === leaderId;
+  const isChamp = champTitle && u.id === champTitle.userId;
     const isFollowing = state.myFollowing.has(u.id);
     const row = document.createElement('div');
     row.className = 'lb-row' + (isYou ? ' you' : '');
@@ -7222,10 +7270,10 @@ function renderLeaderboard() {
       <div class="lb-user" style="cursor:pointer" data-lb-uid="${u.id}">
         <div class="lb-avatar" style="position:relative">
           ${avatarInner(u.avatar)}
-          ${isChamp ? '<span class="lb-champ-dot">👑</span>' : ''}
+          ${isChamp ? '<span class="lb-champ-dot">👑</span>' : isLeader ? '<span class="lb-champ-dot">🔥</span>' : ''}
         </div>
         <div style="min-width:0">
-          <div class="lb-name">${escapeHtml(u.name)}${isYou ? ' (you)' : ''}${isChamp ? ' <span class="lb-champ-tag">Champion</span>' : ''}</div>
+          <div class="lb-name">${escapeHtml(u.name)}${isYou ? ' (you)' : ''}${isChamp ? ' <span class="lb-champ-tag">👑 Champ</span>' : ''}${isLeader && !isChamp ? ' <span class="lb-leader-tag">🔥 Leader</span>' : ''}</div>
           <div class="lb-streak" style="font-size:11px;color:var(--text-muted)">${u.catWins} this month · ${u.catAllTime} all-time</div>
         </div>
       </div>
@@ -7287,6 +7335,112 @@ function initLbTabs() {
 /* ---------- HALL OF FAME ---------- */
 // We record each month's champions in localStorage and display them here.
 // Key: fc_hof_log = [{ month: '2026-05', category: 'Photography', userId, name, avatar }, ...]
+
+// ── Championship Challenge tracking ──────────────────────────────────────────
+// When a championship challenge is launched, its ID is stored so we can
+// later detect the winner when it closes.
+function champIdsKey() { return 'fc_champ_ids'; }
+function getChampIds() {
+  try { return JSON.parse(localStorage.getItem(champIdsKey()) || '{}'); } catch(e) { return {}; }
+}
+function saveChampIds(ids) {
+  try { localStorage.setItem(champIdsKey(), JSON.stringify(ids)); } catch(e) {}
+}
+// Store { challengeId: { category, month, launched } } when admin launches
+function recordChampionshipLaunch(challengeId, category) {
+  const ids = getChampIds();
+  const now = new Date();
+  const month = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  ids[challengeId] = { category, month, launched: now.toISOString() };
+  saveChampIds(ids);
+}
+
+// Actual champion titles per category — set when a championship closes
+function champTitlesKey() { return 'fc_champ_titles'; }
+function getChampTitles() {
+  try { return JSON.parse(localStorage.getItem(champTitlesKey()) || '{}'); } catch(e) { return {}; }
+}
+function saveChampTitles(titles) {
+  try { localStorage.setItem(champTitlesKey(), JSON.stringify(titles)); } catch(e) {}
+}
+
+// Scan closed championship challenges and crown the winner
+async function detectChampionshipWinners() {
+  const champIds = getChampIds();
+  if (!Object.keys(champIds).length) return;
+
+  const titles = getChampTitles();
+  const now = new Date();
+  let changed = false;
+
+  for (const [challengeId, meta] of Object.entries(champIds)) {
+    // Skip if already processed
+    if (titles[`${meta.category}-${meta.month}`]?.processed) continue;
+
+    // Check if the challenge has closed
+    const ch = (state.challenges || []).find(c => c.id === challengeId);
+    if (!ch) continue;
+    const voteEnd = new Date(ch.voting_end);
+    if (now < voteEnd) continue; // still open
+
+    // Get entries and votes for this challenge
+    try {
+      const [entriesRes, votesRes] = await Promise.all([
+        db.from('entries').select('id, user_id, submitter:profiles!entries_user_id_fkey(id, name, avatar)').eq('challenge_id', challengeId),
+        db.from('entry_votes').select('entry_id').eq('challenge_id', challengeId),
+      ]);
+      const entries = entriesRes.data || [];
+      const votes = votesRes.data || [];
+      if (!entries.length || !votes.length) continue;
+
+      // Tally votes
+      const tally = {};
+      votes.forEach(v => { tally[v.entry_id] = (tally[v.entry_id] || 0) + 1; });
+      let max = 0, winner = null;
+      entries.forEach(e => {
+        const v = tally[e.id] || 0;
+        if (v > max) { max = v; winner = e; }
+      });
+      if (!winner || max === 0) continue;
+
+      // Crown the winner
+      const sub = winner.submitter || {};
+      const key = `${meta.category}-${meta.month}`;
+      titles[key] = {
+        userId: winner.user_id,
+        name: sub.name || 'Unknown',
+        avatar: sub.avatar || '🔥',
+        category: meta.category,
+        month: meta.month,
+        wins: max,
+        processed: true,
+        challengeId,
+      };
+      changed = true;
+      console.log(`[championship] ${meta.category} champion for ${meta.month}: ${sub.name}`);
+
+      // Also record in Hall of Fame log
+      const log = getHofLog();
+      const hofKey2 = log.find(r => r.month === meta.month && r.category === meta.category && r.userId === winner.user_id);
+      if (!hofKey2) {
+        log.push({ month: meta.month, category: meta.category, userId: winner.user_id, name: sub.name || 'Unknown', avatar: sub.avatar || '🔥', wins: max, fromChampionship: true });
+        saveHofLog(log);
+      }
+    } catch(e) { console.warn('championship detect error', e); }
+  }
+
+  if (changed) saveChampTitles(titles);
+
+  // Inject into leaderboardData.champions
+  if (state.leaderboardData) {
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    Object.values(titles).forEach(t => {
+      if (t.month === currentMonth && t.processed) {
+        state.leaderboardData.champions[t.category] = t.userId;
+      }
+    });
+  }
+}
 
 function hofKey() { return 'fc_hof_log'; }
 function getHofLog() {
@@ -7435,8 +7589,14 @@ function renderChampionshipTab() {
       .filter(u => (u.rolling30ByCategory[cat] || 0) > 0)
       .sort((a, b) => (b.rolling30ByCategory[cat] || 0) - (a.rolling30ByCategory[cat] || 0));
     const top5 = allInCat.slice(0, 5);
-    const championId = data.champions[cat];
-    const champion = championId ? (data.users || []).find(u => u.id === championId) : null;
+    // Champion = won Championship Challenge; Leader = current #1 on board
+    const champTitlesLocal = getChampTitles();
+    const nowLocal = new Date();
+    const curMonthLocal = `${nowLocal.getFullYear()}-${String(nowLocal.getMonth()+1).padStart(2,'0')}`;
+    const champTitleLocal = champTitlesLocal[`${cat}-${curMonthLocal}`];
+    const champion = champTitleLocal ? (data.users || []).find(u => u.id === champTitleLocal.userId) : null;
+    const leaderId2 = data.leaders?.[cat];
+    const currentLeader = leaderId2 ? (data.users || []).find(u => u.id === leaderId2) : null;
     // My rank in this category (across all players, not just top 5)
     const myRank = myId ? allInCat.findIndex(u => u.id === myId) + 1 : 0;
     const myWins = myId ? (data.users || []).find(u => u.id === myId)?.rolling30ByCategory[cat] || 0 : 0;
@@ -7455,6 +7615,7 @@ function renderChampionshipTab() {
   el.innerHTML = sections.map(({ cat, top5, champion, myRank, myWins, totalInCat }) => {
     const iQualify = myRank > 0 && myRank <= 5;
     const isChamp = myId && champion?.id === myId;
+    const isLeadingCat = myId && currentLeader?.id === myId;
 
     // My status message
     let myStatus = '';
@@ -7471,17 +7632,31 @@ function renderChampionshipTab() {
     }
 
     // Current champion block
+    // Champion block (from closed Championship Challenge)
     const champBlock = champion ? `
       <div class="lb-champ-current">
-        <div class="lb-champ-current-label">👑 Current Champion</div>
+        <div class="lb-champ-current-label">👑 Current Champion — won the Championship Challenge</div>
         <div class="lb-champ-current-row">
           <div class="lb-champ-cav" style="width:40px;height:40px;font-size:20px">${avatarInner(champion.avatar)}</div>
           <div style="flex:1;min-width:0">
             <div class="lb-champ-cname" style="font-size:16px">${escapeHtml(champion.name)}${champion.id === myId ? ' (you)' : ''}</div>
-            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${champion.rolling30ByCategory[cat] || 0} wins this month · defending title</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Earned the title this month</div>
           </div>
         </div>
-      </div>` : `<div class="lb-champ-current lb-champ-current-empty">🏆 No champion yet — be the first to win this month</div>`;
+      </div>` : `<div class="lb-champ-current lb-champ-current-empty">👑 No champion yet — Championship Challenge hasn't been held this month</div>`;
+
+    // Leader block (current #1 on rolling board)
+    const leaderBlock = currentLeader ? `
+      <div class="lb-champ-current" style="background:rgba(255,106,44,0.08);border-color:rgba(255,106,44,0.3)">
+        <div class="lb-champ-current-label" style="color:var(--ember)">🔥 Current Leader — top of the ${cat} rankings</div>
+        <div class="lb-champ-current-row">
+          <div class="lb-champ-cav" style="width:40px;height:40px;font-size:20px">${avatarInner(currentLeader.avatar)}</div>
+          <div style="flex:1;min-width:0">
+            <div class="lb-champ-cname" style="font-size:16px">${escapeHtml(currentLeader.name)}${currentLeader.id === myId ? ' (you)' : ''}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${currentLeader.rolling30ByCategory?.[cat] || 0} wins this month · leading the pack</div>
+          </div>
+        </div>
+      </div>` : '';
 
     return `<div class="lb-champ-section">
       <div class="lb-champ-section-head">
@@ -7489,6 +7664,7 @@ function renderChampionshipTab() {
         ${isAdmin() && top5.length >= 2 ? `<button class="lb-champ-launch-btn" data-launch-cat="${cat}">⚡ Launch</button>` : ''}
       </div>
       ${champBlock}
+      ${leaderBlock}
       ${myStatus}
       <div class="lb-champ-list-label">Top 5 Qualifiers</div>
       <div class="lb-champ-list">
@@ -7556,6 +7732,7 @@ async function launchChampionshipChallenge(category) {
     const { error: invErr } = await db.from('challenge_invites').insert(inviteRows);
     if (invErr) throw invErr;
 
+    recordChampionshipLaunch(ch.id, category);
     toast(`⚡ ${category} Championship launched — ${contenders.length} invited`);
     await loadChallenges();
     renderChampionshipTab();
@@ -9934,8 +10111,15 @@ function renderProfileSheet() {
 
   document.getElementById('psHeaderName').textContent = prof.name || 'Profile';
   document.getElementById('psAvatar').innerHTML = avatarInner(prof.avatar || '🔥');
-  // Current champion badge
-  const champCategories = Object.entries(state.leaderboardData?.champions || {})
+  // Current champion badge — only from Championship Challenge wins
+  const champTitlesPS = getChampTitles();
+  const nowPS = new Date();
+  const curMonthPS = `${nowPS.getFullYear()}-${String(nowPS.getMonth()+1).padStart(2,'0')}`;
+  const champCategories = Object.values(champTitlesPS)
+    .filter(t => t.userId === prof.id && t.month === curMonthPS && t.processed)
+    .map(t => t.category);
+  // Also check if leader (not champion) in any category
+  const leaderCategories = Object.entries(state.leaderboardData?.leaders || {})
     .filter(([cat, uid]) => uid === prof.id && cat !== 'All')
     .map(([cat]) => cat);
   // All-time Nx Champion title from Hall of Fame
@@ -9950,6 +10134,9 @@ function renderProfileSheet() {
   const badgeParts = [];
   if (champCategories.length > 0) {
     badgeParts.push(`<span class="ps-champ-badge">👑 ${champCategories.join(' · ')} Champion</span>`);
+  }
+  if (leaderCategories.length > 0 && !champCategories.length) {
+    badgeParts.push(`<span class="ps-champ-badge" style="background:rgba(255,106,44,0.12);border-color:rgba(255,106,44,0.3);color:var(--ember)">🔥 ${leaderCategories.join(' · ')} Leader</span>`);
   }
   if (nxTitle) {
     badgeParts.push(`<span class="ps-champ-badge ps-champ-badge-alltime">🏛️ ${nxTitle}</span>`);
