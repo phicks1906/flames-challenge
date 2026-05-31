@@ -3429,6 +3429,76 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
   .cd-sheet-inner { max-width: 760px; }
 }
 
+/* ============ CHAMPION TICKER ============ */
+.champ-ticker {
+  position: fixed;
+  bottom: calc(64px + max(12px, env(safe-area-inset-bottom)));
+  left: 0; right: 0;
+  z-index: 119;
+  background: rgba(10, 8, 7, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid rgba(255, 200, 87, 0.3);
+  border-bottom: 1px solid rgba(255, 200, 87, 0.15);
+  height: 32px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+body.theme-light .champ-ticker {
+  background: rgba(255, 255, 255, 0.95);
+  border-top-color: rgba(255, 180, 0, 0.4);
+}
+.ticker-close {
+  flex-shrink: 0;
+  background: none; border: none;
+  color: var(--text-muted); font-size: 16px;
+  padding: 0 8px; cursor: pointer; line-height: 1;
+  height: 100%; display: flex; align-items: center;
+  border-right: 1px solid var(--border);
+}
+.ticker-close:hover { color: var(--text); }
+.ticker-track {
+  flex: 1; overflow: hidden; height: 100%;
+  display: flex; align-items: center;
+}
+.ticker-inner {
+  display: flex; align-items: center; gap: 0;
+  white-space: nowrap;
+  animation: tickerScroll 30s linear infinite;
+  will-change: transform;
+}
+.ticker-inner:hover { animation-play-state: paused; }
+@keyframes tickerScroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.ticker-item {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 0 24px;
+  font-size: 12px; font-weight: 600;
+  color: var(--text-dim);
+  border-right: 1px solid var(--border);
+}
+.ticker-item .ticker-icon { font-size: 14px; }
+.ticker-item .ticker-name { color: var(--text); font-weight: 700; }
+.ticker-item .ticker-badge {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; padding: 1px 6px; border-radius: 100px;
+}
+.ticker-item .ticker-badge.champ { background: rgba(255,200,87,0.2); color: var(--gold); }
+.ticker-item .ticker-badge.leader { background: rgba(255,106,44,0.15); color: var(--ember); }
+.ticker-item .ticker-badge.streak { background: rgba(139,92,246,0.15); color: #a78bfa; }
+.ticker-sep {
+  display: inline-block;
+  padding: 0 16px;
+  color: rgba(255,200,87,0.4);
+  font-size: 16px;
+}
+
+/* Adjust main padding when ticker is visible */
+body.ticker-visible main { padding-bottom: 112px; }
+
 /* ============ BOTTOM NAV BAR ============ */
 .bottom-nav {
   position: fixed;
@@ -3686,6 +3756,14 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 </header>
 
 <!-- BOTTOM NAV BAR -->
+<!-- CHAMPION TICKER -->
+<div class="champ-ticker" id="champTicker" style="display:none">
+  <button class="ticker-close" onclick="dismissTicker()" aria-label="Close ticker">×</button>
+  <div class="ticker-track" id="tickerTrack">
+    <div class="ticker-inner" id="tickerInner"></div>
+  </div>
+</div>
+
 <nav class="bottom-nav" id="bottomNav">
   <button class="bnav-btn active" data-view="feed" onclick="switchView('feed')">
     <span class="bnav-icon">🏠</span>
@@ -4286,6 +4364,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openEditProfile()">✏️ Edit Profile</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openFindPeople()">🔍 Find People</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openInterestEditor()">🎯 My Interests</button>
+    <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" id="tickerToggleBtn" onclick="toggleTickerSetting()">📺 Ticker: On</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openGroupsModal()">👥 My Groups</button>
     <div class="theme-toggle-row" id="themeToggleRow" onclick="toggleTheme()" role="button" tabindex="0">
       <div class="theme-toggle-label">
@@ -4726,7 +4805,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v63 · leader-vs-champ-b";
+const APP_VERSION = "v64 · ticker";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -5337,6 +5416,7 @@ function switchView(view) {
     recordCurrentChampions();
     detectChampionshipWinners().then(() => {
       if (state.currentView === 'leaderboard') renderLeaderboard();
+      buildTicker();
     }).catch(e => console.warn('championship detect', e));
   }
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -5399,6 +5479,8 @@ async function loadAppData() {
   renderFeed();
   loadNotifications();
   startLiveUpdates();
+  // Build ticker after data is ready
+  setTimeout(buildTicker, 500);
 }
 
 // =========================
@@ -6886,6 +6968,8 @@ function buildHeatCheckTicks(g) {
 /* ---------- PROFILE MODAL ---------- */
 function openProfile() {
   if (!state.profile) return;
+  const tickerBtn = document.getElementById('tickerToggleBtn');
+  if (tickerBtn) tickerBtn.textContent = tickerDismissed() ? '📺 Ticker: Off' : '📺 Ticker: On';
   const avatarPrefix = isAvatarUrl(state.profile.avatar) ? '🔥' : (state.profile.avatar || '🔥');
   document.getElementById('profileName').textContent = avatarPrefix + ' ' + state.profile.name;
   const voteCount = Object.keys(state.myVotes).length;
@@ -7312,6 +7396,120 @@ async function lbToggleFollow(btn) {
 
 /* ---------- LEADERBOARD TABS ---------- */
 let _lbTab = 'rankings';
+
+/* ============ CHAMPION TICKER ============ */
+const TICKER_DISMISSED_KEY = 'fc_ticker_dismissed';
+
+function tickerDismissed() {
+  try { return localStorage.getItem(TICKER_DISMISSED_KEY) === '1'; } catch(e) { return false; }
+}
+function dismissTicker() {
+  try { localStorage.setItem(TICKER_DISMISSED_KEY, '1'); } catch(e) {}
+  const el = document.getElementById('champTicker');
+  if (el) el.style.display = 'none';
+  document.body.classList.remove('ticker-visible');
+}
+// Called from settings to re-enable
+function enableTicker() {
+  try { localStorage.removeItem(TICKER_DISMISSED_KEY); } catch(e) {}
+  buildTicker();
+}
+
+function buildTicker() {
+  if (tickerDismissed()) return;
+  const data = state.leaderboardData;
+  if (!data) return;
+
+  const items = [];
+  const now = new Date();
+  const curMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const champTitlesT = getChampTitles();
+  const hofLog = getHofLog();
+  const titlesMap = computeHofTitles(hofLog);
+
+  // 1. Current Champions (from Championship Challenges)
+  Object.values(champTitlesT)
+    .filter(t => t.month === curMonth && t.processed)
+    .forEach(t => {
+      items.push({ icon: '👑', name: t.name, badge: 'champ', text: `${t.category} Champion` });
+    });
+
+  // 2. Current Leaders per category
+  Object.entries(data.leaders || {})
+    .filter(([cat]) => cat !== 'All')
+    .forEach(([cat, uid]) => {
+      const user = (data.users || []).find(u => u.id === uid);
+      if (!user) return;
+      const wins = user.rolling30ByCategory?.[cat] || 0;
+      if (wins < 1) return;
+      items.push({ icon: '🔥', name: user.name, badge: 'leader', text: `${cat} Leader · ${wins} win${wins > 1 ? 's' : ''}` });
+    });
+
+  // 3. Streak holders (2+ consecutive months as champion)
+  const streakMap = {}; // userId → { name, avatar, cats: [] }
+  Object.values(champTitlesT).filter(t => t.processed).forEach(t => {
+    if (!streakMap[t.userId]) streakMap[t.userId] = { name: t.name, months: {} };
+    if (!streakMap[t.userId].months[t.category]) streakMap[t.userId].months[t.category] = [];
+    streakMap[t.userId].months[t.category].push(t.month);
+  });
+  Object.entries(streakMap).forEach(([uid, d]) => {
+    Object.entries(d.months).forEach(([cat, months]) => {
+      if (months.length >= 2) {
+        items.push({ icon: '⚡', name: d.name, badge: 'streak', text: `${months.length}-month ${cat} streak` });
+      }
+    });
+  });
+
+  // 4. Recent Hall of Fame inductees
+  const recentHof = hofLog
+    .filter(r => r.month === curMonth && r.category !== 'All')
+    .slice(0, 3);
+  recentHof.forEach(r => {
+    const titleCount = titlesMap[r.userId]?.catCounts?.[r.category] || 1;
+    if (titleCount >= 2) {
+      items.push({ icon: '🌟', name: r.name, badge: 'champ', text: `${titleCount}x ${r.category} Champion` });
+    }
+  });
+
+  if (!items.length) return; // nothing to show yet
+
+  // Build ticker HTML — duplicate items for seamless loop
+  const itemHtml = items.map(item => `
+    <span class="ticker-item">
+      <span class="ticker-icon">${item.icon}</span>
+      <span class="ticker-name">${escapeHtml(item.name)}</span>
+      <span class="ticker-badge ${item.badge}">${item.text}</span>
+    </span>
+  `).join('<span class="ticker-sep">·</span>');
+
+  const inner = document.getElementById('tickerInner');
+  if (!inner) return;
+  // Duplicate for seamless scroll
+  inner.innerHTML = itemHtml + '<span class="ticker-sep" style="padding:0 32px"></span>' + itemHtml;
+
+  // Adjust animation speed based on content length
+  const totalItems = items.length;
+  const duration = Math.max(20, totalItems * 8);
+  inner.style.animationDuration = duration + 's';
+
+  const ticker = document.getElementById('champTicker');
+  if (ticker) ticker.style.display = 'flex';
+  document.body.classList.add('ticker-visible');
+}
+
+function toggleTickerSetting() {
+  if (tickerDismissed()) {
+    enableTicker();
+    const btn = document.getElementById('tickerToggleBtn');
+    if (btn) btn.textContent = '📺 Ticker: On';
+    toast('Ticker enabled');
+  } else {
+    dismissTicker();
+    const btn = document.getElementById('tickerToggleBtn');
+    if (btn) btn.textContent = '📺 Ticker: Off';
+    toast('Ticker hidden');
+  }
+}
 
 function toggleLbHow() {
   const body = document.getElementById('lbHowBody');
