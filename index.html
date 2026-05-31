@@ -2630,15 +2630,16 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
 }
 .fcc-vote-btn:hover:not(.voted) { background: rgba(255,106,44,0.2); }
 .fcc-your-entry { font-size: 9px; color: var(--ember); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
-/* Submit — ghost style, not dominant */
+/* Submit — ghost pill matching vote btn */
 .fcc-submit-btn {
-  width: 100%;
   background: none;
   border: 1px solid var(--ember);
   color: var(--ember);
   border-radius: 100px;
-  padding: 8px; font-family: inherit; font-weight: 700; font-size: 12px;
-  cursor: pointer;
+  padding: 6px 16px;
+  font-family: inherit; font-weight: 700; font-size: 11px;
+  cursor: pointer; white-space: nowrap; flex-shrink: 0;
+  transition: background 0.15s;
 }
 .fcc-submit-btn:active { background: rgba(255,106,44,0.1); }
 
@@ -4070,12 +4071,9 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       </div>
     </div>
 
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
-      <div class="feed-tabs" role="tablist" style="margin-bottom:0;flex:1">
-        <button class="feed-tab active" data-feedtab="discover" role="tab">Discover</button>
-        <button class="feed-tab" data-feedtab="following" role="tab">Following</button>
-      </div>
-      <button class="feed-expand-btn" id="feedExpandBtn" onclick="toggleFeedExpand()" title="Toggle challenge view" style="width:auto;padding:0 12px;font-size:12px;gap:4px;display:inline-flex;align-items:center">☰ <span id="feedExpandLabel">Compact</span></button>
+    <div class="feed-tabs" role="tablist">
+      <button class="feed-tab active" data-feedtab="discover" role="tab">Discover</button>
+      <button class="feed-tab" data-feedtab="following" role="tab">Following</button>
     </div>
 
     <div class="composer" onclick="openCreatePost()" role="button" tabindex="0">
@@ -4976,7 +4974,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v68 · feed-expand-polish";
+const APP_VERSION = "v68 · feed-expand-polish-b";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -5917,9 +5915,8 @@ function updateComposerContext(hint) {
   el.textContent = hint || "What's the heat? Share something...";
 }
 
-// Feed expand state
-state.feedExpanded = false;
-try { state.feedExpanded = localStorage.getItem('fc_feed_expanded') === '1'; } catch(e) {}
+// Feed always expanded
+state.feedExpanded = true;
 
 function toggleFeedExpand() {
   state.feedExpanded = !state.feedExpanded;
@@ -10407,7 +10404,7 @@ function renderFeedChallengeCard(ch) {
   }
 
   const submitBtn = canEnter
-    ? `<button class="fcc-submit-btn" data-fcc-submit="${ch.id}">+ Submit your entry</button>`
+    ? `<div style="padding:0 0 8px"><button class="fcc-submit-btn" data-fcc-submit="${ch.id}">+ Submit your entry</button></div>`
     : '';
 
   return `<div class="feed-challenge-card feed-challenge-expanded" data-cid="${ch.id}">
