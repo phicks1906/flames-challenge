@@ -2789,15 +2789,7 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
 /* Challenge grid — single column when entries are shown */
 body.has-ch-entries .ch-grid { grid-template-columns: 1fr; }
 /* Entry scroll inside ch-card — use clip instead of hidden so scroll works */
-.ch-card .fcc-entries-wrap { overflow: visible; }
-.ch-card .fcc-entries-scroll {
-  flex-wrap: nowrap !important;
-  overflow-x: auto !important;
-  overflow-y: hidden !important;
-  -webkit-overflow-scrolling: touch !important;
-  padding-left: 0;
-  padding-right: 0;
-}
+.fcc-submit-row { padding: 6px 12px 2px; }
 
 .ch-grid {
   display: grid;
@@ -2808,11 +2800,27 @@ body.has-ch-entries .ch-grid { grid-template-columns: 1fr; }
   background: linear-gradient(180deg, var(--surface), var(--bg-2));
   border: 1px solid rgba(255, 106, 44, 0.2);
   border-radius: var(--radius);
-  overflow: clip; /* clips visually but allows inner scroll on iOS */
+  overflow: hidden;
   cursor: pointer;
   transition: transform 0.25s ease, border-color 0.2s ease;
   display: flex;
   flex-direction: column;
+}
+/* Entry drawer sits OUTSIDE the ch-card, directly in the grid */
+.ch-entry-drawer {
+  background: var(--surface);
+  border: 1px solid rgba(255,106,44,0.2);
+  border-top: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+  margin-top: -var(--radius);
+  overflow: hidden;
+  padding: 10px 0 10px;
+}
+.ch-entry-drawer .fcc-entries-scroll {
+  padding: 0 12px;
+}
+.ch-entry-drawer .fcc-submit-row {
+  padding: 6px 12px 0;
 }
 .ch-card:hover {
   transform: translateY(-2px);
@@ -4993,7 +5001,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v69 · challenges-expand-d";
+const APP_VERSION = "v69 · challenges-expand-e";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -8743,40 +8751,51 @@ function renderChallenges() {
           <span class="countdown">${countdownText}</span>
         </div>
       </div>
-      ${chEntries.length > 0 || canEnterCh ? `<div class="fcc-entries-wrap" style="border-top:1px solid var(--border)">${entriesScrollHtml}${submitRowHtml}</div>` : ''}
     `;
 
-    // Wire clicks
     card.querySelectorAll('[data-ch-open]').forEach(el => {
       el.addEventListener('click', () => openChallenge(ch));
     });
-    card.querySelectorAll('[data-ch-vote]').forEach(btn => {
-      btn.addEventListener('click', async e => {
-        e.stopPropagation();
-        const entryId = btn.dataset.chVote;
-        const chId = btn.dataset.chId;
-        btn.textContent = '⏳'; btn.disabled = true;
-        await new Promise(res => setTimeout(res, 1200));
-        try {
-          const { error } = await db.from('entry_votes').upsert(
-            { challenge_id: chId, entry_id: entryId, voter_id: state.profile.id },
-            { onConflict: 'challenge_id,voter_id' }
-          );
-          if (error) throw error;
-          toast('🔥 Vote cast');
-        } catch(err) { toast('Vote failed'); }
-        renderChallenges();
-      });
-    });
-    card.querySelectorAll('[data-ch-submit]').forEach(btn => {
-      btn.addEventListener('click', e => {
-        e.stopPropagation();
-        const ch2 = state.challenges.find(x => x.id === btn.dataset.chSubmit);
-        if (ch2) { state.currentChallenge = ch2; openSubmitEntry(); }
-      });
-    });
-
     grid.appendChild(card);
+
+    // Render entry drawer as a SIBLING outside the card (avoids overflow:hidden clipping scroll)
+    if (chEntries.length > 0 || canEnterCh) {
+      const drawer = document.createElement('div');
+      drawer.className = 'ch-entry-drawer';
+      drawer.innerHTML = `
+        ${entriesScrollHtml}
+        ${canEnterCh ? `<div class="fcc-submit-row"><button class="fcc-submit-btn" data-ch-submit="${ch.id}">+ Submit your entry</button></div>` : ''}
+      `;
+      drawer.querySelectorAll('[data-ch-vote]').forEach(btn => {
+        btn.addEventListener('click', async e => {
+          e.stopPropagation();
+          const entryId = btn.dataset.chVote;
+          const chId = btn.dataset.chId;
+          btn.textContent = '⏳'; btn.disabled = true;
+          await new Promise(res => setTimeout(res, 1200));
+          try {
+            const { error } = await db.from('entry_votes').upsert(
+              { challenge_id: chId, entry_id: entryId, voter_id: state.profile.id },
+              { onConflict: 'challenge_id,voter_id' }
+            );
+            if (error) throw error;
+            toast('🔥 Vote cast');
+          } catch(err) { toast('Vote failed'); }
+          renderChallenges();
+        });
+      });
+      drawer.querySelectorAll('[data-ch-submit]').forEach(btn => {
+        btn.addEventListener('click', e => {
+          e.stopPropagation();
+          const ch2 = state.challenges.find(x => x.id === btn.dataset.chSubmit);
+          if (ch2) { state.currentChallenge = ch2; openSubmitEntry(); }
+        });
+      });
+      drawer.querySelectorAll('[data-ch-open]').forEach(el => {
+        el.addEventListener('click', () => openChallenge(ch));
+      });
+      grid.appendChild(drawer);
+    }
   });
 }
 
