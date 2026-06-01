@@ -4982,7 +4982,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v68 · feed-expand-polish-e";
+const APP_VERSION = "v68 · feed-expand-polish-f";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -10158,20 +10158,26 @@ function renderFeed() {
     return '';
   }).join('');
 
-  // Wire challenge cards directly with closure over the data
-  mixed.filter(item => item.kind === 'challenge').forEach(item => {
-    const ch = item.data;
-    const card = c.querySelector(`.feed-challenge-card[data-cid="${ch.id}"]`);
-    if (!card) return;
-    card.querySelector('.feed-challenge-header')?.addEventListener('click', e => {
-      if (e.target.closest('[data-fcc-vote],[data-fcc-submit],.fcc-vote-btn,.fcc-submit-btn')) return;
-      openChallenge(ch);
-    });
-  });
+
 
   updateFeedBaseline();
   hideFeedNewPill();
   initFeedExpandBtn();
+
+  // Wire challenge headers — use pointerup with movement check so scroll is never blocked
+  mixed.filter(item => item.kind === 'challenge').forEach(item => {
+    const ch = item.data;
+    const header = c.querySelector(`.feed-challenge-card[data-cid="${ch.id}"] .feed-challenge-header`);
+    if (!header) return;
+    let startY = 0, startX = 0;
+    header.addEventListener('pointerdown', e => { startY = e.clientY; startX = e.clientX; }, { passive: true });
+    header.addEventListener('pointerup', e => {
+      const moved = Math.abs(e.clientY - startY) > 8 || Math.abs(e.clientX - startX) > 8;
+      if (moved) return; // was a scroll, not a tap
+      if (e.target.closest('[data-fcc-vote],[data-fcc-submit],.fcc-vote-btn,.fcc-submit-btn,.fcc-open-btn')) return;
+      openChallenge(ch);
+    });
+  });
 
   // Wire up post menus
   c.querySelectorAll('.post-card-menu').forEach(btn => {
@@ -10202,18 +10208,7 @@ function renderFeed() {
       openUserProfile(el.dataset.userId);
     });
   });
-  // Wire up challenge card clicks (compact area → open detail)
-  c.querySelectorAll('.feed-challenge-card').forEach(card => {
-    card.addEventListener('click', e => {
-      // Vote/submit buttons handle themselves
-      if (e.target.closest('[data-fcc-vote],[data-fcc-submit],.fcc-vote-btn,.fcc-submit-btn')) return;
-      // Header area or open button — open challenge
-      const headerEl = e.target.closest('[data-fcc-cid]');
-      const id = headerEl ? headerEl.dataset.fccCid : card.dataset.cid;
-      const ch = state.challenges.find(x => x.id === id);
-      if (ch) openChallenge(ch);
-    });
-  });
+
 
   // Inline vote buttons
   c.querySelectorAll('[data-fcc-vote]').forEach(btn => {
