@@ -5132,7 +5132,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v73 · feed-labels-e";
+const APP_VERSION = "v73 · feed-labels-f";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -10823,17 +10823,19 @@ function renderFeedChallengeCard(ch) {
   const countdownText = ch.computedStatus === 'submitting' ? `⏱ ${formatCountdown(ch.submission_deadline)}`
     : ch.computedStatus === 'voting' ? `⏱ ${formatCountdown(ch.voting_end)}` : '';
 
-  // Compact card (always shown as header)
+  // Compact card — matches poll card layout: label+time top row, title+status below, ↗ top right
   const compactHtml = `
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px 4px;text-align:left;"><span class="feed-poll-tag" style="color:var(--ember);flex-shrink:0;">${isChampionship ? '⚡' : '🏆'} ${isChampionship ? 'CHAMPIONSHIP' : 'CHALLENGE'}</span><span style="font-size:12px;color:var(--text-muted);margin-left:8px;">${countdownText}</span></div>
-    <div class="feed-challenge-header" data-fcc-cid="${ch.id}" style="cursor:pointer;padding-top:8px">
-      <div class="feed-challenge-thumb">${isChampionship ? '⚡' : '🏆'}</div>
-      <div class="feed-challenge-info">
-        <div class="feed-challenge-label ${phase.cls}"><span class="fcl-dot"></span>${phase.label}</div>
-        <div class="feed-challenge-title">${escapeHtml(ch.title)}</div>
-        <div class="feed-challenge-meta">${meta}</div>
+    <div class="feed-challenge-header" data-fcc-cid="${ch.id}" style="cursor:pointer;display:flex;flex-direction:column;padding:12px 14px 10px;gap:4px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <span class="feed-poll-tag" style="color:var(--ember);">${isChampionship ? '⚡' : '🏆'} ${isChampionship ? 'CHAMPIONSHIP' : 'CHALLENGE'}</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:12px;color:var(--text-muted);">${countdownText}</span>
+          <button class="fcc-open-btn" data-fcc-cid="${ch.id}" title="Open full view" style="flex-shrink:0;">↗</button>
+        </div>
       </div>
-      <button class="fcc-open-btn" data-fcc-cid="${ch.id}" title="Open full view">↗</button>
+      <div class="feed-challenge-label ${phase.cls}" style="margin:0;"><span class="fcl-dot"></span>${phase.label}</div>
+      <div class="feed-challenge-title" style="font-size:17px;font-weight:700;margin:0;">${escapeHtml(ch.title)}</div>
+      <div class="feed-challenge-meta" style="margin:0;">${meta}</div>
     </div>`;
 
   if (!expanded) {
