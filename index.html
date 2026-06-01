@@ -4995,7 +4995,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v69 · challenges-expand-d";
+const APP_VERSION = "v69 · challenges-expand-e";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -8739,11 +8739,15 @@ function renderChallenges() {
         const voteBtn = canVoteCh && !isMyEntry && state.profile
           ? `<button class="fcc-vote-btn${iVoted?' voted':''}" data-fcc-vote="${e.id}" data-fcc-chid="${ch.id}">${iVoted?'✓ Voted':'🔥 Vote'}</button>`
           : isMyEntry ? `<span class="fcc-your-entry">Your entry</span>` : '';
-        return `<div class="fcc-entry-card" style="flex:0 0 160px!important;min-width:160px!important;max-width:160px!important;">${mHtml}<div class="fcc-entry-footer"><div class="fcc-entry-avatar">${avatarInner(sub.avatar)}</div><div class="fcc-entry-name">${escapeHtml(sub.name)}</div>${voteBtn}</div></div>`;
+        return `<div class="fcc-entry-card" style="${useGrid ? '' : 'flex:0 0 160px!important;min-width:160px!important;max-width:160px!important;'}">${mHtml}<div class="fcc-entry-footer"><div class="fcc-entry-avatar">${avatarInner(sub.avatar)}</div><div class="fcc-entry-name">${escapeHtml(sub.name)}</div>${voteBtn}</div></div>`;
       }).join('');
 
+      const useGrid = chEntries.length <= 2;
+      const scrollStyle = useGrid
+        ? 'display:grid;grid-template-columns:repeat(2,1fr);gap:8px;padding:0 12px 8px;'
+        : 'display:flex!important;flex-wrap:nowrap!important;overflow-x:auto!important;overflow-y:hidden!important;-webkit-overflow-scrolling:touch!important;padding:0 12px 8px;';
       drawer.innerHTML = `
-        <div class="fcc-entries-scroll" style="display:flex!important;flex-wrap:nowrap!important;overflow-x:auto!important;overflow-y:hidden!important;-webkit-overflow-scrolling:touch!important;">${cardsHtml}</div>
+        <div style="${scrollStyle}">${cardsHtml}</div>
         ${canEnterCh ? `<div style="padding:4px 12px 2px"><button class="fcc-submit-btn" data-fcc-submit="${ch.id}">+ Submit your entry</button></div>` : ''}
       `;
 
@@ -10507,7 +10511,11 @@ function renderFeedChallengeCard(ch) {
     entriesHtml = `<div class="fcc-no-entries">No entries yet${canEnter ? ' — be the first!' : ''}</div>`;
   } else {
     const canVote = ch.computedStatus === 'submitting' || ch.computedStatus === 'voting';
-    entriesHtml = `<div class="fcc-entries-scroll" style="display:flex!important;flex-wrap:nowrap!important;overflow-x:auto!important;overflow-y:hidden!important;-webkit-overflow-scrolling:touch!important;">` + chEntries.map(e => {
+    const useScrollFeed = chEntries.length > 2;
+    const feedScrollStyle = useScrollFeed
+      ? 'display:flex!important;flex-wrap:nowrap!important;overflow-x:auto!important;overflow-y:hidden!important;-webkit-overflow-scrolling:touch!important;'
+      : 'display:grid;grid-template-columns:repeat(2,1fr);gap:8px;';
+    entriesHtml = `<div class="fcc-entries-scroll" style="${feedScrollStyle}">` + chEntries.map(e => {
       const sub = e.submitter || { name: 'Unknown', avatar: '🔥' };
       const isMyEntry = state.profile && e.user_id === state.profile.id;
       const iVoted = myVoteForCh?.entry_id === e.id;
@@ -10535,7 +10543,7 @@ function renderFeedChallengeCard(ch) {
       const voteBtn = canVote && !isMyEntry && state.profile
         ? `<button class="fcc-vote-btn${iVoted ? ' voted' : ''}" data-fcc-vote="${e.id}" data-fcc-chid="${ch.id}">${iVoted ? '✓ Voted' : '🔥 Vote'}</button>`
         : isMyEntry ? `<span class="fcc-your-entry">Your entry</span>` : '';
-      return `<div class="fcc-entry-card" style="flex:0 0 160px!important;min-width:160px!important;max-width:160px!important;">
+      return `<div class="fcc-entry-card" style="${useScrollFeed ? 'flex:0 0 160px!important;min-width:160px!important;max-width:160px!important;' : ''}">
         ${mediaHtml}
         <div class="fcc-entry-footer">
           <div class="fcc-entry-avatar">${avatarInner(sub.avatar)}</div>
