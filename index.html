@@ -2545,12 +2545,14 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
   border: 1px solid rgba(255,106,44,0.2);
   border-top: none;
   border-radius: 0 0 var(--radius) var(--radius);
-  padding: 10px 0 8px;
-  margin-top: -4px;
+  padding: 10px 0 10px;
+  margin-top: 0;
+  margin-bottom: 16px;
 }
 
 /* ── Expanded challenge card in feed ── */
 .feed-challenge-card { flex-direction: column; padding: 0; overflow: hidden; }
+.feed-challenge-expanded { border-radius: var(--radius) var(--radius) 0 0 !important; border-bottom: none !important; }
 .feed-challenge-header {
   display: flex; align-items: center; gap: 12px;
   padding: 14px;
@@ -2806,7 +2808,7 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
 }
 /* Expanded mode — flex column like the feed */
 .ch-grid[style*="flex"] .ch-card .media { aspect-ratio: 16 / 7; }
-.ch-grid[style*="flex"] .fcc-feed-drawer { margin-bottom: 16px; }
+.ch-grid[style*="flex"] .fcc-feed-drawer { margin-bottom: 20px; }
 .ch-card {
   background: linear-gradient(180deg, var(--surface), var(--bg-2));
   border: 1px solid rgba(255, 106, 44, 0.2);
@@ -2816,6 +2818,11 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
   transition: transform 0.25s ease, border-color 0.2s ease;
   display: flex;
   flex-direction: column;
+}
+.ch-card--has-drawer {
+  border-radius: var(--radius) var(--radius) 0 0;
+  border-bottom: none;
+  margin-bottom: 0;
 }
 .ch-card:hover {
   transform: translateY(-2px);
@@ -4996,7 +5003,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v69 · challenges-expand-q";
+const APP_VERSION = "v70 · unified-cards";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -8729,7 +8736,7 @@ function renderChallenges() {
       </div>` : '';
 
     return `
-      <article class="ch-card" data-chid="${ch.id}" style="cursor:pointer">
+      <article class="ch-card${drawerHtml ? ' ch-card--has-drawer' : ''}" data-chid="${ch.id}" style="cursor:pointer">
         <div class="media">
           ${mediaHtml}
           <span class="ch-status ${ch.computedStatus||'submitting'}"><span class="dot"></span>${statusLabel||'OPEN TO ENTER'}</span>
