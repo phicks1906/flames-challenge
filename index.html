@@ -3703,6 +3703,47 @@ body.theme-light .champ-ticker {
 /* Adjust main padding when ticker is visible */
 body.ticker-visible main { padding-bottom: 112px; }
 
+/* Entry viewer sheet */
+.entry-viewer-modal {
+  background: var(--surface);
+  border-radius: var(--radius) var(--radius) 0 0;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 1000;
+  animation: slideUp 0.3s cubic-bezier(0.16,1,0.3,1);
+}
+.entry-viewer-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.entry-viewer-user { display: flex; align-items: center; gap: 10px; }
+.entry-viewer-media {
+  width: 100%;
+  background: var(--bg-2);
+  display: flex; align-items: center; justify-content: center;
+  min-height: 200px;
+  max-height: 60vh;
+  overflow: hidden;
+}
+.entry-viewer-media img {
+  width: 100%; max-height: 60vh;
+  object-fit: contain;
+  display: block;
+}
+.entry-viewer-media video {
+  width: 100%; max-height: 60vh;
+  display: block;
+}
+.entry-viewer-media audio { width: 100%; padding: 20px; }
+.entry-viewer-actions {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px;
+}
+
 /* Likers sheet */
 .liker-row {
   display: flex; align-items: center; gap: 12px;
@@ -4675,6 +4716,28 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 </div>
 
 <!-- FIND PEOPLE MODAL -->
+<!-- ENTRY VIEWER SHEET -->
+<div class="modal-backdrop" id="entryViewerSheet" onclick="if(event.target===this)closeEntryViewer()">
+  <div class="entry-viewer-modal">
+    <div class="entry-viewer-header">
+      <div class="entry-viewer-user">
+        <div class="avatar" id="evAvatar">🔥</div>
+        <div>
+          <div id="evName" style="font-weight:700;font-size:15px"></div>
+          <div id="evChallenge" style="font-size:12px;color:var(--text-muted)"></div>
+        </div>
+      </div>
+      <button class="modal-close-x" onclick="closeEntryViewer()">×</button>
+    </div>
+    <div id="evMedia" class="entry-viewer-media"></div>
+    <div class="entry-viewer-actions">
+      <button id="evLikeBtn" class="flame-btn">🔥 <span id="evLikeCount">0</span></button>
+      <button id="evFollowBtn" class="btn btn-primary" style="padding:8px 20px;font-size:13px">+ Follow</button>
+    </div>
+    <div id="evCaption" style="padding:0 16px 12px;font-size:14px;color:var(--text-dim)"></div>
+  </div>
+</div>
+
 <!-- LIKERS SHEET -->
 <div class="modal-backdrop" id="likersSheet" onclick="if(event.target===this)closeLikersSheet()">
   <div class="modal" style="max-width:360px">
@@ -5056,7 +5119,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v71 · audio-fix";
+const APP_VERSION = "v72 · entry-viewer";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -8294,6 +8357,132 @@ async function launchChampionshipChallenge(category) {
   }
 }
 
+/* ---------- ENTRY VIEWER ---------- */
+let _evEntry = null;
+let _evChallenge = null;
+
+async function openEntryViewer(entryId, chId) {
+  // Find entry from feedEntries or fetch
+  let entry = (state.feedEntries || []).find(e => e.id === entryId);
+  const ch = state.challenges.find(c => c.id === chId);
+  if (!ch) return;
+
+  // If entry not in state, fetch it
+  if (!entry) {
+    try {
+      const { data } = await db.from('entries')
+        .select('*, submitter:profiles!entries_user_id_fkey(id, name, avatar)')
+        .eq('id', entryId).single();
+      entry = data;
+    } catch(e) { return; }
+  }
+  if (!entry) return;
+
+  _evEntry = entry;
+  _evChallenge = ch;
+
+  const sub = entry.submitter || { name: 'Unknown', avatar: '🔥', id: null };
+
+  // Avatar + name
+  document.getElementById('evAvatar').innerHTML = avatarInner(sub.avatar);
+  document.getElementById('evName').textContent = sub.name;
+  document.getElementById('evChallenge').textContent = ch.title;
+
+  // Media
+  const mediaEl = document.getElementById('evMedia');
+  if (entry.media_type === 'photo' && entry.media_url) {
+    mediaEl.innerHTML = `<img src="${escapeHtml(entry.media_url)}" alt="">`;
+  } else if (entry.media_type === 'video' && entry.media_url) {
+    mediaEl.innerHTML = `<video src="${escapeHtml(entry.media_url)}" controls playsinline preload="auto" ${entry.poster_url ? `poster="${escapeHtml(entry.poster_url)}"` : ''}></video>`;
+  } else if (entry.media_type === 'audio' && entry.media_url) {
+    mediaEl.innerHTML = `<audio src="${escapeHtml(entry.media_url)}" controls preload="auto"></audio>`;
+  } else if (entry.caption) {
+    mediaEl.innerHTML = `<div style="padding:24px;font-size:18px;line-height:1.5;color:var(--text)">${escapeHtml(entry.caption)}</div>`;
+  } else {
+    mediaEl.innerHTML = `<div style="padding:40px;font-size:48px;text-align:center">🎬</div>`;
+  }
+
+  // Caption
+  const capEl = document.getElementById('evCaption');
+  capEl.textContent = (entry.media_type !== 'text' && entry.caption) ? entry.caption : '';
+  capEl.style.display = capEl.textContent ? 'block' : 'none';
+
+  // Like button
+  const likeBtn = document.getElementById('evLikeBtn');
+  const likeCount = state.entryLikeCounts[entryId] || 0;
+  const iLiked = state.myEntryLikes.has(entryId);
+  document.getElementById('evLikeCount').textContent = likeCount;
+  likeBtn.className = `flame-btn${iLiked ? ' liked' : ''}`;
+  likeBtn.onclick = () => {
+    // Reuse existing toggle
+    const btn = document.querySelector(`[data-like-entry="${entryId}"]`);
+    if (btn) btn.click();
+    else toggleEntryLikeFromViewer(entryId);
+    const newLiked = state.myEntryLikes.has(entryId);
+    const newCount = state.entryLikeCounts[entryId] || 0;
+    document.getElementById('evLikeCount').textContent = newCount;
+    likeBtn.className = `flame-btn${newLiked ? ' liked' : ''}`;
+  };
+
+  // Follow button
+  const followBtn = document.getElementById('evFollowBtn');
+  const isMe = sub.id === state.profile?.id;
+  if (isMe || !sub.id) {
+    followBtn.style.display = 'none';
+  } else {
+    followBtn.style.display = 'block';
+    const isFollowing = state.myFollowing.has(sub.id);
+    followBtn.textContent = isFollowing ? '✓ Following' : '+ Follow';
+    followBtn.className = `btn ${isFollowing ? 'btn-ghost' : 'btn-primary'}`;
+    followBtn.style.cssText = 'padding:8px 20px;font-size:13px';
+    followBtn.onclick = async () => {
+      followBtn.disabled = true;
+      const wasFollowing = state.myFollowing.has(sub.id);
+      try {
+        if (wasFollowing) {
+          await db.from('follows').delete().eq('follower_id', state.profile.id).eq('followee_id', sub.id);
+          state.myFollowing.delete(sub.id);
+        } else {
+          await db.from('follows').insert({ follower_id: state.profile.id, followee_id: sub.id });
+          state.myFollowing.add(sub.id);
+        }
+        const nowFollowing = state.myFollowing.has(sub.id);
+        followBtn.textContent = nowFollowing ? '✓ Following' : '+ Follow';
+        followBtn.className = `btn ${nowFollowing ? 'btn-ghost' : 'btn-primary'}`;
+        followBtn.style.cssText = 'padding:8px 20px;font-size:13px';
+        if (state.currentView === 'feed') renderFeed();
+      } catch(e) { toast('Failed'); }
+      finally { followBtn.disabled = false; }
+    };
+  }
+
+  document.getElementById('entryViewerSheet').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+async function toggleEntryLikeFromViewer(entryId) {
+  if (!state.profile) return;
+  const wasLiked = state.myEntryLikes.has(entryId);
+  if (wasLiked) {
+    state.myEntryLikes.delete(entryId);
+    state.entryLikeCounts[entryId] = Math.max(0, (state.entryLikeCounts[entryId] || 1) - 1);
+    await db.from('entry_likes').delete().eq('entry_id', entryId).eq('user_id', state.profile.id);
+  } else {
+    state.myEntryLikes.add(entryId);
+    state.entryLikeCounts[entryId] = (state.entryLikeCounts[entryId] || 0) + 1;
+    await db.from('entry_likes').insert({ entry_id: entryId, user_id: state.profile.id });
+  }
+}
+
+function closeEntryViewer() {
+  document.getElementById('entryViewerSheet').classList.remove('open');
+  document.body.style.overflow = '';
+  // Stop any playing media
+  document.getElementById('evMedia').querySelectorAll('video,audio').forEach(m => { m.pause(); m.currentTime = 0; });
+  _evEntry = null;
+  _evChallenge = null;
+}
+
 /* ---------- LIKERS SHEET ---------- */
 async function openLikersSheet(type, id) {
   const sheet = document.getElementById('likersSheet');
@@ -8857,7 +9046,7 @@ function renderChallenges() {
       const voteBtn = canVoteCh && !isMyEntry && state.profile
         ? `<button class="fcc-vote-btn${iVoted?' voted':''}" data-fcc-vote="${e.id}" data-fcc-chid="${ch.id}">${iVoted?'✓ Voted':'🔥 Vote'}</button>`
         : isMyEntry ? `<span class="fcc-your-entry">Your entry</span>` : '';
-      return `<div class="fcc-entry-card" style="${cardStyle}">${mHtml}<div class="fcc-entry-footer"><div class="fcc-entry-avatar">${avatarInner(sub.avatar)}</div><div class="fcc-entry-name">${escapeHtml(sub.name)}</div>${voteBtn}</div></div>`;
+      return `<div class="fcc-entry-card" style="${cardStyle}cursor:pointer;" data-entry-open="${ch.id}" data-entry-id="${e.id}">${mHtml}<div class="fcc-entry-footer"><div class="fcc-entry-avatar">${avatarInner(sub.avatar)}</div><div class="fcc-entry-name">${escapeHtml(sub.name)}</div>${voteBtn}</div></div>`;
     }).join('');
 
     const scrollStyle = 'display:flex!important;flex-wrap:nowrap!important;overflow-x:auto!important;overflow-y:hidden!important;-webkit-overflow-scrolling:touch!important;padding:0 12px 8px;width:100%;min-width:0;box-sizing:border-box;';
@@ -10369,6 +10558,15 @@ function renderFeed() {
   hideFeedNewPill();
   initFeedExpandBtn();
 
+  // Wire entry card taps → open challenge detail at that entry
+  c.querySelectorAll('[data-entry-open]').forEach(card => {
+    card.addEventListener('click', e => {
+      if (e.target.closest('[data-fcc-vote],.fcc-vote-btn,[data-show-likes]')) return;
+      e.stopPropagation();
+      openEntryViewer(card.dataset.entryId, card.dataset.entryOpen);
+    });
+  });
+
   // Wire like count taps → show likers sheet
   c.querySelectorAll('[data-show-likes]').forEach(el => {
     el.addEventListener('click', e => {
@@ -10428,6 +10626,15 @@ function renderFeed() {
     const drawer = wrap.querySelector('.fcc-feed-drawer');
     if (!drawer) return;
     const chId = drawer.dataset.drawerCid;
+    // Wire entry card taps → open challenge detail
+    drawer.querySelectorAll('[data-entry-open]').forEach(card => {
+      card.addEventListener('click', e => {
+        if (e.target.closest('[data-fcc-vote],.fcc-vote-btn,[data-show-likes]')) return;
+        e.stopPropagation();
+        openEntryViewer(card.dataset.entryId, card.dataset.entryOpen);
+      });
+    });
+
     drawer.querySelectorAll('[data-fcc-vote]').forEach(btn => {
       btn.addEventListener('click', async e => {
         e.stopPropagation();
@@ -10659,7 +10866,7 @@ function renderFeedChallengeCard(ch) {
       const voteBtn = canVote && !isMyEntry && state.profile
         ? `<button class="fcc-vote-btn${iVoted ? ' voted' : ''}" data-fcc-vote="${e.id}" data-fcc-chid="${ch.id}">${iVoted ? '✓ Voted' : '🔥 Vote'}</button>`
         : isMyEntry ? `<span class="fcc-your-entry">Your entry</span>` : '';
-      return `<div class="fcc-entry-card" style="flex:0 0 72vw!important;min-width:72vw!important;max-width:280px!important;">
+      return `<div class="fcc-entry-card" style="flex:0 0 72vw!important;min-width:72vw!important;max-width:280px!important;cursor:pointer;" data-entry-open="${ch.id}" data-entry-id="${e.id}">
         ${mediaHtml}
         <div class="fcc-entry-footer">
           <div class="fcc-entry-avatar">${avatarInner(sub.avatar)}</div>
