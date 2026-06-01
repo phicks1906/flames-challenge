@@ -4995,7 +4995,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v69 · challenges-expand-i";
+const APP_VERSION = "v69 · challenges-expand-j";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -8667,136 +8667,91 @@ function renderChallenges() {
     return;
   }
 
-  list.forEach(ch => {
-    const card = document.createElement('article');
-    card.className = 'ch-card';
+  // Build entire grid as HTML string — same pattern as feed (DOM append breaks scroll)
+  const catIcons = {Art:'🎨',Photography:'📷',Music:'🎵',Writing:'✍️',Cooking:'🍳',Style:'👗',Sports:'🏆',Fitness:'💪',Comedy:'😂'};
+
+  const gridHtml = list.map(ch => {
     const creatorEntry = state.creatorEntries[ch.id];
     let mediaHtml;
     if (ch.media_type === 'photo' && creatorEntry?.media_url) {
       mediaHtml = `<img src="${creatorEntry.media_url}" alt="" loading="lazy">`;
     } else if (ch.media_type === 'video' && creatorEntry?.media_url) {
-      const catIcon = {Art:'🎨',Photography:'📷',Music:'🎵',Writing:'✍️',Cooking:'🍳',Style:'👗',Sports:'🏆',Fitness:'💪',Comedy:'😂'}[ch.category] || '🎬';
-      if (creatorEntry.poster_url) {
-        mediaHtml = `<img src="${creatorEntry.poster_url}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover">`;
-      } else {
-        mediaHtml = `<div class="media-fallback">${catIcon}</div>`;
-      }
+      mediaHtml = creatorEntry.poster_url
+        ? `<img src="${creatorEntry.poster_url}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover">`
+        : `<div class="media-fallback">${catIcons[ch.category]||'🎬'}</div>`;
     } else {
-      const icon = { photo: '📷', video: '🎬', audio: '🎵', text: '✍️' }[ch.media_type] || '🔥';
+      const icon = {photo:'📷',video:'🎬',audio:'🎵',text:'✍️'}[ch.media_type]||'🔥';
       mediaHtml = `<div class="media-fallback">${icon}</div>`;
     }
 
     const statusLabel = challengePhase(ch.computedStatus).label;
     const isChampionship = ch.title && ch.title.startsWith('⚡');
-
     const countdownTarget = ch.computedStatus === 'submitting' ? ch.submission_deadline :
                             ch.computedStatus === 'voting' ? ch.voting_end : null;
     const countdownText = countdownTarget ? `⏱ ${formatCountdown(countdownTarget)}` : '';
 
-    card.innerHTML = `
-      <div class="media">
-        ${mediaHtml}
-        <span class="ch-status ${ch.computedStatus || 'submitting'}"><span class="dot"></span>${statusLabel || 'OPEN TO ENTER'}</span>
-      </div>
-      <div class="body">
-        <div class="ch-category">${isChampionship ? '<span class="ch-champ-tag">⚡ Championship</span> ' : ''}${escapeHtml(ch.category)}${ch.is_public ? '' : ' · 🔒 Private'}</div>
-        <h3 class="ch-title">${escapeHtml(ch.title)}</h3>
-        <div class="ch-creator">
-          <div class="avatar">${avatarInner(ch.creator?.avatar)}</div>
-          <span>by ${escapeHtml(ch.creator?.name || 'Unknown')}</span>
-        </div>
-        <div class="ch-footer">
-          <span>👥 ${state.entryCounts[ch.id] || 0} ${(state.entryCounts[ch.id] || 0) === 1 ? 'entry' : 'entries'}</span>
-          <span class="countdown">${countdownText}</span>
-        </div>
-      </div>
-    `;
-    card.onclick = () => openChallenge(ch);
-    grid.appendChild(card);
-
-    // ── Entry drawer — sibling outside card so overflow:hidden doesn't trap scroll ──
     const chEntries = (state.feedEntries || []).filter(e => e.challenge_id === ch.id);
     const canEnterCh = (ch.computedStatus === 'submitting' || ch.computedStatus === 'voting')
       && state.profile && !chEntries.some(e => e.user_id === state.profile.id);
     const canVoteCh = ch.computedStatus === 'submitting' || ch.computedStatus === 'voting';
+    const useGrid = chEntries.length <= 2;
 
-    if (chEntries.length > 0 || canEnterCh) {
-      const drawer = document.createElement('div');
-      drawer.style.cssText = 'background:var(--surface);border:1px solid rgba(255,106,44,0.2);border-top:none;border-radius:0 0 12px 12px;padding:10px 0 8px;margin-top:-4px;width:100%;box-sizing:border-box;overflow:visible;';
+    const entryCardsHtml = chEntries.map(e => {
+      const sub = e.submitter || {name:'Unknown',avatar:'🔥'};
+      const isMyEntry = state.profile && e.user_id === state.profile.id;
+      const iVoted = (state.currentVotes||[]).some(v => v.entry_id === e.id && v.voter_id === state.profile?.id);
+      let mHtml;
+      if (e.media_type === 'photo' && e.media_url) {
+        mHtml = `<img src="${escapeHtml(e.media_url)}" class="fcc-entry-media" loading="lazy">`;
+      } else if (e.media_type === 'video' && e.media_url) {
+        mHtml = e.poster_url
+          ? `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}"><img src="${escapeHtml(e.poster_url)}" style="width:100%;height:100%;object-fit:cover;display:block"><div class="fcc-play-overlay">▶</div></div>`
+          : `<div class="fcc-entry-media fcc-entry-placeholder">🎬</div>`;
+      } else if (e.media_type === 'audio') {
+        mHtml = `<div class="fcc-entry-media fcc-entry-placeholder">🎵</div>`;
+      } else if (e.media_type === 'text' && e.caption) {
+        mHtml = `<div class="fcc-entry-media fcc-text-entry">${escapeHtml(e.caption.slice(0,80))}${e.caption.length>80?'…':''}</div>`;
+      } else {
+        mHtml = `<div class="fcc-entry-media fcc-entry-placeholder">${catIcons[ch.category]||'🎬'}</div>`;
+      }
+      const cardStyle = useGrid ? '' : 'flex:0 0 160px!important;min-width:160px!important;max-width:160px!important;';
+      const voteBtn = canVoteCh && !isMyEntry && state.profile
+        ? `<button class="fcc-vote-btn${iVoted?' voted':''}" data-fcc-vote="${e.id}" data-fcc-chid="${ch.id}">${iVoted?'✓ Voted':'🔥 Vote'}</button>`
+        : isMyEntry ? `<span class="fcc-your-entry">Your entry</span>` : '';
+      return `<div class="fcc-entry-card" style="${cardStyle}">${mHtml}<div class="fcc-entry-footer"><div class="fcc-entry-avatar">${avatarInner(sub.avatar)}</div><div class="fcc-entry-name">${escapeHtml(sub.name)}</div>${voteBtn}</div></div>`;
+    }).join('');
 
-      const catIcons = {Art:'🎨',Photography:'📷',Music:'🎵',Writing:'✍️',Cooking:'🍳',Style:'👗',Sports:'🏆',Fitness:'💪',Comedy:'😂'};
-      const cardsHtml = chEntries.map(e => {
-        const sub = e.submitter || { name: 'Unknown', avatar: '🔥' };
-        const isMyEntry = state.profile && e.user_id === state.profile.id;
-        const iVoted = (state.currentVotes || []).some(v => v.entry_id === e.id && v.voter_id === state.profile?.id);
-        let mHtml = '';
-        if (e.media_type === 'photo' && e.media_url) {
-          mHtml = `<img src="${escapeHtml(e.media_url)}" class="fcc-entry-media" loading="lazy">`;
-        } else if (e.media_type === 'video' && e.media_url) {
-          mHtml = e.poster_url
-            ? `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}"><img src="${escapeHtml(e.poster_url)}" style="width:100%;height:100%;object-fit:cover;display:block"><div class="fcc-play-overlay">▶</div></div>`
-            : `<div class="fcc-entry-media fcc-entry-placeholder fcc-video-thumb" data-fcc-open="${ch.id}">🎬<div class="fcc-play-overlay">▶</div></div>`;
-        } else if (e.media_type === 'audio') {
-          mHtml = `<div class="fcc-entry-media fcc-entry-placeholder">🎵</div>`;
-        } else if (e.media_type === 'text' && e.caption) {
-          mHtml = `<div class="fcc-entry-media fcc-text-entry">${escapeHtml(e.caption.slice(0,80))}${e.caption.length>80?'…':''}</div>`;
-        } else {
-          mHtml = `<div class="fcc-entry-media fcc-entry-placeholder">${catIcons[ch.category]||'🎬'}</div>`;
-        }
-        const voteBtn = canVoteCh && !isMyEntry && state.profile
-          ? `<button class="fcc-vote-btn${iVoted?' voted':''}" data-fcc-vote="${e.id}" data-fcc-chid="${ch.id}">${iVoted?'✓ Voted':'🔥 Vote'}</button>`
-          : isMyEntry ? `<span class="fcc-your-entry">Your entry</span>` : '';
-        return `<div class="fcc-entry-card" style="${useGrid ? '' : 'flex:0 0 160px!important;min-width:160px!important;max-width:160px!important;'}">${mHtml}<div class="fcc-entry-footer"><div class="fcc-entry-avatar">${avatarInner(sub.avatar)}</div><div class="fcc-entry-name">${escapeHtml(sub.name)}</div>${voteBtn}</div></div>`;
-      }).join('');
+    const scrollStyle = useGrid
+      ? 'display:grid;grid-template-columns:repeat(2,1fr);gap:8px;padding:0 12px 8px;'
+      : 'display:flex!important;flex-wrap:nowrap!important;overflow-x:auto!important;overflow-y:hidden!important;-webkit-overflow-scrolling:touch!important;padding:0 12px 8px;';
 
-      const useGrid = chEntries.length <= 2;
-      const scrollStyle = useGrid
-        ? 'display:grid;grid-template-columns:repeat(2,1fr);gap:8px;padding:0 12px 8px;'
-        : 'display:flex!important;flex-wrap:nowrap!important;overflow-x:auto!important;overflow-y:hidden!important;-webkit-overflow-scrolling:touch!important;padding:0 12px 8px;';
-      drawer.innerHTML = `
-        <div style="${scrollStyle}">${cardsHtml}</div>
+    const drawerHtml = (chEntries.length > 0 || canEnterCh) ? `
+      <div style="background:var(--surface);border:1px solid rgba(255,106,44,0.2);border-top:none;border-radius:0 0 12px 12px;padding:10px 0 8px;margin-top:-4px;">
+        ${chEntries.length > 0 ? `<div style="${scrollStyle}">${entryCardsHtml}</div>` : ''}
         ${canEnterCh ? `<div style="padding:4px 12px 2px"><button class="fcc-submit-btn" data-fcc-submit="${ch.id}">+ Submit your entry</button></div>` : ''}
-      `;
+      </div>` : '';
 
-      // Wire votes
-      drawer.querySelectorAll('[data-fcc-vote]').forEach(btn => {
-        btn.addEventListener('click', async e => {
-          e.stopPropagation();
-          const entryId = btn.dataset.fccVote;
-          const chId = btn.dataset.fccChid;
-          btn.textContent = '⏳'; btn.disabled = true;
-          await new Promise(res => setTimeout(res, 1200));
-          try {
-            const { error } = await db.from('entry_votes').upsert(
-              { challenge_id: chId, entry_id: entryId, voter_id: state.profile.id },
-              { onConflict: 'challenge_id,voter_id' }
-            );
-            if (error) throw error;
-            toast('🔥 Vote cast');
-          } catch(err) { toast('Vote failed'); }
-          renderChallenges();
-        });
-      });
-      // Wire submit
-      drawer.querySelectorAll('[data-fcc-submit]').forEach(btn => {
-        btn.addEventListener('click', e => {
-          e.stopPropagation();
-          const ch2 = state.challenges.find(x => x.id === btn.dataset.fccSubmit);
-          if (ch2) { state.currentChallenge = ch2; openSubmitEntry(); }
-        });
-      });
-      // Wire video thumbs
-      drawer.querySelectorAll('[data-fcc-open]').forEach(el => {
-        el.addEventListener('click', () => openChallenge(ch));
-      });
+    return `
+      <article class="ch-card" data-chid="${ch.id}" style="cursor:pointer">
+        <div class="media">
+          ${mediaHtml}
+          <span class="ch-status ${ch.computedStatus||'submitting'}"><span class="dot"></span>${statusLabel||'OPEN TO ENTER'}</span>
+        </div>
+        <div class="body">
+          <div class="ch-category">${isChampionship?'<span class="ch-champ-tag">⚡ Championship</span> ':''}${escapeHtml(ch.category)}${ch.is_public?'':' · 🔒 Private'}</div>
+          <h3 class="ch-title">${escapeHtml(ch.title)}</h3>
+          <div class="ch-creator"><div class="avatar">${avatarInner(ch.creator?.avatar)}</div><span>by ${escapeHtml(ch.creator?.name||'Unknown')}</span></div>
+          <div class="ch-footer"><span>👥 ${state.entryCounts[ch.id]||0} ${(state.entryCounts[ch.id]||0)===1?'entry':'entries'}</span><span class="countdown">${countdownText}</span></div>
+        </div>
+      </article>
+      ${drawerHtml}`;
+  }).join('');
 
-      grid.appendChild(drawer);
-    }
-  });
-  // Switch to flex column — same container type as feed (grid traps scroll)
+  grid.innerHTML = gridHtml;
   grid.style.display = 'flex';
   grid.style.flexDirection = 'column';
   grid.style.gap = '0';
+
 }
 
 /* =========================================================
