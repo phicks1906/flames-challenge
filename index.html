@@ -5135,7 +5135,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v73 · feed-labels-j";
+const APP_VERSION = "v74 · edit-entry";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -9110,6 +9110,7 @@ state.myCurrentVote = null;
 let seState = {
   file: null,
   fileUrl: null,
+  editingEntry: null, // set when editing an existing entry
 };
 
 async function openChallenge(ch) {
@@ -9353,6 +9354,12 @@ function renderChallengeDetail() {
 
     actionsHtml = (actionsHtml ? actionsHtml + ' ' : '') + likeBtnHtml + commentBtnHtml;
 
+    // Edit button — only on your own entry, only during submission phase
+    const canEdit = isMyEntry && state.currentChallenge?.computedStatus === 'submitting';
+    if (canEdit) {
+      actionsHtml += ` <button class="btn btn-ghost" style="font-size:12px;padding:6px 12px;" data-edit-entry="${entry.id}">✏️ Edit</button>`;
+    }
+
     return `
       <div class="cd-entry${iVoted ? ' voted' : ''}${winnerClass}" data-entry-id="${entry.id}">
         ${medalBadge}
@@ -9434,6 +9441,19 @@ function renderChallengeDetail() {
     el.addEventListener('click', e => {
       e.stopPropagation();
       openLikersSheet(el.dataset.showLikes, el.dataset.showLikesId);
+    });
+  });
+
+  // Wire edit entry buttons
+  grid.querySelectorAll('[data-edit-entry]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const entryId = btn.dataset.editEntry;
+      const entry = state.currentEntries.find(en => en.id === entryId);
+      if (entry) {
+        state.currentChallenge = state.currentChallenge; // ensure set
+        openSubmitEntry(entry);
+      }
     });
   });
 
@@ -9604,9 +9624,12 @@ async function refreshChallengeVotes(challengeId) {
 }
 
 /* ---------- SUBMIT ENTRY ---------- */
-function openSubmitEntry() {
+function openSubmitEntry(entryToEdit = null) {
   const ch = state.currentChallenge;
   if (!ch) return;
+
+  seState.editingEntry = entryToEdit;
+
   // Reset form
   document.getElementById('submitEntryForm').reset();
   clearSubmitEntryPreview();
@@ -9624,12 +9647,41 @@ function openSubmitEntry() {
   else if (ch.media_type === 'video') fileInput.accept = 'video/*';
   else if (ch.media_type === 'audio') fileInput.accept = 'audio/*';
 
+  // Pre-fill if editing
+  const submitBtn = document.querySelector('#submitEntryForm button[type="submit"]');
+  if (entryToEdit) {
+    document.querySelector('#submitEntrySheet h2').textContent = 'Edit Your Entry';
+    if (submitBtn) submitBtn.textContent = 'Save Changes';
+    if (isText && entryToEdit.caption) {
+      document.getElementById('seTextEntry').value = entryToEdit.caption;
+    } else if (entryToEdit.caption) {
+      document.getElementById('seCaption').value = entryToEdit.caption;
+    }
+    // Show existing media as current
+    if (entryToEdit.media_url && !isText) {
+      const preview = document.getElementById('sePreview');
+      let mediaEl = '';
+      if (ch.media_type === 'photo') mediaEl = `<img src="${entryToEdit.media_url}" alt="Current">`;
+      else if (ch.media_type === 'video') mediaEl = entryToEdit.poster_url
+        ? `<video src="${entryToEdit.media_url}" poster="${entryToEdit.poster_url}" controls></video>`
+        : `<video src="${entryToEdit.media_url}" controls></video>`;
+      else if (ch.media_type === 'audio') mediaEl = `<div style="padding:16px;background:#0a0805"><audio preload="auto" src="${entryToEdit.media_url}" controls style="width:100%"></audio></div>`;
+      preview.innerHTML = mediaEl + `<div class="cc-preview-info"><span>Current file · tap below to replace</span></div>`;
+      preview.style.display = 'block';
+      document.getElementById('seUploadZone').classList.add('has-file');
+    }
+  } else {
+    document.querySelector('#submitEntrySheet h2').textContent = 'Your Entry';
+    if (submitBtn) submitBtn.textContent = 'Submit Entry';
+  }
+
   document.getElementById('submitEntrySheet').classList.add('open');
 }
 
 function closeSubmitEntry() {
   document.getElementById('submitEntrySheet').classList.remove('open');
   clearSubmitEntryPreview();
+  seState.editingEntry = null;
 }
 
 function clearSubmitEntryPreview() {
@@ -9684,7 +9736,7 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
   if (ch.media_type === 'text' && !textEntry) {
     errBox.textContent = 'Write something.'; errBox.classList.add('show'); return;
   }
-  if (ch.media_type !== 'text' && !seState.file) {
+  if (ch.media_type !== 'text' && !seState.file && !seState.editingEntry?.media_url) {
     errBox.textContent = 'Upload your ' + ch.media_type + '.'; errBox.classList.add('show'); return;
   }
   if (new Date(ch.submission_deadline) <= new Date()) {
@@ -9722,20 +9774,35 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
         } catch(e) { console.warn('poster capture failed', e); }
       }
     }
-    btn.textContent = 'Submitting...';
+    btn.textContent = seState.editingEntry ? 'Saving...' : 'Submitting...';
     const captionText = ch.media_type === 'text' ? textEntry : (caption || null);
-    const { data: entryData, error: entryError } = await db.from('entries').insert({
-      challenge_id: ch.id,
-      user_id: state.profile.id,
-      media_url: mediaUrl,
-      media_type: ch.media_type,
-      caption: captionText,
-      poster_url: posterUrl,
-    }).select('id').single();
-    if (entryError) throw new Error('Submit failed: ' + entryError.message);
-    if (entryData && captionText) insertMentions('entry', entryData.id, captionText);
 
-    toast('🔥 Entry submitted!');
+    let entryData, entryError;
+    if (seState.editingEntry) {
+      // Edit mode — update existing entry
+      const updates = { caption: captionText };
+      if (mediaUrl) { updates.media_url = mediaUrl; updates.poster_url = posterUrl; }
+      ({ data: entryData, error: entryError } = await db.from('entries')
+        .update(updates)
+        .eq('id', seState.editingEntry.id)
+        .eq('user_id', state.profile.id) // safety check
+        .select('id').single());
+      if (entryError) throw new Error('Update failed: ' + entryError.message);
+      toast('✅ Entry updated!');
+    } else {
+      // New entry — insert
+      ({ data: entryData, error: entryError } = await db.from('entries').insert({
+        challenge_id: ch.id,
+        user_id: state.profile.id,
+        media_url: mediaUrl,
+        media_type: ch.media_type,
+        caption: captionText,
+        poster_url: posterUrl,
+      }).select('id').single());
+      if (entryError) throw new Error('Submit failed: ' + entryError.message);
+      if (entryData && captionText) insertMentions('entry', entryData.id, captionText);
+      toast('🔥 Entry submitted!');
+    }
     closeSubmitEntry();
     await loadChallengeDetail(ch.id);
     renderChallengeDetail();
