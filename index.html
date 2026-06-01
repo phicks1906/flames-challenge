@@ -3703,6 +3703,31 @@ body.theme-light .champ-ticker {
 /* Adjust main padding when ticker is visible */
 body.ticker-visible main { padding-bottom: 112px; }
 
+/* Likers sheet */
+.liker-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.liker-row:last-child { border-bottom: none; }
+.liker-avatar {
+  width: 38px; height: 38px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--ember), var(--coral));
+  display: grid; place-items: center; font-size: 18px;
+  flex-shrink: 0; overflow: hidden;
+}
+.liker-name {
+  flex: 1; font-size: 14px; font-weight: 600;
+  color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.likes-tappable {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(255,106,44,0.4);
+  text-underline-offset: 2px;
+}
+.likes-tappable:hover { color: var(--ember); }
+
 /* ============ BOTTOM NAV BAR ============ */
 .bottom-nav {
   position: fixed;
@@ -4650,6 +4675,15 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 </div>
 
 <!-- FIND PEOPLE MODAL -->
+<!-- LIKERS SHEET -->
+<div class="modal-backdrop" id="likersSheet" onclick="if(event.target===this)closeLikersSheet()">
+  <div class="modal" style="max-width:360px">
+    <button class="modal-close-x" onclick="closeLikersSheet()">×</button>
+    <h2 id="likersSheetTitle" style="margin-bottom:16px">🔥 Liked by</h2>
+    <div id="likersSheetList" style="display:flex;flex-direction:column;gap:2px;max-height:60vh;overflow-y:auto"></div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="findPeopleModal">
   <div class="modal groups-modal-content">
     <button class="modal-close-x" onclick="closeFindPeople()" aria-label="Close">×</button>
@@ -5022,7 +5056,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v70 · unified-cards-c";
+const APP_VERSION = "v71 · who-liked";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -8260,6 +8294,86 @@ async function launchChampionshipChallenge(category) {
   }
 }
 
+/* ---------- LIKERS SHEET ---------- */
+async function openLikersSheet(type, id) {
+  const sheet = document.getElementById('likersSheet');
+  const list = document.getElementById('likersSheetList');
+  const title = document.getElementById('likersSheetTitle');
+  if (!sheet || !list) return;
+
+  list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">Loading...</div>';
+  sheet.classList.add('open');
+
+  try {
+    let data, error;
+    if (type === 'post') {
+      ({ data, error } = await db.from('post_likes')
+        .select('user_id, liker:profiles!post_likes_user_id_fkey(id, name, avatar)')
+        .eq('post_id', id)
+        .order('created_at', { ascending: false })
+        .limit(50));
+    } else {
+      ({ data, error } = await db.from('entry_likes')
+        .select('user_id, liker:profiles!entry_likes_user_id_fkey(id, name, avatar)')
+        .eq('entry_id', id)
+        .order('created_at', { ascending: false })
+        .limit(50));
+    }
+
+    if (error) throw error;
+    const likers = (data || []).map(r => r.liker).filter(Boolean);
+
+    title.textContent = `🔥 ${likers.length} ${likers.length === 1 ? 'Like' : 'Likes'}`;
+
+    if (!likers.length) {
+      list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">No likes yet</div>';
+      return;
+    }
+
+    list.innerHTML = likers.map(u => {
+      const isMe = state.profile && u.id === state.profile.id;
+      const isFollowing = state.myFollowing.has(u.id);
+      return `<div class="liker-row">
+        <div class="liker-avatar${!isMe ? ' user-clickable' : ''}" ${!isMe ? `data-user-id="${u.id}"` : ''}>${avatarInner(u.avatar)}</div>
+        <div class="liker-name${!isMe ? ' user-clickable' : ''}" ${!isMe ? `data-user-id="${u.id}"` : ''}>${escapeHtml(u.name)}${isMe ? ' (you)' : ''}</div>
+        ${!isMe ? `<button class="lb-follow-btn${isFollowing ? ' following' : ''}" data-liker-follow="${u.id}">${isFollowing ? '✓' : '+ Follow'}</button>` : ''}
+      </div>`;
+    }).join('');
+
+    // Wire profile clicks
+    list.querySelectorAll('[data-user-id]').forEach(el => {
+      el.addEventListener('click', () => { closeLikersSheet(); openUserProfile(el.dataset.userId); });
+    });
+    // Wire follow buttons
+    list.querySelectorAll('[data-liker-follow]').forEach(btn => {
+      btn.addEventListener('click', async e => {
+        e.stopPropagation();
+        const uid = btn.dataset.likerFollow;
+        const wasFollowing = state.myFollowing.has(uid);
+        btn.disabled = true;
+        try {
+          if (wasFollowing) {
+            await db.from('follows').delete().eq('follower_id', state.profile.id).eq('followee_id', uid);
+            state.myFollowing.delete(uid);
+          } else {
+            await db.from('follows').insert({ follower_id: state.profile.id, followee_id: uid });
+            state.myFollowing.add(uid);
+          }
+          btn.textContent = state.myFollowing.has(uid) ? '✓' : '+ Follow';
+          btn.classList.toggle('following', state.myFollowing.has(uid));
+        } catch(err) { toast('Failed'); }
+        finally { btn.disabled = false; }
+      });
+    });
+  } catch(err) {
+    list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">Failed to load</div>';
+  }
+}
+
+function closeLikersSheet() {
+  document.getElementById('likersSheet')?.classList.remove('open');
+}
+
 /* ---------- SHARE ---------- */
 async function sharePoll(poll) {
   openPromote('poll', poll);
@@ -9028,7 +9142,7 @@ function renderChallengeDetail() {
     const eLikeBtnAttrs = (isMyEntry || !state.profile)
       ? 'disabled aria-label="Cannot like your own entry"'
       : `data-like-entry="${entry.id}"`;
-    const likeBtnHtml = `<button class="flame-btn${iLikedEntry ? ' liked' : ''}" ${eLikeBtnAttrs}><span class="flame-icon">🔥</span><span class="flame-count">${eLikeCount}</span></button>`;
+    const likeBtnHtml = `<button class="flame-btn${iLikedEntry ? ' liked' : ''}" ${eLikeBtnAttrs}><span class="flame-icon">🔥</span><span class="flame-count${eLikeCount > 0 ? ' likes-tappable' : ''}" ${eLikeCount > 0 ? `data-show-likes="entry" data-show-likes-id="${entry.id}"` : ''}>${eLikeCount}</span></button>`;
     const eCommentCount = state.entryCommentCounts[entry.id] || 0;
     const commentBtnHtml = `<button class="comment-btn" data-comment-entry="${entry.id}"><span class="comment-icon">💬</span><span class="comment-count">${eCommentCount}</span></button>`;
 
@@ -9110,6 +9224,14 @@ function renderChallengeDetail() {
       f.style.width = (f.dataset.pct || 0) + '%';
     });
   });
+  // Wire like count taps in challenge detail
+  grid.querySelectorAll('[data-show-likes]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      openLikersSheet(el.dataset.showLikes, el.dataset.showLikesId);
+    });
+  });
+
   // Attach like handlers
   grid.querySelectorAll('[data-like-entry]').forEach(btn => {
     btn.addEventListener('click', e => {
@@ -10247,6 +10369,14 @@ function renderFeed() {
   hideFeedNewPill();
   initFeedExpandBtn();
 
+  // Wire like count taps → show likers sheet
+  c.querySelectorAll('[data-show-likes]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      openLikersSheet(el.dataset.showLikes, el.dataset.showLikesId);
+    });
+  });
+
   // Wire challenge headers — use pointerup with movement check so scroll is never blocked
   mixed.filter(item => item.kind === 'challenge').forEach(item => {
     const ch = item.data;
@@ -10447,7 +10577,7 @@ function renderPostCard(p) {
       <div class="post-card-actions">
         <button class="flame-btn${iLiked ? ' liked' : ''}" ${likeBtnAttrs}>
           <span class="flame-icon">🔥</span>
-          <span class="flame-count">${likeCount}</span>
+          <span class="flame-count${likeCount > 0 ? ' likes-tappable' : ''}" ${likeCount > 0 ? `data-show-likes="post" data-show-likes-id="${p.id}"` : ''}>${likeCount}</span>
         </button>
         <button class="comment-btn" data-comment-post="${p.id}">
           <span class="comment-icon">💬</span>
