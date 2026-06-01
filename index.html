@@ -3705,6 +3705,7 @@ body.theme-light .champ-ticker {
 .ticker-cat-label.champ { background: rgba(255,200,87,0.25); color: var(--gold); }
 .ticker-cat-label.leader { background: rgba(255,106,44,0.2); color: var(--ember); }
 .ticker-cat-label.streak { background: rgba(139,92,246,0.2); color: #a78bfa; }
+.ticker-cat-label.default { background: rgba(255,255,255,0.08); color: var(--text-muted); }
 .ticker-item .ticker-icon { font-size: 13px; padding-left: 8px; }
 .ticker-item .ticker-name { color: var(--text); font-weight: 700; }
 .ticker-item .ticker-dot { color: var(--text-muted); }
@@ -5135,7 +5136,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v74 · video-fix";
+const APP_VERSION = "v75 · ticker-top3";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -7799,16 +7800,21 @@ function buildTicker() {
       if (selectedCats.has(t.category)) items.push({ icon: '👑', name: t.name, badge: 'champ', category: t.category, text: 'Champion' });
     });
 
-  // 2. Current Leaders per category
+  // 2. Top 3 per category
   Object.entries(data.leaders || {})
     .filter(([cat]) => cat !== 'All')
-    .forEach(([cat, uid]) => {
-      const user = (data.users || []).find(u => u.id === uid);
-      if (!user) return;
+    .forEach(([cat]) => {
       if (!selectedCats.has(cat)) return;
-      const wins = user.rolling30ByCategory?.[cat] || 0;
-      if (wins < 1) return;
-      items.push({ icon: '🔥', name: user.name, badge: 'leader', category: cat, text: `Leader · ${wins} win${wins > 1 ? 's' : ''}` });
+      const catUsers = (data.users || [])
+        .filter(u => (u.rolling30ByCategory?.[cat] || 0) >= 1)
+        .sort((a, b) => (b.rolling30ByCategory?.[cat] || 0) - (a.rolling30ByCategory?.[cat] || 0))
+        .slice(0, 3);
+      const medals = ['🥇', '🥈', '🥉'];
+      catUsers.forEach((user, i) => {
+        const wins = user.rolling30ByCategory?.[cat] || 0;
+        const label = i === 0 ? 'Leader' : i === 1 ? '2nd' : '3rd';
+        items.push({ icon: medals[i], name: user.name, badge: i === 0 ? 'leader' : 'default', category: cat, text: `${label} · ${wins} win${wins > 1 ? 's' : ''}` });
+      });
     });
 
   // 3. Streak holders (2+ consecutive months as champion)
