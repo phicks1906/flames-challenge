@@ -2519,6 +2519,19 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
 .feed-activity-card.winner .fa-target { color: var(--gold); }
 .fa-time { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
 
+/* Feed card type labels */
+.feed-type-label {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px;
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  border-radius: 100px;
+  margin: 8px 12px 0;
+}
+.feed-type-post { background: rgba(79,195,247,0.15); color: #4fc3f7; }
+.feed-type-challenge { background: rgba(255,106,44,0.15); color: var(--ember); }
+.feed-type-winner { background: rgba(255,200,87,0.15); color: var(--gold); }
+
 /* ── Feed expand toggle button ── */
 .feed-expand-btn {
   flex-shrink: 0;
@@ -4721,7 +4734,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
   <div class="entry-viewer-modal">
     <div class="entry-viewer-header">
       <div class="entry-viewer-user">
-        <div class="avatar" id="evAvatar">🔥</div>
+        <div class="avatar" id="evAvatar" style="width:40px;height:40px;font-size:18px;flex-shrink:0;overflow:hidden;border-radius:50%;background:linear-gradient(135deg,var(--ember),var(--coral));display:grid;place-items:center;">🔥</div>
         <div>
           <div id="evName" style="font-weight:700;font-size:15px"></div>
           <div id="evChallenge" style="font-size:12px;color:var(--text-muted)"></div>
@@ -5119,7 +5132,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v72 · entry-viewer";
+const APP_VERSION = "v73 · feed-labels";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -10771,6 +10784,7 @@ function renderPostCard(p) {
   const plusBadge = needsFollowPlus(p.user_id) ? ' <span class="user-plus">+</span>' : '';
   return `
     <div class="post-card" data-pid="${p.id}">
+      <div class="feed-type-label feed-type-post">✍️ Post</div>
       <div class="post-card-header">
         <div class="post-card-avatar" ${userClickAttr}>${avatarInner(author.avatar)}</div>
         <div class="post-card-meta">
@@ -10809,6 +10823,7 @@ function renderFeedChallengeCard(ch) {
 
   // Compact card (always shown as header)
   const compactHtml = `
+    <div class="feed-type-label feed-type-challenge">🏆 Challenge</div>
     <div class="feed-challenge-header" data-fcc-cid="${ch.id}" style="cursor:pointer">
       <div class="feed-challenge-thumb">${isChampionship ? '⚡' : '🏆'}</div>
       <div class="feed-challenge-info">
@@ -10916,7 +10931,7 @@ function renderFeedWinnerCard({ challenge, entry }) {
   const userAttr = clickable ? `data-user-id="${s.id}" class="user-clickable"` : '';
   const plus = needsFollowPlus(s.id) ? ' <span class="user-plus">+</span>' : '';
   return `
-    <div class="feed-activity-card winner" data-cid="${challenge.id}">
+    <div class="feed-activity-card winner" data-cid="${challenge.id}"><div class="feed-type-label feed-type-winner">🏁 Winner</div>
       <div class="fa-avatar gold" ${userAttr}>${avatarInner(s.avatar)}</div>
       <div class="fa-body">
         <div class="fa-text">🥇 <span class="fa-name" ${userAttr}>${escapeHtml(s.name)}${isMine ? ' (you)' : ''}${plus}</span> won <span class="fa-target">${escapeHtml(challenge.title)}</span></div>
