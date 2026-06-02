@@ -4596,7 +4596,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
   <div class="modal promote-modal">
     <button class="modal-close-x" onclick="closePromote()" aria-label="Close">×</button>
     <h2 id="promoteTitle">Promote your challenge</h2>
-    <p class="promote-sub">Share your flyer to your followers or a group — or save it to your device.</p>
+    <p class="promote-sub">Your challenge is live! Share your flyer to get entries — post it to your followers or a group.</p>
     <div class="promote-preview" id="promotePreview"></div>
     <input type="file" id="promoteFileInput" accept="image/*" style="display:none" onchange="onPromoteFileSelected(this)" />
     <div class="promote-media-row" id="promoteMediaRow">
@@ -5144,7 +5144,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v78 · unified-challenges";
+const APP_VERSION = "v79 · flyer-post-fix";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -7132,6 +7132,8 @@ async function openPromote(type, item) {
   }
 }
 
+async function generatePromoteFlyer() { return renderPromoteFlyer(); }
+
 async function renderPromoteFlyer() {
   if (!promoteState) return;
   const opts = { ...promoteState.opts };
@@ -7202,37 +7204,56 @@ async function postFlyerToFeed() {
   btn.textContent = 'Posting...'; btn.disabled = true;
 
   try {
-    // Get flyer image as blob and upload to storage
-    const imgEl = document.querySelector('#promotePreview img');
+    // Get flyer image as blob from canvas or img
     let mediaUrl = null;
+    const imgEl = document.querySelector('#promotePreview img');
+    const canvas = document.querySelector('#promotePreview canvas');
+    let blob = null;
 
-    if (imgEl?.src?.startsWith('data:')) {
-      const blob = await (await fetch(imgEl.src)).blob();
+    if (canvas) {
+      blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+    } else if (imgEl?.src?.startsWith('data:')) {
+      blob = await (await fetch(imgEl.src)).blob();
+    }
+
+    if (blob) {
       const path = `flyers/${state.profile.id}/${ch.id}-${Date.now()}.png`;
       const { error: upErr } = await db.storage.from('challenge-media').upload(path, blob, { contentType: 'image/png', upsert: true });
-      if (!upErr) {
+      if (upErr) {
+        console.warn('Flyer upload failed:', upErr.message, '— posting without image');
+      } else {
         const { data: urlData } = db.storage.from('challenge-media').getPublicUrl(path);
         mediaUrl = urlData?.publicUrl;
       }
     }
 
-    // Post to feed as a flyer post
-    const caption = `🔥 ${escapeHtml(ch.title)} — Enter now!`;
-    const { error } = await db.from('posts').insert({
+    // Post to feed — try with post_type first, fall back without if column missing
+    const postData = {
       user_id: state.profile.id,
-      content: caption,
+      content: `🔥 ${ch.title} — Enter now!`,
       media_url: mediaUrl,
       media_type: mediaUrl ? 'photo' : null,
       post_type: 'flyer',
       challenge_id: ch.id,
-    });
+    };
+
+    let { error } = await db.from('posts').insert(postData);
+
+    // If post_type/challenge_id columns don't exist yet, retry without them
+    if (error && (error.message?.includes('post_type') || error.message?.includes('challenge_id'))) {
+      console.warn('post_type/challenge_id columns missing — posting without them');
+      delete postData.post_type;
+      delete postData.challenge_id;
+      ({ error } = await db.from('posts').insert(postData));
+    }
+
     if (error) throw error;
 
     toast('🔥 Posted to your feed!');
     closePromote();
     if (state.currentView === 'feed') { await loadPosts(); renderFeed(); }
   } catch(err) {
-    console.error('Post flyer error', err);
+    console.error('Post flyer error:', err);
     toast('Failed to post — try again');
   } finally {
     btn.textContent = orig; btn.disabled = false;
@@ -9048,9 +9069,12 @@ document.getElementById('createChallengeForm').addEventListener('submit', async 
     state.cFilter = 'mine';
     document.querySelectorAll('#chTabs .ch-tab').forEach(x => x.classList.toggle('active', x.dataset.cfilter === 'mine'));
     switchView('challenges');
-    // Prompt the creator to promote it (skip for private — nothing public to share)
+    // After creation — open promote modal with flyer pre-generated
     if (ccState.visibility === 'public') {
-      openPromote('challenge', { ...chData, creator: { name: state.profile?.name } });
+      const fullCh = { ...chData, creator: { name: state.profile?.name, avatar: state.profile?.avatar } };
+      await openPromote('challenge', fullCh);
+      // Auto-generate flyer immediately
+      setTimeout(() => generatePromoteFlyer(), 300);
     }
   } catch (err) {
     console.error(err);
@@ -10827,6 +10851,15 @@ function renderFeed() {
     });
   });
 
+  // Wire flyer CTA buttons
+  c.querySelectorAll('[data-flyer-enter]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const ch = state.challenges.find(x => x.id === btn.dataset.flyerEnter);
+      if (ch) openChallenge(ch);
+    });
+  });
+
   // Wire like count taps → show likers sheet
   c.querySelectorAll('[data-show-likes]').forEach(el => {
     el.addEventListener('click', e => {
@@ -11013,6 +11046,9 @@ function renderFeed() {
 }
 
 function renderPostCard(p) {
+  // Flyer posts get their own rich card layout
+  if (p.post_type === 'flyer') return renderFlyerCard(p);
+
   const author = p.author || { name: 'Unknown', avatar: '🔥', id: null };
   const isMine = p.user_id === state.profile?.id;
   let mediaHtml = '';
@@ -11031,12 +11067,11 @@ function renderPostCard(p) {
   const plusBadge = needsFollowPlus(p.user_id) ? ' <span class="user-plus">+</span>' : '';
   return `
     <div class="post-card" data-pid="${p.id}">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px 0"><span class="feed-poll-tag" style="color:${p.post_type === 'flyer' ? 'var(--ember)' : '#4fc3f7'}">${p.post_type === 'flyer' ? '📣 FLYER' : '✍️ POST'}</span><span style="font-size:12px;color:var(--text-muted)">${timeAgo(p.created_at)}</span></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px 0"><span class="feed-poll-tag" style="color:#4fc3f7">✍️ POST</span><span style="font-size:12px;color:var(--text-muted)">${timeAgo(p.created_at)}</span></div>
       <div class="post-card-header" style="padding-top:8px">
         <div class="post-card-avatar" ${userClickAttr}>${avatarInner(author.avatar)}</div>
         <div class="post-card-meta">
           <div class="post-card-name" ${userClickAttr}>${escapeHtml(author.name)}${plusBadge}</div>
-
         </div>
         ${isMine ? `<button class="post-card-menu" data-pid="${p.id}" aria-label="Delete post">⋯</button>` : ''}
       </div>
@@ -11044,6 +11079,64 @@ function renderPostCard(p) {
       ${mediaHtml}
       <div class="post-card-actions">
         <button class="flame-btn${iLiked ? ' liked' : ''}" ${likeBtnAttrs}>
+          <span class="flame-icon">🔥</span>
+          <span class="flame-count${likeCount > 0 ? ' likes-tappable' : ''}" ${likeCount > 0 ? `data-show-likes="post" data-show-likes-id="${p.id}"` : ''}>${likeCount}</span>
+        </button>
+        <button class="comment-btn" data-comment-post="${p.id}">
+          <span class="comment-icon">💬</span>
+          <span class="comment-count">${state.postCommentCounts[p.id] || 0}</span>
+        </button>
+      </div>
+    </div>`;
+}
+
+function renderFlyerCard(p) {
+  const author = p.author || { name: 'Unknown', avatar: '🔥', id: null };
+  const isMine = p.user_id === state.profile?.id;
+  const likeCount = state.postLikeCounts[p.id] || 0;
+  const iLiked = state.myPostLikes.has(p.id);
+  const isClickableUser = p.user_id && !isMine;
+  const userClickAttr = isClickableUser ? `data-user-id="${p.user_id}" class="user-clickable"` : '';
+  const plusBadge = needsFollowPlus(p.user_id) ? ' <span class="user-plus">+</span>' : '';
+
+  // Find linked challenge
+  const ch = p.challenge_id ? state.challenges.find(c => c.id === p.challenge_id) : null;
+  const chStatus = ch ? computeChallengeStatus(ch) : null;
+  const isOpen = chStatus === 'submitting';
+  const isVoting = chStatus === 'voting';
+  const ctaText = isOpen ? '🔥 Enter this Challenge' : isVoting ? '🗳️ Vote Now' : ch ? '👀 View Challenge' : null;
+  const countdown = ch && isOpen ? `⏱ ${formatCountdown(ch.submission_deadline)}` :
+                    ch && isVoting ? `⏱ ${formatCountdown(ch.voting_end)}` : '';
+
+  return `
+    <div class="post-card" data-pid="${p.id}" style="padding:0;overflow:hidden;">
+      <!-- Header row -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px;">
+        <span class="feed-poll-tag" style="color:var(--ember);">📣 FLYER</span>
+        <span style="font-size:12px;color:var(--text-muted);">${timeAgo(p.created_at)}</span>
+      </div>
+
+      <!-- Posted by row -->
+      <div style="display:flex;align-items:center;gap:10px;padding:0 14px 10px;">
+        <div style="width:32px;height:32px;border-radius:50%;overflow:hidden;flex-shrink:0;background:linear-gradient(135deg,var(--ember),var(--coral));display:grid;place-items:center;font-size:14px;" ${userClickAttr}>${avatarInner(author.avatar)}</div>
+        <span style="font-size:13px;font-weight:600;color:var(--text);" ${userClickAttr}>${escapeHtml(author.name)}${plusBadge}</span>
+        ${isMine ? `<button class="post-card-menu" data-pid="${p.id}" style="margin-left:auto;" aria-label="Delete post">⋯</button>` : ''}
+      </div>
+
+      <!-- Flyer image — full width, prominent -->
+      ${p.media_url ? `<img src="${escapeHtml(p.media_url)}" alt="Challenge flyer" style="width:100%;display:block;max-height:420px;object-fit:cover;" loading="lazy">` : `<div style="background:linear-gradient(135deg,rgba(255,106,44,0.2),rgba(255,45,31,0.1));padding:40px;text-align:center;font-size:36px;">🔥</div>`}
+
+      <!-- Challenge CTA -->
+      ${ch ? `
+      <div style="padding:12px 14px 4px;">
+        <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:2px;">${escapeHtml(ch.title)}</div>
+        ${countdown ? `<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${countdown}</div>` : ''}
+        <button class="btn btn-primary" style="width:100%;margin-bottom:8px;" data-flyer-enter="${ch.id}">${ctaText}</button>
+      </div>` : p.content ? `<div style="padding:10px 14px;font-size:14px;color:var(--text);">${formatBody(p.content)}</div>` : ''}
+
+      <!-- Actions -->
+      <div class="post-card-actions" style="padding:4px 14px 12px;">
+        <button class="flame-btn${iLiked ? ' liked' : ''}" data-like-post="${p.id}">
           <span class="flame-icon">🔥</span>
           <span class="flame-count${likeCount > 0 ? ' likes-tappable' : ''}" ${likeCount > 0 ? `data-show-likes="post" data-show-likes-id="${p.id}"` : ''}>${likeCount}</span>
         </button>
