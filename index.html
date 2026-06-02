@@ -4182,7 +4182,10 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       <div class="hc-gauge-stage" id="hcGaugeStage" onclick="openRecordSheet('all')" role="button" tabindex="0">
         <svg width="290" height="290" viewBox="0 0 290 290" class="hc-gauge-svg">
           <defs>
-            <linearGradient id="hcArcGrad" x1="0" y1="0" x2="1" y2="0">
+            <linearGradient id="hcPctGrad" x1="0" y1="0" x2="1" y2="0">
+              <stop id="hcPctStop1" offset="0%" stop-color="#4fc3f7"/>
+              <stop id="hcPctStop2" offset="100%" stop-color="#ff6a2c"/>
+            </linearGradient>
               <stop offset="0%"  stop-color="#1a8fc4"/>
               <stop offset="20%" stop-color="#4fc3f7"/>
               <stop offset="42%" stop-color="#b3e5fc"/>
@@ -4226,8 +4229,8 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
             <polygon points="140,50 134,64 146,64" fill="#fff"/>
           </g>
           <!-- Percentage centered in gauge -->
-          <text id="heatPctText" x="140" y="162" text-anchor="middle" dominant-baseline="middle" font-size="46" font-weight="900" fill="rgba(255,255,255,0.92)" class="hc-pct-text"></text>
-          <text x="140" y="183" text-anchor="middle" font-size="9" font-weight="700" fill="#6a605a" class="hc-pct-label">WIN RATE</text>
+          <text id="heatPctText" x="140" y="155" text-anchor="middle" dominant-baseline="central" font-size="44" font-weight="900" fill="url(#hcPctGrad)" class="hc-pct-text"></text>
+          <text x="140" y="178" text-anchor="middle" font-size="9" font-weight="700" fill="#6a605a" class="hc-pct-label">WIN RATE</text>
           <!-- Hidden spans kept for JS compat -->
           <tspan id="heatPct" style="display:none">—</tspan>
           <tspan id="heatPctSym" style="display:none">%</tspan>
@@ -5217,7 +5220,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v82 · heat-check-alive";
+const APP_VERSION = "v82 · heat-check-split";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -7568,8 +7571,29 @@ function renderHeatCheck() {
   document.querySelectorAll('.hc-fire-side').forEach(el => el.style.opacity = fireOp);
   document.querySelectorAll('.hc-ice-side').forEach(el => el.style.opacity = iceOp);
 
-  // ── E: Count-up number animation ──
+  // ── E: Count-up number animation with split gradient ──
   const pctTextEl = document.getElementById('heatPctText');
+  const stop1 = document.getElementById('hcPctStop1');
+  const stop2 = document.getElementById('hcPctStop2');
+
+  // Set gradient colors based on win rate
+  if (stop1 && stop2) {
+    if (winPct == null || winPct === 50) {
+      stop1.setAttribute('stop-color', '#4fc3f7'); // ice
+      stop2.setAttribute('stop-color', '#ff6a2c'); // fire — true split at 50%
+    } else if (winPct > 50) {
+      // More fire — shift gradient toward orange
+      const intensity = (winPct - 50) / 50;
+      stop1.setAttribute('stop-color', `rgba(255,${Math.round(180 - intensity*100)},${Math.round(87 - intensity*50)},1)`);
+      stop2.setAttribute('stop-color', winPct >= 100 ? '#ffc857' : '#ff6a2c');
+    } else {
+      // More ice — shift gradient toward blue
+      const intensity = (50 - winPct) / 50;
+      stop1.setAttribute('stop-color', '#4fc3f7');
+      stop2.setAttribute('stop-color', `rgba(${Math.round(79 + intensity*20)},${Math.round(195 - intensity*50)},${Math.round(247 - intensity*20)},1)`);
+    }
+  }
+
   if (pctTextEl && winPct != null) {
     const target = Math.round(winPct);
     pctTextEl.textContent = '0%';
@@ -7579,7 +7603,7 @@ function renderHeatCheck() {
     const countUp = (ts) => {
       if (!start) start = ts;
       const progress = Math.min((ts - start) / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+      const eased = 1 - Math.pow(1 - progress, 3);
       const current = Math.round(eased * target);
       pctTextEl.textContent = `${current}%`;
       if (progress < 1) requestAnimationFrame(countUp);
@@ -7591,6 +7615,8 @@ function renderHeatCheck() {
     setTimeout(() => requestAnimationFrame(countUp), 200);
   } else if (pctTextEl) {
     pctTextEl.textContent = '—';
+    if (stop1) stop1.setAttribute('stop-color', '#4fc3f7');
+    if (stop2) stop2.setAttribute('stop-color', '#ff6a2c');
   }
 
   // Build ticks once (idempotent: only if not yet built)
