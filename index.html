@@ -995,7 +995,6 @@ footer .links a:hover { color: var(--ember); }
   .hero-stats { gap: 20px; }
   .stat-num { font-size: 30px; }
   .lb-row { grid-template-columns: 40px 1fr auto; padding: 12px 14px; gap: 12px; }
-  .lb-streak { display: none; }
   .nav-inner { padding: 12px 16px; }
   .brand { font-size: 22px; }
   .hero-cta { width: 100%; }
@@ -5151,7 +5150,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v81 · lb-record";
+const APP_VERSION = "v81 · lb-record-b";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -7419,7 +7418,6 @@ function applyDeepLink() {
 
 function renderHeatCheck() {
   if (!state.profile) return;
-  // Pull from state.myRecord if loaded; otherwise show zeros + kick off a load
   const record = state.myRecord;
   let wins = 0, losses = 0, ties = 0, entries = 0, streak = 0;
   if (record && record.length) {
@@ -7429,12 +7427,17 @@ function renderHeatCheck() {
       else if (r.result === 'tied') ties++;
     });
     entries = record.length;
-    // Win streak = consecutive 'won' going back from the most recent decided entry
-    // record is sorted newest-first by myCreated, so we walk forward
     for (const r of record) {
       if (r.result === 'won') streak++;
-      else if (r.result === 'lost' || r.result === 'tied') break; // a non-win breaks the streak
-      // pending / voided are skipped (don't count, don't break)
+      else if (r.result === 'lost' || r.result === 'tied') break;
+    }
+  } else if (state.leaderboardData?.users) {
+    // Fallback: use leaderboard data if myRecord failed to load
+    const me = state.leaderboardData.users.find(u => u.id === state.profile.id);
+    if (me) {
+      wins = me.wins || 0;
+      losses = me.losses || 0;
+      entries = wins + losses;
     }
   }
   // Stash for profile sheet to display W-L-T
