@@ -5142,7 +5142,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v76 · flyer-share";
+const APP_VERSION = "v77 · winner-card";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -11191,13 +11191,34 @@ function renderFeedWinnerCard({ challenge, entry }) {
   const clickable = s.id && !isMine;
   const userAttr = clickable ? `data-user-id="${s.id}" class="user-clickable"` : '';
   const plus = needsFollowPlus(s.id) ? ' <span class="user-plus">+</span>' : '';
+
+  // Winning entry media
+  let mediaHtml = '';
+  if (entry.media_type === 'photo' && entry.media_url) {
+    mediaHtml = `<img src="${escapeHtml(entry.media_url)}" style="width:100%;max-height:320px;object-fit:cover;display:block;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}">`;
+  } else if (entry.media_type === 'video' && entry.media_url) {
+    mediaHtml = entry.poster_url
+      ? `<div style="position:relative;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><img src="${escapeHtml(entry.poster_url)}" style="width:100%;max-height:320px;object-fit:cover;display:block;"><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.3);font-size:48px;">▶</div></div>`
+      : `<div style="position:relative;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><video src="${escapeHtml(entry.media_url)}" autoplay muted playsinline loop style="width:100%;max-height:320px;object-fit:cover;display:block;"></video><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:48px;pointer-events:none;">▶</div></div>`;
+  }
+
   return `
-    <div class="feed-activity-card winner" data-cid="${challenge.id}">
-      <div class="fa-avatar gold" ${userAttr}>${avatarInner(s.avatar)}</div>
-      <div class="fa-body">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px"><span class="feed-poll-tag" style="color:var(--gold)">🏁 WINNER</span></div>
-        <div class="fa-text">🥇 <span class="fa-name" ${userAttr}>${escapeHtml(s.name)}${isMine ? ' (you)' : ''}${plus}</span> won <span class="fa-target">${escapeHtml(challenge.title)}</span></div>
-        <div class="fa-time">${timeAgo(challenge.voting_end)}</div>
+    <div class="feed-activity-card winner" data-cid="${challenge.id}" style="padding:0;overflow:hidden;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px;">
+        <span class="feed-poll-tag" style="color:var(--gold);">🏁 WINNER</span>
+        <span style="font-size:12px;color:var(--text-muted);">${timeAgo(challenge.voting_end)}</span>
+      </div>
+      ${mediaHtml}
+      <div style="display:flex;align-items:center;gap:12px;padding:12px 14px 14px;">
+        <div style="width:52px;height:52px;border-radius:50%;border:3px solid var(--gold);overflow:hidden;flex-shrink:0;background:linear-gradient(135deg,var(--ember),var(--coral));display:grid;place-items:center;font-size:22px;cursor:${clickable ? 'pointer' : 'default'};" ${userAttr}>
+          ${avatarInner(s.avatar)}
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:16px;font-weight:700;color:var(--text);" ${userAttr}>
+            ${escapeHtml(s.name)}${isMine ? ' <span style="color:var(--ember);font-size:12px;">(you)</span>' : ''}${plus}
+          </div>
+          <div style="font-size:13px;color:var(--gold);font-weight:600;">🥇 Won: ${escapeHtml(challenge.title)}</div>
+        </div>
       </div>
     </div>`;
 }
