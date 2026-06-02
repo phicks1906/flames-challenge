@@ -4594,17 +4594,23 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
   <div class="modal promote-modal">
     <button class="modal-close-x" onclick="closePromote()" aria-label="Close">×</button>
     <h2 id="promoteTitle">Promote your challenge</h2>
-    <p class="promote-sub">Tap Share to open your phone's share sheet — from there you can save the flyer to Photos or post it anywhere.</p>
+    <p class="promote-sub">Share your flyer to your followers or a group — or save it to your device.</p>
     <div class="promote-preview" id="promotePreview"></div>
     <input type="file" id="promoteFileInput" accept="image/*" style="display:none" onchange="onPromoteFileSelected(this)" />
     <div class="promote-media-row" id="promoteMediaRow">
       <button class="btn btn-ghost btn-sm" id="promoteAddPhotoBtn" onclick="document.getElementById('promoteFileInput').click()">📷 Add photo</button>
       <button class="btn btn-ghost btn-sm" id="promoteRemovePhotoBtn" onclick="clearPromoteHero()" style="display:none">Remove photo</button>
     </div>
-    <button class="btn btn-primary" style="width:100%;margin-top:12px" onclick="promoteShare()">Share</button>
-    <div class="promote-actions">
-      <button class="btn btn-ghost" onclick="promoteSave()">Save image</button>
-      <button class="btn btn-ghost" onclick="promoteCopy()">Copy link</button>
+    <button class="btn btn-primary" style="width:100%;margin-top:12px" onclick="postFlyerToFeed()">🔥 Post to Feed</button>
+    <button class="btn btn-ghost" style="width:100%;margin-top:8px" id="promoteShareGroupBtn" onclick="openFlyerGroupPicker()">👥 Share to Group</button>
+    <div id="flyerGroupPicker" style="display:none;margin-top:8px;background:var(--bg-2);border-radius:var(--radius);padding:10px;">
+      <div style="font-size:13px;color:var(--text-muted);margin-bottom:8px;">Choose a group:</div>
+      <div id="flyerGroupList" style="display:flex;flex-direction:column;gap:6px;max-height:160px;overflow-y:auto;"></div>
+    </div>
+    <div class="promote-actions" style="margin-top:8px;">
+      <button class="btn btn-ghost" onclick="promoteShare()">📤 Device share</button>
+      <button class="btn btn-ghost" onclick="promoteSave()">💾 Save image</button>
+      <button class="btn btn-ghost" onclick="promoteCopy()">🔗 Copy link</button>
     </div>
     <button class="btn btn-ghost" style="width:100%;margin-top:8px" onclick="closePromote()">Later</button>
   </div>
@@ -5136,7 +5142,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v75 · no-arrow-btn";
+const APP_VERSION = "v76 · flyer-share";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -7051,6 +7057,8 @@ async function generateFlyer(opts) {
 
 async function openPromote(type, item) {
   if (!item || !item.id) return;
+  state.promoteItem = item; // store for postFlyerToFeed/postFlyerToGroup
+  document.getElementById('flyerGroupPicker').style.display = 'none'; // reset picker
   const link = flyerLink(type, item.id);
   let opts, modalTitle, shareText;
 
@@ -7180,6 +7188,127 @@ function clearPromoteHero() {
   promoteState.heroAutoUrl = null;
   document.getElementById('promotePreview').innerHTML = '<div class="promote-loading">Updating flyer…</div>';
   renderPromoteFlyer().then(updatePromoteMediaButtons);
+}
+
+async function postFlyerToFeed() {
+  if (!state.profile) { toast('Sign in to post'); return; }
+  const ch = state.promoteItem;
+  if (!ch) { toast('No challenge selected'); return; }
+
+  const btn = document.querySelector('#promoteModal .btn-primary');
+  const orig = btn.textContent;
+  btn.textContent = 'Posting...'; btn.disabled = true;
+
+  try {
+    // Get flyer image as blob and upload to storage
+    const imgEl = document.querySelector('#promotePreview img');
+    let mediaUrl = null;
+
+    if (imgEl?.src?.startsWith('data:')) {
+      const blob = await (await fetch(imgEl.src)).blob();
+      const path = `flyers/${state.profile.id}/${ch.id}-${Date.now()}.png`;
+      const { error: upErr } = await db.storage.from('challenge-media').upload(path, blob, { contentType: 'image/png', upsert: true });
+      if (!upErr) {
+        const { data: urlData } = db.storage.from('challenge-media').getPublicUrl(path);
+        mediaUrl = urlData?.publicUrl;
+      }
+    }
+
+    // Post to feed as a flyer post
+    const caption = `🔥 ${escapeHtml(ch.title)} — Enter now!`;
+    const { error } = await db.from('posts').insert({
+      user_id: state.profile.id,
+      content: caption,
+      media_url: mediaUrl,
+      media_type: mediaUrl ? 'photo' : null,
+      post_type: 'flyer',
+      challenge_id: ch.id,
+    });
+    if (error) throw error;
+
+    toast('🔥 Posted to your feed!');
+    closePromote();
+    if (state.currentView === 'feed') { await loadPosts(); renderFeed(); }
+  } catch(err) {
+    console.error('Post flyer error', err);
+    toast('Failed to post — try again');
+  } finally {
+    btn.textContent = orig; btn.disabled = false;
+  }
+}
+
+async function openFlyerGroupPicker() {
+  const picker = document.getElementById('flyerGroupPicker');
+  const list = document.getElementById('flyerGroupList');
+
+  if (picker.style.display === 'block') { picker.style.display = 'none'; return; }
+
+  list.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Loading...</div>';
+  picker.style.display = 'block';
+
+  try {
+    const { data: memberships } = await db.from('user_group_members')
+      .select('group:user_groups(id, name)')
+      .eq('user_id', state.profile.id);
+
+    const groups = (memberships || []).map(m => m.group).filter(Boolean);
+    if (!groups.length) {
+      list.innerHTML = '<div style="color:var(--text-muted);font-size:13px">You\'re not in any groups yet.</div>';
+      return;
+    }
+
+    list.innerHTML = groups.map(g => `
+      <button class="btn btn-ghost" style="width:100%;text-align:left;padding:8px 10px;font-size:13px;" data-group-id="${g.id}" data-group-name="${escapeHtml(g.name)}">
+        👥 ${escapeHtml(g.name)}
+      </button>`).join('');
+
+    list.querySelectorAll('[data-group-id]').forEach(btn => {
+      btn.addEventListener('click', () => postFlyerToGroup(btn.dataset.groupId, btn.dataset.groupName));
+    });
+  } catch(err) {
+    list.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Failed to load groups.</div>';
+  }
+}
+
+async function postFlyerToGroup(groupId, groupName) {
+  if (!state.profile) return;
+  const ch = state.promoteItem;
+  if (!ch) return;
+
+  const btn = document.querySelector(`[data-group-id="${groupId}"]`);
+  if (btn) { btn.textContent = 'Posting...'; btn.disabled = true; }
+
+  try {
+    const imgEl = document.querySelector('#promotePreview img');
+    let mediaUrl = null;
+
+    if (imgEl?.src?.startsWith('data:')) {
+      const blob = await (await fetch(imgEl.src)).blob();
+      const path = `flyers/${state.profile.id}/${ch.id}-${Date.now()}.png`;
+      const { error: upErr } = await db.storage.from('challenge-media').upload(path, blob, { contentType: 'image/png', upsert: true });
+      if (!upErr) {
+        const { data: urlData } = db.storage.from('challenge-media').getPublicUrl(path);
+        mediaUrl = urlData?.publicUrl;
+      }
+    }
+
+    const { error } = await db.from('posts').insert({
+      user_id: state.profile.id,
+      content: `🔥 ${escapeHtml(ch.title)} — Enter now!`,
+      media_url: mediaUrl,
+      media_type: mediaUrl ? 'photo' : null,
+      post_type: 'flyer',
+      challenge_id: ch.id,
+      group_id: groupId,
+    });
+    if (error) throw error;
+
+    toast(`Posted to ${groupName}!`);
+    closePromote();
+  } catch(err) {
+    toast('Failed to post — try again');
+    if (btn) { btn.textContent = `👥 ${groupName}`; btn.disabled = false; }
+  }
 }
 
 function closePromote() {
@@ -10910,7 +11039,7 @@ function renderPostCard(p) {
   const plusBadge = needsFollowPlus(p.user_id) ? ' <span class="user-plus">+</span>' : '';
   return `
     <div class="post-card" data-pid="${p.id}">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px 0"><span class="feed-poll-tag" style="color:#4fc3f7">✍️ POST</span><span style="font-size:12px;color:var(--text-muted)">${timeAgo(p.created_at)}</span></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px 0"><span class="feed-poll-tag" style="color:${p.post_type === 'flyer' ? 'var(--ember)' : '#4fc3f7'}">${p.post_type === 'flyer' ? '📣 FLYER' : '✍️ POST'}</span><span style="font-size:12px;color:var(--text-muted)">${timeAgo(p.created_at)}</span></div>
       <div class="post-card-header" style="padding-top:8px">
         <div class="post-card-avatar" ${userClickAttr}>${avatarInner(author.avatar)}</div>
         <div class="post-card-meta">
