@@ -5151,7 +5151,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v80 · entry-swipe-c";
+const APP_VERSION = "v81 · lb-record";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -6014,18 +6014,19 @@ async function loadLeaderboard() {
     entriesByCh[e.challenge_id].push(e);
   });
 
-  // Compute wins per user — both all-time and 30-day, per category
-  // winsByUser[userId] = { allTime: N, byCategory: { Photography: N, ... }, rolling30: N }
+  // Compute wins AND losses per user
   const winsByUser = {};
+  const lossesByUser = {};
   const ensureUser = id => {
     if (!winsByUser[id]) winsByUser[id] = { allTime: 0, rolling30: 0, byCategory: {}, rolling30ByCategory: {} };
+    if (!lossesByUser[id]) lossesByUser[id] = { allTime: 0, rolling30: 0 };
   };
 
   Object.entries(entriesByCh).forEach(([chId, entries]) => {
     const info = chInfo[chId] || {};
     const cat = info.category || 'Other';
 
-    // All-time winner
+    // All-time winner + losers
     let max = 0, topEntries = [];
     entries.forEach(e => {
       const v = allVotesByEntry[e.id] || 0;
@@ -6037,9 +6038,14 @@ async function loadLeaderboard() {
       ensureUser(uid);
       winsByUser[uid].allTime++;
       winsByUser[uid].byCategory[cat] = (winsByUser[uid].byCategory[cat] || 0) + 1;
+      // Everyone else lost
+      entries.filter(e => e.user_id !== uid).forEach(e => {
+        ensureUser(e.user_id);
+        lossesByUser[e.user_id].allTime++;
+      });
     }
 
-    // Rolling 30-day winner (only for recently-voted challenges)
+    // Rolling 30-day winner + losers
     let rmax = 0, rtopEntries = [];
     entries.forEach(e => {
       const v = recentVotesByEntry[e.id] || 0;
@@ -6051,6 +6057,10 @@ async function loadLeaderboard() {
       ensureUser(uid);
       winsByUser[uid].rolling30++;
       winsByUser[uid].rolling30ByCategory[cat] = (winsByUser[uid].rolling30ByCategory[cat] || 0) + 1;
+      entries.filter(e => e.user_id !== uid).forEach(e => {
+        ensureUser(e.user_id);
+        lossesByUser[e.user_id].rolling30++;
+      });
     }
   });
 
@@ -6059,7 +6069,9 @@ async function loadLeaderboard() {
     ...p,
     isReal: true,
     wins: winsByUser[p.id]?.allTime || 0,
+    losses: lossesByUser[p.id]?.allTime || 0,
     rolling30: winsByUser[p.id]?.rolling30 || 0,
+    rolling30Losses: lossesByUser[p.id]?.rolling30 || 0,
     byCategory: winsByUser[p.id]?.byCategory || {},
     rolling30ByCategory: winsByUser[p.id]?.rolling30ByCategory || {},
   }));
@@ -7805,6 +7817,7 @@ function renderLeaderboard() {
       ...u,
       catWins: cat === 'All' ? (u.rolling30 || 0) : (u.rolling30ByCategory[cat] || 0),
       catAllTime: cat === 'All' ? (u.wins || 0) : (u.byCategory[cat] || 0),
+      catLosses: u.rolling30Losses || 0,
     }))
     .filter(u => u.catWins > 0 || u.catAllTime > 0)
     .sort((a, b) => b.catWins - a.catWins || b.catAllTime - a.catAllTime)
@@ -7886,7 +7899,7 @@ function renderLeaderboard() {
         </div>
         <div style="min-width:0">
           <div class="lb-name">${escapeHtml(u.name)}${isYou ? ' (you)' : ''}${isChamp ? ' <span class="lb-champ-tag">👑 Champ</span>' : ''}${isLeader && !isChamp ? ' <span class="lb-leader-tag">🔥 Leader</span>' : ''}</div>
-          <div class="lb-streak" style="font-size:11px;color:var(--text-muted)">${u.catWins} this month · ${u.catAllTime} all-time</div>
+          <div class="lb-streak" style="font-size:11px;color:var(--text-muted)">${u.catWins}W · ${u.catLosses}L this month · ${u.catAllTime} all-time</div>
         </div>
       </div>
       ${!isYou ? `<button class="lb-follow-btn${isFollowing ? ' following' : ''}" data-lb-follow="${u.id}">${isFollowing ? '✓' : '+ Follow'}</button>` : '<div></div>'}
@@ -7971,7 +7984,7 @@ function buildTicker() {
         .slice(0, 3);
       if (!catUsers.length) return;
       const medals = ['🥇', '🥈', '🥉'];
-      const podiumText = catUsers.map((u, i) => `${medals[i]} ${u.name} · ${u.rolling30ByCategory?.[cat] || 0}w`).join('  ');
+      const podiumText = catUsers.map((u, i) => `${medals[i]} ${u.name}`).join('  ');
       items.push({ icon: '', name: '', badge: 'leader', category: `${cat} TOP 3`, text: podiumText, grouped: true });
     });
 
