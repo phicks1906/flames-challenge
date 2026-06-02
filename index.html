@@ -4751,9 +4751,17 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
           <div id="evChallenge" style="font-size:12px;color:var(--text-muted)"></div>
         </div>
       </div>
-      <button class="modal-close-x" onclick="closeEntryViewer()">×</button>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span id="evCounter" style="font-size:12px;color:var(--text-muted);"></span>
+        <button class="modal-close-x" onclick="closeEntryViewer()">×</button>
+      </div>
     </div>
-    <div id="evMedia" class="entry-viewer-media"></div>
+    <!-- Swipeable media container -->
+    <div id="evMedia" class="entry-viewer-media" style="position:relative;">
+      <!-- Swipe arrows -->
+      <button id="evPrev" onclick="evNavigate(-1)" style="display:none;position:absolute;left:8px;top:50%;transform:translateY(-50%);z-index:10;background:rgba(0,0,0,0.5);border:none;color:white;font-size:24px;width:40px;height:40px;border-radius:50%;cursor:pointer;align-items:center;justify-content:center;">‹</button>
+      <button id="evNext" onclick="evNavigate(1)" style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);z-index:10;background:rgba(0,0,0,0.5);border:none;color:white;font-size:24px;width:40px;height:40px;border-radius:50%;cursor:pointer;align-items:center;justify-content:center;">›</button>
+    </div>
     <div class="entry-viewer-actions">
       <button id="evLikeBtn" class="flame-btn">🔥 <span id="evLikeCount">0</span></button>
       <button id="evFollowBtn" class="btn btn-primary" style="padding:8px 20px;font-size:13px">+ Follow</button>
@@ -5143,7 +5151,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v79 · flyer-modal-clean";
+const APP_VERSION = "v80 · entry-swipe";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -8535,28 +8543,79 @@ async function launchChampionshipChallenge(category) {
 /* ---------- ENTRY VIEWER ---------- */
 let _evEntry = null;
 let _evChallenge = null;
+let _evEntries = []; // all entries for this challenge
+let _evIndex = 0;   // current position
 
 async function openEntryViewer(entryId, chId) {
-  // Find entry from feedEntries or fetch
-  let entry = (state.feedEntries || []).find(e => e.id === entryId);
   const ch = state.challenges.find(c => c.id === chId);
   if (!ch) return;
 
+  // Build entry list for this challenge
+  _evChallenge = ch;
+  _evEntries = (state.feedEntries || []).filter(e => e.challenge_id === chId);
+
   // If entry not in state, fetch it
+  let entry = _evEntries.find(e => e.id === entryId);
   if (!entry) {
     try {
       const { data } = await db.from('entries')
         .select('*, submitter:profiles!entries_user_id_fkey(id, name, avatar)')
         .eq('id', entryId).single();
-      entry = data;
+      if (data) {
+        _evEntries = [data];
+        entry = data;
+      }
     } catch(e) { return; }
   }
   if (!entry) return;
 
-  _evEntry = entry;
-  _evChallenge = ch;
+  _evIndex = _evEntries.findIndex(e => e.id === entryId);
+  if (_evIndex === -1) _evIndex = 0;
 
+  _evEntry = _evEntries[_evIndex];
+  _renderEvEntry();
+
+  // Wire swipe gestures
+  const modal = document.querySelector('.entry-viewer-modal');
+  let touchStartX = 0;
+  modal.ontouchstart = e => { touchStartX = e.touches[0].clientX; };
+  modal.ontouchend = e => {
+    const diff = touchStartX - e.changedTouches[0].clientX;
+    if (Math.abs(diff) > 50) evNavigate(diff > 0 ? 1 : -1);
+  };
+
+  document.getElementById('entryViewerSheet').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function evNavigate(dir) {
+  const newIndex = _evIndex + dir;
+  if (newIndex < 0 || newIndex >= _evEntries.length) return;
+  _evIndex = newIndex;
+  _evEntry = _evEntries[_evIndex];
+  // Stop current media
+  document.getElementById('evMedia').querySelectorAll('video,audio').forEach(m => { m.pause(); m.currentTime = 0; });
+  _renderEvEntry();
+}
+
+function _renderEvEntry() {
+  const entry = _evEntry;
+  const ch = _evChallenge;
   const sub = entry.submitter || { name: 'Unknown', avatar: '🔥', id: null };
+
+  // Counter
+  const counter = document.getElementById('evCounter');
+  if (_evEntries.length > 1) {
+    counter.textContent = `${_evIndex + 1} / ${_evEntries.length}`;
+  } else {
+    counter.textContent = '';
+  }
+
+  // Nav buttons
+  const prevBtn = document.getElementById('evPrev');
+  const nextBtn = document.getElementById('evNext');
+  prevBtn.style.display = _evIndex > 0 ? 'flex' : 'none';
+  nextBtn.style.display = _evIndex < _evEntries.length - 1 ? 'flex' : 'none';
 
   // Avatar + name
   document.getElementById('evAvatar').innerHTML = avatarInner(sub.avatar);
@@ -8565,17 +8624,27 @@ async function openEntryViewer(entryId, chId) {
 
   // Media
   const mediaEl = document.getElementById('evMedia');
+  // Keep nav buttons, replace rest
+  const prevBtnEl = document.getElementById('evPrev');
+  const nextBtnEl = document.getElementById('evNext');
+  mediaEl.innerHTML = '';
+  mediaEl.appendChild(prevBtnEl);
+  mediaEl.appendChild(nextBtnEl);
+
+  const mediaContent = document.createElement('div');
+  mediaContent.style.cssText = 'width:100%;height:100%;';
   if (entry.media_type === 'photo' && entry.media_url) {
-    mediaEl.innerHTML = `<img src="${escapeHtml(entry.media_url)}" alt="">`;
+    mediaContent.innerHTML = `<img src="${escapeHtml(entry.media_url)}" alt="" style="width:100%;max-height:60vh;object-fit:contain;display:block;">`;
   } else if (entry.media_type === 'video' && entry.media_url) {
-    mediaEl.innerHTML = `<video src="${escapeHtml(entry.media_url)}" controls autoplay playsinline preload="auto" ${entry.poster_url ? `poster="${escapeHtml(entry.poster_url)}"` : ''}></video>`;
+    mediaContent.innerHTML = `<video src="${escapeHtml(entry.media_url)}" controls autoplay playsinline preload="auto" ${entry.poster_url ? `poster="${escapeHtml(entry.poster_url)}"` : ''} style="width:100%;max-height:60vh;display:block;"></video>`;
   } else if (entry.media_type === 'audio' && entry.media_url) {
-    mediaEl.innerHTML = `<audio src="${escapeHtml(entry.media_url)}" controls preload="auto"></audio>`;
+    mediaContent.innerHTML = `<div style="padding:20px;"><audio src="${escapeHtml(entry.media_url)}" controls preload="auto" style="width:100%"></audio></div>`;
   } else if (entry.caption) {
-    mediaEl.innerHTML = `<div style="padding:24px;font-size:18px;line-height:1.5;color:var(--text)">${escapeHtml(entry.caption)}</div>`;
+    mediaContent.innerHTML = `<div style="padding:24px;font-size:18px;line-height:1.5;color:var(--text)">${escapeHtml(entry.caption)}</div>`;
   } else {
-    mediaEl.innerHTML = `<div style="padding:40px;font-size:48px;text-align:center">🎬</div>`;
+    mediaContent.innerHTML = `<div style="padding:40px;font-size:48px;text-align:center">🎬</div>`;
   }
+  mediaEl.appendChild(mediaContent);
 
   // Caption
   const capEl = document.getElementById('evCaption');
@@ -8584,18 +8653,14 @@ async function openEntryViewer(entryId, chId) {
 
   // Like button
   const likeBtn = document.getElementById('evLikeBtn');
-  const likeCount = state.entryLikeCounts[entryId] || 0;
-  const iLiked = state.myEntryLikes.has(entryId);
+  const likeCount = state.entryLikeCounts[entry.id] || 0;
+  const iLiked = state.myEntryLikes?.has(entry.id);
   document.getElementById('evLikeCount').textContent = likeCount;
   likeBtn.className = `flame-btn${iLiked ? ' liked' : ''}`;
   likeBtn.onclick = () => {
-    // Reuse existing toggle
-    const btn = document.querySelector(`[data-like-entry="${entryId}"]`);
-    if (btn) btn.click();
-    else toggleEntryLikeFromViewer(entryId);
-    const newLiked = state.myEntryLikes.has(entryId);
-    const newCount = state.entryLikeCounts[entryId] || 0;
-    document.getElementById('evLikeCount').textContent = newCount;
+    toggleEntryLikeFromViewer(entry.id);
+    const newLiked = state.myEntryLikes?.has(entry.id);
+    document.getElementById('evLikeCount').textContent = state.entryLikeCounts[entry.id] || 0;
     likeBtn.className = `flame-btn${newLiked ? ' liked' : ''}`;
   };
 
@@ -8630,9 +8695,6 @@ async function openEntryViewer(entryId, chId) {
       finally { followBtn.disabled = false; }
     };
   }
-
-  document.getElementById('entryViewerSheet').classList.add('open');
-  document.body.style.overflow = 'hidden';
 }
 
 async function toggleEntryLikeFromViewer(entryId) {
@@ -8652,10 +8714,11 @@ async function toggleEntryLikeFromViewer(entryId) {
 function closeEntryViewer() {
   document.getElementById('entryViewerSheet').classList.remove('open');
   document.body.style.overflow = '';
-  // Stop any playing media
   document.getElementById('evMedia').querySelectorAll('video,audio').forEach(m => { m.pause(); m.currentTime = 0; });
   _evEntry = null;
   _evChallenge = null;
+  _evEntries = [];
+  _evIndex = 0;
 }
 
 /* ---------- LIKERS SHEET ---------- */
