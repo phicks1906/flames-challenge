@@ -1627,6 +1627,68 @@ body.theme-light .auth-form input { background: #ffffff; }
 }
 .hc-fire-side, .hc-ice-side { transition: opacity 0.6s ease; }
 
+/* Heat Check background temperature shift */
+.hc-gauge-stage {
+  position: relative;
+  transition: background 1.2s ease;
+}
+.hc-gauge-stage::before {
+  content: '';
+  position: absolute;
+  inset: -12px;
+  border-radius: 16px;
+  opacity: 0;
+  transition: opacity 1.4s ease, background 1.4s ease;
+  pointer-events: none;
+  z-index: 0;
+}
+.hc-gauge-stage.hc-hot::before {
+  background: radial-gradient(ellipse at 70% 60%, rgba(255,106,44,0.18) 0%, transparent 70%);
+  opacity: 1;
+}
+.hc-gauge-stage.hc-cold::before {
+  background: radial-gradient(ellipse at 30% 60%, rgba(79,195,247,0.18) 0%, transparent 70%);
+  opacity: 1;
+}
+.hc-gauge-stage.hc-balanced::before {
+  background: radial-gradient(ellipse at 50% 60%, rgba(180,180,180,0.08) 0%, transparent 70%);
+  opacity: 1;
+}
+
+/* Needle spring animation */
+.hc-needle {
+  transform-origin: 140px 140px;
+  transition: none;
+}
+.hc-needle.hc-needle-animate {
+  transition: transform 1.1s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Arc pulse — stronger based on win rate */
+@keyframes hcArcPulseHot {
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(255,106,44,0.3)) drop-shadow(0 0 12px rgba(255,106,44,0.15)); }
+  50% { filter: drop-shadow(0 0 10px rgba(255,106,44,0.7)) drop-shadow(0 0 24px rgba(255,106,44,0.35)); }
+}
+@keyframes hcArcPulseCold {
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(79,195,247,0.3)) drop-shadow(0 0 12px rgba(79,195,247,0.15)); }
+  50% { filter: drop-shadow(0 0 10px rgba(79,195,247,0.7)) drop-shadow(0 0 24px rgba(79,195,247,0.35)); }
+}
+@keyframes hcArcPulseMid {
+  0%, 100% { filter: drop-shadow(0 0 6px rgba(255,106,44,0.3)) drop-shadow(0 0 6px rgba(79,195,247,0.3)); }
+  50% { filter: drop-shadow(0 0 14px rgba(255,106,44,0.5)) drop-shadow(0 0 14px rgba(79,195,247,0.5)); }
+}
+.hc-arc-hot { animation: hcArcPulseHot 1.8s ease-in-out infinite; }
+.hc-arc-cold { animation: hcArcPulseCold 2.2s ease-in-out infinite; }
+.hc-arc-mid { animation: hcArcPulseMid 2.4s ease-in-out infinite; }
+
+/* Number count-up */
+@keyframes hcNumPop {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.hc-pct-pop { animation: hcNumPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+
 @keyframes hcEmberRise {
   0% { transform: translate(0, 0) scale(1); opacity: 0; }
   15% { opacity: 1; }
@@ -4176,6 +4238,9 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
           <span class="hc-particle hc-ember" style="top:45%; right:10%; --dx: 14px; animation-delay: 1.0s;"></span>
           <span class="hc-particle hc-ember" style="top:55%; right:18%; --dx: -8px; animation-delay: 1.6s;"></span>
           <span class="hc-particle hc-ember" style="top:25%; right:30%; --dx: 4px; animation-delay: 2.0s;"></span>
+          <span class="hc-particle hc-ember" style="top:60%; right:8%; --dx: -10px; animation-delay: 0.3s;"></span>
+          <span class="hc-particle hc-ember" style="top:38%; right:24%; --dx: 8px; animation-delay: 1.2s;"></span>
+          <span class="hc-particle hc-ember" style="top:70%; right:16%; --dx: -4px; animation-delay: 2.4s;"></span>
         </div>
         <div class="hc-ice-side" id="hcIceParticles">
           <span class="hc-particle hc-snow" style="top:22%; left:14%; --dx: -6px; animation-delay: 0s;">❄</span>
@@ -4183,6 +4248,9 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
           <span class="hc-particle hc-snow" style="top:45%; left:10%; --dx: -4px; animation-delay: 1.4s;">❄</span>
           <span class="hc-particle hc-snow" style="top:55%; left:18%; --dx: -8px; animation-delay: 2.2s;">❄</span>
           <span class="hc-particle hc-snow" style="top:25%; left:30%; --dx: -10px; animation-delay: 2.8s;">❄</span>
+          <span class="hc-particle hc-snow" style="top:60%; left:8%; --dx: -6px; animation-delay: 0.4s;">❄</span>
+          <span class="hc-particle hc-snow" style="top:38%; left:24%; --dx: -14px; animation-delay: 1.8s;">❄</span>
+          <span class="hc-particle hc-snow" style="top:70%; left:16%; --dx: -4px; animation-delay: 3.2s;">❄</span>
         </div>
       </div>
 
@@ -5149,7 +5217,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v81 · gauge-center-c";
+const APP_VERSION = "v82 · heat-check-alive";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -7452,25 +7520,78 @@ function renderHeatCheck() {
   // Update big % text + needle + halos
   const pctEl = document.getElementById('heatPct');
   const pctSymEl = document.getElementById('heatPctSym');
-  const pctTextEl = document.getElementById('heatPctText');
-  if (pctTextEl) {
-    pctTextEl.textContent = winPct == null ? '—' : `${Math.round(winPct)}%`;
-    pctTextEl.style.opacity = winPct == null ? '0.4' : '1';
-  }
   if (pctEl) pctEl.textContent = winPct == null ? '—' : Math.round(winPct);
   if (pctSymEl) pctSymEl.style.opacity = winPct == null ? '0.4' : '1';
 
   const needle = document.getElementById('hcNeedle');
   if (needle) {
+    // ── D: Needle slam — start at 0, animate to actual position ──
     const pctForNeedle = winPct == null ? 50 : winPct;
-    const angle = 225 + (270 * pctForNeedle / 100);
-    needle.setAttribute('transform', `rotate(${angle} 140 140)`);
+    const targetAngle = 225 + (270 * pctForNeedle / 100);
+    needle.classList.remove('hc-needle-animate');
+    needle.setAttribute('transform', `rotate(225 140 140)`); // reset to zero
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        needle.classList.add('hc-needle-animate');
+        needle.setAttribute('transform', `rotate(${targetAngle} 140 140)`);
+      });
+    });
   }
-  // Effects intensity scales with win %
-  const fireOp = winPct == null ? 0.4 : (0.25 + 0.75 * winPct / 100);
-  const iceOp = winPct == null ? 0.4 : (0.25 + 0.75 * (1 - winPct / 100));
+
+  // ── B: Arc pulse — intensity based on win rate ──
+  const arcEl = document.querySelector('.hc-arc-glow');
+  if (arcEl) {
+    arcEl.classList.remove('hc-arc-hot', 'hc-arc-cold', 'hc-arc-mid', 'hc-arc-glow');
+    if (winPct == null) arcEl.classList.add('hc-arc-mid');
+    else if (winPct >= 60) arcEl.classList.add('hc-arc-hot');
+    else if (winPct <= 40) arcEl.classList.add('hc-arc-cold');
+    else arcEl.classList.add('hc-arc-mid');
+  }
+
+  // ── C: Background temperature shift ──
+  const stage = document.getElementById('hcGaugeStage');
+  if (stage) {
+    stage.classList.remove('hc-hot', 'hc-cold', 'hc-balanced');
+    if (winPct == null) stage.classList.add('hc-balanced');
+    else if (winPct >= 60) stage.classList.add('hc-hot');
+    else if (winPct <= 40) stage.classList.add('hc-cold');
+    else stage.classList.add('hc-balanced');
+  }
+
+  // ── A: Particle intensity — more embers when hot, more snow when cold ──
+  const fireParticles = document.getElementById('hcFireParticles');
+  const iceParticles = document.getElementById('hcIceParticles');
+  const fireOp = winPct == null ? 0.4 : Math.max(0.1, winPct / 100);
+  const iceOp = winPct == null ? 0.4 : Math.max(0.1, 1 - winPct / 100);
+  if (fireParticles) fireParticles.style.opacity = fireOp;
+  if (iceParticles) iceParticles.style.opacity = iceOp;
   document.querySelectorAll('.hc-fire-side').forEach(el => el.style.opacity = fireOp);
   document.querySelectorAll('.hc-ice-side').forEach(el => el.style.opacity = iceOp);
+
+  // ── E: Count-up number animation ──
+  const pctTextEl = document.getElementById('heatPctText');
+  if (pctTextEl && winPct != null) {
+    const target = Math.round(winPct);
+    pctTextEl.textContent = '0%';
+    pctTextEl.classList.remove('hc-pct-pop');
+    let start = null;
+    const duration = 900;
+    const countUp = (ts) => {
+      if (!start) start = ts;
+      const progress = Math.min((ts - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+      const current = Math.round(eased * target);
+      pctTextEl.textContent = `${current}%`;
+      if (progress < 1) requestAnimationFrame(countUp);
+      else {
+        pctTextEl.textContent = `${target}%`;
+        pctTextEl.classList.add('hc-pct-pop');
+      }
+    };
+    setTimeout(() => requestAnimationFrame(countUp), 200);
+  } else if (pctTextEl) {
+    pctTextEl.textContent = '—';
+  }
 
   // Build ticks once (idempotent: only if not yet built)
   const ticksG = document.getElementById('hcTicks');
