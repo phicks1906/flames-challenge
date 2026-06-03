@@ -5402,7 +5402,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v109 · pct-fix";
+const APP_VERSION = "v110 · record-follow";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -6691,6 +6691,20 @@ function openRecordSheet(filter) {
     if (list) list.innerHTML = '<div class="record-empty">Couldn\'t load your record. Try again.</div>';
   });
 }
+function followFromRecord(userId) {
+  if (!state.profile || !userId) return;
+  const alreadyFollowing = (state.follows || []).some(f => f.following_id === userId);
+  if (alreadyFollowing) return;
+  db.from('follows').insert({ follower_id: state.profile.id, following_id: userId })
+    .then(({ error }) => {
+      if (!error) {
+        if (!state.follows) state.follows = [];
+        state.follows.push({ follower_id: state.profile.id, following_id: userId });
+        renderRecord();
+        toast('Following!');
+      }
+    });
+}
 function closeRecordSheet() {
   document.getElementById('recordSheet').classList.remove('open');
   document.body.style.overflow = '';
@@ -6769,7 +6783,15 @@ async function loadMyRecord() {
       result = 'voided';
     }
 
-    return { challenge: ch, myEntryId: e.id, myCreated: e.created_at, result, myVotes: votesByEntry[e.id] || 0, entryCount: allChEntries.length };
+    // Find the winning entry's user_id
+    let winnerUserId = null;
+    if (status === 'closed' && allChEntries.length > 0) {
+      const counts = allChEntries.map(en => votesByEntry[en.id] || 0);
+      const maxVotes = Math.max(...counts);
+      const winnerEntry = allChEntries.find(en => (votesByEntry[en.id] || 0) === maxVotes);
+      if (winnerEntry && winnerEntry.user_id !== me) winnerUserId = winnerEntry.user_id;
+    }
+    return { challenge: ch, myEntryId: e.id, myCreated: e.created_at, result, myVotes: votesByEntry[e.id] || 0, entryCount: allChEntries.length, winnerUserId };
   }).filter(Boolean);
 
 }
@@ -6829,11 +6851,28 @@ function renderRecord() {
     const date = r.myCreated ? new Date(r.myCreated).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
     const voteLine = r.result === 'won' || r.result === 'lost' ? `${r.myVotes} vote${r.myVotes === 1 ? '' : 's'} · ${r.entryCount} entries` : '';
     const meta = [date, voteLine].filter(Boolean).join(' · ');
+    // Winner follow button
+    let winnerHtml = '';
+    if ((r.result === 'won' || r.result === 'lost') && r.winnerUserId) {
+      const users = state.leaderboardData?.users || [];
+      const winner = users.find(u => u.id === r.winnerUserId);
+      if (winner) {
+        const isFollowing = (state.follows || []).some(f => f.following_id === winner.id);
+        const avatarHtml = winner.avatar
+          ? `<img src="${escapeHtml(winner.avatar)}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0">`
+          : `<div style="width:24px;height:24px;border-radius:50%;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0">🔥</div>`;
+        const followBtn = isFollowing
+          ? `<span style="font-size:11px;color:var(--text-muted)">Following</span>`
+          : `<button onclick="event.stopPropagation();followFromRecord('${winner.id}')" style="background:var(--ember);border:none;color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;cursor:pointer">+ Follow</button>`;
+        winnerHtml = `<div style="display:flex;align-items:center;gap:6px;margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">${avatarHtml}<span style="font-size:12px;color:var(--text-dim);flex:1">${r.result === 'won' ? '🥇 You won' : `🥇 ${escapeHtml(winner.name || 'Winner')}`}</span>${followBtn}</div>`;
+      }
+    }
     return `<div class="record-row" onclick="openRecordRow('${ch.id}')">
       <div class="record-thumb">${icon}</div>
       <div class="record-body">
         <div class="record-title">${escapeHtml(ch.title || 'Untitled')}</div>
         <div class="record-meta">${escapeHtml(meta)}</div>
+        ${winnerHtml}
       </div>
       <div class="record-badge ${r.result}">${badgeLabel[r.result]}</div>
     </div>`;
