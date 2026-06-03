@@ -5362,7 +5362,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v86 · record-diag";
+const APP_VERSION = "v87 · record-fix";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -6677,7 +6677,7 @@ async function loadMyRecord() {
       .eq('user_id', me)
       .order('created_at', { ascending: false }),
     db.from('challenges')
-      .select('id, title, category, submission_deadline, voting_end, is_public, creator_id, status, voided_at'),
+      .select('id, title, category, submission_deadline, voting_end, is_public, creator_id, status'),
     db.from('entries')
       .select('id, challenge_id, user_id'),
     db.from('entry_votes')
@@ -6685,10 +6685,6 @@ async function loadMyRecord() {
   ]);
 
   const myEntries = myEntriesRes.data || [];
-
-  // Temporary diagnostic — remove after confirming fix
-  console.log('[loadMyRecord] uid:', me, 'entries:', myEntries.length, 'err:', myEntriesRes.error?.message);
-  console.log('[loadMyRecord] challenges:', (allChallengesRes.data||[]).length, 'allEntries:', (allEntriesRes.data||[]).length, 'votes:', (allVotesRes.data||[]).length);
 
   // Build lookup maps
   const challengeMap = {};
