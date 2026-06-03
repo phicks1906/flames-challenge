@@ -1764,6 +1764,22 @@ body.theme-light .auth-form input { background: #ffffff; }
   text-transform: uppercase;
   margin-top: 5px;
 }
+.hc-pending-line {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 10px;
+  min-height: 18px;
+}
+.hc-pending-line span {
+  background: rgba(255,106,44,0.12);
+  border: 1px solid rgba(255,106,44,0.3);
+  border-radius: 20px;
+  padding: 2px 10px;
+  color: var(--ember);
+  font-weight: 600;
+  cursor: pointer;
+}
 
 /* Light-mode adjustments — softer halos */
 body.theme-light .hc-arc-glow {
@@ -4397,6 +4413,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
           <div class="hc-tile-lbl">🔥 Streak</div>
         </div>
       </div>
+      <div class="hc-pending-line" id="hcPendingLine"></div>
     </div>
 
     <div class="feed-tabs" role="tablist">
@@ -5362,7 +5379,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v87 · record-fix";
+const APP_VERSION = "v88 · pending-line";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -7676,6 +7693,16 @@ function renderHeatCheck() {
   const wEl = document.getElementById('heatWins');     if (wEl) wEl.textContent = wins;
   const eEl = document.getElementById('heatEntries');  if (eEl) eEl.textContent = entries;
   const sEl = document.getElementById('heatStreak');   if (sEl) sEl.textContent = streak;
+  // Pending line
+  const pending = record ? record.filter(r => r.result === 'pending').length : 0;
+  const plEl = document.getElementById('hcPendingLine');
+  if (plEl) {
+    if (pending > 0) {
+      plEl.innerHTML = `<span onclick="openRecordSheet('pending')">${pending} result${pending > 1 ? 's' : ''} pending ⏳</span>`;
+    } else {
+      plEl.innerHTML = '';
+    }
+  }
   // Update big % text + needle + halos
   const pctEl = document.getElementById('heatPct');
   const pctSymEl = document.getElementById('heatPctSym');
