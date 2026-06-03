@@ -4352,13 +4352,13 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
               <stop id="hcPctStop1" offset="0%" stop-color="#4fc3f7"/>
               <stop id="hcPctStop2" offset="100%" stop-color="#ff6a2c"/>
             </linearGradient>
-              <stop offset="0%"  stop-color="#1a8fc4"/>
-              <stop offset="20%" stop-color="#4fc3f7"/>
-              <stop offset="42%" stop-color="#b3e5fc"/>
-              <stop offset="50%" stop-color="#ffffff"/>
-              <stop offset="58%" stop-color="#ffe4b5"/>
-              <stop offset="78%" stop-color="#ff6a2c"/>
-              <stop offset="100%" stop-color="#ff2d1f"/>
+              <stop offset="0%"  stop-color="#1a6fa0" stop-opacity="0.7"/>
+              <stop offset="20%" stop-color="#4fc3f7" stop-opacity="0.6"/>
+              <stop offset="42%" stop-color="#90cfe8" stop-opacity="0.5"/>
+              <stop offset="50%" stop-color="#c8c0b8" stop-opacity="0.4"/>
+              <stop offset="58%" stop-color="#e8a87a" stop-opacity="0.5"/>
+              <stop offset="78%" stop-color="#ff6a2c" stop-opacity="0.65"/>
+              <stop offset="100%" stop-color="#e02800" stop-opacity="0.7"/>
             </linearGradient>
             <filter id="hcBigGlow" x="-50%" y="-50%" width="200%" height="200%">
               <feGaussianBlur stdDeviation="3" result="b1"/>
@@ -4385,14 +4385,14 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
             stroke="#1a1512" stroke-width="16" fill="none" stroke-linecap="round" opacity="0.25"/>
           <path class="hc-arc-glow"
             d="M 77.8 212.2 A 95 95 0 1 1 212.2 212.2"
-            stroke="url(#hcArcGrad)" stroke-width="14" fill="none" stroke-linecap="round"/>
+            stroke="url(#hcArcGrad)" stroke-width="12" fill="none" stroke-linecap="round"/>
           <g id="hcTicks"></g>
           <text x="62" y="240" text-anchor="middle" fill="#4fc3f7" font-size="11" font-weight="700">0%</text>
           <!-- 50% label removed -->
           <text x="228" y="240" text-anchor="middle" fill="#ff6a2c" font-size="11" font-weight="700">100%</text>
           <!-- needle moved to HTML div -->
           <!-- Percentage centered in gauge — number centered, % smaller offset -->
-          <text id="heatPctText" x="140" y="155" text-anchor="middle" dominant-baseline="central" font-size="48" font-weight="900" fill="url(#hcPctGrad)" class="hc-pct-text" opacity="0.9">—</text>
+          <text id="heatPctText" x="140" y="157" text-anchor="middle" dominant-baseline="central" font-size="46" font-weight="900" fill="url(#hcPctGrad)" class="hc-pct-text" opacity="0.75">—</text>
           <text id="heatPctSymText" x="140" y="155" text-anchor="start" dominant-baseline="central" font-size="20" font-weight="700" fill="url(#hcPctGrad)" opacity="0.8" style="display:none">%</text>
           <text x="140" y="186" text-anchor="middle" font-size="9" font-weight="700" fill="#8a7a72" class="hc-pct-label">WIN RATE</text>
           <tspan id="heatPct" style="display:none">—</tspan>
@@ -5400,7 +5400,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v100 · winrate-fix";
+const APP_VERSION = "v102 · soft-arc";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -7801,8 +7801,8 @@ function renderHeatCheck() {
   if (pctTextEl && winPct != null) {
     const target = Math.round(winPct);
     const symEl = document.getElementById('heatPctSymText');
-    pctTextEl.textContent = '0';
-    if (symEl) { symEl.style.display = 'block'; symEl.textContent = '%'; }
+    if (symEl) symEl.style.display = 'none';
+    pctTextEl.textContent = '0%';
     pctTextEl.classList.remove('hc-pct-pop');
     let start = null;
     const duration = 900;
@@ -7811,24 +7811,11 @@ function renderHeatCheck() {
       const progress = Math.min((ts - start) / duration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
       const current = Math.round(eased * target);
-      pctTextEl.textContent = `${current}`;
-      // Position % right after number
-      if (symEl) {
-        try {
-          const bbox = pctTextEl.getBBox();
-          symEl.setAttribute('x', bbox.x + bbox.width + 2);
-        } catch(e) {}
-      }
+      pctTextEl.textContent = `${current}%`;
       if (progress < 1) requestAnimationFrame(countUp);
       else {
-        pctTextEl.textContent = `${target}`;
+        pctTextEl.textContent = `${target}%`;
         pctTextEl.classList.add('hc-pct-pop');
-        if (symEl) {
-          try {
-            const bbox = pctTextEl.getBBox();
-            symEl.setAttribute('x', bbox.x + bbox.width + 2);
-          } catch(e) {}
-        }
       }
     };
     setTimeout(() => requestAnimationFrame(countUp), 200);
