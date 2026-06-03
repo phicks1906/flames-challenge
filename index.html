@@ -3160,6 +3160,22 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
   color: white;
 }
 .cc-file-input { display: none; }
+.cp-media-type {
+  flex: 1;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cp-media-type.active {
+  border-color: var(--ember);
+  color: var(--ember);
+  background: rgba(255,106,44,0.08);
+}
 .cc-upload {
   border: 2px dashed var(--border-bright);
   border-radius: 14px;
@@ -4726,14 +4742,27 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       </div>
 
       <div class="cc-field">
-        <label>Add media <span class="hint">(optional — photo or video)</span></label>
+        <label>Add media <span class="hint">(optional)</span></label>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <button type="button" id="cpTypePhoto" class="cp-media-type active" onclick="setCpMediaType('photo')">📷 Photo/Video</button>
+          <button type="button" id="cpTypeAudio" class="cp-media-type" onclick="setCpMediaType('audio')">🎙️ Audio</button>
+        </div>
         <div class="cc-upload" id="cpUploadZone" onclick="document.getElementById('cpFile').click()">
           <div class="icon">📤</div>
           <div class="text">Tap to upload</div>
-          <div class="upload-hint">Photo or video · Max 50MB</div>
+          <div class="upload-hint" id="cpUploadHint">Photo or video · Max 50MB</div>
         </div>
         <input type="file" id="cpFile" class="cc-file-input" accept="image/*,video/*" />
         <div class="cc-preview" id="cpPreview" style="display:none"></div>
+        <div id="cpAudioAddZone" style="display:none;margin-top:10px">
+          <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:6px">Add audio track <span class="hint">(optional)</span></label>
+          <div class="cc-upload" style="padding:12px" onclick="document.getElementById('cpAudioFile').click()">
+            <div class="icon" style="font-size:20px">🎵</div>
+            <div class="text" style="font-size:13px">Tap to add audio</div>
+          </div>
+          <input type="file" id="cpAudioFile" class="cc-file-input" accept="audio/*" />
+          <div id="cpAudioPreview" style="display:none"></div>
+        </div>
       </div>
 
       <div id="cpError" class="auth-error"></div>
@@ -5402,7 +5431,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v112 · solo-void";
+const APP_VERSION = "v113 · audio-posts";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -11665,9 +11694,17 @@ function renderPostCard(p) {
   if (p.media_url) {
     if (p.media_type === 'video') {
       mediaHtml = `<div class="post-card-media"><video src="${escapeHtml(p.media_url)}" controls playsinline preload="metadata"></video></div>`;
+    } else if (p.media_type === 'audio') {
+      mediaHtml = `<div class="post-card-media" style="background:var(--surface);border-radius:12px;padding:14px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:28px">🎙️</span>
+        <audio src="${escapeHtml(p.media_url)}" controls preload="auto" style="flex:1;height:36px"></audio>
+      </div>`;
     } else {
       mediaHtml = `<div class="post-card-media"><img src="${escapeHtml(p.media_url)}" alt="post media" loading="lazy"></div>`;
     }
+  }
+  if (p.audio_url) {
+    mediaHtml += `<div style="padding:0 14px 10px"><audio src="${escapeHtml(p.audio_url)}" controls preload="auto" style="width:100%;height:36px;border-radius:8px"></audio></div>`;
   }
   const likeCount = state.postLikeCounts[p.id] || 0;
   const iLiked = state.myPostLikes.has(p.id);
@@ -11962,11 +11999,21 @@ function openCreatePost() {
   if (!state.profile) return;
   cpState.file = null;
   cpState.fileType = null;
+  cpState.audioFile = null;
+  cpState.mediaMode = 'photo';
   document.getElementById('cpContent').value = '';
   document.getElementById('cpFile').value = '';
   document.getElementById('cpPreview').style.display = 'none';
   document.getElementById('cpPreview').innerHTML = '';
   document.getElementById('cpUploadZone').style.display = 'block';
+  document.getElementById('cpAudioFile').value = '';
+  document.getElementById('cpAudioPreview').style.display = 'none';
+  document.getElementById('cpAudioPreview').innerHTML = '';
+  document.getElementById('cpAudioAddZone').style.display = 'none';
+  document.getElementById('cpTypePhoto').classList.add('active');
+  document.getElementById('cpTypeAudio').classList.remove('active');
+  document.getElementById('cpFile').accept = 'image/*,video/*';
+  document.getElementById('cpUploadHint').textContent = 'Photo or video · Max 50MB';
   const err = document.getElementById('cpError');
   err.classList.remove('show');
   err.textContent = '';
@@ -11986,33 +12033,62 @@ function showCpError(msg) {
 document.getElementById('cpFile').addEventListener('change', e => {
   const file = e.target.files[0];
   if (!file) return;
-  if (file.size > 50 * 1024 * 1024) {
-    showCpError('File too large. Max 50MB.');
-    e.target.value = '';
-    return;
-  }
+  if (file.size > 50 * 1024 * 1024) { showCpError('File too large. Max 50MB.'); e.target.value = ''; return; }
   const isVideo = file.type.startsWith('video/');
   const isImage = file.type.startsWith('image/');
-  if (!isVideo && !isImage) {
-    showCpError('Photos and videos only.');
-    e.target.value = '';
-    return;
-  }
+  const isAudio = file.type.startsWith('audio/');
+  if (!isVideo && !isImage && !isAudio) { showCpError('Unsupported file type.'); e.target.value = ''; return; }
   cpState.file = file;
-  cpState.fileType = isVideo ? 'video' : 'photo';
+  cpState.fileType = isVideo ? 'video' : isAudio ? 'audio' : 'photo';
   const preview = document.getElementById('cpPreview');
   const url = URL.createObjectURL(file);
   if (isVideo) {
     preview.innerHTML = `<video src="${url}" controls playsinline style="width:100%;border-radius:12px;max-height:300px"></video>
       <button type="button" class="btn btn-ghost" style="margin-top:8px;width:100%" onclick="clearCpFile()">Remove</button>`;
+  } else if (isAudio) {
+    preview.innerHTML = `<div style="background:var(--surface);border-radius:12px;padding:14px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:24px">🎙️</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${file.name}</div>
+          <audio src="${url}" controls preload="auto" style="width:100%;margin-top:6px;height:32px"></audio>
+        </div>
+      </div>
+      <button type="button" class="btn btn-ghost" style="margin-top:8px;width:100%" onclick="clearCpFile()">Remove</button>`;
   } else {
     preview.innerHTML = `<img src="${url}" style="width:100%;border-radius:12px;max-height:300px;object-fit:contain;background:#000">
       <button type="button" class="btn btn-ghost" style="margin-top:8px;width:100%" onclick="clearCpFile()">Remove</button>`;
+    document.getElementById('cpAudioAddZone').style.display = 'block';
   }
   preview.style.display = 'block';
   document.getElementById('cpUploadZone').style.display = 'none';
   document.getElementById('cpError').classList.remove('show');
 });
+
+document.getElementById('cpAudioFile').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.size > 50 * 1024 * 1024) { showCpError('Audio too large. Max 50MB.'); e.target.value = ''; return; }
+  if (!file.type.startsWith('audio/')) { showCpError('Audio files only.'); e.target.value = ''; return; }
+  cpState.audioFile = file;
+  const url = URL.createObjectURL(file);
+  const ap = document.getElementById('cpAudioPreview');
+  ap.innerHTML = `<div style="background:var(--surface);border-radius:10px;padding:10px;display:flex;align-items:center;gap:8px;margin-top:6px">
+    <span>🎵</span>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:12px;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${file.name}</div>
+      <audio src="${url}" controls preload="auto" style="width:100%;height:28px;margin-top:4px"></audio>
+    </div>
+    <button type="button" onclick="clearCpAudio()" style="background:none;border:none;color:var(--text-muted);font-size:16px;cursor:pointer;padding:0 4px">×</button>
+  </div>`;
+  ap.style.display = 'block';
+});
+
+function clearCpAudio() {
+  cpState.audioFile = null;
+  document.getElementById('cpAudioFile').value = '';
+  document.getElementById('cpAudioPreview').style.display = 'none';
+  document.getElementById('cpAudioPreview').innerHTML = '';
+}
 
 function clearCpFile() {
   cpState.file = null;
@@ -12021,6 +12097,31 @@ function clearCpFile() {
   document.getElementById('cpPreview').style.display = 'none';
   document.getElementById('cpPreview').innerHTML = '';
   document.getElementById('cpUploadZone').style.display = 'block';
+  document.getElementById('cpAudioAddZone').style.display = 'none';
+}
+
+function setCpMediaType(type) {
+  cpState.mediaMode = type;
+  cpState.file = null;
+  cpState.fileType = null;
+  cpState.audioFile = null;
+  document.getElementById('cpFile').value = '';
+  document.getElementById('cpPreview').style.display = 'none';
+  document.getElementById('cpPreview').innerHTML = '';
+  document.getElementById('cpUploadZone').style.display = 'block';
+  document.getElementById('cpAudioAddZone').style.display = 'none';
+  document.getElementById('cpAudioFile').value = '';
+  document.getElementById('cpAudioPreview').style.display = 'none';
+  document.getElementById('cpAudioPreview').innerHTML = '';
+  document.getElementById('cpTypePhoto').classList.toggle('active', type === 'photo');
+  document.getElementById('cpTypeAudio').classList.toggle('active', type === 'audio');
+  if (type === 'audio') {
+    document.getElementById('cpFile').accept = 'audio/*';
+    document.getElementById('cpUploadHint').textContent = 'Audio file · MP3, M4A, WAV · Max 50MB';
+  } else {
+    document.getElementById('cpFile').accept = 'image/*,video/*';
+    document.getElementById('cpUploadHint').textContent = 'Photo or video · Max 50MB';
+  }
 }
 
 document.getElementById('createPostForm').addEventListener('submit', async e => {
@@ -12045,6 +12146,7 @@ document.getElementById('createPostForm').addEventListener('submit', async e => 
   try {
     let mediaUrl = null;
     let mediaType = null;
+    let audioUrl = null;
     if (cpState.file) {
       btn.textContent = 'Uploading...';
       const ext = (cpState.file.name.split('.').pop() || 'bin').toLowerCase();
@@ -12058,6 +12160,18 @@ document.getElementById('createPostForm').addEventListener('submit', async e => 
       mediaUrl = pub.publicUrl;
       mediaType = cpState.fileType;
     }
+    if (cpState.audioFile) {
+      btn.textContent = 'Uploading audio...';
+      const ext = (cpState.audioFile.name.split('.').pop() || 'mp3').toLowerCase();
+      const filename = `posts/${state.profile.id}/audio_${Date.now()}.${ext}`;
+      const uploadResp = await withTimeout(
+        db.storage.from('challenge-media').upload(filename, cpState.audioFile, { cacheControl: '3600', upsert: false }),
+        60000, 'Audio upload'
+      );
+      if (uploadResp.error) throw new Error('Audio upload failed: ' + uploadResp.error.message);
+      const { data: pub } = db.storage.from('challenge-media').getPublicUrl(filename);
+      audioUrl = pub.publicUrl;
+    }
 
     btn.textContent = 'Posting...';
     console.log('[post] inserting with user_id=', state.profile?.id, 'content len=', content.length);
@@ -12067,6 +12181,7 @@ document.getElementById('createPostForm').addEventListener('submit', async e => 
         content,
         media_url: mediaUrl,
         media_type: mediaType,
+        audio_url: audioUrl,
       }).select(),
       15000, 'Insert'
     );
