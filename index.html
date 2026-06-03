@@ -3924,6 +3924,57 @@ body.ticker-visible main { padding-bottom: 112px; }
   font-weight: 600;
 }
 
+/* Legend */
+.following-legend {
+  display: flex;
+  gap: 14px;
+  padding: 4px 16px 2px;
+  align-items: center;
+}
+.following-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.following-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.following-legend-dot.active {
+  background: var(--ember);
+  box-shadow: 0 0 4px rgba(255,106,44,0.6);
+}
+.following-legend-dot.won {
+  background: var(--gold);
+}
+.following-legend-dot.none {
+  background: var(--border);
+  border: 1px solid var(--text-muted);
+}
+
+/* First-time tooltip */
+.following-tooltip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 4px 16px 6px;
+  padding: 8px 12px;
+  background: rgba(255,106,44,0.12);
+  border: 1px solid rgba(255,106,44,0.3);
+  border-radius: 10px;
+  font-size: 12px;
+  color: var(--text);
+  animation: tooltipSlideIn 0.4s cubic-bezier(0.16,1,0.3,1);
+}
+@keyframes tooltipSlideIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* ============ BOTTOM NAV BAR ============ */
 .bottom-nav {
   position: fixed;
@@ -4360,7 +4411,18 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
     <!-- Following activity row -->
     <div id="followingAvatarRow" class="following-avatar-row" style="display:none">
+      <!-- First-time tooltip -->
+      <div id="followingTooltip" class="following-tooltip" style="display:none">
+        <span>👆 Orange ring = competing now — tap to vote!</span>
+        <button onclick="dismissFollowingTooltip()" style="background:none;border:none;color:var(--text-muted);font-size:16px;cursor:pointer;padding:0 0 0 8px;">×</button>
+      </div>
       <div id="followingAvatarScroll" class="following-avatar-scroll"></div>
+      <!-- Persistent legend -->
+      <div class="following-legend">
+        <span class="following-legend-item"><span class="following-legend-dot active"></span>Competing now</span>
+        <span class="following-legend-item"><span class="following-legend-dot won"></span>Recent winner</span>
+        <span class="following-legend-item"><span class="following-legend-dot none"></span>Following</span>
+      </div>
     </div>
 
     <button id="feedNewPill" class="feed-new-pill" style="display:none" onclick="applyFeedNewItems()" aria-label="Show new items"></button>
@@ -5300,7 +5362,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v83 · following-row";
+const APP_VERSION = "v83 · following-row-b";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -8887,10 +8949,22 @@ async function loadFollowingAvatarRow() {
     });
 
     row.style.display = 'block';
+
+    // Show first-time tooltip if not dismissed
+    const tooltip = document.getElementById('followingTooltip');
+    if (tooltip && !localStorage.getItem('fc_following_tooltip_seen')) {
+      tooltip.style.display = 'flex';
+    }
   } catch(err) {
     console.warn('followingAvatarRow error', err);
     row.style.display = 'none';
   }
+}
+
+function dismissFollowingTooltip() {
+  const tooltip = document.getElementById('followingTooltip');
+  if (tooltip) tooltip.style.display = 'none';
+  localStorage.setItem('fc_following_tooltip_seen', '1');
 }
 
 /* ---------- ENTRY VIEWER ---------- */
