@@ -4744,10 +4744,10 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       <div class="cc-field">
         <label>Add media <span class="hint">(optional)</span></label>
         <div style="display:flex;gap:8px;margin-bottom:10px">
-          <button type="button" id="cpTypePhoto" class="cp-media-type active" onclick="setCpMediaType('photo')">📷 Photo/Video</button>
-          <button type="button" id="cpTypeAudio" class="cp-media-type" onclick="setCpMediaType('audio')">🎙️ Audio</button>
+          <button type="button" id="cpTypePhoto" class="cp-media-type active" onclick="event.stopPropagation();setCpMediaType('photo')">📷 Photo/Video</button>
+          <button type="button" id="cpTypeAudio" class="cp-media-type" onclick="event.stopPropagation();setCpMediaType('audio')">🎙️ Audio</button>
         </div>
-        <div class="cc-upload" id="cpUploadZone" onclick="document.getElementById('cpFile').click()">
+        <div class="cc-upload" id="cpUploadZone" onclick="if(cpState.tabSwitching)return;document.getElementById('cpFile').click()">
           <div class="icon">📤</div>
           <div class="text">Tap to upload</div>
           <div class="upload-hint" id="cpUploadHint">Photo or video · Max 50MB</div>
@@ -5431,7 +5431,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v114 · card-border";
+const APP_VERSION = "v115 · audio-tab-fix";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -12103,6 +12103,8 @@ function clearCpFile() {
 
 function setCpMediaType(type) {
   cpState.mediaMode = type;
+  cpState.tabSwitching = true;
+  setTimeout(() => { cpState.tabSwitching = false; }, 400);
   cpState.file = null;
   cpState.fileType = null;
   cpState.audioFile = null;
