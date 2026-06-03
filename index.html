@@ -3849,6 +3849,81 @@ body.ticker-visible main { padding-bottom: 112px; }
 }
 .likes-tappable:hover { color: var(--ember); }
 
+/* ── Following avatar row ── */
+.following-avatar-row {
+  padding: 6px 0 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+.following-avatar-scroll {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding: 4px 16px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.following-avatar-scroll::-webkit-scrollbar { display: none; }
+.following-avatar-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  cursor: pointer;
+  width: 60px;
+}
+.following-avatar-ring {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  padding: 2px;
+  position: relative;
+  flex-shrink: 0;
+}
+.following-avatar-ring.ring-active {
+  background: conic-gradient(var(--ember), #ff2d1f, #ffc857, var(--ember));
+  animation: followingRingPulse 1.5s ease-in-out infinite;
+}
+.following-avatar-ring.ring-won {
+  background: conic-gradient(var(--gold), #fff7cc, var(--gold));
+}
+.following-avatar-ring.ring-none {
+  background: var(--border);
+}
+@keyframes followingRingPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,106,44,0); transform: scale(1); }
+  50% { box-shadow: 0 0 0 4px rgba(255,106,44,0.3); transform: scale(1.04); }
+}
+.following-avatar-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--surface);
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  border: 2px solid var(--bg);
+}
+.following-avatar-inner img {
+  width: 100%; height: 100%; object-fit: cover;
+}
+.following-avatar-name {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+  max-width: 58px;
+}
+.following-avatar-item.has-activity .following-avatar-name {
+  color: var(--ember);
+  font-weight: 600;
+}
+
 /* ============ BOTTOM NAV BAR ============ */
 .bottom-nav {
   position: fixed;
@@ -4281,6 +4356,11 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     <div class="composer" onclick="openCreatePost()" role="button" tabindex="0">
       <div class="avatar" id="composerAvatar">🔥</div>
       <div class="composer-input" id="composerPrompt">What's the heat? Share something...</div>
+    </div>
+
+    <!-- Following activity row -->
+    <div id="followingAvatarRow" class="following-avatar-row" style="display:none">
+      <div id="followingAvatarScroll" class="following-avatar-scroll"></div>
     </div>
 
     <button id="feedNewPill" class="feed-new-pill" style="display:none" onclick="applyFeedNewItems()" aria-label="Show new items"></button>
@@ -5220,7 +5300,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v82 · heat-check-center";
+const APP_VERSION = "v83 · following-row";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -8725,6 +8805,94 @@ async function launchChampionshipChallenge(category) {
   }
 }
 
+/* ---------- FOLLOWING AVATAR ROW ---------- */
+async function loadFollowingAvatarRow() {
+  const row = document.getElementById('followingAvatarRow');
+  const scroll = document.getElementById('followingAvatarScroll');
+  if (!row || !scroll || !state.profile) return;
+
+  try {
+    // Get list of people I follow
+    const { data: followData } = await db
+      .from('follows')
+      .select('followee_id, followee:profiles!follows_followee_id_fkey(id, name, avatar)')
+      .eq('follower_id', state.profile.id)
+      .limit(30);
+
+    const following = (followData || []).map(f => f.followee).filter(Boolean);
+    if (!following.length) { row.style.display = 'none'; return; }
+
+    // Get their recent entries in active challenges
+    const followingIds = following.map(u => u.id);
+    const { data: entryData } = await db
+      .from('entries')
+      .select('id, user_id, challenge_id, challenge:challenges!entries_challenge_id_fkey(id, title, submission_deadline, voting_end, status)')
+      .in('user_id', followingIds)
+      .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
+      .limit(100);
+
+    // Map: userId → { hasActive, hasWon, entryId, challengeId }
+    const now = new Date();
+    const activityMap = {};
+    (entryData || []).forEach(e => {
+      const ch = e.challenge;
+      if (!ch) return;
+      const subEnd = ch.submission_deadline ? new Date(ch.submission_deadline) : null;
+      const voteEnd = ch.voting_end ? new Date(ch.voting_end) : null;
+      const isActive = (subEnd && now < subEnd) || (voteEnd && now < voteEnd);
+      const isDecided = voteEnd && now > voteEnd;
+
+      if (!activityMap[e.user_id]) activityMap[e.user_id] = { hasActive: false, hasDecided: false, entryId: null, challengeId: null };
+      if (isActive) {
+        activityMap[e.user_id].hasActive = true;
+        activityMap[e.user_id].entryId = e.id;
+        activityMap[e.user_id].challengeId = e.challenge_id;
+      }
+      if (isDecided) activityMap[e.user_id].hasDecided = true;
+    });
+
+    // Sort: active first, then won recently, then rest
+    const sorted = [...following].sort((a, b) => {
+      const aActive = activityMap[a.id]?.hasActive ? 2 : activityMap[a.id]?.hasDecided ? 1 : 0;
+      const bActive = activityMap[b.id]?.hasActive ? 2 : activityMap[b.id]?.hasDecided ? 1 : 0;
+      return bActive - aActive;
+    });
+
+    scroll.innerHTML = sorted.map(u => {
+      const act = activityMap[u.id];
+      const ringClass = act?.hasActive ? 'ring-active' : act?.hasDecided ? 'ring-won' : 'ring-none';
+      const hasActivity = act?.hasActive || act?.hasDecided;
+      const entryAttr = act?.hasActive ? `data-entry-open="${act.challengeId}" data-entry-id="${act.entryId}"` : `data-user-id="${u.id}"`;
+      let avatarHtml = '';
+      if (u.avatar && u.avatar.startsWith('http')) {
+        avatarHtml = `<img src="${escapeHtml(u.avatar)}" alt="${escapeHtml(u.name)}">`;
+      } else {
+        avatarHtml = u.avatar || '🔥';
+      }
+      return `
+        <div class="following-avatar-item${hasActivity ? ' has-activity' : ''}" ${entryAttr}>
+          <div class="following-avatar-ring ${ringClass}">
+            <div class="following-avatar-inner">${avatarHtml}</div>
+          </div>
+          <div class="following-avatar-name">${escapeHtml(u.name.split(' ')[0])}</div>
+        </div>`;
+    }).join('');
+
+    // Wire clicks
+    scroll.querySelectorAll('[data-entry-open]').forEach(el => {
+      el.addEventListener('click', () => openEntryViewer(el.dataset.entryId, el.dataset.entryOpen));
+    });
+    scroll.querySelectorAll('[data-user-id]').forEach(el => {
+      el.addEventListener('click', () => openUserProfile(el.dataset.userId));
+    });
+
+    row.style.display = 'block';
+  } catch(err) {
+    console.warn('followingAvatarRow error', err);
+    row.style.display = 'none';
+  }
+}
+
 /* ---------- ENTRY VIEWER ---------- */
 let _evEntry = null;
 let _evChallenge = null;
@@ -11094,6 +11262,14 @@ function renderFeed() {
   updateFeedBaseline();
   hideFeedNewPill();
   initFeedExpandBtn();
+
+  // Load following avatar row (only on Discover tab, only if logged in)
+  if (state.profile && state.feedTab === 'discover') {
+    loadFollowingAvatarRow();
+  } else {
+    const row = document.getElementById('followingAvatarRow');
+    if (row) row.style.display = 'none';
+  }
 
   // Wire entry card taps → open challenge detail at that entry
   c.querySelectorAll('[data-entry-open]').forEach(card => {
