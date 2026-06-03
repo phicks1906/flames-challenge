@@ -2635,6 +2635,67 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
 .feed-type-post { background: rgba(79,195,247,0.15); color: #4fc3f7; }
 .feed-type-challenge { background: rgba(255,106,44,0.15); color: var(--ember); }
 .feed-type-winner { background: rgba(255,200,87,0.15); color: var(--gold); }
+.winner-curtain-wrap {
+  position: relative;
+  overflow: hidden;
+}
+.winner-curtain-left,
+.winner-curtain-right {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  background: linear-gradient(135deg, rgba(255,200,87,0.25), rgba(10,8,6,0.97));
+  z-index: 2;
+  transition: transform 0.9s cubic-bezier(0.77,0,0.18,1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.winner-curtain-left {
+  left: 0;
+  transform: translateX(0);
+  border-right: 1px solid rgba(255,200,87,0.3);
+}
+.winner-curtain-right {
+  right: 0;
+  transform: translateX(0);
+  border-left: 1px solid rgba(255,200,87,0.3);
+}
+.winner-curtain-left::after {
+  content: "🏆";
+  font-size: 32px;
+  opacity: 0.6;
+}
+.winner-curtain-right::after {
+  content: "🥇";
+  font-size: 32px;
+  opacity: 0.6;
+}
+.winner-curtain-wrap.revealed .winner-curtain-left {
+  transform: translateX(-100%);
+}
+.winner-curtain-wrap.revealed .winner-curtain-right {
+  transform: translateX(100%);
+}
+.winner-reveal-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  font-family: var(--font-display);
+  font-size: 20px;
+  letter-spacing: 0.1em;
+  color: var(--gold);
+  text-shadow: 0 0 20px rgba(255,200,87,0.8);
+  white-space: nowrap;
+  pointer-events: none;
+  transition: opacity 0.4s ease 0.3s;
+}
+.winner-curtain-wrap.revealed .winner-reveal-label {
+  opacity: 0;
+}
 
 /* ── Feed expand toggle button ── */
 .feed-expand-btn {
@@ -5435,7 +5496,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v119 · borders";
+const APP_VERSION = "v120 · winner-reveal";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -6114,6 +6175,7 @@ async function loadAppData() {
   renderHeatCheck();
   renderFeedHello();
   renderFeed();
+  setTimeout(wireWinnerReveals, 100);
   loadNotifications();
   startLiveUpdates();
   // Build ticker after data is ready
@@ -11961,10 +12023,37 @@ function renderFeedWinnerCard({ challenge, entry }) {
         <div style="font-size:28px;flex-shrink:0;">🎉</div>
       </div>
 
-      <!-- Winning entry media -->
-      ${mediaHtml}
+      <!-- Winning entry media — curtain reveal -->
+      <div class="winner-curtain-wrap" data-winner-cid="${challenge.id}">
+        ${mediaHtml}
+        <div class="winner-curtain-left"></div>
+        <div class="winner-curtain-right"></div>
+        <div class="winner-reveal-label">WINNER REVEALED</div>
+      </div>
 
     </div>`;
+}
+
+// Wire winner curtain reveals via IntersectionObserver
+function wireWinnerReveals() {
+  if (!('IntersectionObserver' in window)) {
+    // Fallback: reveal all immediately
+    document.querySelectorAll('.winner-curtain-wrap:not(.revealed)').forEach(el => {
+      setTimeout(() => el.classList.add('revealed'), 300);
+    });
+    return;
+  }
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting && !entry.target.classList.contains('revealed')) {
+        setTimeout(() => entry.target.classList.add('revealed'), 400);
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.5 });
+  document.querySelectorAll('.winner-curtain-wrap:not(.revealed)').forEach(el => {
+    observer.observe(el);
+  });
 }
 
 function renderFeedPollCard(poll) {
