@@ -2645,33 +2645,39 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 50%;
-  background: linear-gradient(135deg, rgba(255,200,87,0.25), rgba(10,8,6,0.97));
+  width: 52%;
   z-index: 2;
-  transition: transform 0.9s cubic-bezier(0.77,0,0.18,1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  transition: transform 1.1s cubic-bezier(0.77,0,0.18,1);
 }
 .winner-curtain-left {
   left: 0;
   transform: translateX(0);
-  border-right: 1px solid rgba(255,200,87,0.3);
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(0,0,0,0.15) 0px, rgba(0,0,0,0.0) 8px, rgba(0,0,0,0.12) 16px
+    ),
+    linear-gradient(180deg,
+      #8b0000 0%, #c0392b 15%, #922b21 30%, #cb4335 45%,
+      #922b21 60%, #c0392b 75%, #8b0000 100%
+    );
+  border-right: 3px solid rgba(80,0,0,0.6);
+  box-shadow: inset -8px 0 20px rgba(0,0,0,0.4);
 }
 .winner-curtain-right {
   right: 0;
   transform: translateX(0);
-  border-left: 1px solid rgba(255,200,87,0.3);
-}
-.winner-curtain-left::after {
-  content: "🏆";
-  font-size: 32px;
-  opacity: 0.6;
-}
-.winner-curtain-right::after {
-  content: "🥇";
-  font-size: 32px;
-  opacity: 0.6;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(0,0,0,0.12) 0px, rgba(0,0,0,0.0) 8px, rgba(0,0,0,0.15) 16px
+    ),
+    linear-gradient(180deg,
+      #8b0000 0%, #c0392b 15%, #922b21 30%, #cb4335 45%,
+      #922b21 60%, #c0392b 75%, #8b0000 100%
+    );
+  border-left: 3px solid rgba(80,0,0,0.6);
+  box-shadow: inset 8px 0 20px rgba(0,0,0,0.4);
 }
 .winner-curtain-wrap.revealed .winner-curtain-left {
   transform: translateX(-100%);
@@ -5497,7 +5503,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v122 · winner-reveal2";
+const APP_VERSION = "v123 · curtains";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -11991,7 +11997,7 @@ function renderFeedWinnerCard({ challenge, entry }) {
   const userAttr = clickable ? `data-user-id="${s.id}" class="user-clickable"` : '';
   const plus = needsFollowPlus(s.id) ? ' <span class="user-plus">+</span>' : '';
 
-  // Winning entry media
+  // Winning entry media — always show something
   let mediaHtml = '';
   if (entry.media_type === 'photo' && entry.media_url) {
     mediaHtml = `<img src="${escapeHtml(entry.media_url)}" style="width:100%;max-height:300px;object-fit:cover;display:block;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}">`;
@@ -11999,6 +12005,14 @@ function renderFeedWinnerCard({ challenge, entry }) {
     mediaHtml = entry.poster_url
       ? `<div style="position:relative;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><img src="${escapeHtml(entry.poster_url)}" style="width:100%;max-height:300px;object-fit:cover;display:block;"><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.3);font-size:48px;">▶</div></div>`
       : `<div style="position:relative;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><video src="${escapeHtml(entry.media_url)}" autoplay muted playsinline loop style="width:100%;max-height:300px;object-fit:cover;display:block;"></video><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:48px;pointer-events:none;">▶</div></div>`;
+  } else if (entry.media_type === 'audio' && entry.media_url) {
+    mediaHtml = `<div style="padding:16px;background:var(--surface-2);display:flex;align-items:center;gap:12px;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><span style="font-size:36px">🎙️</span><audio src="${escapeHtml(entry.media_url)}" controls preload="auto" style="flex:1;height:36px"></audio></div>`;
+  } else {
+    // No media — show caption or category placeholder
+    const catIcons = {Art:'🎨',Photography:'📷',Music:'🎵',Writing:'✍️',Cooking:'🍳',Style:'👗',Sports:'🏆',Fitness:'💪',Comedy:'😂'};
+    const icon = catIcons[challenge.category] || '🏆';
+    const caption = entry.caption ? `<div style="font-size:14px;color:var(--text);padding:0 16px 16px;line-height:1.5">${escapeHtml(entry.caption)}</div>` : '';
+    mediaHtml = `<div style="padding:24px 16px;text-align:center;background:var(--surface-2);cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><div style="font-size:48px;margin-bottom:8px">${icon}</div>${caption}</div>`;
   }
 
   return `
