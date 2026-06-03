@@ -2660,7 +2660,7 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
 .fcc-challenge-wrap {
   border-radius: var(--radius);
   overflow: hidden;
-  border: 1px solid rgba(255,106,44,0.2);
+  border: 1px solid rgba(255,106,44,0.85);
   margin-bottom: 20px;
 }
 .fcc-challenge-wrap .feed-challenge-card,
@@ -5431,7 +5431,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v113 · audio-posts";
+const APP_VERSION = "v114 · card-border";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -12030,7 +12030,7 @@ function showCpError(msg) {
   err.classList.add('show');
 }
 
-document.getElementById('cpFile').addEventListener('change', e => {
+function cpFileChangeHandler(e) {
   const file = e.target.files[0];
   if (!file) return;
   if (file.size > 50 * 1024 * 1024) { showCpError('File too large. Max 50MB.'); e.target.value = ''; return; }
@@ -12062,7 +12062,8 @@ document.getElementById('cpFile').addEventListener('change', e => {
   preview.style.display = 'block';
   document.getElementById('cpUploadZone').style.display = 'none';
   document.getElementById('cpError').classList.remove('show');
-});
+}
+document.getElementById('cpFile').addEventListener('change', cpFileChangeHandler);
 
 document.getElementById('cpAudioFile').addEventListener('change', e => {
   const file = e.target.files[0];
@@ -12105,7 +12106,6 @@ function setCpMediaType(type) {
   cpState.file = null;
   cpState.fileType = null;
   cpState.audioFile = null;
-  document.getElementById('cpFile').value = '';
   document.getElementById('cpPreview').style.display = 'none';
   document.getElementById('cpPreview').innerHTML = '';
   document.getElementById('cpUploadZone').style.display = 'block';
@@ -12115,13 +12115,18 @@ function setCpMediaType(type) {
   document.getElementById('cpAudioPreview').innerHTML = '';
   document.getElementById('cpTypePhoto').classList.toggle('active', type === 'photo');
   document.getElementById('cpTypeAudio').classList.toggle('active', type === 'audio');
-  if (type === 'audio') {
-    document.getElementById('cpFile').accept = 'audio/*';
-    document.getElementById('cpUploadHint').textContent = 'Audio file · MP3, M4A, WAV · Max 50MB';
-  } else {
-    document.getElementById('cpFile').accept = 'image/*,video/*';
-    document.getElementById('cpUploadHint').textContent = 'Photo or video · Max 50MB';
-  }
+  // Replace the file input to force iOS to re-evaluate accept type
+  const oldInput = document.getElementById('cpFile');
+  const newInput = oldInput.cloneNode(false);
+  newInput.id = 'cpFile';
+  newInput.className = 'cc-file-input';
+  newInput.accept = type === 'audio' ? 'audio/*' : 'image/*,video/*';
+  newInput.value = '';
+  oldInput.parentNode.replaceChild(newInput, oldInput);
+  newInput.addEventListener('change', cpFileChangeHandler);
+  document.getElementById('cpUploadHint').textContent = type === 'audio'
+    ? 'Audio file · MP3, M4A, WAV · Max 50MB'
+    : 'Photo or video · Max 50MB';
 }
 
 document.getElementById('createPostForm').addEventListener('submit', async e => {
