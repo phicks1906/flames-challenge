@@ -4353,13 +4353,14 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
               <stop id="hcPctStop1" offset="0%" stop-color="#4fc3f7"/>
               <stop id="hcPctStop2" offset="100%" stop-color="#ff6a2c"/>
             </linearGradient>
-              <stop offset="0%"  stop-color="#1a8fc4"/>
-              <stop offset="20%" stop-color="#4fc3f7"/>
-              <stop offset="42%" stop-color="#b3e5fc"/>
+            <linearGradient id="hcArcGrad" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%"  stop-color="#7fd4f5"/>
+              <stop offset="20%" stop-color="#9bdcf7"/>
+              <stop offset="42%" stop-color="#cfeefb"/>
               <stop offset="50%" stop-color="#ffffff"/>
-              <stop offset="58%" stop-color="#ffe4b5"/>
-              <stop offset="78%" stop-color="#ff6a2c"/>
-              <stop offset="100%" stop-color="#ff2d1f"/>
+              <stop offset="58%" stop-color="#ffe9c8"/>
+              <stop offset="78%" stop-color="#ff9d6b"/>
+              <stop offset="100%" stop-color="#ff7a4d"/>
             </linearGradient>
             <filter id="hcBigGlow" x="-50%" y="-50%" width="200%" height="200%">
               <feGaussianBlur stdDeviation="3" result="b1"/>
@@ -4393,7 +4394,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
           <text x="228" y="240" text-anchor="middle" fill="#ff6a2c" font-size="11" font-weight="700">100%</text>
           <!-- needle moved to HTML div -->
           <!-- Percentage centered in gauge — number centered, % smaller offset -->
-          <text x="140" y="157" text-anchor="middle" dominant-baseline="central" font-size="34" font-weight="800" fill="url(#hcPctGrad)" class="hc-pct-text" opacity="0.65"><tspan id="heatPctText">—</tspan><tspan id="heatPctSym2" font-size="16" dy="-8" opacity="0.7"></tspan></text>
+          <text id="heatPctText" x="140" y="157" text-anchor="middle" dominant-baseline="central" font-size="36" font-weight="800" fill="url(#hcPctGrad)" class="hc-pct-text" opacity="0.7">—</text>
           <text id="heatPctSymText" x="140" y="155" text-anchor="start" dominant-baseline="central" font-size="20" font-weight="700" fill="url(#hcPctGrad)" opacity="0.8" style="display:none">%</text>
           <text x="140" y="186" text-anchor="middle" font-size="9" font-weight="700" fill="#8a7a72" class="hc-pct-label">WIN RATE</text>
           <tspan id="heatPct" style="display:none">—</tspan>
@@ -5401,7 +5402,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v107 · final-fix";
+const APP_VERSION = "v108 · gradient-fix";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -7769,8 +7770,8 @@ function renderHeatCheck() {
   // ── A: Particle intensity — more embers when hot, more snow when cold ──
   const fireParticles = document.getElementById('hcFireParticles');
   const iceParticles = document.getElementById('hcIceParticles');
-  const fireOp = winPct == null ? 0.4 : Math.max(0.1, winPct / 100);
-  const iceOp = winPct == null ? 0.4 : Math.max(0.1, 1 - winPct / 100);
+  const fireOp = winPct == null ? 0.5 : Math.max(0.45, winPct / 100);
+  const iceOp = winPct == null ? 0.5 : Math.max(0.45, 1 - winPct / 100);
   if (fireParticles) fireParticles.style.opacity = fireOp;
   if (iceParticles) iceParticles.style.opacity = iceOp;
   document.querySelectorAll('.hc-fire-side').forEach(el => el.style.opacity = fireOp);
@@ -7803,8 +7804,7 @@ function renderHeatCheck() {
     const target = Math.round(winPct);
     const symEl = document.getElementById('heatPctSymText');
     if (symEl) symEl.style.display = 'none';
-    pctTextEl.textContent = '0';
-    const sym2 = document.getElementById('heatPctSym2'); if(sym2) sym2.textContent='%';
+    pctTextEl.textContent = '0%';
     pctTextEl.classList.remove('hc-pct-pop');
     let start = null;
     const duration = 900;
@@ -7813,10 +7813,10 @@ function renderHeatCheck() {
       const progress = Math.min((ts - start) / duration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
       const current = Math.round(eased * target);
-      pctTextEl.textContent = `${current}`;
+      pctTextEl.textContent = `${current}%`;
       if (progress < 1) requestAnimationFrame(countUp);
       else {
-        pctTextEl.textContent = `${target}`;
+        pctTextEl.textContent = `${target}%`;
         pctTextEl.classList.add('hc-pct-pop');
       }
     };
