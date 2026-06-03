@@ -4395,7 +4395,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
           <!-- needle moved to HTML div -->
           <!-- Percentage centered in gauge — number centered, % smaller offset -->
           <text id="heatPctText" x="140" y="157" text-anchor="middle" dominant-baseline="central" font-size="36" font-weight="800" fill="url(#hcPctGrad)" class="hc-pct-text" opacity="0.7">—</text>
-          <text id="heatPctSymText" x="140" y="155" text-anchor="start" dominant-baseline="central" font-size="20" font-weight="700" fill="url(#hcPctGrad)" opacity="0.8" style="display:none">%</text>
+          <text id="heatPctSymText" x="170" y="148" text-anchor="start" font-size="18" font-weight="700" fill="url(#hcPctGrad)" opacity="0.7" style="display:none">%</text>
           <text x="140" y="186" text-anchor="middle" font-size="9" font-weight="700" fill="#8a7a72" class="hc-pct-label">WIN RATE</text>
           <tspan id="heatPct" style="display:none">—</tspan>
           <tspan id="heatPctSym" style="display:none">%</tspan>
@@ -5402,7 +5402,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v108 · gradient-fix";
+const APP_VERSION = "v109 · pct-fix";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -7803,8 +7803,16 @@ function renderHeatCheck() {
   if (pctTextEl && winPct != null) {
     const target = Math.round(winPct);
     const symEl = document.getElementById('heatPctSymText');
-    if (symEl) symEl.style.display = 'none';
-    pctTextEl.textContent = '0%';
+    const positionSym = () => {
+      if (!symEl) return;
+      try {
+        const len = pctTextEl.getComputedTextLength();
+        const cx = parseFloat(pctTextEl.getAttribute('x'));
+        symEl.setAttribute('x', cx + len / 2 + 2);
+        symEl.style.display = '';
+      } catch(e) {}
+    };
+    pctTextEl.textContent = '0';
     pctTextEl.classList.remove('hc-pct-pop');
     let start = null;
     const duration = 900;
@@ -7813,11 +7821,13 @@ function renderHeatCheck() {
       const progress = Math.min((ts - start) / duration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
       const current = Math.round(eased * target);
-      pctTextEl.textContent = `${current}%`;
+      pctTextEl.textContent = `${current}`;
+      positionSym();
       if (progress < 1) requestAnimationFrame(countUp);
       else {
-        pctTextEl.textContent = `${target}%`;
+        pctTextEl.textContent = `${target}`;
         pctTextEl.classList.add('hc-pct-pop');
+        positionSym();
       }
     };
     setTimeout(() => requestAnimationFrame(countUp), 200);
