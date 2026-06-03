@@ -1727,6 +1727,7 @@ body.theme-light .auth-form input { background: #ffffff; }
   position: absolute;
   inset: 0;
   pointer-events: none;
+  z-index: 2;
 }
 .hc-particle {
   position: absolute;
@@ -4176,7 +4177,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
           <input id="loginPassword" type="password" autocomplete="current-password" required />
           <button type="button" class="pw-toggle" onclick="togglePw('loginPassword', this)" aria-label="Show password">👁</button>
         </div>
-        <div id="hcNeedle" style="display:none;position:absolute;left:calc(50% - 1.5px);bottom:50%;width:2px;height:80px;transform-origin:50% 100%;transform:rotate(-135deg);transition:transform 1.1s cubic-bezier(0.34,1.56,0.64,1);pointer-events:none;z-index:3;">
+        <div id="hcNeedle" style="display:none;position:absolute;left:calc(50% - 1.5px);bottom:50%;width:3px;height:85px;transform-origin:50% 100%;transform:rotate(-135deg);transition:transform 1.1s cubic-bezier(0.34,1.56,0.64,1);pointer-events:none;z-index:10;">
           <div style="width:100%;height:calc(100% - 6px);background:linear-gradient(to top,#ff6a2c,#ffd700);border-radius:2px 2px 0 0;opacity:0.9;"></div>
           <div style="width:8px;height:8px;border-radius:50%;background:#ff6a2c;margin-left:-2.5px;"></div>
         </div>
@@ -4352,13 +4353,13 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
               <stop id="hcPctStop1" offset="0%" stop-color="#4fc3f7"/>
               <stop id="hcPctStop2" offset="100%" stop-color="#ff6a2c"/>
             </linearGradient>
-              <stop offset="0%"  stop-color="#1a8fc4" stop-opacity="0.85"/>
-              <stop offset="20%" stop-color="#4fc3f7" stop-opacity="0.85"/>
-              <stop offset="42%" stop-color="#b3e5fc" stop-opacity="0.7"/>
-              <stop offset="50%" stop-color="#e0d8d0" stop-opacity="0.6"/>
-              <stop offset="58%" stop-color="#ffb87a" stop-opacity="0.7"/>
-              <stop offset="78%" stop-color="#ff6a2c" stop-opacity="0.85"/>
-              <stop offset="100%" stop-color="#ff2d1f" stop-opacity="0.85"/>
+              <stop offset="0%"  stop-color="#1a8fc4"/>
+              <stop offset="20%" stop-color="#4fc3f7"/>
+              <stop offset="42%" stop-color="#b3e5fc"/>
+              <stop offset="50%" stop-color="#ffffff"/>
+              <stop offset="58%" stop-color="#ffe4b5"/>
+              <stop offset="78%" stop-color="#ff6a2c"/>
+              <stop offset="100%" stop-color="#ff2d1f"/>
             </linearGradient>
             <filter id="hcBigGlow" x="-50%" y="-50%" width="200%" height="200%">
               <feGaussianBlur stdDeviation="3" result="b1"/>
@@ -4392,7 +4393,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
           <text x="228" y="240" text-anchor="middle" fill="#ff6a2c" font-size="11" font-weight="700">100%</text>
           <!-- needle moved to HTML div -->
           <!-- Percentage centered in gauge — number centered, % smaller offset -->
-          <text id="heatPctText" x="140" y="157" text-anchor="middle" dominant-baseline="central" font-size="34" font-weight="800" fill="url(#hcPctGrad)" class="hc-pct-text" opacity="0.65">—</text>
+          <text x="140" y="157" text-anchor="middle" dominant-baseline="central" font-size="34" font-weight="800" fill="url(#hcPctGrad)" class="hc-pct-text" opacity="0.65"><tspan id="heatPctText">—</tspan><tspan id="heatPctSym2" font-size="18" dy="-5" opacity="0.8"></tspan></text>
           <text id="heatPctSymText" x="140" y="155" text-anchor="start" dominant-baseline="central" font-size="20" font-weight="700" fill="url(#hcPctGrad)" opacity="0.8" style="display:none">%</text>
           <text x="140" y="186" text-anchor="middle" font-size="9" font-weight="700" fill="#8a7a72" class="hc-pct-label">WIN RATE</text>
           <tspan id="heatPct" style="display:none">—</tspan>
@@ -5400,7 +5401,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v104 · arc-needle";
+const APP_VERSION = "v105 · all-fixes";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -7802,7 +7803,8 @@ function renderHeatCheck() {
     const target = Math.round(winPct);
     const symEl = document.getElementById('heatPctSymText');
     if (symEl) symEl.style.display = 'none';
-    pctTextEl.textContent = '0%';
+    pctTextEl.textContent = '0';
+    const sym2 = document.getElementById('heatPctSym2'); if(sym2) sym2.textContent='%';
     pctTextEl.classList.remove('hc-pct-pop');
     let start = null;
     const duration = 900;
@@ -7811,10 +7813,10 @@ function renderHeatCheck() {
       const progress = Math.min((ts - start) / duration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
       const current = Math.round(eased * target);
-      pctTextEl.textContent = `${current}%`;
+      pctTextEl.textContent = `${current}`;
       if (progress < 1) requestAnimationFrame(countUp);
       else {
-        pctTextEl.textContent = `${target}%`;
+        pctTextEl.textContent = `${target}`;
         pctTextEl.classList.add('hc-pct-pop');
       }
     };
@@ -7823,6 +7825,7 @@ function renderHeatCheck() {
     pctTextEl.textContent = '—';
     const symEl = document.getElementById('heatPctSymText');
     if (symEl) symEl.style.display = 'none';
+    const sym2b = document.getElementById('heatPctSym2'); if(sym2b) sym2b.textContent='';
     if (stop1) stop1.setAttribute('stop-color', '#4fc3f7');
     if (stop2) stop2.setAttribute('stop-color', '#ff6a2c');
   }
