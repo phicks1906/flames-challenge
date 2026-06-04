@@ -5497,7 +5497,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v156 · curtain-tap";
+const APP_VERSION = "v157 · css-curtain";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -12041,75 +12041,45 @@ function renderFeedWinnerCard({ challenge, entry }) {
   }
 
   return `
-    <div class="feed-activity-card winner" data-cid="${challenge.id}" style="padding:0;overflow:hidden;position:relative;">
+    <div class="feed-activity-card winner" data-cid="${challenge.id}" style="padding:0;overflow:hidden;">
 
-      <!-- Winner content — always rendered at full size so card has height -->
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 0;">
-        <span class="feed-poll-tag" style="color:var(--gold);">🏁 WINNER</span>
-        <span style="font-size:12px;color:var(--text-muted);">${timeAgo(challenge.voting_end)}</span>
-      </div>
-      <div style="display:flex;align-items:center;gap:14px;padding:12px 14px 14px;background:linear-gradient(135deg,rgba(255,200,87,0.12),rgba(255,106,44,0.08));">
-        <div style="width:60px;height:60px;border-radius:50%;border:3px solid var(--gold);overflow:hidden;flex-shrink:0;background:linear-gradient(135deg,var(--ember),var(--coral));display:grid;place-items:center;font-size:24px;" ${userAttr}>
-          ${avatarInner(s.avatar)}
+      <!-- winner-curtain-wrap: position:relative, overflow:hidden — curtain panels sit inside -->
+      <div class="winner-curtain-wrap">
+
+        <!-- Winner content — always rendered so wrap has real height -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 0;">
+          <span class="feed-poll-tag" style="color:var(--gold);">🏁 WINNER</span>
+          <span style="font-size:12px;color:var(--text-muted);">${timeAgo(challenge.voting_end)}</span>
         </div>
-        <div style="flex:1;min-width:0;">
-          <div style="font-family:var(--font-anton);font-size:22px;letter-spacing:0.02em;color:var(--text);line-height:1.1;" ${userAttr}>
-            ${escapeHtml(s.name.toUpperCase())}${isMine ? ' <span style="color:var(--ember);font-size:13px;font-family:var(--font-body);">(you)</span>' : ''}${plus}
+        <div style="display:flex;align-items:center;gap:14px;padding:12px 14px 14px;background:linear-gradient(135deg,rgba(255,200,87,0.12),rgba(255,106,44,0.08));">
+          <div style="width:60px;height:60px;border-radius:50%;border:3px solid var(--gold);overflow:hidden;flex-shrink:0;background:linear-gradient(135deg,var(--ember),var(--coral));display:grid;place-items:center;font-size:24px;" ${userAttr}>
+            ${avatarInner(s.avatar)}
           </div>
-          <div style="font-size:13px;color:var(--gold);font-weight:600;margin-top:3px;">🥇 ${escapeHtml(challenge.title)}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-family:var(--font-anton);font-size:22px;letter-spacing:0.02em;color:var(--text);line-height:1.1;" ${userAttr}>
+              ${escapeHtml(s.name.toUpperCase())}${isMine ? ' <span style="color:var(--ember);font-size:13px;font-family:var(--font-body);">(you)</span>' : ''}${plus}
+            </div>
+            <div style="font-size:13px;color:var(--gold);font-weight:600;margin-top:3px;">🥇 ${escapeHtml(challenge.title)}</div>
+          </div>
+          <div style="font-size:28px;flex-shrink:0;">🎉</div>
         </div>
-        <div style="font-size:28px;flex-shrink:0;">🎉</div>
-      </div>
-      ${mediaHtml}
+        ${mediaHtml}
 
-      <!-- Curtain: fixed-height overlay, always on top, fades out via JS -->
-      <div class="winner-curtain-overlay" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:20;overflow:hidden;min-height:160px;">
-        <video
-          class="winner-curtain-video"
-          src="https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/curtain.mp4"
-          autoplay playsinline muted preload="auto"
-          style="width:100%;height:100%;object-fit:cover;display:block;">
-        </video>
+        <!-- CSS curtain panels — cover content, slide apart on .revealed -->
+        <div class="winner-curtain-left"></div>
+        <div class="winner-curtain-right"></div>
+        <div class="winner-reveal-label">🏆 WINNER</div>
       </div>
 
     </div>`;
 }
 
-// Wire winner curtain reveals
+// Wire winner curtain reveals — pure CSS, no video, works everywhere
 function wireWinnerReveals() {
-  document.querySelectorAll('.winner-curtain-overlay:not([data-wired])').forEach(overlay => {
-    overlay.setAttribute('data-wired', '1');
-    const video = overlay.querySelector('.winner-curtain-video');
-    if (!video) { overlay.remove(); return; }
-
-    const reveal = () => {
-      if (overlay._revealed) return;
-      overlay._revealed = true;
-      overlay.style.transition = 'opacity 0.8s ease';
-      overlay.style.opacity = '0';
-      setTimeout(() => overlay.remove(), 900);
-    };
-
-    // Wire ended — fires when video finishes one play
-    video.addEventListener('ended', reveal, { once: true });
-
-    // Try to play — if blocked, make overlay tappable so user can start it
-    const playResult = video.play();
-    if (playResult) {
-      playResult.catch(() => {
-        // Autoplay blocked — show a tap-to-play hint, reveal on tap
-        video.style.cursor = 'pointer';
-        overlay.style.cursor = 'pointer';
-        overlay.addEventListener('click', () => {
-          video.play().then(() => {
-            video.addEventListener('ended', reveal, { once: true });
-          }).catch(reveal);
-        }, { once: true });
-      });
-    }
-
-    // Hard fallback: 8s
-    setTimeout(reveal, 8000);
+  document.querySelectorAll('.winner-curtain-wrap:not([data-wired])').forEach(wrap => {
+    wrap.setAttribute('data-wired', '1');
+    // Pause for dramatic effect, then slide curtains open
+    setTimeout(() => wrap.classList.add('revealed'), 1200);
   });
 }
 
