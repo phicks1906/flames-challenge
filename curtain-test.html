@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Curtain Test</title>
+<style>
+body { background: #000; color: #fff; font-family: sans-serif; padding: 20px; }
+.card { position: relative; width: 100%; max-width: 400px; background: #1a1a1a; border-radius: 16px; overflow: hidden; margin: 20px auto; }
+.content { padding: 20px; }
+.overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
+.overlay video { width: 100%; height: 100%; object-fit: cover; display: block; }
+#log { background: #111; padding: 12px; border-radius: 8px; font-size: 12px; font-family: monospace; margin-top: 20px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h2>Curtain Video Test</h2>
+<p>The card below should be covered by the fire curtain video. It should play and then fade to reveal the winner.</p>
+
+<div class="card" id="card">
+  <div class="content">
+    <h3>🏆 WINNER</h3>
+    <p>P23 — Dope Rhyma Challenge</p>
+    <p>If you can read this, the curtain is NOT showing.</p>
+  </div>
+  <div class="overlay" id="overlay">
+    <video id="vid"
+      src="https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/curtain.mp4"
+      autoplay playsinline muted preload="auto"
+      style="width:100%;height:100%;object-fit:cover;">
+    </video>
+  </div>
+</div>
+
+<button onclick="tryPlay()" style="padding:12px 24px;background:#ff6a2c;border:none;color:#fff;border-radius:8px;font-size:16px;cursor:pointer;">Tap to play manually</button>
+
+<div id="log">Waiting for events...</div>
+
+<script>
+const vid = document.getElementById('vid');
+const overlay = document.getElementById('overlay');
+const log = document.getElementById('log');
+
+function addLog(msg) {
+  log.textContent += '\n' + new Date().toLocaleTimeString() + ': ' + msg;
+}
+
+vid.addEventListener('loadstart',    () => addLog('loadstart'));
+vid.addEventListener('loadedmetadata', () => addLog('loadedmetadata — duration: ' + vid.duration + 's'));
+vid.addEventListener('loadeddata',   () => addLog('loadeddata — can render first frame'));
+vid.addEventListener('canplay',      () => addLog('canplay'));
+vid.addEventListener('playing',      () => addLog('▶ PLAYING — curtain should be visible'));
+vid.addEventListener('ended',        () => { addLog('ended — revealing winner'); reveal(); });
+vid.addEventListener('error',        () => addLog('ERROR: code=' + (vid.error && vid.error.code) + ' — ' + (vid.error && vid.error.message)));
+vid.addEventListener('stalled',      () => addLog('stalled'));
+vid.addEventListener('suspend',      () => addLog('suspend'));
+vid.addEventListener('abort',        () => addLog('abort'));
+
+// Try autoplay
+const p = vid.play();
+if (p) {
+  p.then(() => addLog('play() resolved — autoplay OK'))
+   .catch(e => addLog('play() rejected: ' + e.message + ' — tap button above'));
+} else {
+  addLog('play() returned null (old browser)');
+}
+
+function tryPlay() {
+  vid.play()
+    .then(() => addLog('Manual play() resolved'))
+    .catch(e => addLog('Manual play() failed: ' + e.message));
+}
+
+function reveal() {
+  overlay.style.transition = 'opacity 1s';
+  overlay.style.opacity = '0';
+  setTimeout(() => overlay.remove(), 1100);
+}
+
+// Fallback reveal after 8s
+setTimeout(() => { if (overlay.parentNode) { addLog('8s fallback reveal'); reveal(); } }, 8000);
+</script>
+</body>
+</html>
