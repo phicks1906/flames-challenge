@@ -2644,93 +2644,7 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
   position: relative;
   overflow: hidden;
 }
-.winner-curtain-left,
-.winner-curtain-right {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 54%;
-  z-index: 2;
-  transition: transform 2.2s cubic-bezier(0.45,0,0.15,1);
-  overflow: hidden;
-}
-.winner-curtain-left {
-  left: 0;
-  transform: translateX(0);
-  background:
-    repeating-linear-gradient(
-      90deg,
-      rgba(0,0,0,0.0)  0px,
-      rgba(0,0,0,0.18) 4px,
-      rgba(255,255,255,0.04) 8px,
-      rgba(0,0,0,0.22) 12px,
-      rgba(0,0,0,0.0)  18px,
-      rgba(0,0,0,0.15) 24px,
-      rgba(255,255,255,0.03) 28px,
-      rgba(0,0,0,0.18) 34px,
-      rgba(0,0,0,0.0)  40px
-    ),
-    linear-gradient(180deg,
-      #4a0000 0%,
-      #8b0000 4%,
-      #a93226 10%,
-      #7b241c 20%,
-      #cb4335 28%,
-      #922b21 38%,
-      #c0392b 48%,
-      #7b241c 58%,
-      #a93226 68%,
-      #8b0000 80%,
-      #5d0000 90%,
-      #3d0000 100%
-    );
-  box-shadow: inset -12px 0 30px rgba(0,0,0,0.6), inset -2px 0 6px rgba(0,0,0,0.8);
-}
-.winner-curtain-right {
-  right: 0;
-  transform: translateX(0);
-  background:
-    repeating-linear-gradient(
-      90deg,
-      rgba(0,0,0,0.0)  0px,
-      rgba(0,0,0,0.15) 6px,
-      rgba(255,255,255,0.03) 10px,
-      rgba(0,0,0,0.20) 16px,
-      rgba(0,0,0,0.0)  22px,
-      rgba(0,0,0,0.18) 28px,
-      rgba(255,255,255,0.04) 32px,
-      rgba(0,0,0,0.15) 38px,
-      rgba(0,0,0,0.0)  44px
-    ),
-    linear-gradient(180deg,
-      #4a0000 0%,
-      #8b0000 4%,
-      #a93226 10%,
-      #7b241c 20%,
-      #cb4335 28%,
-      #922b21 38%,
-      #c0392b 48%,
-      #7b241c 58%,
-      #a93226 68%,
-      #8b0000 80%,
-      #5d0000 90%,
-      #3d0000 100%
-    );
-  box-shadow: inset 12px 0 30px rgba(0,0,0,0.6), inset 2px 0 6px rgba(0,0,0,0.8);
-}
-/* Valance slides with each curtain via ::before on each curtain half */
-.winner-curtain-left::before,
-.winner-curtain-right::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 18px;
-  background: linear-gradient(180deg, #2d0000 0%, #8b0000 50%, #6b0000 100%);
-  z-index: 1;
-  box-shadow: 0 3px 8px rgba(0,0,0,0.7);
-}
+/* curtain CSS removed — using video */
 .winner-curtain-wrap.revealed .winner-curtain-left {
   transform: translateX(-100%);
 }
@@ -5569,7 +5483,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v138 · preload-meta";
+const APP_VERSION = "v139 · curtain-video";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -12131,8 +12045,7 @@ function renderFeedWinnerCard({ challenge, entry }) {
         </div>
         <!-- Winning entry media -->
         ${mediaHtml}
-        <div class="winner-curtain-left"></div>
-        <div class="winner-curtain-right"></div>
+        <video class="winner-curtain-video" src="https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/assets/curtain.mov" playsinline muted preload="none" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:2;pointer-events:none;opacity:1;transition:opacity 0.5s ease;"></video>
         <div class="winner-reveal-label">🏆 WINNER</div>
       </div>
 
@@ -12142,16 +12055,15 @@ function renderFeedWinnerCard({ challenge, entry }) {
 // Wire winner curtain reveals via IntersectionObserver
 function wireWinnerReveals() {
   if (!('IntersectionObserver' in window)) {
-    // Fallback: reveal all immediately
     document.querySelectorAll('.winner-curtain-wrap:not(.revealed)').forEach(el => {
-      setTimeout(() => el.classList.add('revealed'), 300);
+      setTimeout(() => triggerCurtainReveal(el), 300);
     });
     return;
   }
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       if (entry.isIntersecting && !entry.target.classList.contains('revealed')) {
-        setTimeout(() => entry.target.classList.add('revealed'), 1000);
+        setTimeout(() => triggerCurtainReveal(entry.target), 800);
         observer.unobserve(entry.target);
       }
     });
@@ -12159,6 +12071,32 @@ function wireWinnerReveals() {
   document.querySelectorAll('.winner-curtain-wrap:not(.revealed)').forEach(el => {
     observer.observe(el);
   });
+}
+
+function triggerCurtainReveal(wrap) {
+  const video = wrap.querySelector('.winner-curtain-video');
+  const label = wrap.querySelector('.winner-reveal-label');
+  if (video) {
+    video.play().catch(() => {});
+    // Fade out video after it ends, revealing winner underneath
+    video.addEventListener('ended', () => {
+      video.style.opacity = '0';
+      if (label) label.style.opacity = '0';
+      setTimeout(() => { video.style.display = 'none'; }, 500);
+    }, { once: true });
+    // Fallback: fade out after 6s if ended event doesn't fire
+    setTimeout(() => {
+      if (video.style.opacity !== '0') {
+        video.style.opacity = '0';
+        if (label) label.style.opacity = '0';
+        setTimeout(() => { video.style.display = 'none'; }, 500);
+      }
+    }, 6000);
+  } else {
+    // No video — fall back to CSS reveal
+    wrap.classList.add('revealed');
+  }
+  wrap.classList.add('revealed');
 }
 
 function renderFeedPollCard(poll) {
