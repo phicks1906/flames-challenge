@@ -2644,37 +2644,51 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
   position: relative;
   overflow: hidden;
 }
-/* curtain CSS removed — using video */
-.winner-curtain-wrap.revealed .winner-curtain-left {
-  transform: translateX(-100%);
+.winner-curtain-left,
+.winner-curtain-right {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 50%;
+  z-index: 4;
+  background: linear-gradient(135deg, #1a0a00 0%, #2a1200 40%, #0a0500 100%);
+  transition: transform 0.9s cubic-bezier(0.77, 0, 0.175, 1);
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
 }
-.winner-curtain-wrap.revealed .winner-curtain-right {
-  transform: translateX(100%);
+.winner-curtain-left  { left: 0;  transform: translateX(0); }
+.winner-curtain-right { right: 0; transform: translateX(0); }
+.winner-curtain-left::before,
+.winner-curtain-right::before {
+  content: "";
+  position: absolute; inset: 0;
+  background: repeating-linear-gradient(
+    180deg,
+    transparent 0px, transparent 18px,
+    rgba(255,80,20,0.07) 18px, rgba(255,80,20,0.07) 19px
+  );
 }
+.winner-curtain-left::after  { content: "🔥"; font-size: 48px; opacity: 0.25; position: absolute; right: 8px; }
+.winner-curtain-right::after { content: "🔥"; font-size: 48px; opacity: 0.25; position: absolute; left: 8px; }
+.winner-curtain-wrap.revealed .winner-curtain-left  { transform: translateX(-100%); }
+.winner-curtain-wrap.revealed .winner-curtain-right { transform: translateX(100%); }
 .winner-reveal-label {
   position: absolute;
-  top: 50%;
-  left: 50%;
+  top: 50%; left: 50%;
   transform: translate(-50%, -50%);
-  z-index: 3;
+  z-index: 5;
   font-family: var(--font-display);
-  font-size: 22px;
-  letter-spacing: 0.12em;
+  font-size: 22px; letter-spacing: 0.12em;
   color: var(--gold);
   text-shadow: 0 0 30px rgba(255,200,87,0.9), 0 2px 4px rgba(0,0,0,0.8);
-  white-space: nowrap;
-  pointer-events: none;
-  transition: opacity 0.6s ease 0.8s;
+  white-space: nowrap; pointer-events: none;
+  transition: opacity 0.4s ease 0.7s;
   animation: winnerPulse 1.8s ease-in-out infinite;
 }
 @keyframes winnerPulse {
   0%, 100% { text-shadow: 0 0 20px rgba(255,200,87,0.7), 0 2px 4px rgba(0,0,0,0.8); }
   50% { text-shadow: 0 0 40px rgba(255,200,87,1.0), 0 0 60px rgba(255,150,0,0.5), 0 2px 4px rgba(0,0,0,0.8); }
 }
-.winner-curtain-wrap.revealed .winner-reveal-label {
-  opacity: 0;
-  animation: none;
-}
+.winner-curtain-wrap.revealed .winner-reveal-label { opacity: 0; animation: none; }
 
 /* ── Feed expand toggle button ── */
 .feed-expand-btn {
@@ -5483,7 +5497,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v145 · curtain-viewport";
+const APP_VERSION = "v146 · css-curtain";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -12052,7 +12066,8 @@ function renderFeedWinnerCard({ challenge, entry }) {
         </div>
         <!-- Winning entry media -->
         ${mediaHtml}
-        <video class="winner-curtain-video" src="https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/assets/curtain.mov" playsinline muted preload="auto" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:2;pointer-events:none;display:none;transition:opacity 0.5s ease;"></video>
+        <div class="winner-curtain-left"></div>
+        <div class="winner-curtain-right"></div>
         <div class="winner-reveal-label">🏆 WINNER</div>
       </div>
 
@@ -12091,30 +12106,7 @@ function wireWinnerReveals() {
 }
 
 function triggerCurtainReveal(wrap) {
-  const video = wrap.querySelector('.winner-curtain-video');
-  const label = wrap.querySelector('.winner-reveal-label');
-  if (video) {
-    // Show video — this triggers autoplay on iOS
-    video.style.display = 'block';
-    video.style.opacity = '1';
-    video.currentTime = 0;
-    video.play().catch(() => {});
-    video.addEventListener('ended', () => {
-      video.style.opacity = '0';
-      if (label) label.style.opacity = '0';
-      setTimeout(() => { video.style.display = 'none'; }, 500);
-    }, { once: true });
-    // Fallback: fade out after 8s
-    setTimeout(() => {
-      if (video.style.opacity !== '0') {
-        video.style.opacity = '0';
-        if (label) label.style.opacity = '0';
-        setTimeout(() => { video.style.display = 'none'; }, 500);
-      }
-    }, 8000);
-  } else {
-    wrap.classList.add('revealed');
-  }
+  // CSS transition: adding .revealed slides both panels off-screen
   wrap.classList.add('revealed');
 }
 
