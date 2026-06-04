@@ -5569,7 +5569,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v137 · trophy-cdn";
+const APP_VERSION = "v138 · preload-meta";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -9350,7 +9350,7 @@ function _renderEvEntry() {
     vid.style.cssText = 'width:100%;max-height:60vh;display:block;';
     mediaContent.appendChild(vid);
   } else if (entry.media_type === 'audio' && entry.media_url) {
-    mediaContent.innerHTML = `<div style="padding:20px;"><audio src="${escapeHtml(entry.media_url)}" controls preload="auto" style="width:100%"></audio></div>`;
+    mediaContent.innerHTML = `<div style="padding:20px;"><audio src="${escapeHtml(entry.media_url)}" controls preload="metadata" style="width:100%"></audio></div>`;
   } else if (entry.caption) {
     mediaContent.innerHTML = `<div style="padding:24px;font-size:18px;line-height:1.5;color:var(--text)">${escapeHtml(entry.caption)}</div>`;
   } else {
@@ -9635,7 +9635,7 @@ document.getElementById('ccFile').addEventListener('change', (e) => {
   let mediaEl = '';
   if (ccState.mediaType === 'photo') mediaEl = `<img src="${ccState.fileUrl}" alt="Preview">`;
   else if (ccState.mediaType === 'video') mediaEl = `<video src="${ccState.fileUrl}" controls></video>`;
-  else if (ccState.mediaType === 'audio') mediaEl = `<div style="padding:16px;background:#0a0805"><audio preload="auto" src="${ccState.fileUrl}" controls style="width:100%"></audio></div>`;
+  else if (ccState.mediaType === 'audio') mediaEl = `<div style="padding:16px;background:#0a0805"><audio preload="metadata" src="${ccState.fileUrl}" controls style="width:100%"></audio></div>`;
   preview.innerHTML = mediaEl + `
     <div class="cc-preview-info">
       <span>${escapeHtml(file.name)} · ${(file.size/1024/1024).toFixed(1)} MB</span>
@@ -9983,7 +9983,7 @@ function renderChallenges() {
       } else if (e.media_type === 'video' && e.media_url) {
         mHtml = e.poster_url
           ? `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}"><img src="${escapeHtml(e.poster_url)}" style="width:100%;height:100%;object-fit:cover;display:block"><div class="fcc-play-overlay">▶</div></div>`
-          : `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}" style="position:relative;"><video src="${escapeHtml(e.media_url)}" autoplay muted playsinline loop preload="auto" style="width:100%;height:100%;object-fit:cover;display:block;"></video><div class="fcc-play-overlay">▶</div></div>`;
+          : `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}" style="position:relative;"><video src="${escapeHtml(e.media_url)}" autoplay muted playsinline loop preload="metadata" style="width:100%;height:100%;object-fit:cover;display:block;"></video><div class="fcc-play-overlay">▶</div></div>`;
       } else if (e.media_type === 'audio') {
         mHtml = `<div class="fcc-entry-media fcc-entry-placeholder">🎵</div>`;
       } else if (e.media_type === 'text' && e.caption) {
@@ -10298,7 +10298,7 @@ function renderChallengeDetail() {
         </div>`;
       }
     } else if (entry.media_type === 'audio' && entry.media_url) {
-      mediaHtml = `<div class="cd-audio-wrap"><audio src="${entry.media_url}" controls preload="auto" style="width:100%"></audio></div>`;
+      mediaHtml = `<div class="cd-audio-wrap"><audio src="${entry.media_url}" controls preload="metadata" style="width:100%"></audio></div>`;
     } else if (entry.media_type === 'text') {
       mediaHtml = `<div class="cd-text-entry">${formatBody(entry.caption || '')}</div>`;
     }
@@ -10660,7 +10660,7 @@ function openSubmitEntry(entryToEdit = null) {
       else if (ch.media_type === 'video') mediaEl = entryToEdit.poster_url
         ? `<video src="${entryToEdit.media_url}" poster="${entryToEdit.poster_url}" controls></video>`
         : `<video src="${entryToEdit.media_url}" controls></video>`;
-      else if (ch.media_type === 'audio') mediaEl = `<div style="padding:16px;background:#0a0805"><audio preload="auto" src="${entryToEdit.media_url}" controls style="width:100%"></audio></div>`;
+      else if (ch.media_type === 'audio') mediaEl = `<div style="padding:16px;background:#0a0805"><audio preload="metadata" src="${entryToEdit.media_url}" controls style="width:100%"></audio></div>`;
       preview.innerHTML = mediaEl + `<div class="cc-preview-info"><span>Current file · tap below to replace</span></div>`;
       preview.style.display = 'block';
       document.getElementById('seUploadZone').classList.add('has-file');
@@ -10707,7 +10707,7 @@ document.getElementById('seFile').addEventListener('change', (e) => {
   let mediaEl = '';
   if (ch.media_type === 'photo') mediaEl = `<img src="${seState.fileUrl}" alt="Preview">`;
   else if (ch.media_type === 'video') mediaEl = `<video src="${seState.fileUrl}" controls></video>`;
-  else if (ch.media_type === 'audio') mediaEl = `<div style="padding:16px;background:#0a0805"><audio preload="auto" src="${seState.fileUrl}" controls style="width:100%"></audio></div>`;
+  else if (ch.media_type === 'audio') mediaEl = `<div style="padding:16px;background:#0a0805"><audio preload="metadata" src="${seState.fileUrl}" controls style="width:100%"></audio></div>`;
   preview.innerHTML = mediaEl + `
     <div class="cc-preview-info">
       <span>${escapeHtml(file.name)} · ${(file.size/1024/1024).toFixed(1)} MB</span>
@@ -11860,14 +11860,14 @@ function renderPostCard(p) {
     } else if (p.media_type === 'audio') {
       mediaHtml = `<div class="post-card-media" style="background:var(--surface);border-radius:12px;padding:14px;display:flex;align-items:center;gap:10px">
         <span style="font-size:28px">🎙️</span>
-        <audio src="${escapeHtml(p.media_url)}" controls preload="auto" style="flex:1;height:36px"></audio>
+        <audio src="${escapeHtml(p.media_url)}" controls preload="metadata" style="flex:1;height:36px"></audio>
       </div>`;
     } else {
       mediaHtml = `<div class="post-card-media"><img src="${escapeHtml(p.media_url)}" alt="post media" loading="lazy"></div>`;
     }
   }
   if (p.audio_url) {
-    mediaHtml += `<div style="padding:0 14px 10px"><audio src="${escapeHtml(p.audio_url)}" controls preload="auto" style="width:100%;height:36px;border-radius:8px"></audio></div>`;
+    mediaHtml += `<div style="padding:0 14px 10px"><audio src="${escapeHtml(p.audio_url)}" controls preload="metadata" style="width:100%;height:36px;border-radius:8px"></audio></div>`;
   }
   const likeCount = state.postLikeCounts[p.id] || 0;
   const iLiked = state.myPostLikes.has(p.id);
@@ -12022,7 +12022,7 @@ function renderFeedChallengeCard(ch) {
         } else {
           // No poster — use muted autoplay video to show first frame
           mediaHtml = `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}" style="position:relative;">
-            <video src="${escapeHtml(e.media_url)}" autoplay muted playsinline loop preload="auto" style="width:100%;height:100%;object-fit:cover;display:block;"></video>
+            <video src="${escapeHtml(e.media_url)}" autoplay muted playsinline loop preload="metadata" style="width:100%;height:100%;object-fit:cover;display:block;"></video>
             <div class="fcc-play-overlay">▶</div>
           </div>`;
         }
@@ -12096,7 +12096,7 @@ function renderFeedWinnerCard({ challenge, entry }) {
       ? `<div style="position:relative;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><img src="${escapeHtml(entry.poster_url)}" style="width:100%;max-height:300px;object-fit:cover;display:block;"><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.3);font-size:48px;">▶</div></div>`
       : `<div style="position:relative;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><video src="${escapeHtml(entry.media_url)}" autoplay muted playsinline loop style="width:100%;max-height:300px;object-fit:cover;display:block;"></video><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:48px;pointer-events:none;">▶</div></div>`;
   } else if (entry.media_type === 'audio' && entry.media_url) {
-    mediaHtml = `<div style="padding:16px;background:var(--surface-2);display:flex;align-items:center;gap:12px;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><span style="font-size:36px">🎙️</span><audio src="${escapeHtml(entry.media_url)}" controls preload="auto" style="flex:1;height:36px"></audio></div>`;
+    mediaHtml = `<div style="padding:16px;background:var(--surface-2);display:flex;align-items:center;gap:12px;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><span style="font-size:36px">🎙️</span><audio src="${escapeHtml(entry.media_url)}" controls preload="metadata" style="flex:1;height:36px"></audio></div>`;
   } else {
     // No media — show caption or category placeholder
     const catIcons = {Art:'🎨',Photography:'📷',Music:'🎵',Writing:'✍️',Cooking:'🍳',Style:'👗',Sports:'🏆',Fitness:'💪',Comedy:'😂'};
@@ -12260,7 +12260,7 @@ function cpFileChangeHandler(e) {
         <span style="font-size:24px">🎙️</span>
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${file.name}</div>
-          <audio src="${url}" controls preload="auto" style="width:100%;margin-top:6px;height:32px"></audio>
+          <audio src="${url}" controls preload="metadata" style="width:100%;margin-top:6px;height:32px"></audio>
         </div>
       </div>
       <button type="button" class="btn btn-ghost" style="margin-top:8px;width:100%" onclick="clearCpFile()">Remove</button>`;
@@ -12287,7 +12287,7 @@ document.getElementById('cpAudioFile').addEventListener('change', e => {
     <span>🎵</span>
     <div style="flex:1;min-width:0">
       <div style="font-size:12px;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${file.name}</div>
-      <audio src="${url}" controls preload="auto" style="width:100%;height:28px;margin-top:4px"></audio>
+      <audio src="${url}" controls preload="metadata" style="width:100%;height:28px;margin-top:4px"></audio>
     </div>
     <button type="button" onclick="clearCpAudio()" style="background:none;border:none;color:var(--text-muted);font-size:16px;cursor:pointer;padding:0 4px">×</button>
   </div>`;
