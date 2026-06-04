@@ -5497,7 +5497,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v154 · curtain-shell";
+const APP_VERSION = "v155 · curtain-overlay";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -12041,37 +12041,34 @@ function renderFeedWinnerCard({ challenge, entry }) {
   }
 
   return `
-    <div class="feed-activity-card winner" data-cid="${challenge.id}" style="padding:0;overflow:hidden;">
+    <div class="feed-activity-card winner" data-cid="${challenge.id}" style="padding:0;overflow:hidden;position:relative;">
 
-      <!-- Fire curtain: normal block video that sits on top, removed after playing -->
-      <div class="winner-curtain-shell" style="position:relative;width:100%;background:#000;line-height:0;">
-        <!-- Winner content sits here, hidden until curtain lifts -->
-        <div class="winner-curtain-content" style="visibility:hidden;">
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 0;">
-            <span class="feed-poll-tag" style="color:var(--gold);">🏁 WINNER</span>
-            <span style="font-size:12px;color:var(--text-muted);">${timeAgo(challenge.voting_end)}</span>
-          </div>
-          <div style="display:flex;align-items:center;gap:14px;padding:12px 14px 14px;background:linear-gradient(135deg,rgba(255,200,87,0.12),rgba(255,106,44,0.08));">
-            <div style="width:60px;height:60px;border-radius:50%;border:3px solid var(--gold);overflow:hidden;flex-shrink:0;background:linear-gradient(135deg,var(--ember),var(--coral));display:grid;place-items:center;font-size:24px;cursor:${clickable ? 'pointer' : 'default'};" ${userAttr}>
-              ${avatarInner(s.avatar)}
-            </div>
-            <div style="flex:1;min-width:0;">
-              <div style="font-family:var(--font-anton);font-size:22px;letter-spacing:0.02em;color:var(--text);line-height:1.1;" ${userAttr}>
-                ${escapeHtml(s.name.toUpperCase())}${isMine ? ' <span style="color:var(--ember);font-size:13px;font-family:var(--font-body);">(you)</span>' : ''}${plus}
-              </div>
-              <div style="font-size:13px;color:var(--gold);font-weight:600;margin-top:3px;">🥇 ${escapeHtml(challenge.title)}</div>
-            </div>
-            <div style="font-size:28px;flex-shrink:0;">🎉</div>
-          </div>
-          ${mediaHtml}
+      <!-- Winner content — always rendered at full size so card has height -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 0;">
+        <span class="feed-poll-tag" style="color:var(--gold);">🏁 WINNER</span>
+        <span style="font-size:12px;color:var(--text-muted);">${timeAgo(challenge.voting_end)}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;padding:12px 14px 14px;background:linear-gradient(135deg,rgba(255,200,87,0.12),rgba(255,106,44,0.08));">
+        <div style="width:60px;height:60px;border-radius:50%;border:3px solid var(--gold);overflow:hidden;flex-shrink:0;background:linear-gradient(135deg,var(--ember),var(--coral));display:grid;place-items:center;font-size:24px;" ${userAttr}>
+          ${avatarInner(s.avatar)}
         </div>
-        <!-- Curtain video absolutely covers the content above -->
+        <div style="flex:1;min-width:0;">
+          <div style="font-family:var(--font-anton);font-size:22px;letter-spacing:0.02em;color:var(--text);line-height:1.1;" ${userAttr}>
+            ${escapeHtml(s.name.toUpperCase())}${isMine ? ' <span style="color:var(--ember);font-size:13px;font-family:var(--font-body);">(you)</span>' : ''}${plus}
+          </div>
+          <div style="font-size:13px;color:var(--gold);font-weight:600;margin-top:3px;">🥇 ${escapeHtml(challenge.title)}</div>
+        </div>
+        <div style="font-size:28px;flex-shrink:0;">🎉</div>
+      </div>
+      ${mediaHtml}
+
+      <!-- Curtain: fixed-height overlay, always on top, fades out via JS -->
+      <div class="winner-curtain-overlay" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:20;overflow:hidden;min-height:160px;">
         <video
           class="winner-curtain-video"
           src="https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/curtain.mp4"
           autoplay playsinline muted preload="auto"
-          onerror="this.closest('.winner-curtain-shell').querySelector('.winner-curtain-content').style.visibility='visible';this.remove();"
-          style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;z-index:5;">
+          style="width:100%;height:100%;object-fit:cover;display:block;">
         </video>
       </div>
 
@@ -12080,32 +12077,27 @@ function renderFeedWinnerCard({ challenge, entry }) {
 
 // Wire winner curtain reveals
 function wireWinnerReveals() {
-  document.querySelectorAll('.winner-curtain-video:not([data-wired])').forEach(video => {
-    video.setAttribute('data-wired', '1');
-    const shell = video.closest('.winner-curtain-shell');
-    const content = shell && shell.querySelector('.winner-curtain-content');
-    if (!shell || !content) return;
+  document.querySelectorAll('.winner-curtain-overlay:not([data-wired])').forEach(overlay => {
+    overlay.setAttribute('data-wired', '1');
+    const video = overlay.querySelector('.winner-curtain-video');
+    if (!video) { overlay.remove(); return; }
 
     const reveal = () => {
-      // Fade video out, show content
-      video.style.transition = 'opacity 0.7s ease';
-      video.style.opacity = '0';
-      content.style.visibility = 'visible';
-      setTimeout(() => { video.style.display = 'none'; }, 750);
+      overlay.style.transition = 'opacity 0.8s ease';
+      overlay.style.opacity = '0';
+      setTimeout(() => overlay.remove(), 900);
     };
 
-    // Play for ~5s (full duration) then reveal
+    // Wire ended — fires when video finishes one play
     video.addEventListener('ended', reveal, { once: true });
-    // Remove loop so ended fires
-    video.removeAttribute('loop');
-    // Fallback: reveal after 6s
-    setTimeout(reveal, 6000);
-    // Ensure playing
-    try { video.play().catch(() => reveal()); } catch(e) { reveal(); }
+    // Fallback: 7s in case ended never fires
+    setTimeout(reveal, 7000);
+    // Nudge play in case autoplay was blocked
+    try { video.play().catch(reveal); } catch(e) { reveal(); }
   });
 }
 
-function triggerCurtainReveal(card, video) {}
+function triggerCurtainReveal() {}
 
 function renderFeedPollCard(poll) {
   const counts = state.voteCountsByPoll[poll.id] || {};
