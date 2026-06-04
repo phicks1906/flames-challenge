@@ -5497,7 +5497,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v148 · fire-curtain";
+const APP_VERSION = "v149 · autoplay-curtain";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -12062,12 +12062,12 @@ function renderFeedWinnerCard({ challenge, entry }) {
       </div>
       ${mediaHtml}
 
-      <!-- Fire curtain video — covers card, fades out after playing -->
+      <!-- Fire curtain video — autoplays muted, fades out when done -->
       <video
         class="winner-curtain-video"
         src="https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/assets/curtain.mov"
-        playsinline muted preload="auto"
-        style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:10;pointer-events:none;transition:opacity 0.6s ease;">
+        autoplay playsinline muted preload="auto"
+        style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:10;pointer-events:none;transition:opacity 0.8s ease;">
       </video>
 
     </div>`;
@@ -12104,18 +12104,19 @@ function wireWinnerReveals() {
 function triggerCurtainReveal(card, video) {
   if (!video || card.dataset.curtainDone) return;
   card.dataset.curtainDone = '1';
-  // Ensure video is visible and playing
-  video.style.opacity = '1';
-  video.currentTime = 0;
-  const playPromise = video.play();
-  // Fade out when video ends (or after 6s fallback)
   const fadeOut = () => {
     video.style.opacity = '0';
-    setTimeout(() => { video.style.display = 'none'; }, 700);
+    setTimeout(() => { video.style.display = 'none'; }, 800);
   };
+  // If already ended (loaded fast), fade immediately
+  if (video.ended || (video.duration > 0 && video.currentTime >= video.duration)) {
+    fadeOut(); return;
+  }
+  // Wire ended event — autoplay handles the actual playback
   video.addEventListener('ended', fadeOut, { once: true });
-  setTimeout(fadeOut, 6000);
-  if (playPromise) playPromise.catch(() => fadeOut());
+  // Fallback: fade out after duration + 1s, or 8s max
+  const wait = video.duration > 0 ? (video.duration * 1000 + 500) : 8000;
+  setTimeout(fadeOut, Math.min(wait, 8000));
 }
 
 function renderFeedPollCard(poll) {
