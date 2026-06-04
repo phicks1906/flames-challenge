@@ -5566,7 +5566,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v129 · scroll-perf";
+const APP_VERSION = "v130 · video-fix";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -10267,9 +10267,18 @@ function renderChallengeDetail() {
     if (entry.media_type === 'photo' && entry.media_url) {
       mediaHtml = `<img src="${entry.media_url}" alt="" loading="lazy">`;
     } else if (entry.media_type === 'video' && entry.media_url) {
-      const posterAttr = entry.poster_url ? `poster="${entry.poster_url}"` : '';
-      const fallbackIcon = !entry.poster_url ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:48px;opacity:0.5;pointer-events:none">${{Art:'🎨',Photography:'📷',Music:'🎵',Writing:'✍️',Cooking:'🍳',Style:'👗',Sports:'🏆',Fitness:'💪',Comedy:'😂'}[state.currentChallenge?.category] || '🎬'}</div>` : '';
-      mediaHtml = `<div style="position:relative">${fallbackIcon}<video src="${entry.media_url}" ${posterAttr} controls preload="metadata"></video></div>`;
+      // Use poster+overlay so external URLs don't break — same as feed card
+      if (entry.poster_url) {
+        mediaHtml = `<div style="position:relative;cursor:pointer;" onclick="openEntryViewer('${entry.id}','${entry.challenge_id}')">
+          <img src="${escapeHtml(entry.poster_url)}" style="width:100%;object-fit:cover;display:block;border-radius:8px;">
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.25);border-radius:8px;font-size:52px;">▶</div>
+        </div>`;
+      } else {
+        mediaHtml = `<div style="position:relative;cursor:pointer;" onclick="openEntryViewer('${entry.id}','${entry.challenge_id}')">
+          <video src="${escapeHtml(entry.media_url)}" autoplay muted playsinline loop preload="auto" style="width:100%;object-fit:cover;display:block;border-radius:8px;"></video>
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:52px;pointer-events:none;">▶</div>
+        </div>`;
+      }
     } else if (entry.media_type === 'audio' && entry.media_url) {
       mediaHtml = `<div class="cd-audio-wrap"><audio src="${entry.media_url}" controls preload="auto" style="width:100%"></audio></div>`;
     } else if (entry.media_type === 'text') {
