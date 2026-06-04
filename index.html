@@ -5483,7 +5483,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v143 · needle-curtain";
+const APP_VERSION = "v144 · curtain-fix";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -11763,6 +11763,9 @@ function renderFeed() {
       if (ch && typeof openChallenge === 'function') openChallenge(ch);
     });
   });
+
+  // Wire curtain reveals for any winner cards in this render
+  setTimeout(wireWinnerReveals, 150);
 }
 
 function renderPostCard(p) {
@@ -12058,23 +12061,23 @@ function renderFeedWinnerCard({ challenge, entry }) {
 
 // Wire winner curtain reveals via IntersectionObserver
 function wireWinnerReveals() {
+  const unwired = document.querySelectorAll('.winner-curtain-wrap:not(.revealed):not([data-wired])');
+  if (!unwired.length) return;
+  unwired.forEach(el => el.setAttribute('data-wired', '1'));
+
   if (!('IntersectionObserver' in window)) {
-    document.querySelectorAll('.winner-curtain-wrap:not(.revealed)').forEach(el => {
-      setTimeout(() => triggerCurtainReveal(el), 300);
-    });
+    unwired.forEach(el => setTimeout(() => triggerCurtainReveal(el), 300));
     return;
   }
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       if (entry.isIntersecting && !entry.target.classList.contains('revealed')) {
-        setTimeout(() => triggerCurtainReveal(entry.target), 800);
         observer.unobserve(entry.target);
+        setTimeout(() => triggerCurtainReveal(entry.target), 400);
       }
     });
-  }, { threshold: 0.8 });
-  document.querySelectorAll('.winner-curtain-wrap:not(.revealed)').forEach(el => {
-    observer.observe(el);
-  });
+  }, { threshold: 0.3 });
+  unwired.forEach(el => observer.observe(el));
 }
 
 function triggerCurtainReveal(wrap) {
