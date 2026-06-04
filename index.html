@@ -5497,7 +5497,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v158 · curtain-url";
+const APP_VERSION = "v159 · curtain-stagger";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -12080,14 +12080,15 @@ function renderFeedWinnerCard({ challenge, entry }) {
 
 // Wire winner curtain reveals — CSS panels slide apart, video plays inside them
 function wireWinnerReveals() {
-  document.querySelectorAll('.winner-curtain-wrap:not([data-wired])').forEach(wrap => {
+  document.querySelectorAll('.winner-curtain-wrap:not([data-wired])').forEach((wrap, i) => {
     wrap.setAttribute('data-wired', '1');
-    // Nudge video playback (autoplay attr is primary)
+    // Nudge video playback (bonus texture — curtain works without it)
     wrap.querySelectorAll('.winner-curtain-video').forEach(v => {
       try { v.play().catch(() => {}); } catch(e) {}
     });
-    // Slide curtains open after 2s
-    setTimeout(() => wrap.classList.add('revealed'), 2000);
+    // Stagger reveals: first card opens after 2s, each subsequent one 800ms later
+    const delay = 2000 + (i * 800);
+    setTimeout(() => wrap.classList.add('revealed'), delay);
   });
 }
 
