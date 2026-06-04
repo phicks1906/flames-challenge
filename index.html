@@ -5497,7 +5497,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v155 · curtain-overlay";
+const APP_VERSION = "v156 · curtain-tap";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -12083,6 +12083,8 @@ function wireWinnerReveals() {
     if (!video) { overlay.remove(); return; }
 
     const reveal = () => {
+      if (overlay._revealed) return;
+      overlay._revealed = true;
       overlay.style.transition = 'opacity 0.8s ease';
       overlay.style.opacity = '0';
       setTimeout(() => overlay.remove(), 900);
@@ -12090,10 +12092,24 @@ function wireWinnerReveals() {
 
     // Wire ended — fires when video finishes one play
     video.addEventListener('ended', reveal, { once: true });
-    // Fallback: 7s in case ended never fires
-    setTimeout(reveal, 7000);
-    // Nudge play in case autoplay was blocked
-    try { video.play().catch(reveal); } catch(e) { reveal(); }
+
+    // Try to play — if blocked, make overlay tappable so user can start it
+    const playResult = video.play();
+    if (playResult) {
+      playResult.catch(() => {
+        // Autoplay blocked — show a tap-to-play hint, reveal on tap
+        video.style.cursor = 'pointer';
+        overlay.style.cursor = 'pointer';
+        overlay.addEventListener('click', () => {
+          video.play().then(() => {
+            video.addEventListener('ended', reveal, { once: true });
+          }).catch(reveal);
+        }, { once: true });
+      });
+    }
+
+    // Hard fallback: 8s
+    setTimeout(reveal, 8000);
   });
 }
 
