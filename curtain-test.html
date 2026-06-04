@@ -3,65 +3,53 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Curtain Test</title>
+<title>Curtain Test v3</title>
 <style>
-body { background: #000; color: #fff; font-family: sans-serif; padding: 20px; }
-#log { background: #111; padding: 12px; border-radius: 8px; font-size: 12px; font-family: monospace; white-space: pre-wrap; }
-button { padding: 12px 24px; background: #ff6a2c; border: none; color: #fff; border-radius: 8px; font-size: 16px; cursor: pointer; margin: 8px 4px; display: block; width: 100%; }
+body { background:#000;color:#fff;font-family:sans-serif;padding:16px; }
+#log { background:#111;padding:12px;border-radius:8px;font-size:12px;font-family:monospace;white-space:pre-wrap;margin-top:12px; }
+button { padding:12px;background:#ff6a2c;border:none;color:#fff;border-radius:8px;font-size:15px;cursor:pointer;margin:4px 0;display:block;width:100%; }
+video { width:100%;display:block;margin-top:8px;background:#333;border-radius:8px; }
 </style>
 </head>
 <body>
-<h2>Curtain Debug</h2>
-<button onclick="checkHeaders()">1. Check Content-Type header</button>
-<button onclick="testVideo()">2. Test video element</button>
-<button onclick="testBase64()">3. Test with inline base64 MP4</button>
-<div id="log">Tap buttons above...</div>
-
+<h2>Curtain Test v3</h2>
+<button onclick="test1()">1. Fetch first 4 bytes (confirm file exists)</button>
+<button onclick="test2()">2. Play video (tap = user gesture)</button>
+<button onclick="test3()">3. Open video URL directly in browser</button>
+<div id="log">Ready...</div>
 <script>
-const URL = 'https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/curtain.mp4';
+const MP4 = 'https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/curtain.mp4';
 const log = document.getElementById('log');
-function addLog(msg) { log.textContent += '\n' + msg; }
+function L(m){ log.textContent += '\n'+m; }
 
-async function checkHeaders() {
-  addLog('\n--- Checking headers ---');
+async function test1(){
+  L('\n--- GET first bytes ---');
   try {
-    const r = await fetch(URL, { method: 'HEAD' });
-    addLog('Status: ' + r.status);
-    addLog('Content-Type: ' + r.headers.get('content-type'));
-    addLog('Content-Length: ' + r.headers.get('content-length'));
-    addLog('Accept-Ranges: ' + r.headers.get('accept-ranges'));
-  } catch(e) { addLog('Fetch error: ' + e.message); }
+    const r = await fetch(MP4, {headers:{Range:'bytes=0-3'}});
+    L('Status: '+r.status);
+    L('Content-Type: '+r.headers.get('content-type'));
+    const buf = await r.arrayBuffer();
+    const bytes = Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join(' ');
+    L('First bytes: '+bytes);
+    // MP4 magic: bytes 4-7 should be 'ftyp' = 66 74 79 70
+    L(bytes.includes('66 74 79 70') ? '✓ Valid MP4 (ftyp found)' : '✗ Not a valid MP4');
+  } catch(e){ L('Error: '+e.message); }
 }
 
-function testVideo() {
-  addLog('\n--- Testing video element ---');
+function test2(){
+  L('\n--- Video element (user gesture context) ---');
   const v = document.createElement('video');
-  v.muted = true;
-  v.playsInline = true;
-  v.preload = 'auto';
-  v.style.cssText = 'width:100%;max-height:200px;display:block;margin-top:10px;background:#333';
-  v.src = URL;
+  v.muted=true; v.playsInline=true; v.controls=true; v.preload='auto';
+  v.src = MP4;
+  v.addEventListener('loadedmetadata', ()=>L('loadedmetadata ✓ duration='+v.duration));
+  v.addEventListener('playing', ()=>L('PLAYING ✓ — video works!'));
+  v.addEventListener('error', ()=>L('ERROR code='+v.error?.code));
   document.body.appendChild(v);
-  v.addEventListener('loadedmetadata', () => addLog('loadedmetadata: duration=' + v.duration));
-  v.addEventListener('canplay', () => addLog('canplay'));
-  v.addEventListener('playing', () => addLog('PLAYING ✓'));
-  v.addEventListener('error', () => addLog('ERROR code=' + v.error?.code + ' msg=' + v.error?.message));
-  const p = v.play();
-  if (p) p.then(() => addLog('play() resolved')).catch(e => addLog('play() rejected: ' + e.message));
+  v.play().then(()=>L('play() OK')).catch(e=>L('play() failed: '+e.message));
 }
 
-// Tiny valid H.264 MP4 (4-frame 2x2 black video) — tests if video element itself works
-function testBase64() {
-  addLog('\n--- Testing inline base64 H.264 ---');
-  const v = document.createElement('video');
-  v.muted = true; v.playsInline = true;
-  v.style.cssText = 'width:100%;max-height:60px;display:block;margin-top:8px;background:#333';
-  // Minimal valid MP4 (ftyp+moov+mdat)
-  v.src = 'data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAAA5FtZGF0AAACrGxpYmZhYWMgMS4yOC4wIGh0dHBzOi8vd3d3LmZmb3BlbHNzLm9yZy9saWJmYWFjAAAADGZyZWUAAAAIbWRhdA==';
-  v.addEventListener('error', () => addLog('base64 error code=' + v.error?.code));
-  v.addEventListener('canplay', () => addLog('base64 canplay ✓ — video element works'));
-  v.play().catch(() => {});
-  document.body.appendChild(v);
+function test3(){
+  window.open(MP4, '_blank');
 }
 </script>
 </body>
