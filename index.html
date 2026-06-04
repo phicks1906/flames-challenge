@@ -5513,7 +5513,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v162 · scroll-dots";
+const APP_VERSION = "v163 · curtain-dots";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -12116,7 +12116,7 @@ function renderFeedWinnerCard({ challenge, entry }) {
     </div>`;
 }
 
-// Wire winner curtain reveals — CSS panels slide apart, video plays inside them
+// Wire winner curtain reveals — CSS panels slide apart on scroll into view
 function wireWinnerReveals() {
   document.querySelectorAll('.winner-curtain-wrap:not([data-wired])').forEach(wrap => {
     wrap.setAttribute('data-wired', '1');
@@ -12125,14 +12125,24 @@ function wireWinnerReveals() {
       if (wrap.classList.contains('revealed')) return;
       const video = wrap.querySelector('.winner-curtain-video');
       if (video) {
-        // Show and play video once — open curtains when done (or after 6s fallback)
         video.style.display = 'block';
-        const onDone = () => wrap.classList.add('revealed');
+        // Load then play — preload=none means we must load() first
+        video.load();
+        const onDone = () => {
+          if (!wrap.classList.contains('revealed')) wrap.classList.add('revealed');
+        };
         video.addEventListener('ended', onDone, { once: true });
-        setTimeout(onDone, 6000);
-        try { video.play().catch(onDone); } catch(e) { onDone(); }
+        // Only fall back after full duration, not on play() rejection
+        video.addEventListener('canplay', () => {
+          video.play().catch(() => {
+            // Play blocked — open curtain after short pause anyway
+            setTimeout(onDone, 1200);
+          });
+        }, { once: true });
+        // Hard fallback: 7s
+        setTimeout(onDone, 7000);
       } else {
-        setTimeout(() => wrap.classList.add('revealed'), 800);
+        setTimeout(() => wrap.classList.add('revealed'), 1000);
       }
     };
 
