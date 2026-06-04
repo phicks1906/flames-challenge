@@ -1638,7 +1638,7 @@ body.theme-light .auth-form input { background: #ffffff; }
   content: '';
   position: absolute;
   inset: -80px -16px -16px -16px;
-  background: url('https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/assets/trophy-bg.jpeg') center 30% / cover no-repeat;
+  /* trophy-bg removed to reduce Supabase egress */
   opacity: 0.25;
   mix-blend-mode: screen;
   filter: brightness(1.0) contrast(1.0);
@@ -2780,6 +2780,22 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
   box-sizing: border-box;
 }
 .fcc-entries-scroll::-webkit-scrollbar { display: none; }
+
+/* Carousel dots below entry scroll */
+.fcc-dots {
+  display: flex; justify-content: center; align-items: center;
+  gap: 6px; padding: 4px 0 6px;
+}
+.fcc-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--border-bright);
+  transition: background 0.2s, transform 0.2s;
+  flex-shrink: 0;
+}
+.fcc-dot.active {
+  background: var(--ember);
+  transform: scale(1.3);
+}
 .fcc-entry-card {
   will-change: transform;
   flex: 0 0 72vw;
@@ -5497,7 +5513,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v160 · curtain-scroll";
+const APP_VERSION = "v162 · scroll-dots";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -9929,9 +9945,13 @@ function renderChallenges() {
       return `<div class="fcc-entry-card" style="cursor:pointer;" data-entry-open="${ch.id}" data-entry-id="${e.id}">${mHtml}<div class="fcc-entry-footer"><div class="fcc-entry-avatar">${avatarInner(sub.avatar)}</div><div class="fcc-entry-name">${escapeHtml(sub.name)}</div>${voteBtn}</div></div>`;
     }).join('');
 
+    const dotCount = chEntries.length;
+    const dotsHtml = dotCount > 1
+      ? `<div class="fcc-dots">${Array.from({length: dotCount}, (_, i) => `<span class="fcc-dot${i===0?' active':''}"></span>`).join('')}</div>`
+      : '';
     const drawerHtml = (chEntries.length > 0 || canEnterCh) ? `
       <div class="fcc-feed-drawer">
-        ${chEntries.length > 0 ? `<div class="fcc-entries-scroll">${entryCardsHtml}<div style="flex:0 0 28vw;min-width:28vw;pointer-events:none;opacity:0;"></div></div>` : ''}
+        ${chEntries.length > 0 ? `<div class="fcc-entries-scroll" data-dots-for="${ch.id}">${entryCardsHtml}<div style="flex:0 0 28vw;min-width:28vw;pointer-events:none;opacity:0;"></div></div>${dotsHtml}` : ''}
         ${canEnterCh ? `<div style="padding:4px 12px 2px"><button class="fcc-submit-btn" data-fcc-submit="${ch.id}">+ Submit your entry</button></div>` : ''}
       </div>` : '';
 
@@ -11780,6 +11800,22 @@ function renderFeed() {
 
   // Wire curtain reveals after paint so getBoundingClientRect is accurate
   requestAnimationFrame(() => setTimeout(wireWinnerReveals, 400));
+
+  // Wire scroll dots — update active dot as user scrolls entry cards
+  c.querySelectorAll('.fcc-entries-scroll[data-dots-for], .fcc-entries-scroll').forEach(scroll => {
+    const cid = scroll.dataset.dotsFor || scroll.closest('[data-cid]')?.dataset.cid;
+    if (!cid) return;
+    const dots = scroll.parentElement?.querySelectorAll('.fcc-dot');
+    if (!dots || dots.length < 2) return;
+    const cards = scroll.querySelectorAll('.fcc-entry-card');
+    if (!cards.length) return;
+    scroll.addEventListener('scroll', () => {
+      const scrollLeft = scroll.scrollLeft;
+      const cardWidth = cards[0].offsetWidth + 8; // 8 = gap
+      const idx = Math.round(scrollLeft / cardWidth);
+      dots.forEach((d, i) => d.classList.toggle('active', i === idx));
+    }, { passive: true });
+  });
 }
 
 function renderPostCard(p) {
@@ -11986,6 +12022,10 @@ function renderFeedChallengeCard(ch) {
   const submitBtn = canEnter
     ? `<div style="padding:0 0 8px"><button class="fcc-submit-btn" data-fcc-submit="${ch.id}">+ Submit your entry</button></div>`
     : '';
+  const feedDotCount = chEntries.length;
+  const feedDotsHtml = feedDotCount > 1
+    ? `<div class="fcc-dots" data-dots-cid="${ch.id}">${Array.from({length: feedDotCount}, (_, i) => `<span class="fcc-dot${i===0?' active':''}"></span>`).join('')}</div>`
+    : '';
 
   // Return card + separate drawer div — keeps scroll outside overflow:hidden card
   return `<div class="fcc-challenge-wrap" data-cid="${ch.id}">
@@ -11994,6 +12034,7 @@ function renderFeedChallengeCard(ch) {
     </div>
     <div class="fcc-feed-drawer" data-drawer-cid="${ch.id}">
       ${entriesHtml}
+      ${feedDotsHtml}
       ${submitBtn}
     </div>
   </div>`;
@@ -12065,13 +12106,10 @@ function renderFeedWinnerCard({ challenge, entry }) {
         </div>
         ${mediaHtml}
 
-        <!-- CSS curtain panels with fire video texture — slide apart on .revealed -->
-        <div class="winner-curtain-left">
-          <video class="winner-curtain-video" src="https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/Assets/curtain.mp4" autoplay loop playsinline muted preload="auto" style="position:absolute;inset:0;width:200%;height:100%;object-fit:cover;object-position:left center;pointer-events:none;"></video>
-        </div>
-        <div class="winner-curtain-right">
-          <video class="winner-curtain-video" src="https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/Assets/curtain.mp4" autoplay loop playsinline muted preload="auto" style="position:absolute;inset:0;width:200%;height:100%;object-fit:cover;object-position:right center;pointer-events:none;margin-left:-100%;"></video>
-        </div>
+        <!-- CSS curtain panels — slide apart on .revealed. Single video covers both. -->
+        <div class="winner-curtain-left"></div>
+        <div class="winner-curtain-right"></div>
+        <video class="winner-curtain-video" src="https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/Assets/curtain.mp4" playsinline muted preload="none" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:3;pointer-events:none;display:none;"></video>
         <div class="winner-reveal-label">🏆 WINNER</div>
       </div>
 
@@ -12083,25 +12121,30 @@ function wireWinnerReveals() {
   document.querySelectorAll('.winner-curtain-wrap:not([data-wired])').forEach(wrap => {
     wrap.setAttribute('data-wired', '1');
 
-    const open = () => {
+    const openCurtain = () => {
       if (wrap.classList.contains('revealed')) return;
-      // Nudge video
-      wrap.querySelectorAll('.winner-curtain-video').forEach(v => {
-        try { v.play().catch(() => {}); } catch(e) {}
-      });
-      // Let video play for 1.5s then slide curtains open
-      setTimeout(() => wrap.classList.add('revealed'), 1500);
+      const video = wrap.querySelector('.winner-curtain-video');
+      if (video) {
+        // Show and play video once — open curtains when done (or after 6s fallback)
+        video.style.display = 'block';
+        const onDone = () => wrap.classList.add('revealed');
+        video.addEventListener('ended', onDone, { once: true });
+        setTimeout(onDone, 6000);
+        try { video.play().catch(onDone); } catch(e) { onDone(); }
+      } else {
+        setTimeout(() => wrap.classList.add('revealed'), 800);
+      }
     };
 
-    // Use IntersectionObserver — fires when card enters viewport
+    // Trigger when card scrolls into view
     const obs = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
         if (entry.isIntersecting) {
           obs.unobserve(wrap);
-          open();
+          openCurtain();
         }
       });
-    }, { threshold: 0.25, rootMargin: '0px 0px -60px 0px' });
+    }, { threshold: 0.25 });
 
     obs.observe(wrap);
   });
