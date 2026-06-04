@@ -5497,7 +5497,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v153 · curtain-path";
+const APP_VERSION = "v154 · curtain-shell";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -12041,79 +12041,71 @@ function renderFeedWinnerCard({ challenge, entry }) {
   }
 
   return `
-    <div class="feed-activity-card winner" data-cid="${challenge.id}" style="padding:0;overflow:hidden;position:relative;">
+    <div class="feed-activity-card winner" data-cid="${challenge.id}" style="padding:0;overflow:hidden;">
 
-      <!-- Winner content — always visible underneath -->
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 0;">
-        <span class="feed-poll-tag" style="color:var(--gold);">🏁 WINNER</span>
-        <span style="font-size:12px;color:var(--text-muted);">${timeAgo(challenge.voting_end)}</span>
-      </div>
-      <div style="display:flex;align-items:center;gap:14px;padding:12px 14px 14px;background:linear-gradient(135deg,rgba(255,200,87,0.12),rgba(255,106,44,0.08));">
-        <div style="width:60px;height:60px;border-radius:50%;border:3px solid var(--gold);overflow:hidden;flex-shrink:0;background:linear-gradient(135deg,var(--ember),var(--coral));display:grid;place-items:center;font-size:24px;cursor:${clickable ? 'pointer' : 'default'};" ${userAttr}>
-          ${avatarInner(s.avatar)}
-        </div>
-        <div style="flex:1;min-width:0;">
-          <div style="font-family:var(--font-anton);font-size:22px;letter-spacing:0.02em;color:var(--text);line-height:1.1;" ${userAttr}>
-            ${escapeHtml(s.name.toUpperCase())}${isMine ? ' <span style="color:var(--ember);font-size:13px;font-family:var(--font-body);">(you)</span>' : ''}${plus}
+      <!-- Fire curtain: normal block video that sits on top, removed after playing -->
+      <div class="winner-curtain-shell" style="position:relative;width:100%;background:#000;line-height:0;">
+        <!-- Winner content sits here, hidden until curtain lifts -->
+        <div class="winner-curtain-content" style="visibility:hidden;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 0;">
+            <span class="feed-poll-tag" style="color:var(--gold);">🏁 WINNER</span>
+            <span style="font-size:12px;color:var(--text-muted);">${timeAgo(challenge.voting_end)}</span>
           </div>
-          <div style="font-size:13px;color:var(--gold);font-weight:600;margin-top:3px;">🥇 ${escapeHtml(challenge.title)}</div>
+          <div style="display:flex;align-items:center;gap:14px;padding:12px 14px 14px;background:linear-gradient(135deg,rgba(255,200,87,0.12),rgba(255,106,44,0.08));">
+            <div style="width:60px;height:60px;border-radius:50%;border:3px solid var(--gold);overflow:hidden;flex-shrink:0;background:linear-gradient(135deg,var(--ember),var(--coral));display:grid;place-items:center;font-size:24px;cursor:${clickable ? 'pointer' : 'default'};" ${userAttr}>
+              ${avatarInner(s.avatar)}
+            </div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-family:var(--font-anton);font-size:22px;letter-spacing:0.02em;color:var(--text);line-height:1.1;" ${userAttr}>
+                ${escapeHtml(s.name.toUpperCase())}${isMine ? ' <span style="color:var(--ember);font-size:13px;font-family:var(--font-body);">(you)</span>' : ''}${plus}
+              </div>
+              <div style="font-size:13px;color:var(--gold);font-weight:600;margin-top:3px;">🥇 ${escapeHtml(challenge.title)}</div>
+            </div>
+            <div style="font-size:28px;flex-shrink:0;">🎉</div>
+          </div>
+          ${mediaHtml}
         </div>
-        <div style="font-size:28px;flex-shrink:0;">🎉</div>
+        <!-- Curtain video absolutely covers the content above -->
+        <video
+          class="winner-curtain-video"
+          src="https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/curtain.mp4"
+          autoplay playsinline muted preload="auto"
+          onerror="this.closest('.winner-curtain-shell').querySelector('.winner-curtain-content').style.visibility='visible';this.remove();"
+          style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;z-index:5;">
+        </video>
       </div>
-      ${mediaHtml}
-
-      <!-- Fire curtain video (H.264 mp4 — plays everywhere). Covers card until it ends. -->
-      <video
-        class="winner-curtain-video"
-        src="https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/curtain.mp4"
-        autoplay loop playsinline muted preload="auto"
-        onerror="this.style.display='none'"
-        style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:10;pointer-events:none;transition:opacity 0.8s ease;">
-      </video>
 
     </div>`;
 }
 
-// Wire winner curtain reveals via IntersectionObserver
+// Wire winner curtain reveals
 function wireWinnerReveals() {
-  const cards = document.querySelectorAll('.feed-activity-card.winner:not([data-curtain-wired])');
-  if (!cards.length) return;
+  document.querySelectorAll('.winner-curtain-video:not([data-wired])').forEach(video => {
+    video.setAttribute('data-wired', '1');
+    const shell = video.closest('.winner-curtain-shell');
+    const content = shell && shell.querySelector('.winner-curtain-content');
+    if (!shell || !content) return;
 
-  cards.forEach(card => {
-    card.setAttribute('data-curtain-wired', '1');
-    const video = card.querySelector('.winner-curtain-video');
-    if (!video) return;
+    const reveal = () => {
+      // Fade video out, show content
+      video.style.transition = 'opacity 0.7s ease';
+      video.style.opacity = '0';
+      content.style.visibility = 'visible';
+      setTimeout(() => { video.style.display = 'none'; }, 750);
+    };
 
-    const rect = card.getBoundingClientRect();
-    const inView = rect.top < window.innerHeight && rect.bottom > 0;
-
-    const doReveal = () => triggerCurtainReveal(card, video);
-
-    if (inView) {
-      setTimeout(doReveal, 500);
-    } else {
-      const obs = new IntersectionObserver((entries) => {
-        entries.forEach(e => {
-          if (e.isIntersecting) { obs.unobserve(card); setTimeout(doReveal, 300); }
-        });
-      }, { threshold: 0.2 });
-      obs.observe(card);
-    }
+    // Play for ~5s (full duration) then reveal
+    video.addEventListener('ended', reveal, { once: true });
+    // Remove loop so ended fires
+    video.removeAttribute('loop');
+    // Fallback: reveal after 6s
+    setTimeout(reveal, 6000);
+    // Ensure playing
+    try { video.play().catch(() => reveal()); } catch(e) { reveal(); }
   });
 }
 
-function triggerCurtainReveal(card, video) {
-  if (!video || card.dataset.curtainDone) return;
-  card.dataset.curtainDone = '1';
-  const fadeOut = () => {
-    video.style.opacity = '0';
-    setTimeout(() => { video.style.display = 'none'; }, 800);
-  };
-  // Nudge playback (autoplay attribute is primary; this is a backup)
-  try { video.currentTime = 0; const p = video.play(); if (p) p.catch(() => {}); } catch (e) {}
-  // Curtain plays ~2.5s, then slides away to reveal the winner
-  setTimeout(fadeOut, 2600);
-}
+function triggerCurtainReveal(card, video) {}
 
 function renderFeedPollCard(poll) {
   const counts = state.voteCountsByPoll[poll.id] || {};
