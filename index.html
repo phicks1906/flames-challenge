@@ -5497,7 +5497,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v172 · media-type-fix";
+const APP_VERSION = "v173 · pointer-tap";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -10403,8 +10403,12 @@ function renderChallengeDetail() {
   });
 
   // Tap no-poster video placeholders → open entry viewer
+  // Use pointerdown/up to bypass iOS scroll-snap tap suppression
   grid.querySelectorAll('[data-open-entry]').forEach(el => {
-    el.addEventListener('click', e => {
+    let startX = 0, startY = 0;
+    el.addEventListener('pointerdown', e => { startX = e.clientX; startY = e.clientY; }, { passive: true });
+    el.addEventListener('pointerup', e => {
+      if (Math.abs(e.clientX - startX) > 8 || Math.abs(e.clientY - startY) > 8) return;
       e.stopPropagation();
       openEntryViewer(el.dataset.openEntry, el.dataset.openCh);
     });
