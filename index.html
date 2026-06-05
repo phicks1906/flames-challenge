@@ -5019,6 +5019,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openEditProfile()">✏️ Edit Profile</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openFindPeople()">🔍 Find People</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openInterestEditor()">🎯 My Interests</button>
+    <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="closeAvatarMenu ? closeAvatarMenu() : null; startTour()">👋 Replay Tour</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" id="tickerToggleBtn" onclick="toggleTickerSetting()">📺 Ticker: On</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openGroupsModal()">👥 My Groups</button>
     <div class="theme-toggle-row" id="themeToggleRow" onclick="toggleTheme()" role="button" tabindex="0">
@@ -5115,6 +5116,33 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       <button id="evFollowBtn" class="btn btn-primary" style="padding:8px 20px;font-size:13px">+ Follow</button>
     </div>
     <div id="evCaption" style="padding:0 16px 12px;font-size:14px;color:var(--text-dim)"></div>
+  </div>
+</div>
+
+<!-- PRODUCT TOUR -->
+<div id="tourOverlay" style="display:none;position:fixed;inset:0;z-index:9000;pointer-events:none;">
+  <!-- Spotlight cutout via SVG -->
+  <svg id="tourSvg" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:all;" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <mask id="tourMask">
+        <rect width="100%" height="100%" fill="white"/>
+        <rect id="tourHole" x="0" y="0" width="0" height="0" rx="12" fill="black"/>
+      </mask>
+    </defs>
+    <rect width="100%" height="100%" fill="rgba(0,0,0,0.72)" mask="url(#tourMask)"/>
+  </svg>
+  <!-- Tooltip bubble -->
+  <div id="tourBubble" style="position:absolute;left:50%;transform:translateX(-50%);background:var(--surface);border:2px solid var(--ember);border-radius:16px;padding:16px 18px;max-width:300px;width:90vw;box-shadow:0 8px 32px rgba(0,0,0,0.4);pointer-events:all;z-index:9001;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <span id="tourStep" style="font-size:11px;font-weight:700;color:var(--ember);letter-spacing:0.06em;text-transform:uppercase;"></span>
+      <button onclick="endTour()" style="background:none;border:none;color:var(--text-muted);font-size:20px;cursor:pointer;line-height:1;padding:0;">×</button>
+    </div>
+    <div id="tourTitle" style="font-family:var(--font-display);font-size:18px;text-transform:uppercase;letter-spacing:0.04em;color:var(--text);margin-bottom:6px;"></div>
+    <div id="tourBody" style="font-size:14px;color:var(--text-dim);line-height:1.5;"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;">
+      <button onclick="endTour()" style="background:none;border:none;color:var(--text-muted);font-size:13px;cursor:pointer;text-decoration:underline;padding:0;">Skip tour</button>
+      <button id="tourNext" onclick="tourNext()" class="btn btn-primary" style="padding:9px 22px;font-size:14px;">Next →</button>
+    </div>
   </div>
 </div>
 
@@ -5533,7 +5561,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v183 · fv-polish";
+const APP_VERSION = "v184 · tour";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -11830,6 +11858,8 @@ function renderFeed() {
   // Wire curtain reveals after paint so getBoundingClientRect is accurate
   requestAnimationFrame(() => setTimeout(wireWinnerReveals, 400));
 
+  maybeStartTour();
+
 }
 
 function renderPostCard(p) {
@@ -12126,6 +12156,133 @@ function renderFeedWinnerCard({ challenge, entry }) {
       </div>
 
     </div>`;
+}
+
+
+// ── PRODUCT TOUR ─────────────────────────────────────────────────────────────
+const TOUR_KEY = 'fc_tour_done_v1';
+
+const TOUR_STEPS = [
+  {
+    target: () => document.querySelector('.feed-container') || document.getElementById('feedView'),
+    title: 'Welcome to FlamesChallenge 🔥',
+    body: 'This is your feed. Tap any card to watch entries and vote. Swipe through to see all submissions.',
+    position: 'center',
+  },
+  {
+    target: () => document.querySelector('.ticker-wrap') || document.querySelector('#tickerBar'),
+    title: 'Live Ticker 🏅',
+    body: 'The ticker shows the current top 3 per category in real time. Watch your name climb up here.',
+    position: 'below',
+  },
+  {
+    target: () => document.querySelector('.bnav-btn[data-view="feed"] .bnav-icon') || document.querySelector('[data-view="challenges"]'),
+    title: 'Create & Enter Challenges',
+    body: 'Tap the + button to create a challenge or submit your entry. Challenges run on a timer — don\'t miss the window.',
+    position: 'above',
+    targetOverride: () => document.querySelector('.bnav-fab') || document.querySelector('[onclick*="openCreateChallenge"]') || document.getElementById('fabBtn'),
+  },
+  {
+    target: () => document.querySelector('.bnav-btn[data-view="leaderboard"]'),
+    title: 'Ranks 🏆',
+    body: 'See who\'s winning by category. Top 3 per category qualify for the Championship Challenge.',
+    position: 'above',
+  },
+  {
+    target: () => document.querySelector('.feed-avatar-wrap') || document.querySelector('#avatarMenuBtn') || document.querySelector('.top-avatar'),
+    title: 'Your Profile',
+    body: 'Tap your avatar for dark mode, your interests, find people to follow, and your win record.',
+    position: 'below',
+  },
+  {
+    target: () => document.querySelector('.feed-activity-card .feed-avatar-wrap') || document.querySelector('[data-user-id]'),
+    title: 'Orange Ring = Competing 🟠',
+    body: 'An orange ring around someone\'s avatar means they\'re actively competing in a challenge right now. Tap to vote.',
+    position: 'center',
+  },
+];
+
+let _tourStep = 0;
+
+function startTour() {
+  _tourStep = 0;
+  document.getElementById('tourOverlay').style.display = 'block';
+  document.getElementById('tourOverlay').style.pointerEvents = 'all';
+  renderTourStep();
+}
+
+function renderTourStep() {
+  const steps = TOUR_STEPS;
+  const step = steps[_tourStep];
+  if (!step) { endTour(); return; }
+
+  const overlay = document.getElementById('tourOverlay');
+  const bubble  = document.getElementById('tourBubble');
+  const hole    = document.getElementById('tourHole');
+  const stepEl  = document.getElementById('tourStep');
+  const titleEl = document.getElementById('tourTitle');
+  const bodyEl  = document.getElementById('tourBody');
+  const nextBtn = document.getElementById('tourNext');
+
+  stepEl.textContent  = `${_tourStep + 1} of ${steps.length}`;
+  titleEl.textContent = step.title;
+  bodyEl.textContent  = step.body;
+  nextBtn.textContent = _tourStep === steps.length - 1 ? 'Done ✓' : 'Next →';
+
+  // Find target element
+  const targetFn = step.targetOverride || step.target;
+  const el = targetFn ? targetFn() : null;
+
+  if (el && step.position !== 'center') {
+    const rect = el.getBoundingClientRect();
+    const pad = 8;
+    hole.setAttribute('x',      rect.left - pad);
+    hole.setAttribute('y',      rect.top  - pad);
+    hole.setAttribute('width',  rect.width  + pad * 2);
+    hole.setAttribute('height', rect.height + pad * 2);
+    hole.setAttribute('rx', '10');
+
+    // Position bubble above or below
+    const bubbleH = 200;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    bubble.style.left = '50%';
+    bubble.style.transform = 'translateX(-50%)';
+    bubble.style.right = 'auto';
+
+    if (step.position === 'above' || rect.top > vh * 0.6) {
+      bubble.style.top  = Math.max(8, rect.top - bubbleH - 16) + 'px';
+      bubble.style.bottom = 'auto';
+    } else {
+      bubble.style.top  = Math.min(rect.bottom + 16, vh - bubbleH - 8) + 'px';
+      bubble.style.bottom = 'auto';
+    }
+  } else {
+    // Center — no spotlight, full dim
+    hole.setAttribute('width', '0');
+    hole.setAttribute('height', '0');
+    bubble.style.top    = '50%';
+    bubble.style.left   = '50%';
+    bubble.style.transform = 'translate(-50%, -50%)';
+    bubble.style.bottom = 'auto';
+  }
+}
+
+function tourNext() {
+  _tourStep++;
+  if (_tourStep >= TOUR_STEPS.length) { endTour(); return; }
+  renderTourStep();
+}
+
+function endTour() {
+  document.getElementById('tourOverlay').style.display = 'none';
+  localStorage.setItem(TOUR_KEY, '1');
+}
+
+function maybeStartTour() {
+  if (!localStorage.getItem(TOUR_KEY)) {
+    setTimeout(startTour, 1200);
+  }
 }
 
 // ── FEED VIEWER ─────────────────────────────────────────────────────────────
