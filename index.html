@@ -5116,6 +5116,31 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
   </div>
 </div>
 
+<!-- FEED VIEWER SHEET -->
+<div class="modal-backdrop" id="feedViewerSheet" onclick="if(event.target===this)closeFeedViewer()" style="align-items:flex-end;">
+  <div id="feedViewerModal" style="background:var(--surface);border-radius:var(--radius) var(--radius) 0 0;width:100%;max-height:92vh;overflow-y:auto;position:relative;animation:slideUp 0.3s cubic-bezier(0.16,1,0.3,1);">
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:2;">
+      <div>
+        <div id="fvTitle" style="font-family:var(--font-display);font-size:18px;text-transform:uppercase;letter-spacing:0.04em;color:var(--text);"></div>
+        <div id="fvMeta" style="font-size:12px;color:var(--text-muted);margin-top:2px;"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button id="fvChallengeBtn" class="btn btn-primary" style="padding:8px 14px;font-size:13px;" onclick="openFeedViewerChallenge()"></button>
+        <button onclick="closeFeedViewer()" style="background:var(--overlay-2);border:1px solid var(--border);border-radius:50%;width:36px;height:36px;color:var(--text);font-size:20px;cursor:pointer;display:grid;place-items:center;">×</button>
+      </div>
+    </div>
+    <!-- Entry list -->
+    <div id="fvEntries" style="padding:12px 0 32px;"></div>
+    <!-- No entries state -->
+    <div id="fvEmpty" style="display:none;text-align:center;padding:48px 20px;color:var(--text-muted);">
+      <div style="font-size:40px;margin-bottom:12px;">🎬</div>
+      <div style="font-weight:600;margin-bottom:6px;">No entries yet</div>
+      <div style="font-size:14px;">Be the first to enter this challenge</div>
+    </div>
+  </div>
+</div>
+
 <!-- LIKERS SHEET -->
 <div class="modal-backdrop" id="likersSheet" onclick="if(event.target===this)closeLikersSheet()">
   <div class="modal" style="max-width:360px">
@@ -5497,7 +5522,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v173 · pointer-tap";
+const APP_VERSION = "v175 · feed-viewer";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -9185,7 +9210,7 @@ let _evEntries = []; // all entries for this challenge
 let _evIndex = 0;   // current position
 
 async function openEntryViewer(entryId, chId) {
-  const ch = state.challenges.find(c => c.id === chId);
+  const ch = state.challenges.find(c => c.id === chId) || state.currentChallenge;
   if (!ch) return;
 
   // Build entry list — prefer currentEntries (challenge detail) then feedEntries (feed)
@@ -10403,15 +10428,18 @@ function renderChallengeDetail() {
   });
 
   // Tap no-poster video placeholders → open entry viewer
-  // Use pointerdown/up to bypass iOS scroll-snap tap suppression
   grid.querySelectorAll('[data-open-entry]').forEach(el => {
-    let startX = 0, startY = 0;
-    el.addEventListener('pointerdown', e => { startX = e.clientX; startY = e.clientY; }, { passive: true });
-    el.addEventListener('pointerup', e => {
-      if (Math.abs(e.clientX - startX) > 8 || Math.abs(e.clientY - startY) > 8) return;
+    el.addEventListener('click', e => {
+      e.preventDefault();
       e.stopPropagation();
       openEntryViewer(el.dataset.openEntry, el.dataset.openCh);
     });
+    // Also handle touchend directly for iOS scroll-snap containers
+    el.addEventListener('touchend', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      openEntryViewer(el.dataset.openEntry, el.dataset.openCh);
+    }, { passive: false });
   });
 }
 
@@ -11590,21 +11618,20 @@ function renderFeed() {
     if (row) row.style.display = 'none';
   }
 
-  // Wire entry card taps → open challenge detail at that entry
+  // Wire entry card taps → open feed viewer (stays on feed)
   c.querySelectorAll('[data-entry-open]').forEach(card => {
     card.addEventListener('click', e => {
       if (e.target.closest('[data-fcc-vote],.fcc-vote-btn,[data-show-likes]')) return;
       e.stopPropagation();
-      openEntryViewer(card.dataset.entryId, card.dataset.entryOpen);
+      openFeedViewer(card.dataset.entryOpen);
     });
   });
 
-  // Wire flyer CTA buttons
-  c.querySelectorAll('[data-flyer-enter]').forEach(btn => {
+  // Wire flyer CTA buttons → open feed viewer
+  c.querySelectorAll('[data-flyer-viewer]').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
-      const ch = state.challenges.find(x => x.id === btn.dataset.flyerEnter);
-      if (ch) openChallenge(ch);
+      openFeedViewer(btn.dataset.flyerViewer);
     });
   });
 
@@ -11625,9 +11652,9 @@ function renderFeed() {
     header.addEventListener('pointerdown', e => { startY = e.clientY; startX = e.clientX; }, { passive: true });
     header.addEventListener('pointerup', e => {
       const moved = Math.abs(e.clientY - startY) > 8 || Math.abs(e.clientX - startX) > 8;
-      if (moved) return; // was a scroll, not a tap
+      if (moved) return;
       if (e.target.closest('[data-fcc-vote],[data-fcc-submit],.fcc-vote-btn,.fcc-submit-btn')) return;
-      openChallenge(ch);
+      openFeedViewer(ch.id);
     });
   });
 
@@ -11708,8 +11735,7 @@ function renderFeed() {
     drawer.querySelectorAll('[data-fcc-open]').forEach(el => {
       el.addEventListener('click', e => {
         e.stopPropagation();
-        const ch = state.challenges.find(x => x.id === el.dataset.fccOpen);
-        if (ch) openChallenge(ch);
+        openFeedViewer(el.dataset.fccOpen);
       });
     });
   });
@@ -11752,12 +11778,11 @@ function renderFeed() {
       renderFeed();
     });
   });
-  // Video thumb → open full detail
+  // Video thumb → open feed viewer
   c.querySelectorAll('[data-fcc-open]').forEach(el => {
     el.addEventListener('click', e => {
       e.stopPropagation();
-      const ch = state.challenges.find(x => x.id === el.dataset.fccOpen);
-      if (ch) openChallenge(ch);
+      openFeedViewer(el.dataset.fccOpen);
     });
   });
 
@@ -11787,8 +11812,7 @@ function renderFeed() {
   c.querySelectorAll('.feed-activity-card').forEach(card => {
     card.addEventListener('click', () => {
       const id = card.dataset.cid;
-      const ch = state.challenges.find(x => x.id === id);
-      if (ch && typeof openChallenge === 'function') openChallenge(ch);
+      if (id) openFeedViewer(id);
     });
   });
 
@@ -11884,14 +11908,14 @@ function renderFlyerCard(p) {
       </div>
 
       <!-- Flyer image — full width, prominent -->
-      ${p.media_url ? `<img src="${escapeHtml(p.media_url)}" alt="Challenge flyer" style="width:100%;display:block;max-height:420px;object-fit:cover;cursor:pointer;" loading="lazy" onclick="(function(){var ch=state.challenges&&state.challenges.find(function(x){return x.id==='${p.challenge_id}'});if(ch)openChallenge(ch);})()">` : `<div style="background:linear-gradient(135deg,rgba(255,106,44,0.18),rgba(255,45,31,0.1));padding:32px 20px;text-align:center;cursor:pointer;" ${ch ? `data-flyer-enter="${ch.id}"` : ""}><div style="font-size:52px;margin-bottom:10px;">🔥</div><div style="font-family:var(--font-display);font-size:22px;text-transform:uppercase;letter-spacing:0.04em;color:var(--text);margin-bottom:4px;">${ch ? escapeHtml(ch.title) : escapeHtml(p.content||"")}</div><div style="font-size:13px;color:var(--ember);font-weight:700;margin-top:6px;">${ch ? (isOpen?"OPEN TO ENTER":isVoting?"VOTE NOW":"VIEW CHALLENGE") : ""}</div></div>`}
+      ${p.media_url ? `<img src="${escapeHtml(p.media_url)}" alt="Challenge flyer" style="width:100%;display:block;max-height:420px;object-fit:cover;cursor:pointer;" loading="lazy" onclick="openFeedViewer('${p.challenge_id}')">` : `<div style="background:linear-gradient(135deg,rgba(255,106,44,0.18),rgba(255,45,31,0.1));padding:32px 20px;text-align:center;cursor:pointer;" ${ch ? `data-flyer-viewer="${ch.id}"` : ""}><div style="font-size:52px;margin-bottom:10px;">🔥</div><div style="font-family:var(--font-display);font-size:22px;text-transform:uppercase;letter-spacing:0.04em;color:var(--text);margin-bottom:4px;">${ch ? escapeHtml(ch.title) : escapeHtml(p.content||"")}</div><div style="font-size:13px;color:var(--ember);font-weight:700;margin-top:6px;">${ch ? (isOpen?"OPEN TO ENTER":isVoting?"VOTE NOW":"VIEW CHALLENGE") : ""}</div></div>`}
 
       <!-- Challenge CTA -->
       ${ch ? `
       <div style="padding:12px 14px 4px;">
         <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:2px;">${escapeHtml(ch.title)}</div>
         ${countdown ? `<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${countdown}</div>` : ''}
-        <button class="btn btn-primary" style="width:100%;margin-bottom:8px;" data-flyer-enter="${ch.id}">${ctaText}</button>
+        <button class="btn btn-primary" style="width:100%;margin-bottom:8px;" data-flyer-viewer="${ch.id}">${ctaText}</button>
       </div>` : p.content ? `<div style="padding:10px 14px;font-size:14px;color:var(--text);">${formatBody(p.content)}</div>` : ''}
 
       <!-- Actions -->
@@ -12092,6 +12116,197 @@ function renderFeedWinnerCard({ challenge, entry }) {
 
     </div>`;
 }
+
+// ── FEED VIEWER ─────────────────────────────────────────────────────────────
+// Lightweight media sheet that opens from feed cards.
+// Shows swipeable entries with play/like/vote.
+// "View Challenge" button opens the full challenge detail.
+let _fvChallenge = null;
+let _fvVoteCounts = {}; // entryId → count
+
+async function openFeedViewer(chId) {
+  const ch = state.challenges.find(c => c.id === chId) || state.currentChallenge;
+  if (!ch) return;
+  _fvChallenge = ch;
+
+  // Show sheet immediately with loading state
+  const sheet = document.getElementById('feedViewerSheet');
+  const title = document.getElementById('fvTitle');
+  const meta  = document.getElementById('fvMeta');
+  const btn   = document.getElementById('fvChallengeBtn');
+  const list  = document.getElementById('fvEntries');
+  const empty = document.getElementById('fvEmpty');
+
+  const status = computeChallengeStatus(ch);
+  const phase  = challengePhase(status);
+  title.textContent = ch.title;
+  meta.textContent  = ch.category + ' · ' + phase.label;
+  btn.textContent   = status === 'submitting' ? '🔥 Enter Challenge' :
+                      status === 'voting'     ? '🗳 Vote & Details'  : '📋 View Details';
+  list.innerHTML    = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Loading…</div>';
+  empty.style.display = 'none';
+  sheet.classList.add('open');
+  document.body.style.overflow = 'hidden';
+
+  // Load entries
+  try {
+    const [entriesRes, votesRes] = await Promise.all([
+      db.from('entries')
+        .select('*, submitter:profiles!entries_user_id_fkey(id,name,avatar)')
+        .eq('challenge_id', chId)
+        .order('created_at', { ascending: true }),
+      db.from('entry_votes').select('entry_id, voter_id').eq('challenge_id', chId),
+    ]);
+
+    if (!_fvChallenge || _fvChallenge.id !== chId) return; // sheet closed while loading
+
+    const entries = entriesRes.data || [];
+    const votes   = votesRes.data  || [];
+
+    // Tally votes
+    _fvVoteCounts = {};
+    votes.forEach(v => { _fvVoteCounts[v.entry_id] = (_fvVoteCounts[v.entry_id] || 0) + 1; });
+    const myVoteEntryId = votes.find(v => v.voter_id === state.profile?.id)?.entry_id || null;
+
+    if (!entries.length) {
+      list.innerHTML = '';
+      empty.style.display = 'block';
+      return;
+    }
+
+    const canVote = status === 'voting' || status === 'submitting';
+    list.innerHTML = entries.map(e => renderFvEntry(e, ch, canVote, myVoteEntryId, status)).join('');
+
+    // Wire events
+    list.querySelectorAll('[data-fv-vote]').forEach(btn => {
+      btn.addEventListener('click', e => { e.stopPropagation(); fvVote(btn, chId); });
+    });
+    list.querySelectorAll('[data-fv-like]').forEach(btn => {
+      btn.addEventListener('click', e => { e.stopPropagation(); fvLike(btn); });
+    });
+    list.querySelectorAll('[data-fv-user]').forEach(el => {
+      el.addEventListener('click', e => { e.stopPropagation(); closeFeedViewer(); openUserProfile(el.dataset.fvUser); });
+    });
+    list.querySelectorAll('[data-fv-comment]').forEach(btn => {
+      btn.addEventListener('click', e => { e.stopPropagation(); openComments('entry', btn.dataset.fvComment); });
+    });
+
+  } catch(err) {
+    console.error('feedViewer load', err);
+    list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Couldn\'t load entries</div>';
+  }
+}
+
+function renderFvEntry(entry, ch, canVote, myVoteEntryId, status) {
+  const sub = entry.submitter || { name: 'Unknown', avatar: '🔥', id: null };
+  const isMine = entry.user_id === state.profile?.id;
+  const iVoted = myVoteEntryId === entry.id;
+  const voteCount = _fvVoteCounts[entry.id] || 0;
+  const likeCount = state.entryLikeCounts[entry.id] || 0;
+  const iLiked = state.myEntryLikes?.has(entry.id);
+  const commentCount = state.entryCommentCounts[entry.id] || 0;
+  const mediaType = entry.media_type || ch.media_type;
+
+  let mediaHtml = '';
+  if (mediaType === 'photo' && entry.media_url) {
+    mediaHtml = `<img src="${escapeHtml(entry.media_url)}" style="width:100%;max-height:400px;object-fit:cover;display:block;" loading="lazy">`;
+  } else if (mediaType === 'video' && entry.media_url) {
+    if (entry.poster_url) {
+      mediaHtml = `<div style="position:relative;cursor:pointer;" data-fv-play="${escapeHtml(entry.media_url)}">
+        <img src="${escapeHtml(entry.poster_url)}" style="width:100%;max-height:400px;object-fit:cover;display:block;">
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.25);font-size:52px;">▶</div>
+      </div>`;
+    } else {
+      mediaHtml = `<video src="${escapeHtml(entry.media_url)}" controls playsinline preload="metadata" style="width:100%;max-height:400px;display:block;background:#000;"></video>`;
+    }
+  } else if (mediaType === 'audio' && entry.media_url) {
+    mediaHtml = `<div style="padding:20px 16px;background:var(--surface-2);display:flex;align-items:center;gap:12px;">
+      <span style="font-size:36px;">🎙️</span>
+      <audio src="${escapeHtml(entry.media_url)}" controls preload="metadata" style="flex:1;height:36px;"></audio>
+    </div>`;
+  } else if (mediaType === 'text' && entry.caption) {
+    mediaHtml = `<div style="padding:24px 16px;font-family:var(--font-bricolage);font-size:18px;line-height:1.5;color:var(--text);background:var(--surface-2);">${escapeHtml(entry.caption)}</div>`;
+  }
+
+  const voteBtn = canVote && !isMine
+    ? `<button class="flame-btn${iVoted?' liked':''}" data-fv-vote="${entry.id}" data-fv-ch="${ch.id}">${iVoted?'✓ Voted':'🔥 Vote'}</button>`
+    : isMine ? `<span style="font-size:12px;color:var(--ember);font-weight:700;text-transform:uppercase;letter-spacing:0.04em;">Your entry</span>` : '';
+
+  return `<div style="border-bottom:1px solid var(--border);padding-bottom:4px;margin-bottom:4px;">
+    ${mediaHtml}
+    <div style="padding:10px 14px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <div style="width:36px;height:36px;border-radius:50%;overflow:hidden;flex-shrink:0;background:linear-gradient(135deg,var(--ember),var(--coral));display:grid;place-items:center;font-size:16px;cursor:pointer;" data-fv-user="${sub.id||''}">${avatarInner(sub.avatar)}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;font-size:14px;cursor:pointer;" data-fv-user="${sub.id||''}">${escapeHtml(sub.name)}${isMine?' (you)':''}</div>
+          ${entry.caption && mediaType !== 'text' ? `<div style="font-size:13px;color:var(--text-dim);margin-top:2px;">${escapeHtml(entry.caption)}</div>` : ''}
+        </div>
+        ${voteBtn}
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding-top:8px;border-top:1px solid var(--border);">
+        <button class="flame-btn${iLiked?' liked':''}" data-fv-like="${entry.id}">
+          <span class="flame-icon">🔥</span><span>${likeCount}</span>
+        </button>
+        <button class="comment-btn" data-fv-comment="${entry.id}">
+          <span class="comment-icon">💬</span><span>${commentCount}</span>
+        </button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function fvVote(btn, chId) {
+  if (!state.profile) return;
+  const entryId = btn.dataset.fvVote;
+  btn.disabled = true;
+  btn.textContent = '⏳';
+  try {
+    await db.from('entry_votes').upsert(
+      { challenge_id: chId, entry_id: entryId, voter_id: state.profile.id },
+      { onConflict: 'challenge_id,voter_id' }
+    );
+    toast('🔥 Vote cast');
+    openFeedViewer(chId); // refresh
+  } catch(e) { toast('Vote failed'); btn.disabled = false; }
+}
+
+async function fvLike(btn) {
+  if (!state.profile) return;
+  const entryId = btn.dataset.fvLike;
+  const wasLiked = state.myEntryLikes?.has(entryId);
+  if (wasLiked) {
+    state.myEntryLikes.delete(entryId);
+    state.entryLikeCounts[entryId] = Math.max(0, (state.entryLikeCounts[entryId]||1) - 1);
+    await db.from('entry_likes').delete().eq('entry_id', entryId).eq('user_id', state.profile.id);
+  } else {
+    state.myEntryLikes.add(entryId);
+    state.entryLikeCounts[entryId] = (state.entryLikeCounts[entryId]||0) + 1;
+    await db.from('entry_likes').insert({ entry_id: entryId, user_id: state.profile.id });
+  }
+  btn.classList.toggle('liked', !wasLiked);
+  btn.querySelector('span:last-child').textContent = state.entryLikeCounts[entryId];
+}
+
+function openFeedViewerChallenge() {
+  const ch = _fvChallenge;
+  closeFeedViewer();
+  if (ch) openChallenge(ch);
+}
+
+function closeFeedViewer() {
+  document.getElementById('feedViewerSheet').classList.remove('open');
+  document.body.style.overflow = '';
+  _fvChallenge = null;
+}
+
+// Wire poster-tap → inline video swap inside feed viewer
+document.getElementById('fvEntries').addEventListener('click', e => {
+  const target = e.target.closest('[data-fv-play]');
+  if (!target) return;
+  const src = target.dataset.fvPlay;
+  target.innerHTML = `<video src="${escapeHtml(src)}" controls autoplay playsinline preload="auto" style="width:100%;max-height:400px;display:block;background:#000;"></video>`;
+  delete target.dataset.fvPlay;
+});
 
 // Wire winner curtain reveals — CSS panels slide apart on scroll into view
 function wireWinnerReveals() {
