@@ -4733,7 +4733,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
         <div class="cc-upload" id="ccUploadZone" onclick="document.getElementById('ccFile').click()">
           <div class="icon">📤</div>
           <div class="text">Tap to upload</div>
-          <div class="upload-hint" id="ccUploadHint">Max 500MB</div>
+          <div class="upload-hint" id="ccUploadHint">Max 500MB · Keep videos under 2 min for best results</div>
         </div>
         <input type="file" id="ccFile" class="cc-file-input" accept="image/*" />
         <div class="cc-preview" id="ccPreview" style="display:none"></div>
@@ -4989,7 +4989,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
         <div class="cc-upload" id="seUploadZone" onclick="document.getElementById('seFile').click()">
           <div class="icon">📤</div>
           <div class="text">Tap to upload</div>
-          <div class="upload-hint">Max 500MB</div>
+          <div class="upload-hint" id="seUploadHint">Max 500MB · Keep videos under 2 min for best results</div>
         </div>
         <input type="file" id="seFile" class="cc-file-input" />
         <div class="cc-preview" id="sePreview" style="display:none"></div>
@@ -5561,7 +5561,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v186 · upload-limits";
+const APP_VERSION = "v188 · upload-guidance";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -8193,7 +8193,7 @@ async function saveProfileEdits() {
     let newAvatar = epState.avatar;
 
     if (epState.pendingFile) {
-      btn.textContent = 'Uploading photo...';
+      btn.textContent = 'Uploading... 0%';
       const ext = (epState.pendingFile.name.split('.').pop() || 'jpg').toLowerCase();
       const filename = `avatars/${state.profile.id}/${Date.now()}.${ext}`;
       const withTimeout = (p, ms, label) => Promise.race([
@@ -9623,8 +9623,14 @@ document.getElementById('ccFile').addEventListener('change', (e) => {
   if (!file) return;
   if (file.size > 500 * 1024 * 1024) {
     showCcError('File too large. Max 500MB.');
-    e.target.value = '';
-    return;
+    e.target.value = ''; return;
+  }
+  if (file.size > 100 * 1024 * 1024) {
+    const h = document.getElementById('ccUploadHint');
+    if (h) { h.innerHTML = '⚠️ Large file (' + (file.size/1024/1024).toFixed(0) + 'MB) — upload may take several minutes on mobile. Consider trimming your video first.'; h.style.color = 'var(--gold)'; }
+  } else {
+    const h = document.getElementById('ccUploadHint');
+    if (h) { h.textContent = 'Max 500MB · Keep videos under 2 min for best results'; h.style.color = ''; }
   }
   document.getElementById('ccError').classList.remove('show');
   ccState.file = file;
@@ -9777,15 +9783,24 @@ document.getElementById('createChallengeForm').addEventListener('submit', async 
     let mediaUrl = null;
     let posterUrl = null;
     if (ccState.mediaType !== 'text') {
-      btn.textContent = 'Uploading...';
+      btn.textContent = 'Uploading... 0%';
       const ext = (ccState.file.name.split('.').pop() || 'bin').toLowerCase();
       const filename = `${state.profile.id}/${Date.now()}.${ext}`;
-      const { error: uploadError } = await db.storage
-        .from('challenge-media')
-        .upload(filename, ccState.file, { cacheControl: '3600', upsert: false });
-      if (uploadError) throw new Error('Upload failed: ' + uploadError.message);
-      const { data: pub } = db.storage.from('challenge-media').getPublicUrl(filename);
-      mediaUrl = pub.publicUrl;
+      let mediaResult;
+      try {
+        mediaResult = await uploadWithProgress('challenge-media', filename, ccState.file, pct => {
+          btn.textContent = `Uploading... ${pct}%`;
+        });
+      } catch(upErr) {
+        // Fallback to standard upload if XHR fails
+        const { error: uploadError } = await db.storage
+          .from('challenge-media')
+          .upload(filename, ccState.file, { cacheControl: '3600', upsert: false });
+        if (uploadError) throw new Error('Upload failed: ' + uploadError.message);
+        const { data: pub } = db.storage.from('challenge-media').getPublicUrl(filename);
+        mediaResult = { publicUrl: pub.publicUrl };
+      }
+      mediaUrl = mediaResult.publicUrl;
       // Capture poster frame for videos
       if (ccState.mediaType === 'video') {
         try {
@@ -10709,8 +10724,14 @@ document.getElementById('seFile').addEventListener('change', (e) => {
   if (file.size > 500 * 1024 * 1024) {
     document.getElementById('seError').textContent = 'File too large. Max 500MB.';
     document.getElementById('seError').classList.add('show');
-    e.target.value = '';
-    return;
+    e.target.value = ''; return;
+  }
+  if (file.size > 100 * 1024 * 1024) {
+    const h = document.getElementById('seUploadHint');
+    if (h) { h.innerHTML = '⚠️ Large file (' + (file.size/1024/1024).toFixed(0) + 'MB) — upload may take several minutes on mobile. Consider trimming your video first.'; h.style.color = 'var(--gold)'; }
+  } else {
+    const h = document.getElementById('seUploadHint');
+    if (h) { h.textContent = 'Max 500MB · Keep videos under 2 min for best results'; h.style.color = ''; }
   }
   document.getElementById('seError').classList.remove('show');
   seState.file = file;
@@ -10758,7 +10779,7 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
     let mediaUrl = null;
     let posterUrl = null;
     if (ch.media_type !== 'text' && seState.file) {
-      btn.textContent = 'Uploading...';
+      btn.textContent = 'Uploading... 0%';
       const ext = (seState.file.name.split('.').pop() || 'bin').toLowerCase();
       const filename = `${state.profile.id}/${Date.now()}.${ext}`;
       const { error: uploadError } = await db.storage
@@ -12159,6 +12180,46 @@ function renderFeedWinnerCard({ challenge, entry }) {
 }
 
 
+// ── UPLOAD WITH PROGRESS ─────────────────────────────────────────────────────
+// Uploads a file to Supabase storage with real-time progress updates.
+// onProgress(pct) called with 0-100. Returns { publicUrl } or throws.
+async function uploadWithProgress(bucket, filename, file, onProgress) {
+  const supabaseUrl = 'https://sioalvawzayfphwzqctq.supabase.co';
+  const { data: { session } } = await db.auth.getSession();
+  const token = session?.access_token;
+  if (!token) throw new Error('Not authenticated');
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const url  = `${supabaseUrl}/storage/v1/object/${bucket}/${filename}`;
+
+    xhr.open('POST', url);
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.setRequestHeader('x-upsert', 'false');
+    xhr.setRequestHeader('cache-control', '3600');
+
+    xhr.upload.addEventListener('progress', e => {
+      if (e.lengthComputable) onProgress(Math.round(e.loaded / e.total * 100));
+    });
+
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        const { data } = db.storage.from(bucket).getPublicUrl(filename);
+        resolve({ publicUrl: data.publicUrl });
+      } else {
+        reject(new Error(`Upload failed: ${xhr.status} ${xhr.responseText}`));
+      }
+    });
+
+    xhr.addEventListener('error', () => reject(new Error('Upload network error')));
+    xhr.addEventListener('abort', () => reject(new Error('Upload cancelled')));
+
+    const formData = new FormData();
+    formData.append('', file, filename.split('/').pop());
+    xhr.send(formData);
+  });
+}
+
 // ── PRODUCT TOUR ─────────────────────────────────────────────────────────────
 const TOUR_KEY = 'fc_tour_done_v1';
 
@@ -12589,7 +12650,7 @@ function openCreatePost() {
   document.getElementById('cpTypePhoto').classList.add('active');
   document.getElementById('cpTypeAudio').classList.remove('active');
   document.getElementById('cpFile').accept = 'image/*,video/*';
-  document.getElementById('cpUploadHint').textContent = 'Photo or video · Max 500MB';
+  document.getElementById('cpUploadHint').textContent = 'Photo or video · Max 500MB · Keep videos under 2 min';
   document.getElementById('cpAudioTip').style.display = 'none';
   const err = document.getElementById('cpError');
   err.classList.remove('show');
@@ -12611,6 +12672,10 @@ function cpFileChangeHandler(e) {
   const file = e.target.files[0];
   if (!file) return;
   if (file.size > 500 * 1024 * 1024) { showCpError('File too large. Max 500MB.'); e.target.value = ''; return; }
+  if (file.size > 100 * 1024 * 1024) {
+    document.getElementById('cpUploadHint').innerHTML = '⚠️ Large file (' + (file.size/1024/1024).toFixed(0) + 'MB) — upload may take several minutes. Consider trimming first.';
+    document.getElementById('cpUploadHint').style.color = 'var(--gold)';
+  }
   const isVideo = file.type.startsWith('video/');
   const isImage = file.type.startsWith('image/');
   const isAudio = file.type.startsWith('audio/');
@@ -12757,7 +12822,7 @@ document.getElementById('createPostForm').addEventListener('submit', async e => 
       mediaType = cpState.fileType;
     }
     if (cpState.audioFile) {
-      btn.textContent = 'Uploading audio...';
+      btn.textContent = 'Uploading... 0%';
       const ext = (cpState.audioFile.name.split('.').pop() || 'mp3').toLowerCase();
       const filename = `posts/${state.profile.id}/audio_${Date.now()}.${ext}`;
       const uploadResp = await withTimeout(
