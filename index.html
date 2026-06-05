@@ -5649,7 +5649,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v193 · crop";
+const APP_VERSION = "v194 · crop-entry";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -10868,9 +10868,28 @@ document.getElementById('seFile').addEventListener('change', (e) => {
   if (seToggle) seToggle.style.display = seIsVideo ? 'flex' : 'none';
   if (seTip) seTip.style.display = seIsVideo ? 'block' : 'none';
   document.getElementById('seError').classList.remove('show');
+
+  const ch = state.currentChallenge;
+
+  // For photo challenges: open crop modal first
+  if (ch.media_type === 'photo' && file.type.startsWith('image/')) {
+    openCrop(file, 16, 9, (croppedBlob) => {
+      seState.file = croppedBlob;
+      seState.fileUrl = URL.createObjectURL(croppedBlob);
+      const preview = document.getElementById('sePreview');
+      preview.style.display = 'block';
+      preview.innerHTML = `<img src="${seState.fileUrl}" alt="Preview" style="width:100%;border-radius:8px;aspect-ratio:16/9;object-fit:cover;">
+        <div class="cc-preview-info">
+          <span>${escapeHtml(file.name)} · ${(croppedBlob.size/1024/1024).toFixed(1)} MB</span>
+          <button type="button" class="cc-preview-remove" onclick="clearSubmitEntryPreview()">Remove</button>
+        </div>`;
+      document.getElementById('seUploadZone').classList.add('has-file');
+    });
+    return;
+  }
+
   seState.file = file;
   seState.fileUrl = URL.createObjectURL(file);
-  const ch = state.currentChallenge;
   const preview = document.getElementById('sePreview');
   let mediaEl = '';
   if (ch.media_type === 'photo') mediaEl = `<img src="${seState.fileUrl}" alt="Preview">`;
