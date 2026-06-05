@@ -2780,6 +2780,14 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
   box-sizing: border-box;
 }
 .fcc-entries-scroll::-webkit-scrollbar { display: none; }
+#ccCompressCheck:checked + #ccCompressSlider,
+#seCompressCheck:checked + #seCompressSlider { background: var(--ember) !important; }
+#ccCompressSlider::after, #seCompressSlider::after {
+  content:''; position:absolute; width:18px; height:18px; border-radius:50%;
+  background:#fff; top:3px; left:3px; transition:0.2s;
+}
+#ccCompressCheck:checked + #ccCompressSlider::after,
+#seCompressCheck:checked + #seCompressSlider::after { transform: translateX(20px); }
 .fcc-entry-card {
   will-change: transform;
   flex: 0 0 72vw;
@@ -4730,12 +4738,26 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
       <div class="cc-field" id="ccUploadField">
         <label>Your entry <span class="hint">(you're competing too!)</span></label>
+        <div style="background:var(--surface-2);border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:12px;color:var(--text-muted);line-height:1.5;">
+          💡 <strong>Tip:</strong> Trim your video to under 2 minutes in your Photos app before uploading for the fastest experience.
+        </div>
         <div class="cc-upload" id="ccUploadZone" onclick="document.getElementById('ccFile').click()">
           <div class="icon">📤</div>
           <div class="text">Tap to upload</div>
           <div class="upload-hint" id="ccUploadHint">Max 500MB · Keep videos under 2 min for best results</div>
         </div>
         <input type="file" id="ccFile" class="cc-file-input" accept="image/*" />
+        <!-- Compress toggle — shown for video only -->
+        <div id="ccCompressToggle" style="display:none;margin-top:8px;padding:10px 12px;background:var(--surface-2);border-radius:8px;display:none;align-items:center;justify-content:space-between;">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:var(--text);">⚡ Compress for faster upload</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Reduces file size ~80%. Small quality tradeoff.</div>
+          </div>
+          <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;margin-left:12px;">
+            <input type="checkbox" id="ccCompressCheck" style="opacity:0;width:0;height:0;">
+            <span onclick="document.getElementById('ccCompressCheck').click()" style="position:absolute;cursor:pointer;inset:0;background:var(--border-bright);border-radius:12px;transition:0.2s;" id="ccCompressSlider"></span>
+          </label>
+        </div>
         <div class="cc-preview" id="ccPreview" style="display:none"></div>
       </div>
 
@@ -4986,12 +5008,26 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     <form id="submitEntryForm" class="cc-form">
       <div class="cc-field" id="seUploadField">
         <label>Your <span id="seMediaTypeLabel">photo</span></label>
+        <div id="seTip" style="display:none;background:var(--surface-2);border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:12px;color:var(--text-muted);line-height:1.5;">
+          💡 <strong>Tip:</strong> Trim your video to under 2 minutes in your Photos app before uploading for the fastest experience.
+        </div>
         <div class="cc-upload" id="seUploadZone" onclick="document.getElementById('seFile').click()">
           <div class="icon">📤</div>
           <div class="text">Tap to upload</div>
           <div class="upload-hint" id="seUploadHint">Max 500MB · Keep videos under 2 min for best results</div>
         </div>
         <input type="file" id="seFile" class="cc-file-input" />
+        <!-- Compress toggle — shown for video only -->
+        <div id="seCompressToggle" style="display:none;margin-top:8px;padding:10px 12px;background:var(--surface-2);border-radius:8px;align-items:center;justify-content:space-between;">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:var(--text);">⚡ Compress for faster upload</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Reduces file size ~80%. Small quality tradeoff.</div>
+          </div>
+          <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;margin-left:12px;">
+            <input type="checkbox" id="seCompressCheck" style="opacity:0;width:0;height:0;">
+            <span onclick="document.getElementById('seCompressCheck').click()" style="position:absolute;cursor:pointer;inset:0;background:var(--border-bright);border-radius:12px;transition:0.2s;" id="seCompressSlider"></span>
+          </label>
+        </div>
         <div class="cc-preview" id="sePreview" style="display:none"></div>
       </div>
       <div class="cc-field" id="seTextField" style="display:none">
@@ -5561,7 +5597,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v188 · upload-guidance";
+const APP_VERSION = "v189 · upload-compress";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -9632,6 +9668,10 @@ document.getElementById('ccFile').addEventListener('change', (e) => {
     const h = document.getElementById('ccUploadHint');
     if (h) { h.textContent = 'Max 500MB · Keep videos under 2 min for best results'; h.style.color = ''; }
   }
+  // Show compress toggle + tip for video files
+  const ccIsVideo = file.type.startsWith('video/') || /\.(mov|mp4|m4v|avi|webm)$/i.test(file.name);
+  const ccToggle = document.getElementById('ccCompressToggle');
+  if (ccToggle) ccToggle.style.display = ccIsVideo ? 'flex' : 'none';
   document.getElementById('ccError').classList.remove('show');
   ccState.file = file;
   ccState.fileUrl = URL.createObjectURL(file);
@@ -9783,19 +9823,33 @@ document.getElementById('createChallengeForm').addEventListener('submit', async 
     let mediaUrl = null;
     let posterUrl = null;
     if (ccState.mediaType !== 'text') {
+      // Compress if user opted in
+      let fileToUpload = ccState.file;
+      const ccShouldCompress = document.getElementById('ccCompressCheck')?.checked && ccState.mediaType === 'video';
+      if (ccShouldCompress) {
+        btn.textContent = 'Compressing... 0%';
+        try {
+          fileToUpload = await compressVideo(ccState.file, pct => {
+            btn.textContent = `Compressing... ${pct}%`;
+          });
+        } catch(compErr) {
+          console.warn('[compress] failed, using original', compErr);
+          fileToUpload = ccState.file;
+        }
+      }
       btn.textContent = 'Uploading... 0%';
-      const ext = (ccState.file.name.split('.').pop() || 'bin').toLowerCase();
+      const rawExt = (ccState.file.name.split('.').pop() || 'bin').toLowerCase();
+      const ext = (ccShouldCompress && fileToUpload !== ccState.file) ? 'mp4' : rawExt;
       const filename = `${state.profile.id}/${Date.now()}.${ext}`;
       let mediaResult;
       try {
-        mediaResult = await uploadWithProgress('challenge-media', filename, ccState.file, pct => {
+        mediaResult = await uploadChunked('challenge-media', filename, fileToUpload, pct => {
           btn.textContent = `Uploading... ${pct}%`;
         });
       } catch(upErr) {
-        // Fallback to standard upload if XHR fails
         const { error: uploadError } = await db.storage
           .from('challenge-media')
-          .upload(filename, ccState.file, { cacheControl: '3600', upsert: false });
+          .upload(filename, fileToUpload, { cacheControl: '3600', upsert: false });
         if (uploadError) throw new Error('Upload failed: ' + uploadError.message);
         const { data: pub } = db.storage.from('challenge-media').getPublicUrl(filename);
         mediaResult = { publicUrl: pub.publicUrl };
@@ -10733,6 +10787,12 @@ document.getElementById('seFile').addEventListener('change', (e) => {
     const h = document.getElementById('seUploadHint');
     if (h) { h.textContent = 'Max 500MB · Keep videos under 2 min for best results'; h.style.color = ''; }
   }
+  // Show compress toggle + tip for video files
+  const seIsVideo = file.type.startsWith('video/') || /\.(mov|mp4|m4v|avi|webm)$/i.test(file.name);
+  const seToggle = document.getElementById('seCompressToggle');
+  const seTip = document.getElementById('seTip');
+  if (seToggle) seToggle.style.display = seIsVideo ? 'flex' : 'none';
+  if (seTip) seTip.style.display = seIsVideo ? 'block' : 'none';
   document.getElementById('seError').classList.remove('show');
   seState.file = file;
   seState.fileUrl = URL.createObjectURL(file);
@@ -10779,12 +10839,35 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
     let mediaUrl = null;
     let posterUrl = null;
     if (ch.media_type !== 'text' && seState.file) {
+      // Compress if user opted in
+      let seFileToUpload = seState.file;
+      const seShouldCompress = document.getElementById('seCompressCheck')?.checked && seState.mediaType === 'video';
+      if (seShouldCompress) {
+        btn.textContent = 'Compressing... 0%';
+        try {
+          seFileToUpload = await compressVideo(seState.file, pct => {
+            btn.textContent = `Compressing... ${pct}%`;
+          });
+        } catch(e) { seFileToUpload = seState.file; }
+      }
       btn.textContent = 'Uploading... 0%';
-      const ext = (seState.file.name.split('.').pop() || 'bin').toLowerCase();
+      const seRawExt = (seState.file.name.split('.').pop() || 'bin').toLowerCase();
+      const ext = (seShouldCompress && seFileToUpload !== seState.file) ? 'mp4' : seRawExt;
       const filename = `${state.profile.id}/${Date.now()}.${ext}`;
-      const { error: uploadError } = await db.storage
-        .from('challenge-media')
-        .upload(filename, seState.file, { cacheControl: '3600', upsert: false });
+      let seMediaResult;
+      try {
+        seMediaResult = await uploadChunked('challenge-media', filename, seFileToUpload, pct => {
+          btn.textContent = `Uploading... ${pct}%`;
+        });
+      } catch(e) {
+        const { error: uploadError } = await db.storage
+          .from('challenge-media')
+          .upload(filename, seFileToUpload, { cacheControl: '3600', upsert: false });
+        if (uploadError) throw new Error('Upload failed: ' + uploadError.message);
+        const { data: spub } = db.storage.from('challenge-media').getPublicUrl(filename);
+        seMediaResult = { publicUrl: spub.publicUrl };
+      }
+      const seUploadErr = null;
       if (uploadError) throw new Error('Upload failed: ' + uploadError.message);
       const { data: pub } = db.storage.from('challenge-media').getPublicUrl(filename);
       mediaUrl = pub.publicUrl;
@@ -12218,6 +12301,151 @@ async function uploadWithProgress(bucket, filename, file, onProgress) {
     formData.append('', file, filename.split('/').pop());
     xhr.send(formData);
   });
+}
+
+
+// ── UPLOAD UTILITIES ─────────────────────────────────────────────────────────
+
+// Compress a video file using MediaRecorder (native browser, no library needed)
+// Returns a compressed Blob or the original file if compression fails/unsupported
+async function compressVideo(file, onProgress) {
+  return new Promise((resolve) => {
+    // Check support
+    if (!window.MediaRecorder || !window.VideoDecoder) {
+      console.log('[compress] MediaRecorder/VideoDecoder not supported, skipping');
+      resolve(file); return;
+    }
+
+    const url = URL.createObjectURL(file);
+    const video = document.createElement('video');
+    video.src = url;
+    video.muted = true;
+    video.playsInline = true;
+
+    video.addEventListener('loadedmetadata', () => {
+      const duration = video.duration;
+      if (!duration || duration === Infinity) { resolve(file); URL.revokeObjectURL(url); return; }
+
+      const canvas = document.createElement('canvas');
+      // Target 720p max
+      const scale = Math.min(1, 1280 / Math.max(video.videoWidth, video.videoHeight));
+      canvas.width  = Math.round(video.videoWidth  * scale);
+      canvas.height = Math.round(video.videoHeight * scale);
+      const ctx = canvas.getContext('2d');
+
+      // Pick best supported MIME type
+      const mimeType = ['video/mp4;codecs=h264,aac', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm']
+        .find(t => MediaRecorder.isTypeSupported(t)) || '';
+      if (!mimeType) { resolve(file); URL.revokeObjectURL(url); return; }
+
+      const chunks = [];
+      let recorder;
+      try {
+        const stream = canvas.captureStream(30);
+        recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2_500_000 });
+      } catch(e) { resolve(file); URL.revokeObjectURL(url); return; }
+
+      recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+      recorder.onstop = () => {
+        URL.revokeObjectURL(url);
+        const blob = new Blob(chunks, { type: mimeType.split(';')[0] });
+        // Only use compressed if it's actually smaller
+        if (blob.size < file.size * 0.95) {
+          console.log(`[compress] ${(file.size/1024/1024).toFixed(1)}MB → ${(blob.size/1024/1024).toFixed(1)}MB`);
+          resolve(blob);
+        } else {
+          console.log('[compress] No size benefit, using original');
+          resolve(file);
+        }
+      };
+
+      recorder.start(1000); // 1s chunks
+      video.currentTime = 0;
+
+      let lastPct = 0;
+      const drawFrame = () => {
+        if (video.ended || video.paused) { recorder.stop(); return; }
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const pct = Math.round((video.currentTime / duration) * 100);
+        if (pct !== lastPct) { lastPct = pct; onProgress && onProgress(pct); }
+        requestAnimationFrame(drawFrame);
+      };
+
+      video.addEventListener('play', drawFrame, { once: true });
+      video.addEventListener('ended', () => { if (recorder.state !== 'inactive') recorder.stop(); }, { once: true });
+      video.play().catch(() => { recorder.stop(); resolve(file); });
+
+      // Safety timeout: 3× real duration
+      setTimeout(() => {
+        if (recorder.state !== 'inactive') { recorder.stop(); }
+      }, duration * 3000 + 5000);
+    });
+
+    video.addEventListener('error', () => { URL.revokeObjectURL(url); resolve(file); });
+    video.load();
+  });
+}
+
+// Chunked upload to Supabase with progress (5MB chunks, auto-retry)
+const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
+
+async function uploadChunked(bucket, filename, file, onProgress) {
+  const supabaseUrl = 'https://sioalvawzayfphwzqctq.supabase.co';
+  const { data: { session } } = await db.auth.getSession();
+  const token = session?.access_token;
+  if (!token) throw new Error('Not authenticated');
+
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+
+  // For small files (< 10MB) use simple XHR upload
+  if (totalChunks <= 2) {
+    return uploadWithProgress(bucket, filename, file, onProgress);
+  }
+
+  // Initiate TUS resumable upload
+  const tusUrl = `${supabaseUrl}/storage/v1/upload/resumable`;
+  const initRes = await fetch(tusUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/offset+octet-stream',
+      'Upload-Length': file.size,
+      'Upload-Metadata': `bucketName ${btoa(bucket)},objectName ${btoa(filename)},contentType ${btoa(file.type || 'video/mp4')}`,
+      'Tus-Resumable': '1.0.0',
+    },
+  });
+
+  if (!initRes.ok) {
+    // TUS not available, fall back to XHR
+    console.log('[upload] TUS init failed, falling back to XHR');
+    return uploadWithProgress(bucket, filename, file, onProgress);
+  }
+
+  const uploadUrl = initRes.headers.get('Location');
+  if (!uploadUrl) return uploadWithProgress(bucket, filename, file, onProgress);
+
+  // Upload chunks
+  let offset = 0;
+  while (offset < file.size) {
+    const chunk = file.slice(offset, offset + CHUNK_SIZE);
+    const chunkRes = await fetch(uploadUrl, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/offset+octet-stream',
+        'Upload-Offset': offset,
+        'Tus-Resumable': '1.0.0',
+        'Content-Length': chunk.size,
+      },
+      body: chunk,
+    });
+    if (!chunkRes.ok) throw new Error(`Chunk upload failed at offset ${offset}`);
+    offset += chunk.size;
+    onProgress && onProgress(Math.round(offset / file.size * 100));
+  }
+
+  const { data } = db.storage.from(bucket).getPublicUrl(filename);
+  return { publicUrl: data.publicUrl };
 }
 
 // ── PRODUCT TOUR ─────────────────────────────────────────────────────────────
