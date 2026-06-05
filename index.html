@@ -2780,6 +2780,25 @@ body.theme-light .hc-pct-label { fill: #7a716a; }
   box-sizing: border-box;
 }
 .fcc-entries-scroll::-webkit-scrollbar { display: none; }
+
+/* Crop modal */
+#cropModal.open { display:flex !important; }
+.crop-ratio-btn {
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.3);
+  color: #fff;
+  padding: 7px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.crop-ratio-btn.active {
+  background: var(--ember);
+  border-color: var(--ember);
+  font-weight: 700;
+}
+
 #ccCompressCheck:checked + #ccCompressSlider,
 #seCompressCheck:checked + #seCompressSlider { background: var(--ember) !important; }
 #ccCompressSlider::after, #seCompressSlider::after {
@@ -5156,6 +5175,38 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
   </div>
 </div>
 
+<!-- IMAGE CROP MODAL -->
+<div id="cropModal" style="display:none;position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,0.95);flex-direction:column;align-items:center;justify-content:space-between;">
+  <div style="padding:16px 20px;width:100%;display:flex;align-items:center;justify-content:space-between;">
+    <button onclick="cancelCrop()" style="background:none;border:none;color:#fff;font-size:16px;cursor:pointer;padding:8px;">Cancel</button>
+    <span style="color:#fff;font-size:16px;font-weight:600;">Crop Photo</span>
+    <button onclick="confirmCrop()" style="background:var(--ember);border:none;color:#fff;font-size:16px;font-weight:700;cursor:pointer;padding:8px 18px;border-radius:20px;">Use Photo</button>
+  </div>
+  <!-- Canvas container -->
+  <div id="cropContainer" style="position:relative;overflow:hidden;touch-action:none;flex:1;width:100%;display:flex;align-items:center;justify-content:center;">
+    <canvas id="cropCanvas" style="max-width:100%;max-height:100%;touch-action:none;"></canvas>
+    <!-- Crop overlay — darkens outside the crop box -->
+    <div id="cropOverlay" style="position:absolute;inset:0;pointer-events:none;"></div>
+    <!-- Crop box -->
+    <div id="cropBox" style="position:absolute;border:2px solid #fff;box-shadow:0 0 0 9999px rgba(0,0,0,0.55);box-sizing:border-box;">
+      <!-- Corner handles -->
+      <div class="crop-handle" data-pos="tl" style="position:absolute;top:-6px;left:-6px;width:20px;height:20px;border-top:3px solid #fff;border-left:3px solid #fff;cursor:nw-resize;"></div>
+      <div class="crop-handle" data-pos="tr" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-top:3px solid #fff;border-right:3px solid #fff;cursor:ne-resize;"></div>
+      <div class="crop-handle" data-pos="bl" style="position:absolute;bottom:-6px;left:-6px;width:20px;height:20px;border-bottom:3px solid #fff;border-left:3px solid #fff;cursor:sw-resize;"></div>
+      <div class="crop-handle" data-pos="br" style="position:absolute;bottom:-6px;right:-6px;width:20px;height:20px;border-bottom:3px solid #fff;border-right:3px solid #fff;cursor:se-resize;"></div>
+    </div>
+  </div>
+  <div style="padding:16px 20px;text-align:center;">
+    <div id="cropRatioLabel" style="color:rgba(255,255,255,0.6);font-size:13px;margin-bottom:8px;"></div>
+    <div style="display:flex;gap:10px;justify-content:center;">
+      <button onclick="setCropRatio(16,9)"  id="cropBtn169"  class="crop-ratio-btn">16:9</button>
+      <button onclick="setCropRatio(4,3)"   id="cropBtn43"   class="crop-ratio-btn">4:3</button>
+      <button onclick="setCropRatio(1,1)"   id="cropBtn11"   class="crop-ratio-btn">1:1</button>
+      <button onclick="setCropRatio(0,0)"   id="cropBtnFree" class="crop-ratio-btn">Free</button>
+    </div>
+  </div>
+</div>
+
 <!-- PRODUCT TOUR -->
 <div id="tourOverlay" style="display:none;position:fixed;inset:0;z-index:9000;pointer-events:none;">
   <!-- Spotlight cutout via SVG -->
@@ -5598,7 +5649,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v192 · title-fix";
+const APP_VERSION = "v193 · crop";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -9674,6 +9725,27 @@ document.getElementById('ccFile').addEventListener('change', (e) => {
   const ccToggle = document.getElementById('ccCompressToggle');
   if (ccToggle) ccToggle.style.display = ccIsVideo ? 'flex' : 'none';
   document.getElementById('ccError').classList.remove('show');
+
+  // For photos: open crop modal first, then proceed
+  const ccIsPhoto = file.type.startsWith('image/');
+  if (ccIsPhoto) {
+    openCrop(file, 16, 9, (croppedBlob) => {
+      croppedBlob.name = file.name;
+      croppedBlob.lastModified = file.lastModified;
+      ccState.file = croppedBlob;
+      ccState.fileUrl = URL.createObjectURL(croppedBlob);
+      const preview = document.getElementById('ccPreview');
+      if (preview) {
+        preview.style.display = 'block';
+        preview.innerHTML = `<img src="${ccState.fileUrl}" style="width:100%;border-radius:8px;aspect-ratio:16/9;object-fit:cover;">`;
+      }
+      document.getElementById('ccUploadZone').classList.add('has-file');
+      const fi = document.getElementById('ccUploadZone').querySelector('.text');
+      if (fi) fi.textContent = croppedBlob.name || file.name;
+    });
+    return; // wait for crop callback
+  }
+
   ccState.file = file;
   ccState.fileUrl = URL.createObjectURL(file);
   const preview = document.getElementById('ccPreview');
@@ -12306,6 +12378,238 @@ async function uploadWithProgress(bucket, filename, file, onProgress) {
 }
 
 
+
+// ── IMAGE CROP ────────────────────────────────────────────────────────────────
+const cropState = {
+  img: null,          // Image element
+  originalFile: null, // Original File object
+  callback: null,     // fn(croppedBlob) called on confirm
+  ratio: 16/9,        // Current aspect ratio (0 = free)
+  ratioW: 16, ratioH: 9,
+  // Canvas display metrics
+  canvasX: 0, canvasY: 0, canvasW: 0, canvasH: 0,
+  // Crop box in canvas-relative coords (pixels on screen)
+  boxX: 0, boxY: 0, boxW: 0, boxH: 0,
+  // Drag state
+  dragging: null, dragStartX: 0, dragStartY: 0,
+  boxStartX: 0, boxStartY: 0, boxStartW: 0, boxStartH: 0,
+};
+
+// Open the crop modal with a file. ratio: [w,h] or [0,0] for free
+// callback(blob) called when user taps "Use Photo"
+function openCrop(file, ratioW, ratioH, callback) {
+  cropState.originalFile = file;
+  cropState.callback = callback;
+  cropState.ratioW = ratioW;
+  cropState.ratioH = ratioH;
+  cropState.ratio = (ratioW && ratioH) ? ratioW / ratioH : 0;
+
+  const modal = document.getElementById('cropModal');
+  modal.classList.add('open');
+
+  // Highlight active ratio button
+  ['169','43','11','Free'].forEach(id => {
+    const btn = document.getElementById('cropBtn' + id);
+    if (btn) btn.classList.remove('active');
+  });
+  const activeId = ratioW === 16 ? '169' : ratioW === 4 ? '43' : ratioW === 1 ? '11' : 'Free';
+  const activeBtn = document.getElementById('cropBtn' + activeId);
+  if (activeBtn) activeBtn.classList.add('active');
+
+  // Load image onto canvas
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      cropState.img = img;
+      drawCropCanvas();
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function drawCropCanvas() {
+  const canvas = document.getElementById('cropCanvas');
+  const container = document.getElementById('cropContainer');
+  const img = cropState.img;
+  if (!img) return;
+
+  // Fit image to container
+  const maxW = container.clientWidth - 32;
+  const maxH = container.clientHeight - 32;
+  const scale = Math.min(maxW / img.width, maxH / img.height, 1);
+  const dispW = Math.round(img.width  * scale);
+  const dispH = Math.round(img.height * scale);
+
+  canvas.width  = dispW;
+  canvas.height = dispH;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, dispW, dispH);
+
+  // Store canvas position
+  const rect = canvas.getBoundingClientRect();
+  cropState.canvasX = rect.left;
+  cropState.canvasY = rect.top;
+  cropState.canvasW = dispW;
+  cropState.canvasH = dispH;
+
+  // Init crop box to fit inside canvas with correct ratio
+  initCropBox(dispW, dispH);
+  updateCropBox();
+}
+
+function initCropBox(w, h) {
+  const ratio = cropState.ratio;
+  let bw, bh;
+  if (!ratio) {
+    // Free — start at 80% of image
+    bw = Math.round(w * 0.8);
+    bh = Math.round(h * 0.8);
+  } else {
+    // Fit ratio inside canvas
+    if (w / h > ratio) {
+      bh = Math.round(h * 0.9);
+      bw = Math.round(bh * ratio);
+    } else {
+      bw = Math.round(w * 0.9);
+      bh = Math.round(bw / ratio);
+    }
+  }
+  cropState.boxX = Math.round((w - bw) / 2);
+  cropState.boxY = Math.round((h - bh) / 2);
+  cropState.boxW = bw;
+  cropState.boxH = bh;
+}
+
+function updateCropBox() {
+  const box = document.getElementById('cropBox');
+  const canvas = document.getElementById('cropCanvas');
+  const cr = canvas.getBoundingClientRect();
+  const container = document.getElementById('cropContainer');
+  const conR = container.getBoundingClientRect();
+
+  const s = cropState;
+  // Position crop box relative to container
+  const offsetX = cr.left - conR.left;
+  const offsetY = cr.top  - conR.top;
+
+  box.style.left   = (offsetX + s.boxX) + 'px';
+  box.style.top    = (offsetY + s.boxY) + 'px';
+  box.style.width  = s.boxW + 'px';
+  box.style.height = s.boxH + 'px';
+
+  const label = document.getElementById('cropRatioLabel');
+  if (label) {
+    if (!s.ratio) label.textContent = `${s.boxW} × ${s.boxH}`;
+    else label.textContent = `${s.ratioW}:${s.ratioH} ratio`;
+  }
+}
+
+function setCropRatio(w, h) {
+  cropState.ratioW = w; cropState.ratioH = h;
+  cropState.ratio = (w && h) ? w / h : 0;
+  ['169','43','11','Free'].forEach(id => {
+    document.getElementById('cropBtn' + id)?.classList.remove('active');
+  });
+  const activeId = w === 16 ? '169' : w === 4 ? '43' : w === 1 ? '11' : 'Free';
+  document.getElementById('cropBtn' + activeId)?.classList.add('active');
+  initCropBox(cropState.canvasW, cropState.canvasH);
+  updateCropBox();
+}
+
+// Touch/pointer drag on crop box
+const cropBox = document.getElementById('cropBox');
+let _cropPointerDown = false;
+
+cropBox.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  const handle = e.target.dataset.pos;
+  cropState.dragging = handle || 'move';
+  cropState.dragStartX = e.clientX;
+  cropState.dragStartY = e.clientY;
+  cropState.boxStartX  = cropState.boxX;
+  cropState.boxStartY  = cropState.boxY;
+  cropState.boxStartW  = cropState.boxW;
+  cropState.boxStartH  = cropState.boxH;
+  cropBox.setPointerCapture(e.pointerId);
+});
+
+cropBox.addEventListener('pointermove', e => {
+  if (!cropState.dragging) return;
+  e.preventDefault();
+  const dx = e.clientX - cropState.dragStartX;
+  const dy = e.clientY - cropState.dragStartY;
+  const s  = cropState;
+  const minSize = 40;
+
+  if (s.dragging === 'move') {
+    s.boxX = Math.max(0, Math.min(s.canvasW - s.boxW, s.boxStartX + dx));
+    s.boxY = Math.max(0, Math.min(s.canvasH - s.boxH, s.boxStartY + dy));
+  } else {
+    let nx = s.boxStartX, ny = s.boxStartY, nw = s.boxStartW, nh = s.boxStartH;
+    if (s.dragging.includes('r')) { nw = Math.max(minSize, s.boxStartW + dx); }
+    if (s.dragging.includes('l')) { const d = Math.min(dx, s.boxStartW - minSize); nx = s.boxStartX + d; nw = s.boxStartW - d; }
+    if (s.dragging.includes('b')) { nh = Math.max(minSize, s.boxStartH + dy); }
+    if (s.dragging.includes('t')) { const d = Math.min(dy, s.boxStartH - minSize); ny = s.boxStartY + d; nh = s.boxStartH - d; }
+    // Enforce ratio
+    if (s.ratio) {
+      if (s.dragging.includes('r') || s.dragging.includes('l')) nh = Math.round(nw / s.ratio);
+      else nw = Math.round(nh * s.ratio);
+    }
+    // Clamp to canvas
+    nw = Math.min(nw, s.canvasW - nx);
+    nh = Math.min(nh, s.canvasH - ny);
+    nx = Math.max(0, nx); ny = Math.max(0, ny);
+    s.boxX = nx; s.boxY = ny; s.boxW = nw; s.boxH = nh;
+  }
+  updateCropBox();
+});
+
+cropBox.addEventListener('pointerup', () => { cropState.dragging = null; });
+
+function confirmCrop() {
+  const s = cropState;
+  if (!s.img) return;
+
+  // Scale from display coords back to original image coords
+  const scaleX = s.img.width  / s.canvasW;
+  const scaleY = s.img.height / s.canvasH;
+
+  const srcX = Math.round(s.boxX * scaleX);
+  const srcY = Math.round(s.boxY * scaleY);
+  const srcW = Math.round(s.boxW * scaleX);
+  const srcH = Math.round(s.boxH * scaleY);
+
+  const out = document.createElement('canvas');
+  out.width  = srcW;
+  out.height = srcH;
+  out.getContext('2d').drawImage(s.img, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH);
+
+  out.toBlob(blob => {
+    closeCropModal();
+    if (blob && s.callback) s.callback(blob);
+  }, 'image/jpeg', 0.88);
+}
+
+function cancelCrop() {
+  closeCropModal();
+}
+
+function closeCropModal() {
+  document.getElementById('cropModal').classList.remove('open');
+  cropState.img = null;
+  cropState.callback = null;
+  cropState.originalFile = null;
+}
+
+// Handle window resize — redraw canvas
+window.addEventListener('resize', () => {
+  if (cropState.img && document.getElementById('cropModal').classList.contains('open')) {
+    drawCropCanvas();
+  }
+});
+
 // ── UPLOAD UTILITIES ─────────────────────────────────────────────────────────
 
 // Compress a video file using MediaRecorder (native browser, no library needed)
@@ -12919,6 +13223,18 @@ function cpFileChangeHandler(e) {
   if (file.size > 100 * 1024 * 1024) {
     document.getElementById('cpUploadHint').innerHTML = '⚠️ Large file (' + (file.size/1024/1024).toFixed(0) + 'MB) — upload may take several minutes. Consider trimming first.';
     document.getElementById('cpUploadHint').style.color = 'var(--gold)';
+  }
+
+  // For photos: open crop modal
+  if (file.type.startsWith('image/')) {
+    openCrop(file, 16, 9, (croppedBlob) => {
+      cpState.file = croppedBlob;
+      cpState.fileUrl = URL.createObjectURL(croppedBlob);
+      document.getElementById('cpUploadZone').classList.add('has-file');
+      const cpPrev = document.getElementById('cpPreview');
+      if (cpPrev) { cpPrev.style.display = 'block'; cpPrev.innerHTML = `<img src="${cpState.fileUrl}" style="width:100%;border-radius:8px;aspect-ratio:16/9;object-fit:cover;">`; }
+    });
+    return;
   }
   const isVideo = file.type.startsWith('video/');
   const isImage = file.type.startsWith('image/');
