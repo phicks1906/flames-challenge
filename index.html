@@ -5649,7 +5649,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v194 · crop-entry";
+const APP_VERSION = "v195 · flyer-video";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -12145,8 +12145,18 @@ function renderFlyerCard(p) {
         ${isMine ? `<button class="post-card-menu" data-pid="${p.id}" style="margin-left:auto;" aria-label="Delete post">⋯</button>` : ''}
       </div>
 
-      <!-- Flyer image — full width, prominent -->
-      ${p.media_url ? `<img src="${escapeHtml(p.media_url)}" alt="Challenge flyer" style="width:100%;display:block;max-height:420px;object-fit:cover;cursor:pointer;" loading="lazy" onclick="openFeedViewer('${p.challenge_id}')">` : `<div style="background:linear-gradient(135deg,rgba(255,106,44,0.18),rgba(255,45,31,0.1));padding:32px 20px;text-align:center;cursor:pointer;" ${ch ? `data-flyer-viewer="${ch.id}"` : ""}><div style="font-size:52px;margin-bottom:10px;">🔥</div><div style="font-family:var(--font-display);font-size:22px;text-transform:uppercase;letter-spacing:0.04em;color:var(--text);margin-bottom:4px;">${ch ? escapeHtml(ch.title) : escapeHtml(p.content||"")}</div><div style="font-size:13px;color:var(--ember);font-weight:700;margin-top:6px;">${ch ? (isOpen?"OPEN TO ENTER":isVoting?"VOTE NOW":"VIEW CHALLENGE") : ""}</div></div>`}
+      <!-- Flyer media — image or video, full width -->
+      ${p.media_url
+        ? (p.media_type === 'video'
+            ? `<div style="position:relative;cursor:pointer;" data-flyer-viewer="${p.challenge_id||''}">
+                <video src="${escapeHtml(p.media_url)}" autoplay muted playsinline loop preload="auto" style="width:100%;max-height:420px;object-fit:cover;display:block;pointer-events:none;"></video>
+                <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">
+                  <div style="width:52px;height:52px;border-radius:50%;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;font-size:22px;">▶</div>
+                </div>
+              </div>`
+            : `<img src="${escapeHtml(p.media_url)}" alt="Challenge flyer" style="width:100%;display:block;max-height:420px;object-fit:cover;cursor:pointer;" loading="lazy" onclick="openFeedViewer('${p.challenge_id}')">`)
+        : `<div style="background:linear-gradient(135deg,rgba(255,106,44,0.18),rgba(255,45,31,0.1));padding:32px 20px;text-align:center;cursor:pointer;" ${ch ? `data-flyer-viewer="${ch.id}"` : ""}><div style="font-size:52px;margin-bottom:10px;">🔥</div><div style="font-family:var(--font-display);font-size:22px;text-transform:uppercase;letter-spacing:0.04em;color:var(--text);margin-bottom:4px;">${ch ? escapeHtml(ch.title) : escapeHtml(p.content||"")}</div><div style="font-size:13px;color:var(--ember);font-weight:700;margin-top:6px;">${ch ? (isOpen?"OPEN TO ENTER":isVoting?"VOTE NOW":"VIEW CHALLENGE") : ""}</div></div>`
+      }
 
       <!-- Challenge CTA -->
       ${ch ? `
