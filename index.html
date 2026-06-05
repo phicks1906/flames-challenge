@@ -5597,7 +5597,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v189 · upload-compress";
+const APP_VERSION = "v191 · poster-fix";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -9855,10 +9855,11 @@ document.getElementById('createChallengeForm').addEventListener('submit', async 
         mediaResult = { publicUrl: pub.publicUrl };
       }
       mediaUrl = mediaResult.publicUrl;
-      // Capture poster frame for videos
+      // Capture poster frame for videos — use compressed file if available (H.264 decodable)
       if (ccState.mediaType === 'video') {
         try {
-          const poster = await captureVideoPoster(ccState.file);
+          const posterSource = (fileToUpload !== ccState.file) ? fileToUpload : ccState.file;
+          const poster = await captureVideoPoster(posterSource);
           if (poster) {
             const pf = `${state.profile.id}/${Date.now()}_poster.${poster.ext}`;
             const pu = await db.storage.from('challenge-media').upload(pf, poster.blob, { cacheControl: '86400', upsert: false });
@@ -10050,7 +10051,7 @@ function renderChallenges() {
       } else if (e.media_type === 'video' && e.media_url) {
         mHtml = e.poster_url
           ? `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}"><img src="${escapeHtml(e.poster_url)}" style="width:100%;height:100%;object-fit:cover;display:block"><div class="fcc-play-overlay">▶</div></div>`
-          : `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}" style="position:relative;"><video src="${escapeHtml(e.media_url)}" autoplay muted playsinline loop preload="metadata" style="width:100%;height:100%;object-fit:cover;display:block;"></video><div class="fcc-play-overlay">▶</div></div>`;
+          : `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}" style="position:relative;"><video src="${escapeHtml(e.media_url)}" autoplay muted playsinline loop preload="auto" style="width:100%;height:100%;object-fit:cover;display:block;"></video><div class="fcc-play-overlay">▶</div></div>`;
       } else if (e.media_type === 'audio') {
         mHtml = `<div class="fcc-entry-media fcc-entry-placeholder">🎵</div>`;
       } else if (e.media_type === 'text' && e.caption) {
@@ -12659,8 +12660,21 @@ async function openFeedViewer(chId) {
       const target = e.target.closest('[data-fv-play]');
       if (!target) return;
       const src = target.dataset.fvPlay;
-      target.outerHTML = `<video src="${escapeHtml(src)}" controls autoplay playsinline preload="auto"
-        style="width:100%;max-height:55vmax;display:block;background:#000;"></video>`;
+      // Reuse hidden preloaded video if available, otherwise create new
+      const preloaded = target.querySelector('video[style*="display:none"]');
+      if (preloaded) {
+        preloaded.style.display = 'block';
+        preloaded.style.cssText = 'width:100%;max-height:55vmax;display:block;background:#000;';
+        preloaded.muted = false;
+        preloaded.controls = true;
+        preloaded.loop = false;
+        preloaded.autoplay = true;
+        preloaded.play().catch(() => {});
+        target.outerHTML = preloaded.outerHTML;
+      } else {
+        target.outerHTML = `<video src="${escapeHtml(src)}" controls autoplay playsinline preload="auto"
+          style="width:100%;max-height:55vmax;display:block;background:#000;"></video>`;
+      }
     }, { once: false });
 
     // Wire events
@@ -12697,15 +12711,16 @@ function renderFvEntry(entry, ch, canVote, myVoteEntryId, status) {
     mediaHtml = `<img src="${escapeHtml(entry.media_url)}" style="width:100%;max-height:55vmax;object-fit:contain;display:block;background:#000;" loading="lazy">`;
   } else if (mediaType === 'video' && entry.media_url) {
     if (entry.poster_url) {
-      // Has poster — tap to play
+      // Has poster — show it, video preloads in background so play is instant
       mediaHtml = `<div style="position:relative;cursor:pointer;" data-fv-play="${escapeHtml(entry.media_url)}" data-fv-poster="${escapeHtml(entry.poster_url)}">
         <img src="${escapeHtml(entry.poster_url)}" style="width:100%;max-height:55vmax;object-fit:cover;display:block;">
+        <video src="${escapeHtml(entry.media_url)}" preload="auto" style="display:none;" playsinline></video>
         <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">
           <div style="width:56px;height:56px;border-radius:50%;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;font-size:24px;">▶</div>
         </div>
       </div>`;
     } else {
-      // No poster — autoplay muted loop shows first frame, same as feed cards
+      // No poster — autoplay muted shows first frame, preload=auto so play is instant on tap
       mediaHtml = `<div style="position:relative;cursor:pointer;" data-fv-play="${escapeHtml(entry.media_url)}">
         <video src="${escapeHtml(entry.media_url)}" autoplay muted playsinline loop preload="auto"
           style="width:100%;max-height:55vmax;object-fit:cover;display:block;pointer-events:none;"></video>
