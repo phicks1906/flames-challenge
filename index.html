@@ -5130,8 +5130,13 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
         <button onclick="closeFeedViewer()" style="background:var(--overlay-2);border:1px solid var(--border);border-radius:50%;width:36px;height:36px;color:var(--text);font-size:20px;cursor:pointer;display:grid;place-items:center;">×</button>
       </div>
     </div>
-    <!-- Entry list -->
-    <div id="fvEntries" style="padding:12px 0 32px;"></div>
+    <!-- Horizontal snap-scroll entries -->
+    <div style="position:relative;">
+      <div id="fvEntries" style="display:flex;flex-direction:row;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scroll-snap-stop:always;-webkit-overflow-scrolling:touch;scrollbar-width:none;gap:0;"></div>
+      <!-- Counter + dots -->
+      <div id="fvCounter" style="text-align:center;font-size:13px;color:var(--text-muted);padding:8px 0 4px;"></div>
+      <div id="fvDots" style="display:flex;justify-content:center;gap:6px;padding:0 0 8px;"></div>
+    </div>
     <!-- No entries state -->
     <div id="fvEmpty" style="display:none;text-align:center;padding:48px 20px;color:var(--text-muted);">
       <div style="font-size:40px;margin-bottom:12px;">🎬</div>
@@ -5522,7 +5527,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v175 · feed-viewer";
+const APP_VERSION = "v177 · fv-swipe";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -12177,6 +12182,26 @@ async function openFeedViewer(chId) {
     const canVote = status === 'voting' || status === 'submitting';
     list.innerHTML = entries.map(e => renderFvEntry(e, ch, canVote, myVoteEntryId, status)).join('');
 
+    // Dots + counter
+    const counter = document.getElementById('fvCounter');
+    const dotsEl  = document.getElementById('fvDots');
+    const total = entries.length;
+    if (counter) counter.textContent = total > 1 ? `1 of ${total}` : '';
+    if (dotsEl) {
+      dotsEl.innerHTML = total > 1
+        ? entries.map((_, i) => `<span style="width:7px;height:7px;border-radius:50%;background:${i===0?'var(--ember)':'var(--border-bright)'};transition:background 0.2s,transform 0.2s;display:inline-block;${i===0?'transform:scale(1.3)':''}"></span>`).join('')
+        : '';
+      // Update dots on scroll
+      list.addEventListener('scroll', () => {
+        const idx = Math.round(list.scrollLeft / list.offsetWidth);
+        if (counter) counter.textContent = total > 1 ? `${idx+1} of ${total}` : '';
+        if (dotsEl) dotsEl.querySelectorAll('span').forEach((d,i) => {
+          d.style.background = i===idx ? 'var(--ember)' : 'var(--border-bright)';
+          d.style.transform  = i===idx ? 'scale(1.3)' : 'scale(1)';
+        });
+      }, { passive: true });
+    }
+
     // Wire events
     list.querySelectorAll('[data-fv-vote]').forEach(btn => {
       btn.addEventListener('click', e => { e.stopPropagation(); fvVote(btn, chId); });
@@ -12201,7 +12226,6 @@ function renderFvEntry(entry, ch, canVote, myVoteEntryId, status) {
   const sub = entry.submitter || { name: 'Unknown', avatar: '🔥', id: null };
   const isMine = entry.user_id === state.profile?.id;
   const iVoted = myVoteEntryId === entry.id;
-  const voteCount = _fvVoteCounts[entry.id] || 0;
   const likeCount = state.entryLikeCounts[entry.id] || 0;
   const iLiked = state.myEntryLikes?.has(entry.id);
   const commentCount = state.entryCommentCounts[entry.id] || 0;
@@ -12209,41 +12233,40 @@ function renderFvEntry(entry, ch, canVote, myVoteEntryId, status) {
 
   let mediaHtml = '';
   if (mediaType === 'photo' && entry.media_url) {
-    mediaHtml = `<img src="${escapeHtml(entry.media_url)}" style="width:100%;max-height:400px;object-fit:cover;display:block;" loading="lazy">`;
+    mediaHtml = `<img src="${escapeHtml(entry.media_url)}" style="width:100%;max-height:55vmax;object-fit:contain;display:block;background:#000;" loading="lazy">`;
   } else if (mediaType === 'video' && entry.media_url) {
-    if (entry.poster_url) {
-      mediaHtml = `<div style="position:relative;cursor:pointer;" data-fv-play="${escapeHtml(entry.media_url)}">
-        <img src="${escapeHtml(entry.poster_url)}" style="width:100%;max-height:400px;object-fit:cover;display:block;">
-        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.25);font-size:52px;">▶</div>
-      </div>`;
-    } else {
-      mediaHtml = `<video src="${escapeHtml(entry.media_url)}" controls playsinline preload="metadata" style="width:100%;max-height:400px;display:block;background:#000;"></video>`;
-    }
+    mediaHtml = `<video
+      src="${escapeHtml(entry.media_url)}"
+      ${entry.poster_url ? `poster="${escapeHtml(entry.poster_url)}"` : ''}
+      controls playsinline preload="metadata"
+      style="width:100%;max-height:55vmax;display:block;background:#111;">
+    </video>`;
   } else if (mediaType === 'audio' && entry.media_url) {
-    mediaHtml = `<div style="padding:20px 16px;background:var(--surface-2);display:flex;align-items:center;gap:12px;">
-      <span style="font-size:36px;">🎙️</span>
-      <audio src="${escapeHtml(entry.media_url)}" controls preload="metadata" style="flex:1;height:36px;"></audio>
+    mediaHtml = `<div style="padding:32px 16px;background:var(--surface-2);display:flex;align-items:center;gap:14px;min-height:120px;">
+      <span style="font-size:40px;flex-shrink:0;">🎙️</span>
+      <audio src="${escapeHtml(entry.media_url)}" controls preload="metadata" style="flex:1;height:40px;"></audio>
     </div>`;
   } else if (mediaType === 'text' && entry.caption) {
-    mediaHtml = `<div style="padding:24px 16px;font-family:var(--font-bricolage);font-size:18px;line-height:1.5;color:var(--text);background:var(--surface-2);">${escapeHtml(entry.caption)}</div>`;
+    mediaHtml = `<div style="padding:32px 16px;font-family:var(--font-bricolage);font-size:20px;line-height:1.6;color:var(--text);background:var(--surface-2);min-height:120px;display:flex;align-items:center;">${escapeHtml(entry.caption)}</div>`;
   }
 
   const voteBtn = canVote && !isMine
-    ? `<button class="flame-btn${iVoted?' liked':''}" data-fv-vote="${entry.id}" data-fv-ch="${ch.id}">${iVoted?'✓ Voted':'🔥 Vote'}</button>`
+    ? `<button class="btn btn-primary" style="padding:8px 18px;font-size:13px;" data-fv-vote="${entry.id}" data-fv-ch="${ch.id}">${iVoted ? '✓ Voted' : '🔥 Vote'}</button>`
     : isMine ? `<span style="font-size:12px;color:var(--ember);font-weight:700;text-transform:uppercase;letter-spacing:0.04em;">Your entry</span>` : '';
 
-  return `<div style="border-bottom:1px solid var(--border);padding-bottom:4px;margin-bottom:4px;">
+  // Each entry is a full-width snap card
+  return `<div style="flex:0 0 100%;width:100%;scroll-snap-align:center;min-width:0;box-sizing:border-box;">
     ${mediaHtml}
-    <div style="padding:10px 14px;">
+    <div style="padding:12px 14px 16px;">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-        <div style="width:36px;height:36px;border-radius:50%;overflow:hidden;flex-shrink:0;background:linear-gradient(135deg,var(--ember),var(--coral));display:grid;place-items:center;font-size:16px;cursor:pointer;" data-fv-user="${sub.id||''}">${avatarInner(sub.avatar)}</div>
+        <div style="width:38px;height:38px;border-radius:50%;overflow:hidden;flex-shrink:0;background:linear-gradient(135deg,var(--ember),var(--coral));display:grid;place-items:center;font-size:18px;cursor:pointer;" data-fv-user="${sub.id||''}">${avatarInner(sub.avatar)}</div>
         <div style="flex:1;min-width:0;">
-          <div style="font-weight:700;font-size:14px;cursor:pointer;" data-fv-user="${sub.id||''}">${escapeHtml(sub.name)}${isMine?' (you)':''}</div>
-          ${entry.caption && mediaType !== 'text' ? `<div style="font-size:13px;color:var(--text-dim);margin-top:2px;">${escapeHtml(entry.caption)}</div>` : ''}
+          <div style="font-weight:700;font-size:15px;cursor:pointer;" data-fv-user="${sub.id||''}">${escapeHtml(sub.name)}${isMine?' (you)':''}</div>
+          ${entry.caption && mediaType !== 'text' ? `<div style="font-size:13px;color:var(--text-dim);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(entry.caption)}</div>` : ''}
         </div>
         ${voteBtn}
       </div>
-      <div style="display:flex;align-items:center;gap:10px;padding-top:8px;border-top:1px solid var(--border);">
+      <div style="display:flex;align-items:center;gap:10px;">
         <button class="flame-btn${iLiked?' liked':''}" data-fv-like="${entry.id}">
           <span class="flame-icon">🔥</span><span>${likeCount}</span>
         </button>
@@ -12299,14 +12322,7 @@ function closeFeedViewer() {
   _fvChallenge = null;
 }
 
-// Wire poster-tap → inline video swap inside feed viewer
-document.getElementById('fvEntries').addEventListener('click', e => {
-  const target = e.target.closest('[data-fv-play]');
-  if (!target) return;
-  const src = target.dataset.fvPlay;
-  target.innerHTML = `<video src="${escapeHtml(src)}" controls autoplay playsinline preload="auto" style="width:100%;max-height:400px;display:block;background:#000;"></video>`;
-  delete target.dataset.fvPlay;
-});
+
 
 // Wire winner curtain reveals — CSS panels slide apart on scroll into view
 function wireWinnerReveals() {
