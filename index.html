@@ -5497,7 +5497,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v170 · flyer-fallback";
+const APP_VERSION = "v171 · viewer-video";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -9274,15 +9274,13 @@ function _renderEvEntry() {
   if (entry.media_type === 'photo' && entry.media_url) {
     mediaContent.innerHTML = `<img src="${escapeHtml(entry.media_url)}" alt="" style="width:100%;max-height:60vh;object-fit:contain;display:block;">`;
   } else if (entry.media_type === 'video' && entry.media_url) {
-    const vid = document.createElement('video');
-    vid.src = entry.media_url;
-    vid.controls = true;
-    vid.autoplay = true;
-    vid.setAttribute('playsinline', '');
-    vid.preload = 'auto';
-    if (entry.poster_url) vid.poster = entry.poster_url;
-    vid.style.cssText = 'width:100%;max-height:60vh;display:block;';
-    mediaContent.appendChild(vid);
+    // Use innerHTML so autoplay/playsinline are HTML attributes (required for iOS)
+    mediaContent.innerHTML = `<video
+      src="${escapeHtml(entry.media_url)}"
+      ${entry.poster_url ? `poster="${escapeHtml(entry.poster_url)}"` : ''}
+      controls autoplay playsinline preload="auto"
+      style="width:100%;max-height:60vh;display:block;">
+    </video>`;
   } else if (entry.media_type === 'audio' && entry.media_url) {
     mediaContent.innerHTML = `<div style="padding:20px;"><audio src="${escapeHtml(entry.media_url)}" controls preload="metadata" style="width:100%"></audio></div>`;
   } else if (entry.caption) {
