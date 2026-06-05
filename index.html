@@ -5497,7 +5497,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v171 · viewer-video";
+const APP_VERSION = "v172 · media-type-fix";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -9271,9 +9271,11 @@ function _renderEvEntry() {
 
   const mediaContent = document.createElement('div');
   mediaContent.style.cssText = 'width:100%;';
-  if (entry.media_type === 'photo' && entry.media_url) {
+  // Fall back to challenge media_type if entry's own is missing
+  const entryMediaType = entry.media_type || _evChallenge?.media_type;
+  if (entryMediaType === 'photo' && entry.media_url) {
     mediaContent.innerHTML = `<img src="${escapeHtml(entry.media_url)}" alt="" style="width:100%;max-height:60vh;object-fit:contain;display:block;">`;
-  } else if (entry.media_type === 'video' && entry.media_url) {
+  } else if (entryMediaType === 'video' && entry.media_url) {
     // Use innerHTML so autoplay/playsinline are HTML attributes (required for iOS)
     mediaContent.innerHTML = `<video
       src="${escapeHtml(entry.media_url)}"
@@ -9281,7 +9283,7 @@ function _renderEvEntry() {
       controls autoplay playsinline preload="auto"
       style="width:100%;max-height:60vh;display:block;">
     </video>`;
-  } else if (entry.media_type === 'audio' && entry.media_url) {
+  } else if (entryMediaType === 'audio' && entry.media_url) {
     mediaContent.innerHTML = `<div style="padding:20px;"><audio src="${escapeHtml(entry.media_url)}" controls preload="metadata" style="width:100%"></audio></div>`;
   } else if (entry.caption) {
     mediaContent.innerHTML = `<div style="padding:24px;font-size:18px;line-height:1.5;color:var(--text)">${escapeHtml(entry.caption)}</div>`;
@@ -9292,7 +9294,7 @@ function _renderEvEntry() {
 
   // Caption
   const capEl = document.getElementById('evCaption');
-  capEl.textContent = (entry.media_type !== 'text' && entry.caption) ? entry.caption : '';
+  capEl.textContent = (entryMediaType !== 'text' && entry.caption) ? entry.caption : '';
   capEl.style.display = capEl.textContent ? 'block' : 'none';
 
   // Like button
