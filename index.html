@@ -5497,7 +5497,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v167 · viewer-entries";
+const APP_VERSION = "v168 · tap-video";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -10223,12 +10223,12 @@ function renderChallengeDetail() {
       } else {
         // No poster — show category icon placeholder, tap to open viewer
         const catIcon = {Art:'🎨',Photography:'📷',Music:'🎵',Writing:'✍️',Cooking:'🍳',Style:'👗',Sports:'🏆',Fitness:'💪',Comedy:'😂'}[state.currentChallenge?.category] || '🎬';
-        mediaHtml = `<div style="position:relative;cursor:pointer;background:var(--surface-2);border-radius:8px;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;" onclick="openEntryViewer('${entry.id}','${entry.challenge_id}')">
+        mediaHtml = `<div class="cd-entry-media" data-open-entry="${entry.id}" data-open-ch="${entry.challenge_id}" style="cursor:pointer;background:var(--surface-2);display:flex;align-items:center;justify-content:center;position:relative;">
           <div style="text-align:center">
             <div style="font-size:48px;margin-bottom:8px">${catIcon}</div>
             <div style="font-size:13px;color:var(--text-muted)">Tap to play video</div>
           </div>
-          <div style="position:absolute;bottom:12px;right:12px;background:rgba(255,106,44,0.85);border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:18px;">▶</div>
+          <div style="position:absolute;bottom:12px;right:12px;background:rgba(255,106,44,0.85);border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:18px;pointer-events:none;">▶</div>
         </div>`;
       }
     } else if (entry.media_type === 'audio' && entry.media_url) {
@@ -10399,6 +10399,14 @@ function renderChallengeDetail() {
     el.addEventListener('click', e => {
       e.stopPropagation();
       openUserProfile(el.dataset.userId);
+    });
+  });
+
+  // Tap no-poster video placeholders → open entry viewer
+  grid.querySelectorAll('[data-open-entry]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      openEntryViewer(el.dataset.openEntry, el.dataset.openCh);
     });
   });
 }
