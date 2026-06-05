@@ -5649,7 +5649,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v196 · flyer-upload";
+const APP_VERSION = "v197 · xhr-fix";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -12388,13 +12388,17 @@ async function uploadWithProgress(bucket, filename, file, onProgress) {
   const token = session?.access_token;
   if (!token) throw new Error('Not authenticated');
 
+  // Determine content type
+  const contentType = file.type || (filename.endsWith('.png') ? 'image/png' : filename.endsWith('.jpg') || filename.endsWith('.jpeg') ? 'image/jpeg' : 'application/octet-stream');
+
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     const url  = `${supabaseUrl}/storage/v1/object/${bucket}/${filename}`;
 
     xhr.open('POST', url);
     xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-    xhr.setRequestHeader('x-upsert', 'false');
+    xhr.setRequestHeader('Content-Type', contentType);
+    xhr.setRequestHeader('x-upsert', 'true');
     xhr.setRequestHeader('cache-control', '3600');
 
     xhr.upload.addEventListener('progress', e => {
@@ -12406,16 +12410,15 @@ async function uploadWithProgress(bucket, filename, file, onProgress) {
         const { data } = db.storage.from(bucket).getPublicUrl(filename);
         resolve({ publicUrl: data.publicUrl });
       } else {
-        reject(new Error(`Upload failed: ${xhr.status} ${xhr.responseText}`));
+        reject(new Error(`Upload failed: ${xhr.status} — ${xhr.responseText}`));
       }
     });
 
     xhr.addEventListener('error', () => reject(new Error('Upload network error')));
     xhr.addEventListener('abort', () => reject(new Error('Upload cancelled')));
 
-    const formData = new FormData();
-    formData.append('', file, filename.split('/').pop());
-    xhr.send(formData);
+    // Send raw binary — NOT FormData (Supabase rejects multipart)
+    xhr.send(file);
   });
 }
 
