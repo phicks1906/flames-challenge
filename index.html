@@ -5649,7 +5649,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v205 · viewer-btn";
+const APP_VERSION = "v206 · entry-manage";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -13016,6 +13016,28 @@ async function openFeedViewer(chId) {
       btn.addEventListener('click', e => { e.stopPropagation(); openComments('entry', btn.dataset.fvComment); });
     });
 
+    // Edit own entry
+    list.querySelectorAll('[data-fv-edit]').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const entry = entries.find(en => en.id === btn.dataset.fvEdit);
+        if (entry) { closeFeedViewer(); openChallenge(ch); setTimeout(() => openSubmitEntry(entry), 400); }
+      });
+    });
+
+    // Delete own entry
+    list.querySelectorAll('[data-fv-delete]').forEach(btn => {
+      btn.addEventListener('click', async e => {
+        e.stopPropagation();
+        if (!confirm('Delete your entry? This cannot be undone.')) return;
+        btn.textContent = 'Deleting…'; btn.disabled = true;
+        const { error } = await db.from('entries').delete().eq('id', btn.dataset.fvDelete).eq('user_id', state.profile.id);
+        if (error) { toast('Delete failed'); btn.disabled = false; btn.textContent = '🗑 Delete'; return; }
+        toast('Entry deleted');
+        openFeedViewer(btn.dataset.fvCh); // refresh
+      });
+    });
+
   } catch(err) {
     console.error('feedViewer load', err);
     list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Couldn\'t load entries</div>';
@@ -13065,7 +13087,10 @@ function renderFvEntry(entry, ch, canVote, myVoteEntryId, status) {
 
   const voteBtn = canVote && !isMine
     ? `<button class="btn btn-primary" style="padding:8px 18px;font-size:13px;" data-fv-vote="${entry.id}" data-fv-ch="${ch.id}">${iVoted ? '✓ Voted' : '🔥 Vote'}</button>`
-    : isMine ? `<span style="font-size:12px;color:var(--ember);font-weight:700;text-transform:uppercase;letter-spacing:0.04em;">Your entry</span>` : '';
+    : isMine ? `<div style="display:flex;gap:8px;align-items:center;">
+        ${status === 'submitting' ? `<button style="background:none;border:1px solid var(--ember);color:var(--ember);border-radius:20px;padding:6px 12px;font-size:12px;cursor:pointer;" data-fv-edit="${entry.id}">✏️ Edit</button>` : ''}
+        <button style="background:none;border:1px solid var(--error,#e53);color:var(--error,#e53);border-radius:20px;padding:6px 12px;font-size:12px;cursor:pointer;" data-fv-delete="${entry.id}" data-fv-ch="${ch.id}">🗑 Delete</button>
+      </div>` : '';
 
   // Each entry is a full-width snap card
   return `<div style="flex:0 0 100%;width:100%;scroll-snap-align:center;min-width:0;box-sizing:border-box;">
@@ -13127,6 +13152,14 @@ function openFeedViewerChallenge() {
   const ch = _fvChallenge;
   closeFeedViewer();
   if (ch) openChallenge(ch);
+}
+
+async function deleteFvEntry(entryId, chId) {
+  if (!confirm('Delete your entry? This cannot be undone.')) return;
+  const { error } = await db.from('entries').delete().eq('id', entryId).eq('user_id', state.profile.id);
+  if (error) { toast('Delete failed'); return; }
+  toast('Entry deleted');
+  openFeedViewer(chId);
 }
 
 function closeFeedViewer() {
