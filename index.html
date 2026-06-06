@@ -5649,7 +5649,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v206 · entry-manage";
+const APP_VERSION = "v207 · file-validation";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -9735,6 +9735,14 @@ document.getElementById('ccFile').addEventListener('change', (e) => {
   const ccIsVideo = file.type.startsWith('video/') || /\.(mov|mp4|m4v|avi|webm)$/i.test(file.name);
   const ccToggle = document.getElementById('ccCompressToggle');
   if (ccToggle) ccToggle.style.display = ccIsVideo ? 'flex' : 'none';
+  // Validate file type matches challenge media type
+  const ccTypeErr = validateFileType(file, ccState.mediaType);
+  if (ccTypeErr) {
+    showCcError(ccTypeErr);
+    e.target.value = '';
+    return;
+  }
+
   document.getElementById('ccError').classList.remove('show');
 
   // For photos: open crop modal first, then proceed
@@ -10897,6 +10905,15 @@ document.getElementById('seFile').addEventListener('change', (e) => {
   const seTip = document.getElementById('seTip');
   if (seToggle) seToggle.style.display = seIsVideo ? 'flex' : 'none';
   if (seTip) seTip.style.display = seIsVideo ? 'block' : 'none';
+  // Validate file type matches challenge media type
+  const seTypeErr = validateFileType(file, state.currentChallenge?.media_type);
+  if (seTypeErr) {
+    document.getElementById('seError').textContent = seTypeErr;
+    document.getElementById('seError').classList.add('show');
+    e.target.value = '';
+    return;
+  }
+
   document.getElementById('seError').classList.remove('show');
 
   const ch = state.currentChallenge;
@@ -12669,6 +12686,27 @@ window.addEventListener('resize', () => {
   }
 });
 
+// ── FILE TYPE VALIDATION ─────────────────────────────────────────────────────
+function validateFileType(file, expectedMediaType) {
+  const mime = file.type.toLowerCase();
+  const name = file.name.toLowerCase();
+
+  const isImage = mime.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|heic)$/.test(name);
+  const isVideo = mime.startsWith('video/') || /\.(mp4|mov|m4v|avi|webm|mkv)$/.test(name);
+  const isAudio = mime.startsWith('audio/') || /\.(mp3|m4a|wav|aac|ogg|flac)$/.test(name);
+
+  if (expectedMediaType === 'photo' && !isImage) {
+    return 'This is a photo challenge. Please select an image file (JPG, PNG, etc.)';
+  }
+  if (expectedMediaType === 'video' && !isVideo) {
+    return 'This is a video challenge. Please select a video file (MP4, MOV, etc.)';
+  }
+  if (expectedMediaType === 'audio' && !isAudio) {
+    return 'This is an audio challenge. Please select an audio file (MP3, M4A, WAV, etc.)';
+  }
+  return null; // valid
+}
+
 // ── UPLOAD UTILITIES ─────────────────────────────────────────────────────────
 
 // Compress a video file using MediaRecorder (native browser, no library needed)
@@ -13273,6 +13311,15 @@ function cpFileChangeHandler(e) {
   const file = e.target.files[0];
   if (!file) return;
   if (file.size > 500 * 1024 * 1024) { showCpError('File too large. Max 500MB.'); e.target.value = ''; return; }
+  // Validate file type matches expected type
+  const cpExpected = cpState.mediaType || 'video';
+  const cpTypeErr = validateFileType(file, cpExpected);
+  if (cpTypeErr) {
+    showCpError(cpTypeErr);
+    e.target.value = '';
+    return;
+  }
+
   if (file.size > 100 * 1024 * 1024) {
     document.getElementById('cpUploadHint').innerHTML = '⚠️ Large file (' + (file.size/1024/1024).toFixed(0) + 'MB) — upload may take several minutes. Consider trimming first.';
     document.getElementById('cpUploadHint').style.color = 'var(--gold)';
