@@ -5649,7 +5649,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v202 · compress-default";
+const APP_VERSION = "v203 · entry-mediatype";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -10130,13 +10130,14 @@ function renderChallenges() {
       const isMyEntry = state.profile && e.user_id === state.profile.id;
       const iVoted = (state.currentVotes||[]).some(v => v.entry_id === e.id && v.voter_id === state.profile?.id);
       let mHtml;
-      if (e.media_type === 'photo' && e.media_url) {
-        mHtml = `<img src="${escapeHtml(e.media_url)}" class="fcc-entry-media" loading="lazy">`;
-      } else if (e.media_type === 'video' && e.media_url) {
+      const eMt = e.media_type || ch.media_type; // fall back to challenge type
+      if (eMt === 'photo' && e.media_url) {
+        mHtml = `<img src="${escapeHtml(e.media_url)}" class="fcc-entry-media" loading="lazy" onerror="this.parentElement.innerHTML='<div class=fcc-entry-media fcc-entry-placeholder>${catIcons[ch.category]||'🎬'}</div>'">`;
+      } else if (eMt === 'video' && e.media_url) {
         mHtml = e.poster_url
           ? `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}"><img src="${escapeHtml(e.poster_url)}" style="width:100%;height:100%;object-fit:cover;display:block"><div class="fcc-play-overlay">▶</div></div>`
           : `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}" style="position:relative;"><video src="${escapeHtml(e.media_url)}" autoplay muted playsinline loop preload="auto" style="width:100%;height:100%;object-fit:cover;display:block;"></video><div class="fcc-play-overlay">▶</div></div>`;
-      } else if (e.media_type === 'audio') {
+      } else if (eMt === 'audio') {
         mHtml = `<div class="fcc-entry-media fcc-entry-placeholder">🎵</div>`;
       } else if (e.media_type === 'text' && e.caption) {
         mHtml = `<div class="fcc-entry-media fcc-text-entry">${escapeHtml(e.caption.slice(0,80))}${e.caption.length>80?'…':''}</div>`;
