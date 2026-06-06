@@ -5649,7 +5649,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v199 · upload-err-fix";
+const APP_VERSION = "v200 · upload-xhr";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -12732,66 +12732,10 @@ async function compressVideo(file, onProgress) {
   });
 }
 
-// Chunked upload to Supabase with progress (5MB chunks, auto-retry)
-const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
-
+// Upload with progress — single XHR, works for all file sizes
+// (TUS chunking removed — unreliable without server config)
 async function uploadChunked(bucket, filename, file, onProgress) {
-  const supabaseUrl = 'https://sioalvawzayfphwzqctq.supabase.co';
-  const { data: { session } } = await db.auth.getSession();
-  const token = session?.access_token;
-  if (!token) throw new Error('Not authenticated');
-
-  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-
-  // For small files (< 10MB) use simple XHR upload
-  if (totalChunks <= 2) {
-    return uploadWithProgress(bucket, filename, file, onProgress);
-  }
-
-  // Initiate TUS resumable upload
-  const tusUrl = `${supabaseUrl}/storage/v1/upload/resumable`;
-  const initRes = await fetch(tusUrl, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/offset+octet-stream',
-      'Upload-Length': file.size,
-      'Upload-Metadata': `bucketName ${btoa(bucket)},objectName ${btoa(filename)},contentType ${btoa(file.type || 'video/mp4')}`,
-      'Tus-Resumable': '1.0.0',
-    },
-  });
-
-  if (!initRes.ok) {
-    // TUS not available, fall back to XHR
-    console.log('[upload] TUS init failed, falling back to XHR');
-    return uploadWithProgress(bucket, filename, file, onProgress);
-  }
-
-  const uploadUrl = initRes.headers.get('Location');
-  if (!uploadUrl) return uploadWithProgress(bucket, filename, file, onProgress);
-
-  // Upload chunks
-  let offset = 0;
-  while (offset < file.size) {
-    const chunk = file.slice(offset, offset + CHUNK_SIZE);
-    const chunkRes = await fetch(uploadUrl, {
-      method: 'PATCH',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/offset+octet-stream',
-        'Upload-Offset': offset,
-        'Tus-Resumable': '1.0.0',
-        'Content-Length': chunk.size,
-      },
-      body: chunk,
-    });
-    if (!chunkRes.ok) throw new Error(`Chunk upload failed at offset ${offset}`);
-    offset += chunk.size;
-    onProgress && onProgress(Math.round(offset / file.size * 100));
-  }
-
-  const { data } = db.storage.from(bucket).getPublicUrl(filename);
-  return { publicUrl: data.publicUrl };
+  return uploadWithProgress(bucket, filename, file, onProgress);
 }
 
 // ── PRODUCT TOUR ─────────────────────────────────────────────────────────────
