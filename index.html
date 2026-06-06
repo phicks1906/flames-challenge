@@ -5649,7 +5649,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v204 · entry-status";
+const APP_VERSION = "v205 · viewer-btn";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -12907,8 +12907,9 @@ async function openFeedViewer(chId) {
   const phase  = challengePhase(status);
   title.textContent = ch.title;
   meta.textContent  = phase.label;
-  btn.textContent   = status === 'submitting' ? '🔥 Enter Challenge' :
-                      status === 'voting'     ? '🗳 Vote & Details'  : '📋 View Details';
+  // Will update button after entries load — set placeholder for now
+  btn.textContent = '📋 View Details';
+  btn.style.display = 'block';
   list.innerHTML    = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Loading…</div>';
   empty.style.display = 'none';
   sheet.classList.add('open');
@@ -12942,6 +12943,22 @@ async function openFeedViewer(chId) {
 
     const canVote = status === 'voting' || status === 'submitting';
     list.innerHTML = entries.map(e => renderFvEntry(e, ch, canVote, myVoteEntryId, status)).join('');
+
+    // Update header button based on user's entry status
+    const userHasEntered = entries.some(e => e.user_id === state.profile?.id);
+    if (status === 'submitting' && !userHasEntered) {
+      btn.textContent = '🔥 Enter Challenge';
+      btn.style.display = 'block';
+    } else if (status === 'submitting' && userHasEntered) {
+      btn.textContent = '✏️ Edit Entry';
+      btn.style.display = 'block';
+    } else if (status === 'voting') {
+      btn.textContent = '🗳 Vote & Details';
+      btn.style.display = 'block';
+    } else {
+      btn.textContent = '📋 View Details';
+      btn.style.display = 'block';
+    }
 
     // Dots + counter
     const counter = document.getElementById('fvCounter');
