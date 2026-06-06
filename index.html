@@ -5073,6 +5073,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     <p id="profileStats" style="margin-bottom:24px"></p>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="closeModals()">Keep voting</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openEditProfile()">✏️ Edit Profile</button>
+    <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="closeAvatarMenu ? closeAvatarMenu() : null; openFollowingSheet()">👥 People I Follow</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openFindPeople()">🔍 Find People</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openInterestEditor()">🎯 My Interests</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="closeAvatarMenu ? closeAvatarMenu() : null; startTour()">👋 Replay Tour</button>
@@ -5231,6 +5232,21 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       <button onclick="endTour()" style="background:none;border:none;color:var(--text-muted);font-size:13px;cursor:pointer;text-decoration:underline;padding:0;">Skip tour</button>
       <button id="tourNext" onclick="tourNext()" class="btn btn-primary" style="padding:9px 22px;font-size:14px;">Next →</button>
     </div>
+  </div>
+</div>
+
+<!-- FOLLOWING SHEET -->
+<div class="modal-backdrop" id="followingSheet" onclick="if(event.target===this)closeFollowingSheet()" style="align-items:flex-end;">
+  <div style="background:var(--surface);border-radius:var(--radius) var(--radius) 0 0;width:100%;max-height:90vh;display:flex;flex-direction:column;animation:slideUp 0.3s cubic-bezier(0.16,1,0.3,1);">
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <div style="font-family:var(--font-display);font-size:20px;text-transform:uppercase;letter-spacing:0.04em;color:var(--text);">Following</div>
+      <button onclick="closeFollowingSheet()" style="background:var(--overlay-2);border:1px solid var(--border);border-radius:50%;width:36px;height:36px;color:var(--text);font-size:20px;cursor:pointer;display:grid;place-items:center;">×</button>
+    </div>
+    <!-- Count -->
+    <div id="followingCount" style="padding:10px 16px 0;font-size:13px;color:var(--text-muted);flex-shrink:0;"></div>
+    <!-- List -->
+    <div id="followingList" style="overflow-y:auto;flex:1;padding:8px 0 32px;"></div>
   </div>
 </div>
 
@@ -5649,7 +5665,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v207 · file-validation";
+const APP_VERSION = "v208 · following-sheet";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -12919,6 +12935,113 @@ function maybeStartTour() {
   if (!localStorage.getItem(TOUR_KEY)) {
     setTimeout(startTour, 1200);
   }
+}
+
+
+// ── FOLLOWING SHEET ──────────────────────────────────────────────────────────
+async function openFollowingSheet() {
+  closeModals();
+  const sheet = document.getElementById('followingSheet');
+  const list  = document.getElementById('followingList');
+  const count = document.getElementById('followingCount');
+  sheet.classList.add('open');
+  list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Loading…</div>';
+  count.textContent = '';
+
+  try {
+    // Get all follows by current user
+    const { data: follows, error } = await db
+      .from('follows')
+      .select('following_id')
+      .eq('follower_id', state.profile.id);
+
+    if (error) throw error;
+    if (!follows || !follows.length) {
+      list.innerHTML = '<div style="text-align:center;padding:48px 20px;color:var(--text-muted);"><div style="font-size:40px;margin-bottom:12px;">👥</div><div style="font-weight:600;margin-bottom:6px;">Not following anyone yet</div><div style="font-size:14px;">Find people to follow from the profile menu.</div></div>';
+      return;
+    }
+
+    const ids = follows.map(f => f.following_id);
+    count.textContent = `${ids.length} following`;
+
+    // Fetch profiles + check who is currently competing
+    const [profilesRes, competingRes] = await Promise.all([
+      db.from('profiles').select('id,name,avatar').in('id', ids),
+      db.from('entries')
+        .select('user_id')
+        .in('user_id', ids)
+        .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
+    ]);
+
+    const profiles = profilesRes.data || [];
+    const competingIds = new Set((competingRes.data || []).map(e => e.user_id));
+
+    // Sort: competing first, then alphabetical
+    profiles.sort((a, b) => {
+      const ac = competingIds.has(a.id) ? 0 : 1;
+      const bc = competingIds.has(b.id) ? 0 : 1;
+      if (ac !== bc) return ac - bc;
+      return a.name.localeCompare(b.name);
+    });
+
+    list.innerHTML = profiles.map(p => {
+      const isCompeting = competingIds.has(p.id);
+      const isSelf = p.id === state.profile?.id;
+      return `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);">
+        <div style="position:relative;flex-shrink:0;cursor:pointer;" data-user-id="${p.id}">
+          <div style="width:48px;height:48px;border-radius:50%;overflow:hidden;background:linear-gradient(135deg,var(--ember),var(--coral));display:grid;place-items:center;font-size:22px;${isCompeting ? 'border:2.5px solid var(--ember);' : ''}">
+            ${avatarInner(p.avatar)}
+          </div>
+          ${isCompeting ? '<div style="position:absolute;bottom:0;right:0;width:12px;height:12px;border-radius:50%;background:var(--ember);border:2px solid var(--surface);"></div>' : ''}
+        </div>
+        <div style="flex:1;min-width:0;cursor:pointer;" data-user-id="${p.id}">
+          <div style="font-weight:700;font-size:15px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(p.name)}</div>
+          ${isCompeting ? '<div style="font-size:12px;color:var(--ember);font-weight:600;margin-top:1px;">● Competing now</div>' : ''}
+        </div>
+        ${!isSelf ? `<button style="border:1px solid var(--border);background:none;color:var(--text-muted);border-radius:20px;padding:7px 16px;font-size:13px;cursor:pointer;flex-shrink:0;" data-unfollow-id="${p.id}" data-unfollow-name="${escapeHtml(p.name)}">Unfollow</button>` : ''}
+      </div>`;
+    }).join('');
+
+    // Wire profile taps
+    list.querySelectorAll('[data-user-id]').forEach(el => {
+      el.addEventListener('click', () => {
+        closeFollowingSheet();
+        openUserProfile(el.dataset.userId);
+      });
+    });
+
+    // Wire unfollow buttons
+    list.querySelectorAll('[data-unfollow-id]').forEach(btn => {
+      btn.addEventListener('click', async e => {
+        e.stopPropagation();
+        const uid = btn.dataset.unfollowId;
+        const name = btn.dataset.unfollowName;
+        if (!confirm(`Unfollow ${name}?`)) return;
+        btn.textContent = '…'; btn.disabled = true;
+        const { error } = await db.from('follows')
+          .delete()
+          .eq('follower_id', state.profile.id)
+          .eq('following_id', uid);
+        if (error) { toast('Unfollow failed'); btn.disabled = false; btn.textContent = 'Unfollow'; return; }
+        // Remove row
+        btn.closest('div[style*="border-bottom"]').remove();
+        const remaining = list.querySelectorAll('[data-unfollow-id]').length;
+        count.textContent = `${remaining} following`;
+        if (!remaining) openFollowingSheet(); // refresh empty state
+        toast(`Unfollowed ${name}`);
+        // Update local state
+        if (state.following) state.following.delete(uid);
+      });
+    });
+
+  } catch(err) {
+    console.error('followingSheet', err);
+    list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Could not load following list.</div>';
+  }
+}
+
+function closeFollowingSheet() {
+  document.getElementById('followingSheet').classList.remove('open');
 }
 
 // ── FEED VIEWER ─────────────────────────────────────────────────────────────
