@@ -5673,7 +5673,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v213 · tour-fix";
+const APP_VERSION = "v214 · crop-preview";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -9780,11 +9780,10 @@ document.getElementById('ccFile').addEventListener('change', (e) => {
       const preview = document.getElementById('ccPreview');
       if (preview) {
         preview.style.display = 'block';
-        preview.innerHTML = `<img src="${ccState.fileUrl}" style="width:100%;border-radius:8px;aspect-ratio:16/9;object-fit:cover;">`;
+        preview.innerHTML = `<img src="${ccState.fileUrl}" style="width:100%;border-radius:8px;aspect-ratio:16/9;object-fit:cover;">
+          <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">${escapeHtml(file.name)} · ${(croppedBlob.size/1024/1024).toFixed(1)} MB</div>`;
       }
       document.getElementById('ccUploadZone').classList.add('has-file');
-      const fi = document.getElementById('ccUploadZone').querySelector('.text');
-      if (fi) fi.textContent = croppedBlob.name || file.name;
     });
     return; // wait for crop callback
   }
@@ -13555,10 +13554,16 @@ function cpFileChangeHandler(e) {
   if (file.type.startsWith('image/')) {
     openCrop(file, 16, 9, (croppedBlob) => {
       cpState.file = croppedBlob;
+      cpState.fileType = 'photo';
       cpState.fileUrl = URL.createObjectURL(croppedBlob);
+      document.getElementById('cpUploadZone').style.display = 'none';
       document.getElementById('cpUploadZone').classList.add('has-file');
       const cpPrev = document.getElementById('cpPreview');
-      if (cpPrev) { cpPrev.style.display = 'block'; cpPrev.innerHTML = `<img src="${cpState.fileUrl}" style="width:100%;border-radius:8px;aspect-ratio:16/9;object-fit:cover;">`; }
+      if (cpPrev) {
+        cpPrev.style.display = 'block';
+        cpPrev.innerHTML = `<img src="${cpState.fileUrl}" style="width:100%;border-radius:12px;max-height:300px;object-fit:contain;background:#000">
+          <button type="button" class="btn btn-ghost" style="margin-top:8px;width:100%" onclick="clearCpFile()">Remove</button>`;
+      }
     });
     return;
   }
