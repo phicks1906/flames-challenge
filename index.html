@@ -1619,6 +1619,9 @@ body.theme-light .auth-form input { background: #ffffff; }
   margin-bottom: 8px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  background: radial-gradient(ellipse at 50% 45%, rgba(28,12,5,0.96) 0%, rgba(6,8,18,0.98) 100%);
+  border-radius: 16px;
+  overflow: hidden;
 }
 .hc-gauge-stage:active { transform: scale(0.985); transition: transform 0.12s ease; }
 .hc-gauge-svg { display: block; overflow: visible; }
@@ -1638,7 +1641,9 @@ body.theme-light .auth-form input { background: #ffffff; }
   content: '';
   position: absolute;
   inset: -80px -16px -16px -16px;
-  /* trophy-bg removed to reduce Supabase egress */
+  background-image: url('https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/assets/trophy-bg.jpeg');
+  background-size: cover;
+  background-position: center;
   opacity: 0.25;
   mix-blend-mode: screen;
   filter: brightness(1.0) contrast(1.0);
@@ -1661,11 +1666,11 @@ body.theme-light .auth-form input { background: #ffffff; }
   z-index: 0;
 }
 .hc-gauge-stage.hc-hot::before {
-  background: radial-gradient(ellipse at 70% 60%, rgba(255,106,44,0.18) 0%, transparent 70%);
+  background: radial-gradient(ellipse at 70% 60%, rgba(255,106,44,0.30) 0%, transparent 70%);
   opacity: 1;
 }
 .hc-gauge-stage.hc-cold::before {
-  background: radial-gradient(ellipse at 30% 60%, rgba(79,195,247,0.18) 0%, transparent 70%);
+  background: radial-gradient(ellipse at 30% 60%, rgba(79,195,247,0.30) 0%, transparent 70%);
   opacity: 1;
 }
 .hc-gauge-stage.hc-balanced::before {
@@ -1735,10 +1740,11 @@ body.theme-light .auth-form input { background: #ffffff; }
   will-change: transform, opacity;
 }
 .hc-ember {
-  width: 4px; height: 4px;
+  width: 5px; height: 6px;
   background: radial-gradient(circle, #fff4d4 0%, #ffc857 30%, #ff6a2c 70%, transparent 100%);
   border-radius: 50%;
   animation: hcEmberRise 2.8s ease-out infinite;
+  box-shadow: 0 0 4px 2px rgba(255,150,50,0.7), 0 0 8px 3px rgba(255,100,30,0.35);
 }
 .hc-snow {
   width: 8px; height: 8px;
@@ -1747,6 +1753,7 @@ body.theme-light .auth-form input { background: #ffffff; }
   font-size: 9px;
   line-height: 8px;
   animation: hcSnowDrift 3.6s linear infinite;
+  text-shadow: 0 0 4px #4fc3f7, 0 0 8px rgba(79,195,247,0.6);
 }
 
 /* Three-tile row below the gauge */
@@ -1802,13 +1809,13 @@ body.theme-light .auth-form input { background: #ffffff; }
   cursor: pointer;
 }
 
-/* Light-mode adjustments — softer halos */
+/* Light-mode adjustments — gauge is always dark, restore dark-mode rendering inside it */
 body.theme-light .hc-arc-glow {
-  animation: none;
-  filter: drop-shadow(0 0 6px rgba(255, 106, 44, 0.25)) drop-shadow(0 0 6px rgba(26, 143, 196, 0.2));
+  animation: hcCorePulse 2.4s ease-in-out infinite;
+  filter: none;
 }
-body.theme-light .hc-pct-text { fill: #1a1714; }
-body.theme-light .hc-pct-label { fill: #7a716a; }
+body.theme-light .hc-pct-text { fill: url(#hcPctGrad); opacity: 0.88; }
+body.theme-light .hc-pct-label { fill: #8a7a72; }
 
 /* Record sheet */
 .record-tabs {
@@ -4491,7 +4498,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
           <ellipse class="hc-fire-side" id="hcFireHaloEl" cx="230" cy="135" rx="80" ry="120" fill="url(#hcFireHalo)" opacity="0.5"/>
           <path d="M 77.8 212.2 A 95 95 0 1 1 212.2 212.2"
             stroke="#0a0806" stroke-width="10" fill="none" stroke-linecap="round" opacity="0.4"/>
-          <path class="hc-arc-glow"
+          <path id="hcArcPath" class="hc-arc-glow"
             d="M 77.8 212.2 A 95 95 0 1 1 212.2 212.2"
             stroke="url(#hcArcGrad)" stroke-width="14" fill="none" stroke-linecap="round"/>
           <g id="hcTicks"></g>
@@ -5681,7 +5688,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v234 · viewer-action-bar";
+const APP_VERSION = "v235 · heat-check-stage";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -8106,9 +8113,9 @@ function renderHeatCheck() {
   }
 
   // ── B: Arc pulse — intensity based on win rate ──
-  const arcEl = document.querySelector('.hc-arc-glow');
+  const arcEl = document.getElementById('hcArcPath');
   if (arcEl) {
-    arcEl.classList.remove('hc-arc-hot', 'hc-arc-cold', 'hc-arc-mid', 'hc-arc-glow');
+    arcEl.classList.remove('hc-arc-hot', 'hc-arc-cold', 'hc-arc-mid');
     if (winPct == null) arcEl.classList.add('hc-arc-mid');
     else if (winPct >= 60) arcEl.classList.add('hc-arc-hot');
     else if (winPct <= 40) arcEl.classList.add('hc-arc-cold');
