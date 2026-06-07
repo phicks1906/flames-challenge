@@ -5680,7 +5680,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v230 · entry-mediaurl";
+const APP_VERSION = "v231 · flyer-auth-upload";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -7833,17 +7833,20 @@ async function postFlyerToFeed() {
     if (blob) {
       const path = `flyers/${state.profile.id}/${ch.id}-${Date.now()}.png`;
       btn.textContent = 'Uploading...';
-      // Use SDK upload directly — most reliable for flyers
-      const { error: upErr } = await db.storage
-        .from('challenge-media')
-        .upload(path, blob, { contentType: 'image/png', upsert: true, cacheControl: '3600' });
-      if (upErr) {
-        toast('⚠️ Flyer upload failed: ' + upErr.message);
+      // Use the authenticated XHR upload (same path entries use) so the request
+      // carries the user's token. The SDK upload was going up anonymously and
+      // getting blocked by the authenticated-only storage RLS policy.
+      let up;
+      try {
+        up = await uploadWithProgress('challenge-media', path, blob, pct => {
+          btn.textContent = `Uploading... ${pct}%`;
+        });
+      } catch(e) {
+        toast('⚠️ Flyer upload failed: ' + e.message);
         btn.textContent = orig; btn.disabled = false;
         return;
       }
-      const { data: pubData } = db.storage.from('challenge-media').getPublicUrl(path);
-      mediaUrl = pubData?.publicUrl || null;
+      mediaUrl = up?.publicUrl || null;
       if (!mediaUrl) {
         toast('⚠️ Could not get flyer URL — please try again');
         btn.textContent = orig; btn.disabled = false;
@@ -7927,16 +7930,22 @@ async function postFlyerToGroup(groupId, groupName) {
   if (btn) { btn.textContent = 'Posting...'; btn.disabled = true; }
 
   try {
-    const imgEl = document.querySelector('#promotePreview img');
     let mediaUrl = null;
+    let blob = promoteState?.blob || null;
+    if (!blob) {
+      const canvas = document.querySelector('#promotePreview canvas');
+      if (canvas) blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+    }
 
-    if (imgEl?.src?.startsWith('data:')) {
-      const blob = await (await fetch(imgEl.src)).blob();
+    if (blob) {
       const path = `flyers/${state.profile.id}/${ch.id}-${Date.now()}.png`;
-      const { error: upErr } = await db.storage.from('challenge-media').upload(path, blob, { contentType: 'image/png', upsert: true });
-      if (!upErr) {
-        const { data: urlData } = db.storage.from('challenge-media').getPublicUrl(path);
-        mediaUrl = urlData?.publicUrl;
+      try {
+        const up = await uploadWithProgress('challenge-media', path, blob, () => {});
+        mediaUrl = up?.publicUrl || null;
+      } catch(e) {
+        toast('⚠️ Flyer upload failed: ' + e.message);
+        if (btn) { btn.textContent = `👥 ${groupName}`; btn.disabled = false; }
+        return;
       }
     }
 
