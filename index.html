@@ -5696,7 +5696,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v246 · record-thumbs";
+const APP_VERSION = "v247 · fv-sound-fix";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -13307,21 +13307,11 @@ async function openFeedViewer(chId) {
       const target = e.target.closest('[data-fv-play]');
       if (!target) return;
       const src = target.dataset.fvPlay;
-      // Reuse hidden preloaded video if available, otherwise create new
-      const preloaded = target.querySelector('video[style*="display:none"]');
-      if (preloaded) {
-        preloaded.style.display = 'block';
-        preloaded.style.cssText = 'width:100%;max-height:55vmax;display:block;background:#000;';
-        preloaded.muted = false;
-        preloaded.controls = true;
-        preloaded.loop = false;
-        preloaded.autoplay = true;
-        preloaded.play().catch(() => {});
-        target.outerHTML = preloaded.outerHTML;
-      } else {
-        target.outerHTML = `<video src="${escapeHtml(src)}" controls autoplay playsinline preload="auto"
-          style="width:100%;max-height:55vmax;display:block;background:#000;"></video>`;
-      }
+      // Always build a fresh video element string — never use outerHTML of a preloaded
+      // video because the muted HTML attribute persists in serialization even after
+      // setting element.muted = false, causing silent playback on iOS.
+      target.outerHTML = `<video src="${escapeHtml(src)}" controls autoplay playsinline preload="auto"
+        style="width:100%;max-height:55vmax;display:block;background:#000;"></video>`;
     }, { once: false });
 
     // Wire events
