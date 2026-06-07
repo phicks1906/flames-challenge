@@ -5266,22 +5266,18 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 <!-- FEED VIEWER SHEET -->
 <div class="modal-backdrop" id="feedViewerSheet" onclick="if(event.target===this)closeFeedViewer()" style="align-items:flex-end;background:rgba(0,0,0,0.5);">
-  <div id="feedViewerModal" style="background:var(--surface);border-radius:var(--radius) var(--radius) 0 0;width:100%;max-height:92vh;overflow-y:auto;position:relative;animation:slideUp 0.3s cubic-bezier(0.16,1,0.3,1);border-top:3px solid var(--ember);box-shadow:0 -8px 40px rgba(255,106,44,0.18);padding-bottom:env(safe-area-inset-bottom,16px);">
+  <div id="feedViewerModal" style="background:var(--surface);border-radius:var(--radius) var(--radius) 0 0;width:100%;max-height:92vh;overflow-y:auto;position:relative;animation:slideUp 0.3s cubic-bezier(0.16,1,0.3,1);border-top:3px solid var(--ember);box-shadow:0 -8px 40px rgba(255,106,44,0.18);padding-bottom:0;">
     <!-- Drag handle -->
     <div style="display:flex;justify-content:center;padding:10px 0 4px;">
       <div style="width:36px;height:4px;border-radius:2px;background:var(--border-bright);opacity:0.6;"></div>
     </div>
     <!-- Header -->
     <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:2;">
-      <div>
-        <div id="fvTitle" style="font-family:var(--font-display);font-size:16px;text-transform:uppercase;letter-spacing:0.04em;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;"></div>
+      <div style="flex:1;min-width:0;margin-right:12px;">
+        <div id="fvTitle" style="font-family:var(--font-display);font-size:16px;text-transform:uppercase;letter-spacing:0.04em;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
         <div id="fvMeta" style="font-size:11px;color:var(--text-muted);margin-top:1px;white-space:nowrap;"></div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <button id="fvChallengeBtn" class="btn btn-primary" style="padding:8px 14px;font-size:13px;" onclick="openFeedViewerChallenge()"></button>
-        <button id="fvShareBtn" onclick="shareFeedViewerChallenge()" style="background:var(--overlay-2);border:1px solid var(--border);border-radius:50%;width:36px;height:36px;color:var(--ember);font-size:18px;cursor:pointer;display:grid;place-items:center;" title="Share">↗</button>
-        <button onclick="closeFeedViewer()" style="background:var(--overlay-2);border:1px solid var(--border);border-radius:50%;width:36px;height:36px;color:var(--text);font-size:20px;cursor:pointer;display:grid;place-items:center;">×</button>
-      </div>
+      <button onclick="closeFeedViewer()" style="background:var(--overlay-2);border:1px solid var(--border);border-radius:50%;width:36px;height:36px;color:var(--text);font-size:20px;cursor:pointer;display:grid;place-items:center;flex-shrink:0;">×</button>
     </div>
     <!-- Horizontal snap-scroll entries -->
     <div style="position:relative;">
@@ -5295,6 +5291,11 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       <div style="font-size:40px;margin-bottom:12px;">🎬</div>
       <div style="font-weight:600;margin-bottom:6px;">No entries yet</div>
       <div style="font-size:14px;">Be the first to enter this challenge</div>
+    </div>
+    <!-- Sticky action bar -->
+    <div style="position:sticky;bottom:0;display:flex;gap:10px;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--border);background:var(--surface);z-index:2;">
+      <button id="fvChallengeBtn" class="btn btn-primary" style="flex:1;padding:12px;font-size:14px;" onclick="openFeedViewerChallenge()"></button>
+      <button id="fvPromoteBtn" class="btn btn-ghost" style="flex:0 0 auto;padding:12px 16px;font-size:14px;white-space:nowrap;" onclick="promoteFeedViewerChallenge()">📣 Promote</button>
     </div>
   </div>
 </div>
@@ -5680,7 +5681,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v233 · flyer-no-upsert";
+const APP_VERSION = "v234 · viewer-action-bar";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -13194,6 +13195,8 @@ async function openFeedViewer(chId) {
   // Will update button after entries load — set placeholder for now
   btn.textContent = '📋 View Details';
   btn.style.display = 'block';
+  const promoteBtn = document.getElementById('fvPromoteBtn');
+  if (promoteBtn) promoteBtn.style.display = (ch.is_public && status !== 'closed' && status !== 'voided') ? 'block' : 'none';
   list.innerHTML    = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Loading…</div>';
   empty.style.display = 'none';
   sheet.classList.add('open');
@@ -13472,6 +13475,12 @@ function openFeedViewerChallenge() {
   const ch = _fvChallenge;
   closeFeedViewer();
   if (ch) openChallenge(ch);
+}
+
+function promoteFeedViewerChallenge() {
+  const ch = _fvChallenge;
+  closeFeedViewer();
+  if (ch) openPromote('challenge', ch);
 }
 
 async function shareFeedViewerChallenge() {
