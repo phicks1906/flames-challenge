@@ -5680,7 +5680,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v226 · audio-fix";
+const APP_VERSION = "v227 · flyer-sdk";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -7832,27 +7832,22 @@ async function postFlyerToFeed() {
     }
     if (blob) {
       const path = `flyers/${state.profile.id}/${ch.id}-${Date.now()}.png`;
-      try {
-        btn.textContent = 'Uploading...';
-        await uploadWithProgress('challenge-media', path, blob, pct => {
-          btn.textContent = `Uploading... ${pct}%`;
-        });
-        // Always derive public URL from SDK to ensure correct format
-        const { data: pubData } = db.storage.from('challenge-media').getPublicUrl(path);
-        mediaUrl = pubData?.publicUrl || null;
-        if (!mediaUrl) throw new Error('No public URL returned');
-      } catch(upErr) {
-        // Try standard upload as fallback
-        const { error: upErr2, data: upData } = await db.storage
-          .from('challenge-media')
-          .upload(path, blob, { contentType: 'image/png', upsert: true });
-        if (upErr2) {
-          toast('⚠️ Flyer image upload failed: ' + upErr2.message);
-          console.error('Flyer upload error:', upErr2);
-        } else {
-          const { data: urlData } = db.storage.from('challenge-media').getPublicUrl(path);
-          mediaUrl = urlData?.publicUrl;
-        }
+      btn.textContent = 'Uploading...';
+      // Use SDK upload directly — most reliable for flyers
+      const { error: upErr } = await db.storage
+        .from('challenge-media')
+        .upload(path, blob, { contentType: 'image/png', upsert: true, cacheControl: '3600' });
+      if (upErr) {
+        toast('⚠️ Flyer upload failed: ' + upErr.message);
+        btn.textContent = orig; btn.disabled = false;
+        return;
+      }
+      const { data: pubData } = db.storage.from('challenge-media').getPublicUrl(path);
+      mediaUrl = pubData?.publicUrl || null;
+      if (!mediaUrl) {
+        toast('⚠️ Could not get flyer URL — please try again');
+        btn.textContent = orig; btn.disabled = false;
+        return;
       }
       btn.textContent = 'Posting...';
     }
