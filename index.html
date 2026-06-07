@@ -5073,7 +5073,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     <p id="profileStats" style="margin-bottom:24px"></p>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="closeModals()">Keep voting</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openEditProfile()">✏️ Edit Profile</button>
-    <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openFollowingSheet()">👥 People I Follow</button>
+    <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openFollowingSheet()">👥 Following & Followers</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openFindPeople()">🔍 Find People</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openInterestEditor()">🎯 My Interests</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="closeAvatarMenu ? closeAvatarMenu() : null; startTour()">👋 Replay Tour</button>
@@ -5240,11 +5240,18 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
   <div style="background:var(--surface);border-radius:var(--radius) var(--radius) 0 0;width:100%;max-height:90vh;display:flex;flex-direction:column;animation:slideUp 0.3s cubic-bezier(0.16,1,0.3,1);">
     <!-- Header -->
     <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0;">
-      <div style="font-family:var(--font-display);font-size:20px;text-transform:uppercase;letter-spacing:0.04em;color:var(--text);">Following</div>
+      <div style="font-family:var(--font-display);font-size:20px;text-transform:uppercase;letter-spacing:0.04em;color:var(--text);">Connections</div>
       <button onclick="closeFollowingSheet()" style="background:var(--overlay-2);border:1px solid var(--border);border-radius:50%;width:36px;height:36px;color:var(--text);font-size:20px;cursor:pointer;display:grid;place-items:center;">×</button>
     </div>
-    <!-- Count -->
-    <div id="followingCount" style="padding:10px 16px 0;font-size:13px;color:var(--text-muted);flex-shrink:0;"></div>
+    <!-- Tabs -->
+    <div style="display:flex;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <button id="fsTabFollowing" onclick="switchFollowTab('following')" style="flex:1;padding:12px;font-size:14px;font-weight:700;border:none;background:none;color:var(--ember);border-bottom:2px solid var(--ember);cursor:pointer;">
+        Following <span id="fsFollowingCount" style="font-size:12px;color:var(--text-muted);font-weight:400;"></span>
+      </button>
+      <button id="fsTabFollowers" onclick="switchFollowTab('followers')" style="flex:1;padding:12px;font-size:14px;font-weight:700;border:none;background:none;color:var(--text-muted);border-bottom:2px solid transparent;cursor:pointer;">
+        Followers <span id="fsFollowersCount" style="font-size:12px;color:var(--text-muted);font-weight:400;"></span>
+      </button>
+    </div>
     <!-- List -->
     <div id="followingList" style="overflow-y:auto;flex:1;padding:8px 0 32px;"></div>
   </div>
@@ -5666,7 +5673,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v211 · following-col";
+const APP_VERSION = "v212 · connections";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -12940,106 +12947,145 @@ function maybeStartTour() {
 
 
 // ── FOLLOWING SHEET ──────────────────────────────────────────────────────────
+let _fsActiveTab = 'following';
+
 async function openFollowingSheet() {
-  // Close profile modal but open following sheet
   document.getElementById('profileModal')?.classList.remove('open');
-  const sheet = document.getElementById('followingSheet');
-  const list  = document.getElementById('followingList');
-  const count = document.getElementById('followingCount');
-  sheet.classList.add('open');
+  document.getElementById('followingSheet').classList.add('open');
+  _fsActiveTab = 'following';
+  switchFollowTab('following');
+}
+
+function switchFollowTab(tab) {
+  _fsActiveTab = tab;
+  const followingBtn = document.getElementById('fsTabFollowing');
+  const followersBtn = document.getElementById('fsTabFollowers');
+  followingBtn.style.color = tab === 'following' ? 'var(--ember)' : 'var(--text-muted)';
+  followingBtn.style.borderBottom = tab === 'following' ? '2px solid var(--ember)' : '2px solid transparent';
+  followersBtn.style.color = tab === 'followers' ? 'var(--ember)' : 'var(--text-muted)';
+  followersBtn.style.borderBottom = tab === 'followers' ? '2px solid var(--ember)' : '2px solid transparent';
+
+  if (tab === 'following') loadFollowingList();
+  else loadFollowersList();
+}
+
+async function loadFollowingList() {
+  const list = document.getElementById('followingList');
   list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Loading…</div>';
-  count.textContent = '';
-
   try {
-    // Get all follows by current user
-    const { data: follows, error } = await db
-      .from('follows')
-      .select('followee_id')
-      .eq('follower_id', state.profile.id);
-
+    const { data: follows, error } = await db.from('follows').select('followee_id').eq('follower_id', state.profile.id);
     if (error) throw error;
-    if (!follows || !follows.length) {
-      list.innerHTML = '<div style="text-align:center;padding:48px 20px;color:var(--text-muted);"><div style="font-size:40px;margin-bottom:12px;">👥</div><div style="font-weight:600;margin-bottom:6px;">Not following anyone yet</div><div style="font-size:14px;">Find people to follow from the profile menu.</div></div>';
+    const ids = (follows || []).map(f => f.followee_id);
+    document.getElementById('fsFollowingCount').textContent = ids.length ? `(${ids.length})` : '';
+    if (!ids.length) {
+      list.innerHTML = '<div style="text-align:center;padding:48px 20px;color:var(--text-muted);"><div style="font-size:40px;margin-bottom:12px;">👥</div><div style="font-weight:600;margin-bottom:6px;">Not following anyone yet</div><div style="font-size:14px;">Find people from the profile menu.</div></div>';
       return;
     }
-
-    const ids = follows.map(f => f.followee_id);
-    count.textContent = `${ids.length} following`;
-
-    // Fetch profiles + check who is currently competing
     const [profilesRes, competingRes] = await Promise.all([
       db.from('profiles').select('id,name,avatar').in('id', ids),
-      db.from('entries')
-        .select('user_id')
-        .in('user_id', ids)
-        .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
+      db.from('entries').select('user_id').in('user_id', ids).gte('created_at', new Date(Date.now() - 7*24*60*60*1000).toISOString()),
     ]);
-
     const profiles = profilesRes.data || [];
     const competingIds = new Set((competingRes.data || []).map(e => e.user_id));
-
-    // Sort: competing first, then alphabetical
-    profiles.sort((a, b) => {
-      const ac = competingIds.has(a.id) ? 0 : 1;
-      const bc = competingIds.has(b.id) ? 0 : 1;
-      if (ac !== bc) return ac - bc;
-      return a.name.localeCompare(b.name);
-    });
-
-    list.innerHTML = profiles.map(p => {
-      const isCompeting = competingIds.has(p.id);
-      const isSelf = p.id === state.profile?.id;
-      return `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);">
-        <div style="position:relative;flex-shrink:0;cursor:pointer;" data-user-id="${p.id}">
-          <div style="width:48px;height:48px;border-radius:50%;overflow:hidden;background:linear-gradient(135deg,var(--ember),var(--coral));display:grid;place-items:center;font-size:22px;${isCompeting ? 'border:2.5px solid var(--ember);' : ''}">
-            ${avatarInner(p.avatar)}
-          </div>
-          ${isCompeting ? '<div style="position:absolute;bottom:0;right:0;width:12px;height:12px;border-radius:50%;background:var(--ember);border:2px solid var(--surface);"></div>' : ''}
-        </div>
-        <div style="flex:1;min-width:0;cursor:pointer;" data-user-id="${p.id}">
-          <div style="font-weight:700;font-size:15px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(p.name)}</div>
-          ${isCompeting ? '<div style="font-size:12px;color:var(--ember);font-weight:600;margin-top:1px;">● Competing now</div>' : ''}
-        </div>
-        ${!isSelf ? `<button style="border:1px solid var(--border);background:none;color:var(--text-muted);border-radius:20px;padding:7px 16px;font-size:13px;cursor:pointer;flex-shrink:0;" data-unfollow-id="${p.id}" data-unfollow-name="${escapeHtml(p.name)}">Unfollow</button>` : ''}
-      </div>`;
-    }).join('');
-
-    // Wire profile taps
-    list.querySelectorAll('[data-user-id]').forEach(el => {
-      el.addEventListener('click', () => {
-        closeFollowingSheet();
-        openUserProfile(el.dataset.userId);
-      });
-    });
-
-    // Wire unfollow buttons
-    list.querySelectorAll('[data-unfollow-id]').forEach(btn => {
-      btn.addEventListener('click', async e => {
-        e.stopPropagation();
-        const uid = btn.dataset.unfollowId;
-        const name = btn.dataset.unfollowName;
-        if (!confirm(`Unfollow ${name}?`)) return;
-        btn.textContent = '…'; btn.disabled = true;
-        const { error } = await db.from('follows')
-          .delete()
-          .eq('follower_id', state.profile.id)
-          .eq('followee_id', uid);
-        if (error) { toast('Unfollow failed'); btn.disabled = false; btn.textContent = 'Unfollow'; return; }
-        // Remove row
-        btn.closest('div[style*="border-bottom"]').remove();
-        const remaining = list.querySelectorAll('[data-unfollow-id]').length;
-        count.textContent = `${remaining} following`;
-        if (!remaining) openFollowingSheet(); // refresh empty state
-        toast(`Unfollowed ${name}`);
-        // Update local state
-        if (state.following) state.following.delete(uid);
-      });
-    });
-
+    profiles.sort((a, b) => (competingIds.has(b.id) ? 1 : 0) - (competingIds.has(a.id) ? 1 : 0) || a.name.localeCompare(b.name));
+    renderFollowList(list, profiles, competingIds, 'following');
   } catch(err) {
-    console.error('followingSheet', err);
-    list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Could not load following list.</div>';
+    list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Could not load list.</div>';
   }
+}
+
+async function loadFollowersList() {
+  const list = document.getElementById('followingList');
+  list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Loading…</div>';
+  try {
+    const { data: follows, error } = await db.from('follows').select('follower_id').eq('followee_id', state.profile.id);
+    if (error) throw error;
+    const ids = (follows || []).map(f => f.follower_id);
+    document.getElementById('fsFollowersCount').textContent = ids.length ? `(${ids.length})` : '';
+    if (!ids.length) {
+      list.innerHTML = '<div style="text-align:center;padding:48px 20px;color:var(--text-muted);"><div style="font-size:40px;margin-bottom:12px;">👥</div><div style="font-weight:600;margin-bottom:6px;">No followers yet</div><div style="font-size:14px;">Share your challenges to grow your following.</div></div>';
+      return;
+    }
+    // Check who current user follows back
+    const { data: myFollows } = await db.from('follows').select('followee_id').eq('follower_id', state.profile.id);
+    const iFollow = new Set((myFollows || []).map(f => f.followee_id));
+    const [profilesRes, competingRes] = await Promise.all([
+      db.from('profiles').select('id,name,avatar').in('id', ids),
+      db.from('entries').select('user_id').in('user_id', ids).gte('created_at', new Date(Date.now() - 7*24*60*60*1000).toISOString()),
+    ]);
+    const profiles = profilesRes.data || [];
+    const competingIds = new Set((competingRes.data || []).map(e => e.user_id));
+    profiles.sort((a, b) => (competingIds.has(b.id) ? 1 : 0) - (competingIds.has(a.id) ? 1 : 0) || a.name.localeCompare(b.name));
+    renderFollowList(list, profiles, competingIds, 'followers', iFollow);
+  } catch(err) {
+    list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Could not load list.</div>';
+  }
+}
+
+function renderFollowList(list, profiles, competingIds, mode, iFollow) {
+  list.innerHTML = profiles.map(p => {
+    const isCompeting = competingIds.has(p.id);
+    const isSelf = p.id === state.profile?.id;
+    const followingBack = iFollow?.has(p.id);
+    const actionBtn = mode === 'following'
+      ? `<button style="border:1px solid var(--border);background:none;color:var(--text-muted);border-radius:20px;padding:7px 14px;font-size:13px;cursor:pointer;" data-unfollow-id="${p.id}" data-unfollow-name="${escapeHtml(p.name)}">Unfollow</button>`
+      : isSelf ? ''
+      : followingBack
+        ? `<button style="border:1px solid var(--border);background:none;color:var(--text-muted);border-radius:20px;padding:7px 14px;font-size:13px;cursor:pointer;" data-unfollow-id="${p.id}" data-unfollow-name="${escapeHtml(p.name)}">Following</button>`
+        : `<button style="border:none;background:var(--ember);color:#fff;border-radius:20px;padding:7px 14px;font-size:13px;font-weight:700;cursor:pointer;" data-follow-id="${p.id}">Follow</button>`;
+
+    return `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);">
+      <div style="position:relative;flex-shrink:0;cursor:pointer;" data-user-id="${p.id}">
+        <div style="width:48px;height:48px;border-radius:50%;overflow:hidden;background:linear-gradient(135deg,var(--ember),var(--coral));display:grid;place-items:center;font-size:22px;${isCompeting?'border:2.5px solid var(--ember);':''}">
+          ${avatarInner(p.avatar)}
+        </div>
+        ${isCompeting ? '<div style="position:absolute;bottom:0;right:0;width:12px;height:12px;border-radius:50%;background:var(--ember);border:2px solid var(--surface);"></div>' : ''}
+      </div>
+      <div style="flex:1;min-width:0;cursor:pointer;" data-user-id="${p.id}">
+        <div style="font-weight:700;font-size:15px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(p.name)}</div>
+        ${isCompeting ? '<div style="font-size:12px;color:var(--ember);font-weight:600;margin-top:1px;">● Competing now</div>' : ''}
+      </div>
+      ${!isSelf ? actionBtn : ''}
+    </div>`;
+  }).join('');
+
+  // Wire profile taps
+  list.querySelectorAll('[data-user-id]').forEach(el => {
+    el.addEventListener('click', () => { closeFollowingSheet(); openUserProfile(el.dataset.userId); });
+  });
+
+  // Wire unfollow
+  list.querySelectorAll('[data-unfollow-id]').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      const uid = btn.dataset.unfollowId;
+      const name = btn.dataset.unfollowName;
+      if (!confirm(`Unfollow ${name}?`)) return;
+      btn.textContent = '…'; btn.disabled = true;
+      const { error } = await db.from('follows').delete().eq('follower_id', state.profile.id).eq('followee_id', uid);
+      if (error) { toast('Unfollow failed'); btn.disabled = false; return; }
+      toast(`Unfollowed ${name}`);
+      if (state.following) state.following.delete(uid);
+      switchFollowTab(_fsActiveTab);
+    });
+  });
+
+  // Wire follow back
+  list.querySelectorAll('[data-follow-id]').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      const uid = btn.dataset.followId;
+      btn.textContent = '…'; btn.disabled = true;
+      const { error } = await db.from('follows').insert({ follower_id: state.profile.id, followee_id: uid });
+      if (error) { toast('Follow failed'); btn.disabled = false; return; }
+      btn.textContent = 'Following';
+      btn.style.background = 'none';
+      btn.style.border = '1px solid var(--border)';
+      btn.style.color = 'var(--text-muted)';
+      btn.style.fontWeight = '400';
+      if (state.follows) state.follows.push({ follower_id: state.profile.id, followee_id: uid });
+    });
+  });
 }
 
 function closeFollowingSheet() {
