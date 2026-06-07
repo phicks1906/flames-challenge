@@ -5680,7 +5680,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v232 · flyer-path-fix";
+const APP_VERSION = "v233 · flyer-no-upsert";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -7833,20 +7833,20 @@ async function postFlyerToFeed() {
     if (blob) {
       const path = `${state.profile.id}/flyer-${ch.id}-${Date.now()}.png`;
       btn.textContent = 'Uploading...';
-      // Use the authenticated XHR upload (same path entries use) so the request
-      // carries the user's token. The SDK upload was going up anonymously and
-      // getting blocked by the authenticated-only storage RLS policy.
-      let up;
-      try {
-        up = await uploadWithProgress('challenge-media', path, blob, pct => {
-          btn.textContent = `Uploading... ${pct}%`;
-        });
-      } catch(e) {
-        toast('⚠️ Flyer upload failed: ' + e.message);
+      // Plain insert (upsert:false). Bucket has INSERT/DELETE policies only — an
+      // upsert turns this into INSERT...ON CONFLICT DO UPDATE which also needs
+      // UPDATE+SELECT policies and gets RLS-rejected (403). Path is unique, so
+      // no upsert is needed anyway.
+      const { error: upErr } = await db.storage
+        .from('challenge-media')
+        .upload(path, blob, { contentType: 'image/png', upsert: false, cacheControl: '3600' });
+      if (upErr) {
+        toast('⚠️ Flyer upload failed: ' + upErr.message);
         btn.textContent = orig; btn.disabled = false;
         return;
       }
-      mediaUrl = up?.publicUrl || null;
+      const { data: pubData } = db.storage.from('challenge-media').getPublicUrl(path);
+      mediaUrl = pubData?.publicUrl || null;
       if (!mediaUrl) {
         toast('⚠️ Could not get flyer URL — please try again');
         btn.textContent = orig; btn.disabled = false;
@@ -7939,14 +7939,16 @@ async function postFlyerToGroup(groupId, groupName) {
 
     if (blob) {
       const path = `${state.profile.id}/flyer-${ch.id}-${Date.now()}.png`;
-      try {
-        const up = await uploadWithProgress('challenge-media', path, blob, () => {});
-        mediaUrl = up?.publicUrl || null;
-      } catch(e) {
-        toast('⚠️ Flyer upload failed: ' + e.message);
+      const { error: upErr } = await db.storage
+        .from('challenge-media')
+        .upload(path, blob, { contentType: 'image/png', upsert: false, cacheControl: '3600' });
+      if (upErr) {
+        toast('⚠️ Flyer upload failed: ' + upErr.message);
         if (btn) { btn.textContent = `👥 ${groupName}`; btn.disabled = false; }
         return;
       }
+      const { data: pubData } = db.storage.from('challenge-media').getPublicUrl(path);
+      mediaUrl = pubData?.publicUrl || null;
     }
 
     const { error } = await db.from('posts').insert({
