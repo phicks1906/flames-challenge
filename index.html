@@ -5680,7 +5680,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v229 · entry-crop-name";
+const APP_VERSION = "v230 · entry-mediaurl";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -11059,7 +11059,7 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
         const { data: spub } = db.storage.from('challenge-media').getPublicUrl(filename);
         seMediaResult = { publicUrl: spub.publicUrl };
       }
-      // mediaUrl set via seMediaResult above
+      mediaUrl = seMediaResult.publicUrl;
       // Capture poster frame for videos
       if (ch.media_type === 'video') {
         try {
@@ -11109,6 +11109,9 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
     renderChallengeDetail();
     // Also refresh the main challenges list since entry counts changed
     await loadChallenges();
+    // Refresh feed so the new entry shows without a manual reload
+    await loadFeedActivity();
+    if (state.currentView === 'feed') renderFeed();
   } catch (err) {
     console.error(err);
     errBox.textContent = err.message;
