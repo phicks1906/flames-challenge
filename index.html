@@ -5680,7 +5680,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v219 · flyer-debug";
+const APP_VERSION = "v220 · delete-challenge";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -10202,9 +10202,13 @@ function renderChallenges() {
     if (canEnterCh) {
       bottomBar = `<div style="padding:4px 12px 6px"><button class="fcc-submit-btn" data-fcc-submit="${ch.id}">+ Submit your entry</button></div>`;
     } else if (alreadyEntered && isSubmitting) {
-      bottomBar = `<div style="padding:6px 12px;display:flex;align-items:center;justify-content:space-between;background:rgba(255,106,44,0.06);border-top:1px solid var(--border);">
-        <span style="font-size:13px;color:var(--ember);font-weight:700;">✓ You're in! Entry submitted.</span>
-        <button class="fcc-submit-btn" style="padding:6px 12px;font-size:12px;" data-fcc-submit="${ch.id}" data-edit="1">✏️ Edit</button>
+      const deadline = ch.submission_deadline ? formatCountdown(ch.submission_deadline) : null;
+      bottomBar = `<div style="padding:6px 12px;background:rgba(255,106,44,0.06);border-top:1px solid var(--border);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${deadline?'4px':'0'};">
+          <span style="font-size:13px;color:var(--ember);font-weight:700;">✓ You're in!</span>
+          <button class="fcc-submit-btn" style="padding:6px 12px;font-size:12px;" data-fcc-submit="${ch.id}" data-edit="1">✏️ Edit</button>
+        </div>
+        ${deadline ? `<div style="font-size:11px;color:var(--text-muted);">You can change your entry for ${deadline}</div>` : ''}
       </div>`;
     } else if (alreadyEntered && ch.computedStatus === 'voting') {
       bottomBar = `<div style="padding:6px 12px;background:rgba(255,106,44,0.06);border-top:1px solid var(--border);">
@@ -13278,12 +13282,39 @@ async function openFeedViewer(chId) {
     list.querySelectorAll('[data-fv-delete]').forEach(btn => {
       btn.addEventListener('click', async e => {
         e.stopPropagation();
-        if (!confirm('Delete your entry? This cannot be undone.')) return;
+        const entryId = btn.dataset.fvDelete;
+        const chId    = btn.dataset.fvCh;
+        const ch      = _fvChallenge;
+        const isCreator = ch && ch.creator_id === state.profile?.id;
+        const isSubmitting = ch && computeChallengeStatus(ch) === 'submitting';
+        const totalEntries = list.querySelectorAll('[data-fv-delete]').length;
+        const isOnlyEntry  = totalEntries === 1;
+
+        // Creator + only entry + still submitting → offer to delete challenge too
+        if (isCreator && isOnlyEntry && isSubmitting) {
+          const choice = confirm('You are the only entrant. Delete the entire challenge? Tap OK to delete challenge, Cancel to delete entry only.');
+          if (choice) {
+            // Delete challenge (entries cascade)
+            if (!confirm('Delete this challenge? This cannot be undone.')) return;
+            btn.textContent = 'Deleting…'; btn.disabled = true;
+            const { error } = await db.from('challenges').delete().eq('id', chId).eq('creator_id', state.profile.id);
+            if (error) { toast('Delete failed: ' + error.message); btn.disabled = false; btn.textContent = '🗑 Delete'; return; }
+            toast('Challenge deleted');
+            closeFeedViewer();
+            // Remove from state and re-render
+            state.challenges = (state.challenges || []).filter(c => c.id !== chId);
+            renderFeed();
+            return;
+          }
+        } else {
+          if (!confirm('Delete your entry? This cannot be undone.')) return;
+        }
+
         btn.textContent = 'Deleting…'; btn.disabled = true;
-        const { error } = await db.from('entries').delete().eq('id', btn.dataset.fvDelete).eq('user_id', state.profile.id);
+        const { error } = await db.from('entries').delete().eq('id', entryId).eq('user_id', state.profile.id);
         if (error) { toast('Delete failed'); btn.disabled = false; btn.textContent = '🗑 Delete'; return; }
         toast('Entry deleted');
-        openFeedViewer(btn.dataset.fvCh); // refresh
+        openFeedViewer(chId);
       });
     });
 
