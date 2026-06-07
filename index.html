@@ -4763,10 +4763,12 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
         </div>
         <div class="cc-upload" id="ccUploadZone" onclick="document.getElementById('ccFile').click()">
           <div class="icon">📤</div>
-          <div class="text">Tap to upload</div>
+          <div class="text">Choose from library</div>
           <div class="upload-hint" id="ccUploadHint">Max 500MB · Keep videos under 2 min for best results</div>
         </div>
+        <button type="button" class="btn btn-ghost" id="ccCameraBtn" style="width:100%;margin-top:6px;font-size:13px;" onclick="document.getElementById('ccFileCamera').click()">📷 Take Photo</button>
         <input type="file" id="ccFile" class="cc-file-input" accept="image/*" />
+        <input type="file" id="ccFileCamera" class="cc-file-input" accept="image/*" capture="environment" style="display:none;" />
         <!-- Compress toggle — shown for video only -->
         <div id="ccCompressToggle" style="display:none;margin-top:8px;padding:10px 12px;background:var(--surface-2);border-radius:8px;display:none;align-items:center;justify-content:space-between;">
           <div>
@@ -4856,13 +4858,15 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
         </div>
         <div class="cc-upload" id="cpUploadZone" onclick="if(cpState.tabSwitching)return;document.getElementById('cpFile').click()">
           <div class="icon">📤</div>
-          <div class="text">Tap to upload</div>
+          <div class="text">Choose from library</div>
           <div class="upload-hint" id="cpUploadHint">Photo or video · Max 500MB</div>
         </div>
+        <button type="button" class="btn btn-ghost" id="cpCameraBtn" style="width:100%;margin-top:6px;font-size:13px;" onclick="document.getElementById('cpFileCamera').click()">📷 Take Photo</button>
         <div id="cpAudioTip" style="display:none;font-size:12px;color:var(--text-muted);margin-top:8px;padding:8px 10px;background:var(--surface);border-radius:8px;line-height:1.5">
           💡 On iPhone, tap <strong style="color:var(--text)">Choose File</strong> → Browse → On My iPhone to find Voice Memos or downloaded audio.
         </div>
         <input type="file" id="cpFile" class="cc-file-input" accept="image/*,video/*" />
+        <input type="file" id="cpFileCamera" class="cc-file-input" accept="image/*" capture="environment" style="display:none;" />
         <div class="cc-preview" id="cpPreview" style="display:none"></div>
         <div id="cpAudioAddZone" style="display:none;margin-top:10px">
           <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:6px">Add audio track <span class="hint">(optional — tap Choose File for audio)</span></label>
@@ -5037,6 +5041,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
           <div class="upload-hint" id="seUploadHint">Max 500MB · Keep videos under 2 min for best results</div>
         </div>
         <input type="file" id="seFile" class="cc-file-input" />
+        <input type="file" id="seFileCamera" class="cc-file-input" accept="image/*" capture="environment" style="display:none;" />
         <!-- Compress toggle — shown for video only -->
         <div id="seCompressToggle" style="display:none;margin-top:8px;padding:10px 12px;background:var(--surface-2);border-radius:8px;align-items:center;justify-content:space-between;">
           <div>
@@ -5673,7 +5678,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v214 · crop-preview";
+const APP_VERSION = "v215 · camera-input";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -13608,6 +13613,16 @@ function cpFileChangeHandler(e) {
   document.getElementById('cpError').classList.remove('show');
 }
 document.getElementById('cpFile').addEventListener('change', cpFileChangeHandler);
+document.getElementById('cpFileCamera').addEventListener('change', cpFileChangeHandler);
+document.getElementById('ccFileCamera')?.addEventListener('change', e => {
+  // Reuse ccFile handler
+  const handler = document.getElementById('ccFile').onchange;
+  Object.defineProperty(e, 'target', { value: e.target });
+  ccFileChangeHandler(e);
+});
+document.getElementById('seFileCamera')?.addEventListener('change', e => {
+  seFileChangeHandler(e);
+});
 
 document.getElementById('cpAudioFile').addEventListener('change', e => {
   const file = e.target.files[0];
