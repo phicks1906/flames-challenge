@@ -4896,11 +4896,13 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     <div class="cd-hero" id="cdHero"></div>
     <div class="cd-entries-header">
       <button class="count cd-count-btn" id="cdEntriesCount" onclick="openEntrantsSheet()">0 entries</button>
-      <button class="btn btn-primary" id="cdAddEntryBtn" onclick="openSubmitEntry()" style="display:none">+ Submit your entry</button>
     </div>
     <div class="cd-entries-grid" id="cdEntriesGrid"></div>
     <div class="cd-entries-counter" id="cdEntriesCounter" style="display:none"></div>
     <div class="cd-entries-dots" id="cdEntriesDots" style="display:none"></div>
+    <div id="cdSubmitBtnWrap" style="padding:12px 0 4px;display:none;">
+      <button class="btn btn-primary" id="cdAddEntryBtn" onclick="openSubmitEntry()" style="width:100%">+ Submit your entry</button>
+    </div>
     <div id="cdResultsPanel" style="display:none"></div>
   </div>
 </div>
@@ -5678,7 +5680,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v216 · flyer-select";
+const APP_VERSION = "v218 · no-poster-video";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -10436,7 +10438,9 @@ function renderChallengeDetail() {
   // Submit button visibility
   const userHasEntered = state.profile && state.currentEntries.some(e => e.user_id === state.profile.id);
   const canEnter = status === 'submitting' && !userHasEntered && state.profile;
-  document.getElementById('cdAddEntryBtn').style.display = canEnter ? 'inline-flex' : 'none';
+  document.getElementById('cdAddEntryBtn').style.display = canEnter ? 'block' : 'none';
+  const cdWrap = document.getElementById('cdSubmitBtnWrap');
+  if (cdWrap) cdWrap.style.display = canEnter ? 'block' : 'none';
 
   // Entry count + grid
   document.getElementById('cdEntriesCount').textContent = `${state.currentEntries.length} ${state.currentEntries.length === 1 ? 'entry' : 'entries'}`;
@@ -10494,14 +10498,13 @@ function renderChallengeDetail() {
           <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.25);border-radius:8px;font-size:52px;">▶</div>
         </div>`;
       } else {
-        // No poster — show category icon placeholder, tap to open viewer
-        const catIcon = {Art:'🎨',Photography:'📷',Music:'🎵',Writing:'✍️',Cooking:'🍳',Style:'👗',Sports:'🏆',Fitness:'💪',Comedy:'😂'}[state.currentChallenge?.category] || '🎬';
-        mediaHtml = `<div data-open-entry="${entry.id}" data-open-ch="${entry.challenge_id}" style="cursor:pointer;background:var(--surface-2);width:100%;height:100%;display:flex;align-items:center;justify-content:center;position:relative;">
-          <div style="text-align:center">
-            <div style="font-size:48px;margin-bottom:8px">${catIcon}</div>
-            <div style="font-size:13px;color:var(--text-muted)">Tap to play video</div>
+        // No poster — use autoplay muted video to show first frame (same as feed cards)
+        mediaHtml = `<div style="position:relative;cursor:pointer;" data-open-entry="${entry.id}" data-open-ch="${entry.challenge_id}">
+          <video src="${escapeHtml(entry.media_url)}" autoplay muted playsinline loop preload="auto"
+            style="width:100%;height:100%;object-fit:cover;display:block;border-radius:8px;pointer-events:none;"></video>
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;border-radius:8px;">
+            <div style="width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;font-size:20px;">▶</div>
           </div>
-          <div style="position:absolute;bottom:12px;right:12px;background:rgba(255,106,44,0.85);border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:18px;pointer-events:none;">▶</div>
         </div>`;
       }
     } else if (entry.media_type === 'audio' && entry.media_url) {
