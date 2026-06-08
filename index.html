@@ -4676,8 +4676,8 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
     <div class="feed-tabs" style="margin-bottom:16px" id="lbMainTabs">
       <button class="feed-tab active" data-lbtab="rankings">🏆 Rankings</button>
-      <button class="feed-tab" data-lbtab="halloffame">🌟 Hall of Fame</button>
       <button class="feed-tab" data-lbtab="championship">⚡ Championship</button>
+      <button class="feed-tab" data-lbtab="halloffame">🌟 Hall of Fame</button>
     </div>
 
     <!-- RANKINGS TAB -->
@@ -5728,7 +5728,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v258 · poll-notifs";
+const APP_VERSION = "v259 · championship-supabase";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -6343,11 +6343,17 @@ function switchView(view) {
   if (view === 'leaderboard') {
     initLbTabs();
     renderLeaderboard();
-    recordCurrentChampions();
     detectChampionshipWinners().then(() => {
       if (state.currentView === 'leaderboard') renderLeaderboard();
       buildTicker();
     }).catch(e => console.warn('championship detect', e));
+    // Auto-launch monthly championships: fires on 1st–3rd of month if admin and not yet launched
+    if (isAdmin() && state.profile) {
+      const now = new Date();
+      const month = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+      const alreadyLaunched = (state.champLaunches || []).some(l => l.month === month && !l.is_sponsored);
+      if (now.getDate() <= 3 && !alreadyLaunched) autoLaunchMonthlyChampionships(month);
+    }
   }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -6400,6 +6406,7 @@ async function loadAppData() {
   await loadFeedActivity();
   await loadMentionableProfiles();
   await loadMyRecord();
+  await loadChampionshipData();
   state.loading = false;
   renderPolls();
   renderLeaderboard();
@@ -8999,54 +9006,75 @@ function initLbTabs() {
 // We record each month's champions in localStorage and display them here.
 // Key: fc_hof_log = [{ month: '2026-05', category: 'Photography', userId, name, avatar }, ...]
 
-// ── Championship Challenge tracking ──────────────────────────────────────────
-// When a championship challenge is launched, its ID is stored so we can
-// later detect the winner when it closes.
-function champIdsKey() { return 'fc_champ_ids'; }
+// ── Championship data — Supabase-backed, cached in state ─────────────────────
+async function loadChampionshipData() {
+  try {
+    const [launchRes, hofRes] = await Promise.all([
+      db.from('championship_launches').select('*').order('launched_at', { ascending: false }),
+      db.from('hall_of_fame')
+        .select('*, profile:profiles!hall_of_fame_user_id_fkey(id, name, avatar)')
+        .order('created_at', { ascending: false }),
+    ]);
+    state.champLaunches = launchRes.data || [];
+    state.hofData = (hofRes.data || []).map(r => ({
+      userId: r.user_id,
+      name: r.profile?.name || 'Unknown',
+      avatar: r.profile?.avatar || '🔥',
+      category: r.category,
+      month: r.month,
+      wins: r.win_count || 1,
+      challengeId: r.challenge_id,
+      fromChampionship: true,
+    }));
+  } catch(e) {
+    console.warn('loadChampionshipData', e);
+    state.champLaunches = state.champLaunches || [];
+    state.hofData = state.hofData || [];
+  }
+}
+// Sync accessors — read from state loaded by loadChampionshipData
 function getChampIds() {
-  try { return JSON.parse(localStorage.getItem(champIdsKey()) || '{}'); } catch(e) { return {}; }
+  const result = {};
+  (state.champLaunches || []).forEach(l => {
+    if (l.challenge_id) result[l.challenge_id] = { category: l.category, month: l.month, launched: l.launched_at };
+  });
+  return result;
 }
-function saveChampIds(ids) {
-  try { localStorage.setItem(champIdsKey(), JSON.stringify(ids)); } catch(e) {}
-}
-// Store { challengeId: { category, month, launched } } when admin launches
-function recordChampionshipLaunch(challengeId, category) {
-  const ids = getChampIds();
-  const now = new Date();
-  const month = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-  ids[challengeId] = { category, month, launched: now.toISOString() };
-  saveChampIds(ids);
-}
-
-// Actual champion titles per category — set when a championship closes
-function champTitlesKey() { return 'fc_champ_titles'; }
+function saveChampIds() { /* no-op: replaced by Supabase insert */ }
+function champIdsKey() { return 'fc_champ_ids'; }
 function getChampTitles() {
-  try { return JSON.parse(localStorage.getItem(champTitlesKey()) || '{}'); } catch(e) { return {}; }
+  const result = {};
+  (state.hofData || []).forEach(r => {
+    const key = `${r.category}-${r.month}`;
+    if (!result[key]) result[key] = { userId: r.userId, name: r.name, avatar: r.avatar, category: r.category, month: r.month, wins: r.wins, processed: true, challengeId: r.challengeId };
+  });
+  return result;
 }
-function saveChampTitles(titles) {
-  try { localStorage.setItem(champTitlesKey(), JSON.stringify(titles)); } catch(e) {}
-}
+function saveChampTitles() { /* no-op: replaced by Supabase insert */ }
+function champTitlesKey() { return 'fc_champ_titles'; }
+function hofKey() { return 'fc_hof_log'; }
+function getHofLog() { return state.hofData || []; }
+function saveHofLog() { /* no-op: replaced by Supabase insert */ }
+// ── End championship state accessors ─────────────────────────────────────────
 
 // Scan closed championship challenges and crown the winner
 async function detectChampionshipWinners() {
+  if (!isAdmin() || !state.profile) return; // only admin detects and records winners
   const champIds = getChampIds();
   if (!Object.keys(champIds).length) return;
 
-  const titles = getChampTitles();
   const now = new Date();
-  let changed = false;
 
   for (const [challengeId, meta] of Object.entries(champIds)) {
-    // Skip if already processed
-    if (titles[`${meta.category}-${meta.month}`]?.processed) continue;
+    // Skip if already in state.hofData for this category+month
+    const alreadyRecorded = (state.hofData || []).some(r => r.category === meta.category && r.month === meta.month);
+    if (alreadyRecorded) continue;
 
-    // Check if the challenge has closed
     const ch = (state.challenges || []).find(c => c.id === challengeId);
     if (!ch) continue;
     const voteEnd = new Date(ch.voting_end);
     if (now < voteEnd) continue; // still open
 
-    // Get entries and votes for this challenge
     try {
       const [entriesRes, votesRes] = await Promise.all([
         db.from('entries').select('id, user_id, submitter:profiles!entries_user_id_fkey(id, name, avatar)').eq('challenge_id', challengeId),
@@ -9056,51 +9084,39 @@ async function detectChampionshipWinners() {
       const votes = votesRes.data || [];
       if (!entries.length || !votes.length) continue;
 
-      // Tally votes
       const tally = {};
       votes.forEach(v => { tally[v.entry_id] = (tally[v.entry_id] || 0) + 1; });
       let max = 0, winner = null;
-      entries.forEach(e => {
-        const v = tally[e.id] || 0;
-        if (v > max) { max = v; winner = e; }
-      });
+      entries.forEach(e => { const v = tally[e.id] || 0; if (v > max) { max = v; winner = e; } });
       if (!winner || max === 0) continue;
 
-      // Crown the winner
       const sub = winner.submitter || {};
-      const key = `${meta.category}-${meta.month}`;
-      titles[key] = {
-        userId: winner.user_id,
-        name: sub.name || 'Unknown',
-        avatar: sub.avatar || '🔥',
+      // Write to Supabase hall_of_fame
+      const { error } = await db.from('hall_of_fame').insert({
+        user_id: winner.user_id,
         category: meta.category,
         month: meta.month,
-        wins: max,
-        processed: true,
-        challengeId,
-      };
-      changed = true;
-      console.log(`[championship] ${meta.category} champion for ${meta.month}: ${sub.name}`);
-
-      // Also record in Hall of Fame log
-      const log = getHofLog();
-      const hofKey2 = log.find(r => r.month === meta.month && r.category === meta.category && r.userId === winner.user_id);
-      if (!hofKey2) {
-        log.push({ month: meta.month, category: meta.category, userId: winner.user_id, name: sub.name || 'Unknown', avatar: sub.avatar || '🔥', wins: max, fromChampionship: true });
-        saveHofLog(log);
+        challenge_id: challengeId,
+        win_count: max,
+      });
+      if (error && error.code !== '23505') { // 23505 = unique violation (already recorded)
+        console.warn('hall_of_fame insert', error);
+        continue;
       }
+      // Update in-memory state
+      if (!(state.hofData || []).some(r => r.category === meta.category && r.month === meta.month)) {
+        state.hofData = state.hofData || [];
+        state.hofData.unshift({ userId: winner.user_id, name: sub.name || 'Unknown', avatar: sub.avatar || '🔥', category: meta.category, month: meta.month, wins: max, challengeId, fromChampionship: true });
+      }
+      console.log(`[championship] ${meta.category} champion for ${meta.month}: ${sub.name}`);
     } catch(e) { console.warn('championship detect error', e); }
   }
 
-  if (changed) saveChampTitles(titles);
-
-  // Inject into leaderboardData.champions
+  // Inject current champions into leaderboardData
   if (state.leaderboardData) {
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-    Object.values(titles).forEach(t => {
-      if (t.month === currentMonth && t.processed) {
-        state.leaderboardData.champions[t.category] = t.userId;
-      }
+    (state.hofData || []).filter(r => r.month === currentMonth).forEach(r => {
+      state.leaderboardData.champions[r.category] = r.userId;
     });
   }
 }
@@ -9385,6 +9401,7 @@ async function launchChampionshipChallenge(category) {
       submission_deadline: subDeadline,
       voting_end: voteEnd,
       is_public: false,
+      is_championship: true,
       status: 'submitting',
     }).select().single();
 
@@ -9395,7 +9412,18 @@ async function launchChampionshipChallenge(category) {
     const { error: invErr } = await db.from('challenge_invites').insert(inviteRows);
     if (invErr) throw invErr;
 
-    recordChampionshipLaunch(ch.id, category);
+    // Record launch in Supabase (replaces localStorage recordChampionshipLaunch)
+    const { error: launchErr } = await db.from('championship_launches').insert({
+      category,
+      month,
+      challenge_id: ch.id,
+      launched_by: state.profile.id,
+      is_sponsored: false,
+    });
+    if (launchErr && launchErr.code !== '23505') throw launchErr; // ignore unique violation
+    // Update in-memory state
+    state.champLaunches = state.champLaunches || [];
+    state.champLaunches.unshift({ category, month, challenge_id: ch.id, launched_by: state.profile.id, launched_at: new Date().toISOString(), is_sponsored: false });
     toast(`⚡ ${category} Championship launched — ${contenders.length} invited`);
     await loadChallenges();
     renderChampionshipTab();
@@ -9404,6 +9432,55 @@ async function launchChampionshipChallenge(category) {
     toast('Launch failed: ' + (err.message || 'unknown'));
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '⚡ Launch'; }
+  }
+}
+
+/* ---------- AUTO-LAUNCH MONTHLY CHAMPIONSHIPS ---------- */
+async function autoLaunchMonthlyChampionships(month) {
+  if (!isAdmin() || !state.profile || !state.leaderboardData) return;
+  const data = state.leaderboardData;
+  const CATEGORIES = ['singing','dunk','drawing','rap','fashion'];
+  let launched = 0;
+  for (const cat of CATEGORIES) {
+    const alreadyThisMonth = (state.champLaunches || []).some(l => l.month === month && l.category === cat);
+    if (alreadyThisMonth) continue;
+    const contenders = [...(data.users || [])]
+      .filter(u => (u.rolling30ByCategory?.[cat] || 0) > 0)
+      .sort((a, b) => (b.rolling30ByCategory?.[cat] || 0) - (a.rolling30ByCategory?.[cat] || 0))
+      .slice(0, 3);
+    if (contenders.length < 2) continue;
+    // Silently launch — same logic as manual button
+    try {
+      const now = new Date();
+      const monthLabel = now.toLocaleString('default', { month: 'long', year: 'numeric' });
+      const subDeadline = new Date(now.getTime() + 7 * 86400000).toISOString();
+      const voteEnd = new Date(now.getTime() + 14 * 86400000).toISOString();
+      const { data: ch, error: chErr } = await db.from('challenges').insert({
+        creator_id: state.profile.id,
+        title: `⚡ ${cat} Championship — ${monthLabel}`,
+        category: cat,
+        media_type: 'photo',
+        rules: `Official ${cat} Championship Challenge for ${monthLabel}. Top performers this month, invited to compete for the Champion title.`,
+        submission_deadline: subDeadline,
+        voting_end: voteEnd,
+        is_public: false,
+        is_championship: true,
+        status: 'submitting',
+      }).select().single();
+      if (chErr) throw chErr;
+      await db.from('challenge_invites').insert(contenders.map(u => ({ challenge_id: ch.id, invited_user_id: u.id })));
+      const { error: le } = await db.from('championship_launches').insert({ category: cat, month, challenge_id: ch.id, launched_by: state.profile.id, is_sponsored: false });
+      if (le && le.code !== '23505') throw le;
+      state.champLaunches = state.champLaunches || [];
+      state.champLaunches.unshift({ category: cat, month, challenge_id: ch.id, launched_by: state.profile.id, launched_at: now.toISOString(), is_sponsored: false });
+      launched++;
+    } catch(e) { console.warn(`[auto-launch] ${cat}`, e); }
+  }
+  if (launched) {
+    toast(`⚡ ${launched} championship${launched > 1 ? 's' : ''} auto-launched for ${month}`);
+    await loadChallenges();
+    renderLeaderboard();
+    renderFeed();
   }
 }
 
@@ -11995,7 +12072,7 @@ function renderFeed() {
   // Closed challenges are represented by "winner" activity cards instead.
   const cutoff = new Date(Date.now() - 14 * 86400000);
   let challenges = (state.challenges || [])
-    .filter(ch => ch.is_public || ch.creator_id === myId)
+    .filter(ch => ch.is_public || ch.creator_id === myId || ch.is_championship)
     .filter(ch => new Date(ch.created_at) >= cutoff)
     .filter(ch => ['submitting', 'voting'].includes(computeChallengeStatus(ch)));
   if (followingMode && myId) {
@@ -12037,6 +12114,36 @@ function renderFeed() {
 
   const myInterests = new Set(state.profile?.interests || []);
   const hasInterests = myInterests.size > 0;
+
+  // Championship challenges: pinned above the scored feed in Discover, interest-filtered
+  let champHtml = '';
+  if (!followingMode) {
+    const champChallenges = (state.challenges || []).filter(ch =>
+      ch.is_championship &&
+      ['submitting', 'voting'].includes(computeChallengeStatus(ch)) &&
+      (myInterests.size === 0 || myInterests.has(ch.category))
+    );
+    if (champChallenges.length) {
+      champHtml = champChallenges.map(ch => {
+        const status = computeChallengeStatus(ch);
+        const phase = status === 'submitting' ? 'OPEN TO ENTER' : 'VOTE NOW';
+        const deadline = status === 'submitting' ? ch.submission_deadline : ch.voting_end;
+        const countdown = deadline ? formatCountdown(deadline) : '';
+        const entryCount = state.entryCounts[ch.id] || 0;
+        return `<div class="fcc-challenge-wrap" style="border-left:3px solid #e8e8e8;" data-cid="${ch.id}" onclick="openChallenge((state.challenges||[]).find(c=>c.id==='${ch.id}'))">
+          <div class="feed-challenge-card" style="padding:16px;cursor:pointer;">
+            <div class="feed-poll-header">
+              <span class="feed-poll-tag" style="color:#e8e8e8;">⚡ CHAMPIONSHIP</span>
+              <span class="feed-poll-time">⏱ ${countdown}</span>
+            </div>
+            <div class="feed-challenge-label ${status === 'voting' ? 'voting' : 'submitting'}" style="margin-bottom:6px;"><span class="fcl-dot"></span>${phase}</div>
+            <div class="feed-poll-question">${escapeHtml(ch.title)}</div>
+            <div class="feed-poll-time">${entryCount} entr${entryCount===1?'y':'ies'} · ${ch.category}</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
 
   // ── Phase 3: Freshness + diversity rules ────────────────────────────────────
   // Builds on Phase 2 scoring. New in Phase 3:
@@ -12093,7 +12200,8 @@ function renderFeed() {
   }
 
   // Deduplicate by challenge: keep the best-scored item per challenge ID
-  const allRaw = [...postItems, ...challengeItems, ...winnerItems, ...pollItems];
+  // Exclude championship challenges from the regular scored feed (they're pinned above)
+  const allRaw = [...postItems, ...challengeItems.filter(i => !i.data.is_championship), ...winnerItems, ...pollItems];
   allRaw.sort((a, b) => itemScore(b) - itemScore(a));
 
   const seenChallengeIds = new Set();
@@ -12150,7 +12258,7 @@ function renderFeed() {
     return;
   }
 
-  c.innerHTML = mixed.map(item => {
+  c.innerHTML = champHtml + mixed.map(item => {
     if (item.kind === 'post') return renderPostCard(item.data);
     if (item.kind === 'challenge') return renderFeedChallengeCard(item.data);
     if (item.kind === 'entry') return renderFeedEntryCard(item.data);
