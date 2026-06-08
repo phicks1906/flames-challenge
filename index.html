@@ -5726,7 +5726,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v274 · prestige-tab";
+const APP_VERSION = "v275 · ticker-championship";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -8826,11 +8826,20 @@ function buildTicker() {
 
   const selectedCats = getTickerCats();
 
-  // 1. Current Champions (from Championship Challenges)
+  // 0. Active championship challenges — highest priority, shown first
+  (state.challenges || [])
+    .filter(ch => ch.is_championship && ['submitting', 'voting'].includes(computeChallengeStatus(ch)))
+    .forEach(ch => {
+      if (!selectedCats.has(ch.category)) return;
+      const action = computeChallengeStatus(ch) === 'voting' ? 'VOTE NOW' : 'ENTER NOW';
+      items.push({ icon: '', name: '', badge: 'champ', category: `⚡ ${ch.category} CHAMPIONSHIP`, text: action, grouped: true });
+    });
+
+  // 1. Current Champions (from Championship Challenges) — announced with excitement
   Object.values(champTitlesT)
     .filter(t => t.month === curMonth && t.processed)
     .forEach(t => {
-      if (selectedCats.has(t.category)) items.push({ icon: '👑', name: t.name, badge: 'champ', category: t.category, text: 'Champion' });
+      if (selectedCats.has(t.category)) items.push({ icon: '👑', name: t.name, badge: 'champ', category: t.category, text: 'is the new Champion!' });
     });
 
   // 2. Top 3 per category — grouped as one ticker item
