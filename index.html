@@ -4440,6 +4440,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     <p style="margin-bottom:24px;color:var(--text-dim);font-size:14px">What do you want to post?</p>
     <button class="btn btn-primary" style="width:100%;margin-bottom:12px" onclick="closeCreateSheet();openCreatePost()">📝 Post something</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:12px" onclick="closeCreateSheet();openCreateChallenge()">🏆 Start a challenge</button>
+    <button class="btn btn-ghost" style="width:100%;margin-bottom:12px" onclick="closeCreateSheet();openCreatePoll()">🗳️ Ask a question</button>
     <button class="btn btn-ghost" style="width:100%" onclick="closeCreateSheet()">Cancel</button>
   </div>
 </div>
@@ -4847,6 +4848,37 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       <div class="cc-submit-area">
         <button type="submit" class="btn btn-primary" style="width:100%">🔥 Light it up</button>
       </div>
+    </form>
+  </div>
+</div>
+
+<!-- CREATE POLL SHEET -->
+<div class="cc-sheet" id="createPollSheet">
+  <div class="cc-sheet-header">
+    <button class="cc-close" onclick="closeCreatePoll()" aria-label="Close">×</button>
+    <h2>New Poll</h2>
+  </div>
+  <div class="cc-sheet-inner">
+    <form id="createPollForm" class="cc-form" onsubmit="return false;">
+      <div class="cc-field">
+        <label for="cpQuestion">Question</label>
+        <textarea id="cpQuestion" maxlength="200" rows="2" required placeholder="What do you want to ask?" style="resize:none;"></textarea>
+      </div>
+      <div class="cc-field">
+        <label>Options <span class="hint">(2–4)</span></label>
+        <div id="cpOptionsContainer"></div>
+      </div>
+      <div class="cc-field">
+        <label>Duration</label>
+        <div id="cpDurationPills" style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="cc-pill" onclick="setCpDuration(24,this)">24 hrs</button>
+          <button type="button" class="cc-pill selected" onclick="setCpDuration(48,this)">48 hrs</button>
+          <button type="button" class="cc-pill" onclick="setCpDuration(72,this)">72 hrs</button>
+          <button type="button" class="cc-pill" onclick="setCpDuration(168,this)">1 week</button>
+        </div>
+      </div>
+      <div id="cpError" class="cc-error"></div>
+      <button type="button" id="cpSubmitBtn" class="btn btn-primary" style="width:100%;margin-top:8px;" onclick="submitPoll()">🗳️ Post poll</button>
     </form>
   </div>
 </div>
@@ -5696,7 +5728,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v254 · video-preload";
+const APP_VERSION = "v255 · create-poll";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -9926,6 +9958,91 @@ function showCcError(msg) {
   errBox.textContent = msg;
   errBox.classList.add('show');
 }
+
+// ── Create Poll ──────────────────────────────────────────────────────────────
+const pollState = { options: ['', ''], duration: 48 };
+
+function openCreatePoll() {
+  if (!state.profile) return;
+  pollState.options = ['', ''];
+  pollState.duration = 48;
+  document.getElementById('cpQuestion').value = '';
+  document.getElementById('cpError').textContent = '';
+  document.querySelectorAll('#cpDurationPills .cc-pill').forEach((p, i) => p.classList.toggle('selected', i === 1));
+  renderCpOptions();
+  document.getElementById('createPollSheet').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeCreatePoll() {
+  document.getElementById('createPollSheet').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function setCpDuration(hours, btn) {
+  pollState.duration = hours;
+  document.querySelectorAll('#cpDurationPills .cc-pill').forEach(p => p.classList.remove('selected'));
+  btn.classList.add('selected');
+}
+
+function renderCpOptions() {
+  const c = document.getElementById('cpOptionsContainer');
+  c.innerHTML = pollState.options.map((opt, i) => `
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+      <input type="text" value="${escapeHtml(opt)}" maxlength="80" placeholder="Option ${i + 1}"
+        oninput="pollState.options[${i}]=this.value"
+        style="flex:1;padding:10px 12px;background:var(--overlay-2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;font-family:inherit;">
+      ${i >= 2 ? `<button type="button" onclick="cpRemoveOption(${i})" style="background:none;border:none;color:var(--text-muted);font-size:22px;cursor:pointer;line-height:1;padding:0 4px;">×</button>` : ''}
+    </div>
+  `).join('') + (pollState.options.length < 4
+    ? `<button type="button" onclick="cpAddOption()" style="background:none;border:none;color:var(--ember);font-size:13px;font-weight:700;cursor:pointer;padding:4px 0;">+ Add option</button>`
+    : '');
+}
+
+function cpAddOption() {
+  if (pollState.options.length >= 4) return;
+  pollState.options.push('');
+  renderCpOptions();
+}
+
+function cpRemoveOption(i) {
+  pollState.options.splice(i, 1);
+  renderCpOptions();
+}
+
+async function submitPoll() {
+  if (!state.profile) return;
+  const question = document.getElementById('cpQuestion').value.trim();
+  const errEl = document.getElementById('cpError');
+  errEl.textContent = '';
+  if (!question) { errEl.textContent = 'Add a question.'; return; }
+  const options = pollState.options.map(o => o.trim()).filter(Boolean);
+  if (options.length < 2) { errEl.textContent = 'Add at least 2 options.'; return; }
+
+  const btn = document.getElementById('cpSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Posting...';
+
+  const { error } = await db.from('polls').insert({
+    question,
+    options: options.map(label => ({ label, seed_votes: 0 })),
+    hours_remaining: pollState.duration,
+  });
+
+  btn.disabled = false;
+  btn.textContent = '🗳️ Post poll';
+
+  if (error) { errEl.textContent = 'Failed: ' + error.message; return; }
+
+  closeCreatePoll();
+  toast('Poll posted!');
+  // Reload polls and navigate
+  const { data } = await db.from('polls').select('*').order('created_at', { ascending: false });
+  if (data) state.polls = data;
+  renderPolls();
+  switchView('polls');
+}
+// ── End Create Poll ──────────────────────────────────────────────────────────
 
 // Captures a thumbnail from a video file at ~0.5s using canvas.
 // Returns a { blob, ext } or null if capture fails.
