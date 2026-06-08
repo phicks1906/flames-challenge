@@ -5728,7 +5728,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v257 · poll-category";
+const APP_VERSION = "v258 · poll-notifs";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -6918,6 +6918,54 @@ async function loadNotifications() {
     }
   } catch (e) { console.warn('notif replies', e); }
 
+  // 11. New challenges & polls by people I follow
+  let followeeIds = [];
+  try {
+    const fRows = await sel('follows', 'followee_id', q => q.eq('follower_id', me), 'followees');
+    followeeIds = fRows.map(r => r.followee_id).filter(id => id !== me);
+  } catch(e) { console.warn('notif followees', e); }
+
+  if (followeeIds.length) {
+    const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+
+    try {
+      const rows = await sel('challenges', 'id, title, creator_id', q => q.in('creator_id', followeeIds).gte('created_at', cutoff), 'new challenges');
+      rows.forEach(r => notifs.push({
+        type: 'new_challenge', actorId: r.creator_id, ts: r.created_at || null,
+        text: `started a new challenge: ${escapeHtml(r.title)}`,
+        target: { kind: 'challenge', id: r.id }
+      }));
+    } catch(e) { console.warn('notif new challenges', e); }
+
+    try {
+      const rows = await sel('polls', 'id, question, creator_id', q => q.in('creator_id', followeeIds).gte('created_at', cutoff), 'new polls');
+      rows.filter(r => r.creator_id).forEach(r => notifs.push({
+        type: 'new_poll', actorId: r.creator_id, ts: r.created_at || null,
+        text: `started a poll: ${escapeHtml(r.question)}`,
+        target: { kind: 'polls' }
+      }));
+    } catch(e) { console.warn('notif new polls', e); }
+  }
+
+  // 12. Ended polls I voted in
+  try {
+    const vRows = await sel('votes', 'poll_id', q => q.eq('user_id', me), 'my poll votes');
+    const votedPollIds = [...new Set(vRows.map(r => r.poll_id).filter(Boolean))];
+    if (votedPollIds.length) {
+      const { data: endedPolls } = await T(db.from('polls').select('id, question, hours_remaining, created_at').in('id', votedPollIds), 10000, 'ended polls');
+      const now = Date.now();
+      (endedPolls || []).filter(p => p.created_at && p.hours_remaining).forEach(p => {
+        const endsAt = new Date(p.created_at).getTime() + p.hours_remaining * 3600000;
+        if (endsAt > now) return;
+        notifs.push({
+          type: 'poll_ended', actorId: null, ts: new Date(endsAt).toISOString(),
+          text: `Poll ended — see results: "${escapeHtml(p.question)}"`,
+          target: { kind: 'polls' }
+        });
+      });
+    }
+  } catch(e) { console.warn('notif poll ended', e); }
+
   notifs.forEach(n => { n.actor = n.actorId ? actorOf(n.actorId) : null; });
   notifs.sort((a, b) => (b.ts ? new Date(b.ts).getTime() : 0) - (a.ts ? new Date(a.ts).getTime() : 0));
   state.notifsAll = notifs.slice(0, 80);
@@ -6926,20 +6974,23 @@ async function loadNotifications() {
 
 /* ---------- NOTIFICATION PREFERENCES ---------- */
 const NOTIF_PREF_DEFS = [
-  { key: 'likes',    label: 'Likes',                     icon: '🔥' },
-  { key: 'comments', label: 'Comments',                  icon: '💬' },
-  { key: 'replies',  label: 'Replies',                   icon: '↩️' },
-  { key: 'mentions', label: 'Mentions',                  icon: '@' },
-  { key: 'follows',  label: 'New followers',             icon: '👤' },
-  { key: 'votes',    label: 'Votes on your challenges',  icon: '🗳️' },
-  { key: 'entries',  label: 'Entries to your challenges', icon: '🎬' },
-  { key: 'results',  label: 'Challenge results',         icon: '🏁' },
+  { key: 'likes',       label: 'Likes',                                    icon: '🔥' },
+  { key: 'comments',    label: 'Comments',                                 icon: '💬' },
+  { key: 'replies',     label: 'Replies',                                  icon: '↩️' },
+  { key: 'mentions',    label: 'Mentions',                                 icon: '@' },
+  { key: 'follows',     label: 'New followers',                            icon: '👤' },
+  { key: 'votes',       label: 'Votes on your challenges',                 icon: '🗳️' },
+  { key: 'entries',     label: 'Entries to your challenges',               icon: '🎬' },
+  { key: 'results',     label: 'Challenge results',                        icon: '🏁' },
+  { key: 'new_content', label: 'New challenges & polls from people you follow', icon: '✨' },
+  { key: 'poll_results',label: 'Poll results',                             icon: '📊' },
 ];
 function notifTypeCategory(type) {
   return ({
     post_like: 'likes', entry_like: 'likes',
     comment: 'comments', reply: 'replies', mention: 'mentions',
     follow: 'follows', vote: 'votes', entry: 'entries', challenge_closed: 'results',
+    new_challenge: 'new_content', new_poll: 'new_content', poll_ended: 'poll_results',
   })[type];
 }
 function notifPrefKey() { return 'fc_notif_prefs_' + (state.profile?.id || 'anon'); }
@@ -7242,7 +7293,7 @@ function renderNotifs() {
     list.innerHTML = `<div class="notif-empty"><div class="icon">🔔</div>No notifications yet.<br>When people like, follow, vote, or join your challenges, it'll show up here.</div>`;
     return;
   }
-  const kindIcon = { post_like: '🔥', entry_like: '🔥', follow: '👤', vote: '🗳️', entry: '🎬', comment: '💬', reply: '↩️', mention: '@', challenge_closed: '🏁' };
+  const kindIcon = { post_like: '🔥', entry_like: '🔥', follow: '👤', vote: '🗳️', entry: '🎬', comment: '💬', reply: '↩️', mention: '@', challenge_closed: '🏁', new_challenge: '🏆', new_poll: '🗳️', poll_ended: '📊' };
   list.innerHTML = notifs.map((n, i) => {
     const unread = isNotifUnread(n);
     const av = n.actor ? avatarInner(n.actor.avatar) : '🏁';
@@ -7273,6 +7324,8 @@ function openNotifTarget(n) {
   else if (t.kind === 'challenge' && t.id) {
     const ch = (state.challenges || []).find(c => c.id === t.id);
     if (ch) openChallenge(ch); else switchView('challenges');
+  } else if (t.kind === 'polls') {
+    switchView('polls');
   } else if (t.kind === 'post' && t.id) {
     switchView('feed');
     setTimeout(() => scrollToPost(t.id), 150);
@@ -10029,6 +10082,7 @@ async function submitPoll() {
     options: options.map(label => ({ label, seed_votes: 0 })),
     hours_remaining: pollState.duration,
     category: 'general',
+    creator_id: state.profile.id,
   });
 
   btn.disabled = false;
