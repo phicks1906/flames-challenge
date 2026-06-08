@@ -4648,7 +4648,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
           <div><strong>Win challenges</strong> — Enter and win challenges in any category. Every win counts toward your rank.</div>
         </div>
         <div class="lb-how-item">
-          <div class="lb-how-icon">📅</div>
+          <div class="lb-how-icon">🔄</div>
           <div><strong>30-day rolling window</strong> — Rankings reset every month. New users have just as much chance to reach #1 as veterans.</div>
         </div>
         <div class="lb-how-item">
@@ -4661,15 +4661,11 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
         </div>
         <div class="lb-how-item">
           <div class="lb-how-icon">⚡</div>
-          <div><strong>Championship Challenge</strong> — Each month, the top 3 players in a category are invited to a head-to-head Championship Challenge. Win it to claim or defend the Champion title.</div>
-        </div>
-        <div class="lb-how-item">
-          <div class="lb-how-icon">🌍</div>
-          <div><strong>Overall Champion</strong> — The player with the most total wins across all categories this month earns the Overall Champion title.</div>
+          <div><strong>Championship Challenge</strong> — On the last day of each month, the top 3 players in a category are invited to a head-to-head Championship Challenge. Win it to claim or defend the Champion title.</div>
         </div>
         <div class="lb-how-item">
           <div class="lb-how-icon">🌟</div>
-          <div><strong>Hall of Fame</strong> — Your championship titles are recorded permanently. Winning the title multiple times earns you an "Nx Champion" badge on your profile forever.</div>
+          <div><strong>Hall of Fame</strong> — Championship titles are recorded permanently. Win a title multiple times and earn an "Nx Champion" badge on your profile forever.</div>
         </div>
       </div>
     </div>
@@ -5728,7 +5724,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v259 · championship-supabase";
+const APP_VERSION = "v261 · champ-lastday";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -6352,7 +6348,9 @@ function switchView(view) {
       const now = new Date();
       const month = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
       const alreadyLaunched = (state.champLaunches || []).some(l => l.month === month && !l.is_sponsored);
-      if (now.getDate() <= 3 && !alreadyLaunched) autoLaunchMonthlyChampionships(month);
+      const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      const isLastDay = now.getDate() === daysInMonth;
+      if (isLastDay && !alreadyLaunched) autoLaunchMonthlyChampionships(month);
     }
   }
   window.scrollTo({ top: 0, behavior: 'smooth' });
