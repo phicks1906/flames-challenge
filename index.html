@@ -5724,7 +5724,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v262 · ev-delete";
+const APP_VERSION = "v263 · post-photo-fix";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -13995,13 +13995,15 @@ function cpFileChangeHandler(e) {
   const file = e.target.files[0];
   if (!file) return;
   if (file.size > 500 * 1024 * 1024) { showCpError('File too large. Max 500MB.'); e.target.value = ''; return; }
-  // Validate file type matches expected type
-  const cpExpected = cpState.mediaType || 'video';
-  const cpTypeErr = validateFileType(file, cpExpected);
-  if (cpTypeErr) {
-    showCpError(cpTypeErr);
-    e.target.value = '';
-    return;
+
+  // Audio tab: reject photos/videos. Photo/Video tab: accept both image and video.
+  if (cpState.mediaMode === 'audio') {
+    const cpTypeErr = validateFileType(file, 'audio');
+    if (cpTypeErr) { showCpError(cpTypeErr); e.target.value = ''; return; }
+  }
+  if (cpState.mediaMode === 'photo' && file.type.startsWith('audio/')) {
+    showCpError('That\'s an audio file. Switch to the Audio tab to post audio, or pick a photo/video.');
+    e.target.value = ''; return;
   }
 
   if (file.size > 100 * 1024 * 1024) {
@@ -14030,17 +14032,6 @@ function cpFileChangeHandler(e) {
   const isImage = file.type.startsWith('image/');
   const isAudio = file.type.startsWith('audio/');
   if (!isVideo && !isImage && !isAudio) { showCpError('Unsupported file type.'); e.target.value = ''; return; }
-  // Mode mismatch — guide the user
-  if (cpState.mediaMode === 'audio' && (isVideo || isImage)) {
-    showCpError('That\'s a photo or video. Use Choose File to find an audio file, or switch to the Photo/Video tab.');
-    e.target.value = '';
-    return;
-  }
-  if (cpState.mediaMode === 'photo' && isAudio) {
-    showCpError('That\'s an audio file. Switch to the Audio tab to post audio, or pick a photo/video.');
-    e.target.value = '';
-    return;
-  }
   cpState.file = file;
   cpState.fileType = isVideo ? 'video' : isAudio ? 'audio' : 'photo';
   const preview = document.getElementById('cpPreview');
