@@ -4922,7 +4922,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
         </div>
       </div>
 
-      <div id="cpError" class="auth-error"></div>
+      <div id="cpPostError" class="auth-error"></div>
 
       <div class="cc-submit-area">
         <button type="submit" class="btn btn-primary" style="width:100%">🔥 Post</button>
@@ -5724,7 +5724,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v263 · post-photo-fix";
+const APP_VERSION = "v264 · post-submit-fix";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -13975,9 +13975,8 @@ function openCreatePost() {
   document.getElementById('cpFile').accept = 'image/*,video/*';
   document.getElementById('cpUploadHint').textContent = 'Photo or video · Max 500MB · Keep videos under 2 min';
   document.getElementById('cpAudioTip').style.display = 'none';
-  const err = document.getElementById('cpError');
-  err.classList.remove('show');
-  err.textContent = '';
+  const err = document.getElementById('cpPostError');
+  if (err) { err.classList.remove('show'); err.textContent = ''; }
   document.getElementById('createPostSheet').classList.add('open');
 }
 
@@ -13986,7 +13985,8 @@ function closeCreatePost() {
 }
 
 function showCpError(msg) {
-  const err = document.getElementById('cpError');
+  const err = document.getElementById('cpPostError');
+  if (!err) return;
   err.textContent = msg;
   err.classList.add('show');
 }
@@ -14014,6 +14014,7 @@ function cpFileChangeHandler(e) {
   // For photos: open crop modal
   if (file.type.startsWith('image/')) {
     openCrop(file, 16, 9, (croppedBlob) => {
+      croppedBlob.name = file.name;
       cpState.file = croppedBlob;
       cpState.fileType = 'photo';
       cpState.fileUrl = URL.createObjectURL(croppedBlob);
@@ -14138,7 +14139,7 @@ function setCpMediaType(type) {
 
 document.getElementById('createPostForm').addEventListener('submit', async e => {
   e.preventDefault();
-  document.getElementById('cpError').classList.remove('show');
+  document.getElementById('cpPostError')?.classList.remove('show');
 
   const content = document.getElementById('cpContent').value.trim();
   if (!content) return showCpError('Add some text.');
@@ -14161,7 +14162,7 @@ document.getElementById('createPostForm').addEventListener('submit', async e => 
     let audioUrl = null;
     if (cpState.file) {
       btn.textContent = 'Uploading...';
-      const ext = (cpState.file.name.split('.').pop() || 'bin').toLowerCase();
+      const ext = ((cpState.file.name || 'photo.jpg').split('.').pop() || 'jpg').toLowerCase();
       const filename = `posts/${state.profile.id}/${Date.now()}.${ext}`;
       const uploadResp = await withTimeout(
         db.storage.from('challenge-media').upload(filename, cpState.file, { cacheControl: '3600', upsert: false }),
