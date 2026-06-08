@@ -5723,7 +5723,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v269 · champ-tab-fix";
+const APP_VERSION = "v271 · tied-leader";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -9265,14 +9265,14 @@ function renderChampionshipTab() {
       .filter(u => (u.rolling30ByCategory[cat] || 0) > 0)
       .sort((a, b) => (b.rolling30ByCategory[cat] || 0) - (a.rolling30ByCategory[cat] || 0));
     const top5 = allInCat.slice(0, 3);
-    // Champion = won Championship Challenge; Leader = current #1 on board
+    // Champion = won Championship Challenge; Leader = top of the qualifier sort
     const champTitlesLocal = getChampTitles();
     const nowLocal = new Date();
     const curMonthLocal = `${nowLocal.getFullYear()}-${String(nowLocal.getMonth()+1).padStart(2,'0')}`;
     const champTitleLocal = champTitlesLocal[`${cat}-${curMonthLocal}`];
     const champion = champTitleLocal ? (data.users || []).find(u => u.id === champTitleLocal.userId) : null;
-    const leaderId2 = data.leaders?.[cat];
-    const currentLeader = leaderId2 ? (data.users || []).find(u => u.id === leaderId2) : null;
+    // Use top qualifier as leader so both panels always agree
+    const currentLeader = top5[0] || null;
     // My rank in this category (across all players, not just top 5)
     const myRank = myId ? allInCat.findIndex(u => u.id === myId) + 1 : 0;
     const myWins = myId ? (data.users || []).find(u => u.id === myId)?.rolling30ByCategory[cat] || 0 : 0;
@@ -9321,18 +9321,29 @@ function renderChampionshipTab() {
         </div>
       </div>` : `<div class="lb-champ-current lb-champ-current-empty">👑 No champion yet — Championship Challenge hasn't been held this month</div>`;
 
-    // Leader block (current #1 on rolling board)
-    const leaderBlock = currentLeader ? `
-      <div class="lb-champ-current" style="background:rgba(255,106,44,0.08);border-color:rgba(255,106,44,0.3)">
-        <div class="lb-champ-current-label" style="color:var(--ember)">🔥 Current Leader — top of the ${cat} rankings</div>
-        <div class="lb-champ-current-row">
-          <div class="lb-champ-cav" style="width:40px;height:40px;font-size:20px">${avatarInner(currentLeader.avatar)}</div>
-          <div style="flex:1;min-width:0">
-            <div class="lb-champ-cname" style="font-size:16px">${escapeHtml(currentLeader.name)}${currentLeader.id === myId ? ' (you)' : ''}</div>
-            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${currentLeader.rolling30ByCategory?.[cat] || 0} wins this month · leading the pack</div>
+    // Leader block — only show if #1 is genuinely ahead of #2. If tied, show count.
+    let leaderBlock = '';
+    if (currentLeader) {
+      const topWins = currentLeader.rolling30ByCategory?.[cat] || 0;
+      const tiedCount = top5.filter(u => (u.rolling30ByCategory?.[cat] || 0) === topWins).length;
+      const isTied = tiedCount > 1;
+      if (isTied) {
+        leaderBlock = `<div class="lb-champ-current" style="background:rgba(255,200,87,0.06);border-color:rgba(255,200,87,0.25)">
+          <div class="lb-champ-current-label" style="color:var(--gold)">🤝 ${tiedCount} players tied for the lead — ${topWins} win${topWins > 1 ? 's' : ''} each</div>
+        </div>`;
+      } else {
+        leaderBlock = `<div class="lb-champ-current" style="background:rgba(255,106,44,0.08);border-color:rgba(255,106,44,0.3)">
+          <div class="lb-champ-current-label" style="color:var(--ember)">🔥 Current Leader — top of the ${cat} rankings</div>
+          <div class="lb-champ-current-row">
+            <div class="lb-champ-cav" style="width:40px;height:40px;font-size:20px">${avatarInner(currentLeader.avatar)}</div>
+            <div style="flex:1;min-width:0">
+              <div class="lb-champ-cname" style="font-size:16px">${escapeHtml(currentLeader.name)}${currentLeader.id === myId ? ' (you)' : ''}</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${topWins} win${topWins > 1 ? 's' : ''} this month · leading the pack</div>
+            </div>
           </div>
-        </div>
-      </div>` : '';
+        </div>`;
+      }
+    }
 
     return `<div class="lb-champ-section">
       <div class="lb-champ-section-head">
