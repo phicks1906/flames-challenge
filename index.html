@@ -4556,8 +4556,8 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
           <div class="hc-tile-lbl">🥇 Wins</div>
         </div>
         <div class="hc-tile hc-tap" onclick="openRecordSheet('all')" role="button" tabindex="0">
-          <div class="hc-tile-val ice" id="heatRecord">—</div>
-          <div class="hc-tile-lbl">🏁 Record</div>
+          <div class="hc-tile-val ice" id="heatLosses">0</div>
+          <div class="hc-tile-lbl">Losses</div>
         </div>
         <div class="hc-tile hc-tap" onclick="openRecordSheet('wins')" role="button" tabindex="0">
           <div class="hc-tile-val ember" id="heatStreak">0</div>
@@ -4681,6 +4681,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     <!-- RANKINGS TAB -->
     <div id="lbTabRankings">
       <div id="lbChampionBanner" style="display:none"></div>
+      <div id="lbChampCountdown" style="display:none;text-align:center;padding:10px 0 4px;font-size:13px;color:var(--text-muted);"></div>
       <div class="ch-tabs" id="lbCategoryTabs" style="margin-bottom:20px"></div>
       <div class="leaderboard" id="lbList"></div>
     </div>
@@ -5726,7 +5727,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v277 · champ-live-card";
+const APP_VERSION = "v279 · losses-countdown";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -6974,6 +6975,61 @@ async function loadNotifications() {
     }
   } catch(e) { console.warn('notif poll ended', e); }
 
+  // 13. Championship notifications — qualification invites and wins
+  try {
+    // You qualified — you have a championship invite
+    const { data: myInvites } = await T(
+      db.from('challenge_invites')
+        .select('challenge_id, challenge:challenges!challenge_invites_challenge_id_fkey(id, title, category, submission_deadline, is_championship, status)')
+        .eq('invited_user_id', me),
+      10000, 'champ invites'
+    );
+    (myInvites || []).filter(r => r.challenge?.is_championship).forEach(r => {
+      const ch = r.challenge;
+      const deadline = ch.submission_deadline ? new Date(ch.submission_deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+      notifs.push({
+        type: 'champ_qualified', actorId: null, ts: null,
+        text: `⚡ You qualified for the ${ch.category} Championship! Submit your entry${deadline ? ` by ${deadline}` : ''}.`,
+        target: { kind: 'challenge', id: ch.id }
+      });
+    });
+
+    // You won a championship
+    (state.hofData || []).filter(r => r.userId === me).forEach(r => {
+      notifs.push({
+        type: 'champ_won', actorId: null, ts: null,
+        text: `👑 You won the ${r.category} Championship!`,
+        target: { kind: 'leaderboard' }
+      });
+    });
+
+    // Someone you follow qualified
+    if (followeeIds.length) {
+      const { data: friendInvites } = await T(
+        db.from('challenge_invites')
+          .select('invited_user_id, challenge:challenges!challenge_invites_challenge_id_fkey(id, category, is_championship)')
+          .in('invited_user_id', followeeIds),
+        10000, 'friend champ invites'
+      );
+      (friendInvites || []).filter(r => r.challenge?.is_championship).forEach(r => {
+        notifs.push({
+          type: 'champ_friend_qualified', actorId: r.invited_user_id, ts: null,
+          text: `qualified for the ${r.challenge.category} Championship ⚡`,
+          target: { kind: 'leaderboard' }
+        });
+      });
+
+      // Someone you follow won a championship
+      (state.hofData || []).filter(r => followeeIds.includes(r.userId)).forEach(r => {
+        notifs.push({
+          type: 'champ_friend_won', actorId: r.userId, ts: null,
+          text: `won the ${r.category} Championship 👑`,
+          target: { kind: 'leaderboard' }
+        });
+      });
+    }
+  } catch(e) { console.warn('notif championship', e); }
+
   notifs.forEach(n => { n.actor = n.actorId ? actorOf(n.actorId) : null; });
   notifs.sort((a, b) => (b.ts ? new Date(b.ts).getTime() : 0) - (a.ts ? new Date(a.ts).getTime() : 0));
   state.notifsAll = notifs.slice(0, 80);
@@ -6982,16 +7038,17 @@ async function loadNotifications() {
 
 /* ---------- NOTIFICATION PREFERENCES ---------- */
 const NOTIF_PREF_DEFS = [
-  { key: 'likes',       label: 'Likes',                                    icon: '🔥' },
-  { key: 'comments',    label: 'Comments',                                 icon: '💬' },
-  { key: 'replies',     label: 'Replies',                                  icon: '↩️' },
-  { key: 'mentions',    label: 'Mentions',                                 icon: '@' },
-  { key: 'follows',     label: 'New followers',                            icon: '👤' },
-  { key: 'votes',       label: 'Votes on your challenges',                 icon: '🗳️' },
-  { key: 'entries',     label: 'Entries to your challenges',               icon: '🎬' },
-  { key: 'results',     label: 'Challenge results',                        icon: '🏁' },
-  { key: 'new_content', label: 'New challenges & polls from people you follow', icon: '✨' },
-  { key: 'poll_results',label: 'Poll results',                             icon: '📊' },
+  { key: 'likes',           label: 'Likes',                                         icon: '🔥' },
+  { key: 'comments',        label: 'Comments',                                      icon: '💬' },
+  { key: 'replies',         label: 'Replies',                                       icon: '↩️' },
+  { key: 'mentions',        label: 'Mentions',                                      icon: '@' },
+  { key: 'follows',         label: 'New followers',                                 icon: '👤' },
+  { key: 'votes',           label: 'Votes on your challenges',                      icon: '🗳️' },
+  { key: 'entries',         label: 'Entries to your challenges',                    icon: '🎬' },
+  { key: 'results',         label: 'Challenge results',                             icon: '🏁' },
+  { key: 'new_content',     label: 'New challenges & polls from people you follow', icon: '✨' },
+  { key: 'poll_results',    label: 'Poll results',                                  icon: '📊' },
+  { key: 'championship',    label: 'Championship notifications',                    icon: '⚡' },
 ];
 function notifTypeCategory(type) {
   return ({
@@ -6999,6 +7056,8 @@ function notifTypeCategory(type) {
     comment: 'comments', reply: 'replies', mention: 'mentions',
     follow: 'follows', vote: 'votes', entry: 'entries', challenge_closed: 'results',
     new_challenge: 'new_content', new_poll: 'new_content', poll_ended: 'poll_results',
+    champ_qualified: 'championship', champ_won: 'championship',
+    champ_friend_qualified: 'championship', champ_friend_won: 'championship',
   })[type];
 }
 function notifPrefKey() { return 'fc_notif_prefs_' + (state.profile?.id || 'anon'); }
@@ -7301,7 +7360,7 @@ function renderNotifs() {
     list.innerHTML = `<div class="notif-empty"><div class="icon">🔔</div>No notifications yet.<br>When people like, follow, vote, or join your challenges, it'll show up here.</div>`;
     return;
   }
-  const kindIcon = { post_like: '🔥', entry_like: '🔥', follow: '👤', vote: '🗳️', entry: '🎬', comment: '💬', reply: '↩️', mention: '@', challenge_closed: '🏁', new_challenge: '🏆', new_poll: '🗳️', poll_ended: '📊' };
+  const kindIcon = { post_like: '🔥', entry_like: '🔥', follow: '👤', vote: '🗳️', entry: '🎬', comment: '💬', reply: '↩️', mention: '@', challenge_closed: '🏁', new_challenge: '🏆', new_poll: '🗳️', poll_ended: '📊', champ_qualified: '⚡', champ_won: '👑', champ_friend_qualified: '⚡', champ_friend_won: '👑' };
   list.innerHTML = notifs.map((n, i) => {
     const unread = isNotifUnread(n);
     const av = n.actor ? avatarInner(n.actor.avatar) : '🏁';
@@ -7334,6 +7393,8 @@ function openNotifTarget(n) {
     if (ch) openChallenge(ch); else switchView('challenges');
   } else if (t.kind === 'polls') {
     switchView('polls');
+  } else if (t.kind === 'leaderboard') {
+    switchView('leaderboard');
   } else if (t.kind === 'post' && t.id) {
     switchView('feed');
     setTimeout(() => scrollToPost(t.id), 150);
@@ -8182,7 +8243,7 @@ function renderHeatCheck() {
 
   // Update tiles
   const wEl = document.getElementById('heatWins');   if (wEl) wEl.textContent = wins;
-  const rEl = document.getElementById('heatRecord'); if (rEl) rEl.textContent = decided ? `${wins}W · ${losses}L` : '—';
+  const lEl = document.getElementById('heatLosses'); if (lEl) lEl.textContent = losses;
   const sEl = document.getElementById('heatStreak'); if (sEl) sEl.textContent = streak;
   // Pending line
   const pending = record ? record.filter(r => r.result === 'pending').length : 0;
@@ -8654,6 +8715,32 @@ function renderLeaderboard() {
 
   const data = state.leaderboardData;
   if (!data) { list.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted)">No data yet</div>`; return; }
+
+  // ── Championship countdown ──
+  const countdownEl = document.getElementById('lbChampCountdown');
+  if (countdownEl) {
+    const now = new Date();
+    const month = now.getMonth();
+    const year = now.getFullYear();
+    const lastDay = new Date(year, month + 1, 0); // last day of current month
+    const hasLaunchedThisMonth = (state.champLaunches || []).some(l => {
+      const [ly, lm] = l.month.split('-').map(Number);
+      return ly === year && lm === month + 1 && !l.is_sponsored;
+    });
+    if (hasLaunchedThisMonth) {
+      countdownEl.style.display = 'none';
+    } else {
+      const daysLeft = Math.ceil((lastDay - now) / 86400000);
+      const label = daysLeft === 0
+        ? '⚡ Championship launches today!'
+        : daysLeft === 1
+        ? '⚡ Championship launches tomorrow!'
+        : `⚡ Next Championship launches in ${daysLeft} days`;
+      countdownEl.textContent = label;
+      countdownEl.style.display = 'block';
+      countdownEl.style.color = daysLeft <= 3 ? 'var(--ember)' : 'var(--text-muted)';
+    }
+  }
 
   const cat = state.lbCategory || 'All';
 
