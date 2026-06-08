@@ -5696,7 +5696,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v251 · native-video-sound";
+const APP_VERSION = "v252 · compress-audio-fix";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -9523,7 +9523,7 @@ function _renderEvEntry() {
     mediaContent.innerHTML = `<video
       src="${escapeHtml(entry.media_url)}"
       ${entry.poster_url ? `poster="${escapeHtml(entry.poster_url)}"` : ''}
-      controls playsinline preload="auto"
+      controls autoplay playsinline preload="auto"
       style="width:100%;max-height:60vh;display:block;">
     </video>`;
   } else if (entryMediaType === 'audio' && entry.media_url) {
@@ -9535,8 +9535,6 @@ function _renderEvEntry() {
   }
   mediaEl.appendChild(mediaContent);
 
-  // Note: no programmatic .play() — iOS Safari mutes JS-initiated playback. The
-  // video/audio elements have native controls so the user taps play and gets sound.
 
   // Caption
   const capEl = document.getElementById('evCaption');
@@ -12832,7 +12830,10 @@ async function compressVideo(file, onProgress) {
     const url = URL.createObjectURL(file);
     const video = document.createElement('video');
     video.src = url;
-    video.muted = true;
+    // Not muted: audio is routed through Web Audio into the recording (graph is not
+    // connected to speakers, so nothing is heard). A muted element can feed silence
+    // into createMediaElementSource on some browsers.
+    video.muted = false;
     video.playsInline = true;
 
     video.addEventListener('loadedmetadata', () => {
@@ -12853,14 +12854,39 @@ async function compressVideo(file, onProgress) {
 
       const chunks = [];
       let recorder;
+      let audioCtx = null;
       try {
         const stream = canvas.captureStream(30);
+        // canvas.captureStream() captures video frames ONLY. Without routing the
+        // source audio in, the compressed video has NO audio track — which silenced
+        // every uploaded video. Route the source audio through a Web Audio graph into
+        // a MediaStreamDestination (NOT connected to speakers, so nothing is heard
+        // during compression) and add that track to the recorded stream.
+        try {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          if (audioCtx.state === 'suspended') audioCtx.resume();
+          const srcNode = audioCtx.createMediaElementSource(video);
+          const destNode = audioCtx.createMediaStreamDestination();
+          srcNode.connect(destNode);
+          const aTracks = destNode.stream.getAudioTracks();
+          if (aTracks.length) {
+            aTracks.forEach(t => stream.addTrack(t));
+          } else {
+            throw new Error('no audio track captured');
+          }
+        } catch (audioErr) {
+          // Couldn't capture audio — use the original file so sound is preserved
+          console.log('[compress] audio capture failed, using original to keep sound', audioErr);
+          if (audioCtx) { try { audioCtx.close(); } catch(_) {} }
+          resolve(file); URL.revokeObjectURL(url); return;
+        }
         recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2_500_000 });
       } catch(e) { resolve(file); URL.revokeObjectURL(url); return; }
 
       recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
       recorder.onstop = () => {
         URL.revokeObjectURL(url);
+        if (audioCtx) { try { audioCtx.close(); } catch(_) {} }
         const blob = new Blob(chunks, { type: mimeType.split(';')[0] });
         // Only use compressed if it's actually smaller
         if (blob.size < file.size * 0.95) {
@@ -13304,6 +13330,18 @@ async function openFeedViewer(chId) {
       }, { passive: true });
     }
 
+    // Tap poster → swap to autoplaying video with sound
+    list.addEventListener('click', e => {
+      const target = e.target.closest('[data-fv-play]');
+      if (!target) return;
+      const src = target.dataset.fvPlay;
+      target.insertAdjacentHTML('afterend', `<video src="${escapeHtml(src)}" controls autoplay playsinline preload="auto"
+        style="width:100%;max-height:55vmax;display:block;background:#000;"></video>`);
+      const vid = target.nextElementSibling;
+      target.remove();
+      if (vid) vid.play().catch(() => {});
+    }, { once: false });
+
     // Wire events
     list.querySelectorAll('[data-fv-vote]').forEach(btn => {
       btn.addEventListener('click', e => { e.stopPropagation(); fvVote(btn, chId); });
@@ -13392,12 +13430,22 @@ function renderFvEntry(entry, ch, canVote, myVoteEntryId, status) {
   if (mediaType === 'photo' && entry.media_url) {
     mediaHtml = `<img src="${escapeHtml(entry.media_url)}" style="width:100%;max-height:55vmax;min-height:200px;object-fit:contain;display:block;background:var(--surface-2);" loading="lazy">`;
   } else if (mediaType === 'video' && entry.media_url) {
-    // Render a native <video controls poster> — same pattern as <audio controls>.
-    // The user taps the native play button, which iOS treats as a direct media
-    // gesture and allows sound. A JS-driven .play() (poster + swap) is treated as
-    // non-user-initiated and silently muted on iOS Safari, no matter the timing.
-    mediaHtml = `<video src="${escapeHtml(entry.media_url)}" ${entry.poster_url ? `poster="${escapeHtml(entry.poster_url)}"` : ''} controls playsinline preload="metadata"
-      style="width:100%;max-height:55vmax;display:block;background:#000;"></video>`;
+    if (entry.poster_url) {
+      mediaHtml = `<div style="position:relative;cursor:pointer;" data-fv-play="${escapeHtml(entry.media_url)}" data-fv-poster="${escapeHtml(entry.poster_url)}">
+        <img src="${escapeHtml(entry.poster_url)}" style="width:100%;max-height:55vmax;object-fit:cover;display:block;">
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">
+          <div style="width:56px;height:56px;border-radius:50%;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;font-size:24px;">▶</div>
+        </div>
+      </div>`;
+    } else {
+      mediaHtml = `<div style="position:relative;cursor:pointer;" data-fv-play="${escapeHtml(entry.media_url)}">
+        <video src="${escapeHtml(entry.media_url)}" autoplay muted playsinline loop preload="auto"
+          style="width:100%;max-height:55vmax;object-fit:cover;display:block;pointer-events:none;"></video>
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">
+          <div style="width:56px;height:56px;border-radius:50%;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;font-size:24px;">▶</div>
+        </div>
+      </div>`;
+    }
   } else if (mediaType === 'audio' && entry.media_url) {
     mediaHtml = `<div style="padding:32px 16px;background:var(--surface-2);display:flex;align-items:center;gap:14px;min-height:120px;">
       <span style="font-size:40px;flex-shrink:0;">🎙️</span>
