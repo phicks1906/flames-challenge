@@ -5727,7 +5727,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v279 · losses-countdown";
+const APP_VERSION = "v281 · monthly-voting-end";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -6564,8 +6564,8 @@ async function loadFeedActivity() {
 }
 
 async function loadLeaderboard() {
-  const now = new Date();
-  const MONTH_START = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const now2 = new Date();
+  const MONTH_START = new Date(now2.getFullYear(), now2.getMonth(), 1);
 
   const [profilesRes, entriesRes, votesRes, challengesRes] = await Promise.all([
     db.from('profiles').select('id, name, avatar'),
@@ -6583,8 +6583,19 @@ async function loadLeaderboard() {
   const chInfo = {};
   allChallenges.forEach(c => { chInfo[c.id] = { category: c.category, votingEnd: c.voting_end }; });
 
+  // "This month's challenges" = voting ended on/after the 1st of this month and already closed
+  const thisMonthChIds = new Set(
+    allChallenges
+      .filter(c => {
+        if (!c.voting_end) return false;
+        const end = new Date(c.voting_end);
+        return end >= MONTH_START && end <= now2;
+      })
+      .map(c => c.id)
+  );
+
   // Only count votes cast in the last 30 days for the rolling leaderboard
-  const recentVotes = allVotes.filter(v => v.created_at && v.created_at >= MONTH_START);
+  const recentVotes = allVotes.filter(v => v.created_at && v.created_at >= MONTH_START.toISOString());
 
   // Tally recent votes per entry
   const recentVotesByEntry = {};
@@ -6632,22 +6643,24 @@ async function loadLeaderboard() {
       });
     }
 
-    // Rolling 30-day winner + losers
-    let rmax = 0, rtopEntries = [];
-    entries.forEach(e => {
-      const v = recentVotesByEntry[e.id] || 0;
-      if (v > rmax) { rmax = v; rtopEntries = [e]; }
-      else if (v === rmax && v > 0) rtopEntries.push(e);
-    });
-    if (rmax > 0 && rtopEntries.length === 1) {
-      const uid = rtopEntries[0].user_id;
-      ensureUser(uid);
-      winsByUser[uid].rolling30++;
-      winsByUser[uid].rolling30ByCategory[cat] = (winsByUser[uid].rolling30ByCategory[cat] || 0) + 1;
-      entries.filter(e => e.user_id !== uid).forEach(e => {
-        ensureUser(e.user_id);
-        lossesByUser[e.user_id].rolling30++;
+    // Monthly winner — challenges whose voting ended this calendar month, using all votes
+    if (thisMonthChIds.has(chId)) {
+      let rmax = 0, rtopEntries = [];
+      entries.forEach(e => {
+        const v = allVotesByEntry[e.id] || 0;
+        if (v > rmax) { rmax = v; rtopEntries = [e]; }
+        else if (v === rmax && v > 0) rtopEntries.push(e);
       });
+      if (rmax > 0 && rtopEntries.length === 1) {
+        const uid = rtopEntries[0].user_id;
+        ensureUser(uid);
+        winsByUser[uid].rolling30++;
+        winsByUser[uid].rolling30ByCategory[cat] = (winsByUser[uid].rolling30ByCategory[cat] || 0) + 1;
+        entries.filter(e => e.user_id !== uid).forEach(e => {
+          ensureUser(e.user_id);
+          lossesByUser[e.user_id].rolling30++;
+        });
+      }
     }
   });
 
@@ -9204,6 +9217,10 @@ async function detectChampionshipWinners() {
       if (!(state.hofData || []).some(r => r.category === meta.category && r.month === meta.month)) {
         state.hofData = state.hofData || [];
         state.hofData.unshift({ userId: winner.user_id, name: sub.name || 'Unknown', avatar: sub.avatar || '🔥', category: meta.category, month: meta.month, wins: max, challengeId, fromChampionship: true });
+        // Send winner email (fire and forget)
+        db.functions.invoke('send-championship-email', {
+          body: { type: 'won', userIds: [winner.user_id], category: meta.category, month: meta.month, challengeId }
+        }).catch(e => console.warn('winner email', e));
       }
       console.log(`[championship] ${meta.category} champion for ${meta.month}: ${sub.name}`);
     } catch(e) { console.warn('championship detect error', e); }
@@ -9569,6 +9586,11 @@ async function launchChampionshipChallenge(category) {
     state.champLaunches = state.champLaunches || [];
     state.champLaunches.unshift({ category, month, challenge_id: ch.id, launched_by: state.profile.id, launched_at: new Date().toISOString(), is_sponsored: false });
     toast(`⚡ ${category} Championship launched — ${contenders.length} invited`);
+    // Send qualifier emails (fire and forget — don't block launch on email failure)
+    const deadlineLabel = new Date(subDeadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    db.functions.invoke('send-championship-email', {
+      body: { type: 'qualified', userIds: contenders.map(u => u.id), category, month, deadline: deadlineLabel, challengeId: ch.id }
+    }).catch(e => console.warn('qualifier email', e));
     await loadChallenges();
     renderChampionshipTab();
   } catch(err) {
