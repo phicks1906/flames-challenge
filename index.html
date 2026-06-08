@@ -5727,7 +5727,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v281 · monthly-voting-end";
+const APP_VERSION = "v282 · relaunch-deleted";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -9531,7 +9531,12 @@ async function launchChampionshipChallenge(category) {
   // Prevent duplicate launch for same category+month
   const now = new Date();
   const month = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-  const alreadyLaunched = (state.champLaunches || []).some(l => l.category === category && l.month === month);
+  const alreadyLaunched = (state.champLaunches || []).some(l => {
+    if (l.category !== category || l.month !== month || l.is_sponsored) return false;
+    // If the challenge was deleted, allow re-launch
+    if (l.challenge_id && !(state.challenges || []).find(c => c.id === l.challenge_id)) return false;
+    return true;
+  });
   if (alreadyLaunched) { toast(`${category} Championship already launched this month`); return; }
 
   const contenders = [...(data.users || [])]
