@@ -5696,7 +5696,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v252 · compress-audio-fix";
+const APP_VERSION = "v253 · compress-audio-fix2";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -12830,13 +12830,14 @@ async function compressVideo(file, onProgress) {
     const url = URL.createObjectURL(file);
     const video = document.createElement('video');
     video.src = url;
-    // Not muted: audio is routed through Web Audio into the recording (graph is not
-    // connected to speakers, so nothing is heard). A muted element can feed silence
-    // into createMediaElementSource on some browsers.
-    video.muted = false;
+    // Muted so iOS allows programmatic play() (unmuted autoplay is blocked without a
+    // user gesture, which would stall the frame capture). Audio is still captured for
+    // the compressed file via createMediaElementSource below — the source node taps
+    // the audio before the muted gain, so muting only silences the local speakers.
+    video.muted = true;
     video.playsInline = true;
 
-    video.addEventListener('loadedmetadata', () => {
+    video.addEventListener('loadedmetadata', async () => {
       const duration = video.duration;
       if (!duration || duration === Infinity) { resolve(file); URL.revokeObjectURL(url); return; }
 
@@ -12857,28 +12858,29 @@ async function compressVideo(file, onProgress) {
       let audioCtx = null;
       try {
         const stream = canvas.captureStream(30);
-        // canvas.captureStream() captures video frames ONLY. Without routing the
-        // source audio in, the compressed video has NO audio track — which silenced
-        // every uploaded video. Route the source audio through a Web Audio graph into
-        // a MediaStreamDestination (NOT connected to speakers, so nothing is heard
-        // during compression) and add that track to the recorded stream.
+        // canvas.captureStream() captures video frames ONLY. Route the source audio
+        // through Web Audio into a MediaStreamDestination (not connected to speakers,
+        // so nothing is heard) and add that track so the compressed video has sound.
+        // Only attach audio if the AudioContext is actually RUNNING — a suspended
+        // context (iOS default) yields an empty audio track that corrupts the
+        // container (video stuck buffering forever). In that case record video-only,
+        // which is valid and playable.
         try {
           audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-          if (audioCtx.state === 'suspended') audioCtx.resume();
-          const srcNode = audioCtx.createMediaElementSource(video);
-          const destNode = audioCtx.createMediaStreamDestination();
-          srcNode.connect(destNode);
-          const aTracks = destNode.stream.getAudioTracks();
-          if (aTracks.length) {
-            aTracks.forEach(t => stream.addTrack(t));
+          if (audioCtx.state === 'suspended') { try { await audioCtx.resume(); } catch(_) {} }
+          if (audioCtx.state === 'running') {
+            const srcNode = audioCtx.createMediaElementSource(video);
+            const destNode = audioCtx.createMediaStreamDestination();
+            srcNode.connect(destNode);
+            destNode.stream.getAudioTracks().forEach(t => stream.addTrack(t));
           } else {
-            throw new Error('no audio track captured');
+            console.log('[compress] audio context not running — recording video-only');
+            try { audioCtx.close(); } catch(_) {}
+            audioCtx = null;
           }
         } catch (audioErr) {
-          // Couldn't capture audio — use the original file so sound is preserved
-          console.log('[compress] audio capture failed, using original to keep sound', audioErr);
-          if (audioCtx) { try { audioCtx.close(); } catch(_) {} }
-          resolve(file); URL.revokeObjectURL(url); return;
+          console.log('[compress] audio capture failed — recording video-only', audioErr);
+          if (audioCtx) { try { audioCtx.close(); } catch(_) {} audioCtx = null; }
         }
         recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2_500_000 });
       } catch(e) { resolve(file); URL.revokeObjectURL(url); return; }
