@@ -4465,7 +4465,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
     <div class="heat-check">
       <div class="heat-check-title">Heat Check</div>
-      <div class="heat-check-sub">Your performance · tap to see</div>
+      <div class="heat-check-sub">All-time performance · tap to see</div>
 
       <div class="hc-gauge-stage" id="hcGaugeStage" onclick="openRecordSheet('all')" role="button" tabindex="0">
         <svg width="290" height="290" viewBox="0 0 290 290" class="hc-gauge-svg">
@@ -4556,8 +4556,8 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
           <div class="hc-tile-lbl">🥇 Wins</div>
         </div>
         <div class="hc-tile hc-tap" onclick="openRecordSheet('all')" role="button" tabindex="0">
-          <div class="hc-tile-val ice" id="heatEntries">0</div>
-          <div class="hc-tile-lbl">🎬 Entries</div>
+          <div class="hc-tile-val ice" id="heatRecord">—</div>
+          <div class="hc-tile-lbl">🏁 Record</div>
         </div>
         <div class="hc-tile hc-tap" onclick="openRecordSheet('wins')" role="button" tabindex="0">
           <div class="hc-tile-val ember" id="heatStreak">0</div>
@@ -5726,7 +5726,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v275 · ticker-championship";
+const APP_VERSION = "v276 · monthly-heatfix";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -6563,7 +6563,8 @@ async function loadFeedActivity() {
 }
 
 async function loadLeaderboard() {
-  const THIRTY_DAYS_AGO = new Date(Date.now() - 30 * 86400000).toISOString();
+  const now = new Date();
+  const MONTH_START = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
   const [profilesRes, entriesRes, votesRes, challengesRes] = await Promise.all([
     db.from('profiles').select('id, name, avatar'),
@@ -6582,7 +6583,7 @@ async function loadLeaderboard() {
   allChallenges.forEach(c => { chInfo[c.id] = { category: c.category, votingEnd: c.voting_end }; });
 
   // Only count votes cast in the last 30 days for the rolling leaderboard
-  const recentVotes = allVotes.filter(v => v.created_at && v.created_at >= THIRTY_DAYS_AGO);
+  const recentVotes = allVotes.filter(v => v.created_at && v.created_at >= MONTH_START);
 
   // Tally recent votes per entry
   const recentVotesByEntry = {};
@@ -8180,9 +8181,9 @@ function renderHeatCheck() {
   const winPct = decided ? (wins / decided) * 100 : null;
 
   // Update tiles
-  const wEl = document.getElementById('heatWins');     if (wEl) wEl.textContent = wins;
-  const eEl = document.getElementById('heatEntries');  if (eEl) eEl.textContent = entries;
-  const sEl = document.getElementById('heatStreak');   if (sEl) sEl.textContent = streak;
+  const wEl = document.getElementById('heatWins');   if (wEl) wEl.textContent = wins;
+  const rEl = document.getElementById('heatRecord'); if (rEl) rEl.textContent = decided ? `${wins}W · ${losses}L` : '—';
+  const sEl = document.getElementById('heatStreak'); if (sEl) sEl.textContent = streak;
   // Pending line
   const pending = record ? record.filter(r => r.result === 'pending').length : 0;
   const plEl = document.getElementById('hcPendingLine');
@@ -9388,10 +9389,19 @@ function renderChampionshipTab() {
   });
 }
 
+let _championshipLaunching = false;
+
 async function launchChampionshipChallenge(category) {
   if (!isAdmin() || !state.profile) return;
+  if (_championshipLaunching) { toast('Launch already in progress…'); return; }
   const data = state.leaderboardData;
   if (!data) return;
+
+  // Prevent duplicate launch for same category+month
+  const now = new Date();
+  const month = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const alreadyLaunched = (state.champLaunches || []).some(l => l.category === category && l.month === month);
+  if (alreadyLaunched) { toast(`${category} Championship already launched this month`); return; }
 
   const contenders = [...(data.users || [])]
     .filter(u => (u.rolling30ByCategory[category] || 0) > 0)
@@ -9402,12 +9412,11 @@ async function launchChampionshipChallenge(category) {
 
   if (!confirm(`Launch ${category} Championship Challenge and invite ${contenders.length} qualifiers?`)) return;
 
-  const now = new Date();
-  const month = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
   const monthLabel = now.toLocaleString('default', { month: 'long', year: 'numeric' });
-  const subDeadline = new Date(now.getTime() + 7 * 86400000).toISOString();  // 7 days to submit
-  const voteEnd = new Date(now.getTime() + 14 * 86400000).toISOString();     // 14 days to vote
+  const subDeadline = new Date(now.getTime() + 7 * 86400000).toISOString();
+  const voteEnd = new Date(now.getTime() + 14 * 86400000).toISOString();
 
+  _championshipLaunching = true;
   const btn = document.querySelector(`[data-launch-cat="${category}"]`);
   if (btn) { btn.disabled = true; btn.textContent = 'Launching...'; }
 
@@ -9452,6 +9461,7 @@ async function launchChampionshipChallenge(category) {
     console.error('launch championship', err);
     toast('Launch failed: ' + (err.message || 'unknown'));
   } finally {
+    _championshipLaunching = false;
     if (btn) { btn.disabled = false; btn.textContent = '⚡ Launch'; }
   }
 }
