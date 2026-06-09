@@ -2219,6 +2219,36 @@ body.theme-light .hc-view-stats { border-color: var(--ember); color: var(--ember
 }
 .feed-empty .icon { font-size: 32px; margin-bottom: 10px; opacity: 0.6; }
 
+/* ── Skeleton shimmer ── */
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 50%, var(--surface) 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: 8px;
+}
+.skeleton-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 14px;
+}
+.skeleton-line  { height: 14px; margin-bottom: 10px; }
+.skeleton-line.short  { width: 40%; }
+.skeleton-line.medium { width: 65%; }
+.skeleton-line.full   { width: 100%; }
+.skeleton-avatar { width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; }
+.skeleton-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.skeleton-media { width: 100%; height: 180px; border-radius: 12px; margin-bottom: 12px; }
+body.theme-light .skeleton {
+  background: linear-gradient(90deg, #e9e6e1 25%, #f6f5f3 50%, #e9e6e1 75%);
+  background-size: 800px 100%;
+}
+
 /* POST CARD */
 .post-card {
   background: var(--surface);
@@ -5841,7 +5871,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v350 · lb-realtime";
+const APP_VERSION = "v351 · polish";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -6922,6 +6952,73 @@ function renderFeedHello() {
   updateWelcomeBanner();
 }
 
+// ── Double-tap to like ────────────────────────────────────────────────────────
+// Attaches double-tap detection to post-card-media and fcc-entry-card elements.
+// Fires the like action and shows a heart burst on the tapped element.
+function wireDoubleTapLike(container) {
+  const targets = container.querySelectorAll('.post-card-media, .fcc-entry-card, .cd-entry-media');
+  targets.forEach(el => {
+    let lastTap = 0;
+    el.addEventListener('touchend', e => {
+      const now = Date.now();
+      if (now - lastTap < 280) {
+        e.preventDefault();
+        // Find the like button in the nearest card
+        const card = el.closest('.post-card, .fcc-entry-card, .cd-entry');
+        if (!card) return;
+        const likeBtn = card.querySelector('[data-like-post],[data-like-entry]');
+        if (likeBtn && !likeBtn.disabled) {
+          likeBtn.click();
+          spawnHeartBurst(e.changedTouches[0]?.clientX ?? 0, e.changedTouches[0]?.clientY ?? 0);
+        }
+        lastTap = 0;
+      } else {
+        lastTap = now;
+      }
+    }, { passive: false });
+  });
+}
+
+// ── Ember burst on vote reveal ────────────────────────────────────────────────
+function spawnHeartBurst(x, y) {
+  for (let i = 0; i < 8; i++) {
+    const el = document.createElement('div');
+    const angle = (i / 8) * Math.PI * 2;
+    const dist = 40 + Math.random() * 30;
+    const dx = Math.cos(angle) * dist;
+    const dy = Math.sin(angle) * dist - 20;
+    el.textContent = '🔥';
+    el.style.cssText = `position:fixed;left:${x}px;top:${y}px;font-size:${14 + Math.random()*10}px;pointer-events:none;z-index:9999;transition:transform 0.6s ease-out,opacity 0.6s ease-out;transform:translate(0,0) scale(1);opacity:1;`;
+    document.body.appendChild(el);
+    requestAnimationFrame(() => {
+      el.style.transform = `translate(${dx}px,${dy}px) scale(0)`;
+      el.style.opacity = '0';
+    });
+    setTimeout(() => el.remove(), 650);
+  }
+}
+
+function spawnEmberBurst(anchorEl) {
+  if (!anchorEl) return;
+  const rect = anchorEl.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  spawnHeartBurst(cx, cy);
+}
+
+function skeletonCards(n = 3) {
+  return Array.from({ length: n }, () => `
+    <div class="skeleton-card">
+      <div class="skeleton-header">
+        <div class="skeleton skeleton-avatar"></div>
+        <div style="flex:1"><div class="skeleton skeleton-line medium"></div><div class="skeleton skeleton-line short" style="margin-bottom:0"></div></div>
+      </div>
+      <div class="skeleton skeleton-media"></div>
+      <div class="skeleton skeleton-line full"></div>
+      <div class="skeleton skeleton-line medium" style="margin-bottom:0"></div>
+    </div>`).join('');
+}
+
 
 
 /* ---------- NOTIFICATIONS (computed from existing data) ---------- */
@@ -7456,7 +7553,12 @@ function renderRecord() {
   if (!list || !tabsEl) return;
   const all = state.myRecord;
   if (!all) {
-    list.innerHTML = '<div class="record-loading">Loading your record…</div>';
+    list.innerHTML = Array.from({ length: 3 }, () => `
+      <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border)">
+        <div class="skeleton" style="width:46px;height:46px;border-radius:10px;flex-shrink:0"></div>
+        <div style="flex:1"><div class="skeleton skeleton-line medium"></div><div class="skeleton skeleton-line short" style="margin-bottom:0"></div></div>
+        <div class="skeleton" style="width:52px;height:28px;border-radius:6px"></div>
+      </div>`).join('');
     tabsEl.innerHTML = '';
     return;
   }
@@ -8839,6 +8941,7 @@ function renderPolls() {
 async function castVote(pollId, optionIdx) {
   if (!state.profile) return;
   if (state.myVotes[pollId] !== undefined) return;
+  try { navigator.vibrate && navigator.vibrate(10); } catch(e) {}
 
   // Optimistic — mark voted but don't reveal results yet
   state.myVotes[pollId] = optionIdx;
@@ -10879,7 +10982,7 @@ function renderChallenges() {
   const grid = document.getElementById('challengesGrid');
   if (!grid) return;
   if (state.loading) {
-    grid.innerHTML = `<div class="ch-empty" style="grid-column:1/-1"><div class="ch-empty-icon">🔥</div>Loading challenges...</div>`;
+    grid.innerHTML = skeletonCards(3);
     return;
   }
 
@@ -11568,6 +11671,7 @@ function renderChallengeResults() {
 async function voteOnEntry(entryId) {
   if (!state.profile || !state.currentChallenge) return;
   if (state.myCurrentVote === entryId) return;
+  try { navigator.vibrate && navigator.vibrate(10); } catch(e) {}
 
   const challengeId = state.currentChallenge.id;
   const me = state.profile.id;
@@ -11594,9 +11698,10 @@ async function voteOnEntry(entryId) {
     const grid = document.getElementById('cdEntriesGrid');
     if (grid) grid.scrollLeft = 0;
     renderChallengeResults();
-    // scrollIntoView doesn't work inside position:fixed containers on iOS.
-    // Scroll the sheet element directly instead.
+    // Ember burst on the voted entry card
     setTimeout(() => {
+      const votedCard = document.querySelector(`.cd-entry[data-entry-id="${entryId}"]`);
+      spawnEmberBurst(votedCard);
       const panel = document.getElementById('cdResultsPanel');
       const sheet = document.getElementById('challengeDetailSheet');
       if (panel && sheet && panel.style.display !== 'none') {
@@ -12563,7 +12668,7 @@ function renderFeed() {
   const c = document.getElementById('feedContainer');
   if (!c) return;
   if (state.loading) {
-    c.innerHTML = `<div class="feed-empty"><div class="icon">🔥</div>Loading feed...</div>`;
+    c.innerHTML = skeletonCards(4);
     return;
   }
 
@@ -12864,6 +12969,9 @@ function renderFeed() {
       openUserProfile(el.dataset.userId);
     });
   });
+
+  // ── Double-tap to like — post media and entry media ───────────────────────
+  wireDoubleTapLike(c);
 
 
   // Wire feed drawers — vote and submit buttons
@@ -14307,6 +14415,7 @@ function renderFvEntry(entry, ch, canVote, myVoteEntryId, status) {
 
 async function fvVote(btn, chId) {
   if (!state.profile) return;
+  try { navigator.vibrate && navigator.vibrate(10); } catch(e) {}
   const entryId = btn.dataset.fvVote;
   btn.disabled = true;
   btn.textContent = '⏳';
