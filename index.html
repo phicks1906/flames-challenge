@@ -5841,7 +5841,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v348 · champ-db";
+const APP_VERSION = "v350 · lb-realtime";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -6455,12 +6455,17 @@ function switchView(view) {
   if (view === 'admin') renderAdminOverview();
   if (view === 'leaderboard') {
     initLbTabs();
-    renderLeaderboard();
+    // If a Realtime vote arrived while on another view, reload now
+    if (state._leaderboardStale) {
+      state._leaderboardStale = false;
+      loadLeaderboard().then(() => { renderLeaderboard(); buildTicker(); }).catch(() => {});
+    } else {
+      renderLeaderboard();
+    }
     detectChampionshipWinners().then(() => {
       if (state.currentView === 'leaderboard') renderLeaderboard();
       buildTicker();
     }).catch(e => console.warn('championship detect', e));
-    // Auto-launch monthly championships: fires on 1st–3rd of month if admin and not yet launched
     if (isAdmin() && state.profile) {
       const now = new Date();
       const month = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
@@ -6538,21 +6543,56 @@ async function loadAppData() {
 const LIVE_TICK_MS = 15000;
 let _liveTickHandle = null;
 let _liveTickRunning = false;
-state.feedBaselineTs = 0;       // newest ts at last renderFeed
-state.pendingFeedCount = 0;     // count of items newer than baseline
+let _realtimeChannel = null;
+state.feedBaselineTs = 0;
+state.pendingFeedCount = 0;
 
 function startLiveUpdates() {
   if (_liveTickHandle) return;
   _liveTickHandle = setInterval(liveTick, LIVE_TICK_MS);
   document.addEventListener('visibilitychange', _liveVisHandler);
+  startRealtimeSubscriptions();
 }
 function stopLiveUpdates() {
   if (_liveTickHandle) { clearInterval(_liveTickHandle); _liveTickHandle = null; }
   document.removeEventListener('visibilitychange', _liveVisHandler);
   hideFeedNewPill();
+  if (_realtimeChannel) { try { db.removeChannel(_realtimeChannel); } catch(e) {} _realtimeChannel = null; }
 }
 function _liveVisHandler() {
   if (!document.hidden && state.profile) liveTick();
+}
+
+// ── Supabase Realtime — leaderboard updates instantly on any new vote ─────────
+// Requires: ALTER PUBLICATION supabase_realtime ADD TABLE entry_votes, challenges;
+function startRealtimeSubscriptions() {
+  if (_realtimeChannel) return;
+  try {
+    _realtimeChannel = db.channel('fc-live')
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'entry_votes' },
+        () => {
+          if (state.currentView === 'leaderboard') {
+            loadLeaderboard().then(() => { renderLeaderboard(); buildTicker(); }).catch(() => {});
+          } else {
+            state._leaderboardStale = true;
+          }
+        }
+      )
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'challenges' },
+        () => {
+          state._leaderboardStale = true;
+          if (state.currentView === 'leaderboard') {
+            loadLeaderboard().then(() => { renderLeaderboard(); buildTicker(); }).catch(() => {});
+          }
+        }
+      )
+      .subscribe(status => {
+        if (status === 'SUBSCRIBED') console.log('[realtime] leaderboard live');
+        else if (status === 'CHANNEL_ERROR') console.warn('[realtime] failed — polling covers updates');
+      });
+  } catch(e) { console.warn('[realtime] setup error', e); }
 }
 
 async function liveTick() {
@@ -6708,55 +6748,70 @@ async function loadFeedActivity(opts = {}) {
 }
 
 async function loadLeaderboard() {
-  const now2 = new Date();
-  const MONTH_START = new Date(now2.getFullYear(), now2.getMonth(), 1);
+  const now = new Date();
+  const MONTH_START = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
-  const [profilesRes, entriesRes, votesRes, challengesRes] = await Promise.all([
-    db.from('profiles').select('id, name, avatar'),
-    db.from('entries').select('id, challenge_id, user_id'),
-    db.from('entry_votes').select('entry_id, created_at'),
-    db.from('challenges').select('id, category, voting_end'),
-  ]);
+  // ── Step 1: Only challenges whose voting closed THIS calendar month ───────────
+  // Resets cleanly on the 1st of each month — aligns with monthly championships.
+  const { data: recentChallenges, error: chErr } = await db.from('challenges')
+    .select('id, category, voting_end')
+    .gte('voting_end', MONTH_START)
+    .lte('voting_end', now.toISOString())
+    .limit(500);
 
-  const allProfiles = profilesRes.data || [];
-  const allEntries = entriesRes.data || [];
-  const allVotes = votesRes.data || [];
-  const allChallenges = challengesRes.data || [];
-
-  // Map challenge_id → category and voting_end
+  if (chErr) { console.error('leaderboard challenges', chErr); }
+  const recentChs = recentChallenges || [];
+  const chIds = recentChs.map(c => c.id);
   const chInfo = {};
-  allChallenges.forEach(c => { chInfo[c.id] = { category: c.category, votingEnd: c.voting_end }; });
+  recentChs.forEach(c => { chInfo[c.id] = { category: c.category, votingEnd: c.voting_end }; });
 
-  // "This month's challenges" = voting ended on/after the 1st of this month and already closed
-  const thisMonthChIds = new Set(
-    allChallenges
-      .filter(c => {
-        if (!c.voting_end) return false;
-        const end = new Date(c.voting_end);
-        return end >= MONTH_START && end <= now2;
-      })
-      .map(c => c.id)
-  );
+  // All challenges this month qualify for the monthly tally
+  const thisMonthChIds = new Set(chIds);
 
-  // Only count votes cast in the last 30 days for the rolling leaderboard
-  const recentVotes = allVotes.filter(v => v.created_at && v.created_at >= MONTH_START.toISOString());
+  // No recent challenges → empty leaderboard, skip remaining queries
+  if (!chIds.length) {
+    state.leaderboardData = { users: [], leaders: {}, champions: {} };
+    state.lbCategory = state.lbCategory || 'All';
+    state.leaders = [];
+    return;
+  }
 
-  // Tally recent votes per entry
-  const recentVotesByEntry = {};
-  recentVotes.forEach(v => { recentVotesByEntry[v.entry_id] = (recentVotesByEntry[v.entry_id] || 0) + 1; });
+  // ── Step 2: Entries only for those challenges ─────────────────────────────────
+  const { data: entries } = await db.from('entries')
+    .select('id, challenge_id, user_id')
+    .in('challenge_id', chIds);
 
-  // All-time votes per entry (for global all-time board)
+  const allEntries = entries || [];
+  const entryIds = allEntries.map(e => e.id);
+
+  // ── Step 3: Votes only for those entries ──────────────────────────────────────
   const allVotesByEntry = {};
-  allVotes.forEach(v => { allVotesByEntry[v.entry_id] = (allVotesByEntry[v.entry_id] || 0) + 1; });
+  if (entryIds.length) {
+    const { data: votes } = await db.from('entry_votes')
+      .select('entry_id')
+      .in('entry_id', entryIds);
+    (votes || []).forEach(v => {
+      allVotesByEntry[v.entry_id] = (allVotesByEntry[v.entry_id] || 0) + 1;
+    });
+  }
 
-  // Group entries by challenge
+  // ── Step 4: Profiles only for users with entries (not all profiles) ───────────
+  const participantIds = [...new Set(allEntries.map(e => e.user_id))];
+  let allProfiles = [];
+  if (participantIds.length) {
+    const { data: profs } = await db.from('profiles')
+      .select('id, name, avatar')
+      .in('id', participantIds);
+    allProfiles = profs || [];
+  }
+
+  // ── Compute wins/losses per user from scoped data ─────────────────────────────
   const entriesByCh = {};
   allEntries.forEach(e => {
     if (!entriesByCh[e.challenge_id]) entriesByCh[e.challenge_id] = [];
     entriesByCh[e.challenge_id].push(e);
   });
 
-  // Compute wins AND losses per user
   const winsByUser = {};
   const lossesByUser = {};
   const ensureUser = id => {
@@ -6765,10 +6820,9 @@ async function loadLeaderboard() {
   };
 
   Object.entries(entriesByCh).forEach(([chId, entries]) => {
-    const info = chInfo[chId] || {};
-    const cat = info.category || 'Other';
+    const cat = chInfo[chId]?.category || 'Other';
 
-    // All-time winner + losers
+    // All-time winner within this 30-day window
     let max = 0, topEntries = [];
     entries.forEach(e => {
       const v = allVotesByEntry[e.id] || 0;
@@ -6780,35 +6834,23 @@ async function loadLeaderboard() {
       ensureUser(uid);
       winsByUser[uid].allTime++;
       winsByUser[uid].byCategory[cat] = (winsByUser[uid].byCategory[cat] || 0) + 1;
-      // Everyone else lost
       entries.filter(e => e.user_id !== uid).forEach(e => {
-        ensureUser(e.user_id);
-        lossesByUser[e.user_id].allTime++;
+        ensureUser(e.user_id); lossesByUser[e.user_id].allTime++;
       });
     }
 
-    // Monthly winner — challenges whose voting ended this calendar month, using all votes
-    if (thisMonthChIds.has(chId)) {
-      let rmax = 0, rtopEntries = [];
-      entries.forEach(e => {
-        const v = allVotesByEntry[e.id] || 0;
-        if (v > rmax) { rmax = v; rtopEntries = [e]; }
-        else if (v === rmax && v > 0) rtopEntries.push(e);
+    // Monthly wins (this calendar month only)
+    if (thisMonthChIds.has(chId) && max > 0 && topEntries.length === 1) {
+      const uid = topEntries[0].user_id;
+      ensureUser(uid);
+      winsByUser[uid].rolling30++;
+      winsByUser[uid].rolling30ByCategory[cat] = (winsByUser[uid].rolling30ByCategory[cat] || 0) + 1;
+      entries.filter(e => e.user_id !== uid).forEach(e => {
+        ensureUser(e.user_id); lossesByUser[e.user_id].rolling30++;
       });
-      if (rmax > 0 && rtopEntries.length === 1) {
-        const uid = rtopEntries[0].user_id;
-        ensureUser(uid);
-        winsByUser[uid].rolling30++;
-        winsByUser[uid].rolling30ByCategory[cat] = (winsByUser[uid].rolling30ByCategory[cat] || 0) + 1;
-        entries.filter(e => e.user_id !== uid).forEach(e => {
-          ensureUser(e.user_id);
-          lossesByUser[e.user_id].rolling30++;
-        });
-      }
     }
   });
 
-  // Build ranked user list with all stats
   const users = allProfiles.map(p => ({
     ...p,
     isReal: true,
@@ -6820,8 +6862,7 @@ async function loadLeaderboard() {
     rolling30ByCategory: winsByUser[p.id]?.rolling30ByCategory || {},
   }));
 
-  // Determine leader per category (most rolling30 wins) — NOT champion
-  const leaders = {}; // category → userId of current #1
+  const leaders = {};
   CATEGORIES.forEach(cat => {
     const ranked = [...users]
       .filter(u => (u.rolling30ByCategory[cat] || 0) > 0)
@@ -6831,13 +6872,9 @@ async function loadLeaderboard() {
   const overallRanked = [...users].filter(u => u.rolling30 > 0).sort((a, b) => b.rolling30 - a.rolling30);
   if (overallRanked.length > 0) leaders['All'] = overallRanked[0].id;
 
-  // Champions are determined by Championship Challenge results (stored separately)
-  // detectChampionshipWinners() will populate state.leaderboardData.champions
   state.leaderboardData = { users, leaders, champions: {} };
   state.lbCategory = state.lbCategory || 'All';
-
-  // Keep backward compat
-  state.leaders = users.sort((a, b) => b.rolling30 - a.rolling30).slice(0, 10);
+  state.leaders = [...users].sort((a, b) => b.rolling30 - a.rolling30).slice(0, 10);
 }
 
 /* ---------- RENDER: chip, feed, heat check ---------- */
