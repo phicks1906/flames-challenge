@@ -5841,7 +5841,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v347 · curtain-fix";
+const APP_VERSION = "v348 · champ-db";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -9278,8 +9278,7 @@ function initLbTabs() {
 }
 
 /* ---------- HALL OF FAME ---------- */
-// We record each month's champions in localStorage and display them here.
-// Key: fc_hof_log = [{ month: '2026-05', category: 'Photography', userId, name, avatar }, ...]
+// Champions stored in Supabase: championship_launches + hall_of_fame tables.
 
 // ── Championship data — Supabase-backed, cached in state ─────────────────────
 async function loadChampionshipData() {
@@ -9326,8 +9325,6 @@ function getChampTitles() {
   return result;
 }
 function saveChampTitles() { /* no-op: replaced by Supabase insert */ }
-function champTitlesKey() { return 'fc_champ_titles'; }
-function hofKey() { return 'fc_hof_log'; }
 function getHofLog() { return state.hofData || []; }
 function saveHofLog() { /* no-op: replaced by Supabase insert */ }
 // ── End championship state accessors ─────────────────────────────────────────
@@ -9398,34 +9395,6 @@ async function detectChampionshipWinners() {
       state.leaderboardData.champions[r.category] = r.userId;
     });
   }
-}
-
-function hofKey() { return 'fc_hof_log'; }
-function getHofLog() {
-  try { return JSON.parse(localStorage.getItem(hofKey()) || '[]'); } catch(e) { return []; }
-}
-function saveHofLog(log) {
-  try { localStorage.setItem(hofKey(), JSON.stringify(log.slice(-120))); } catch(e) {} // keep last 120 records
-}
-
-function recordCurrentChampions() {
-  if (!state.leaderboardData) return;
-  const now = new Date();
-  const month = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-  const log = getHofLog();
-  const champions = state.leaderboardData.champions || {};
-  const users = state.leaderboardData.users || [];
-  let changed = false;
-  Object.entries(champions).forEach(([cat, uid]) => {
-    if (!uid) return;
-    const existing = log.find(r => r.month === month && r.category === cat);
-    if (existing) return; // already recorded this month
-    const user = users.find(u => u.id === uid);
-    if (!user) return;
-    log.push({ month, category: cat, userId: uid, name: user.name, avatar: user.avatar, wins: user.rolling30ByCategory?.[cat] || user.rolling30 || 0 });
-    changed = true;
-  });
-  if (changed) saveHofLog(log);
 }
 
 // Returns a map of userId → { name, avatar, titles: [ { category, count, months[] } ] }
