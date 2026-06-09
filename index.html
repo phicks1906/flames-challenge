@@ -5108,6 +5108,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
         </div>
         <input type="file" id="seFile" class="cc-file-input" />
         <input type="file" id="seFileCamera" class="cc-file-input" accept="image/*" capture="environment" style="display:none;" />
+        <button type="button" class="btn btn-ghost" id="seCameraBtn" style="width:100%;margin-top:6px;font-size:13px;">📷 Take Photo</button>
         <!-- Compress toggle — shown for video only -->
         <div id="seCompressToggle" style="display:none;margin-top:8px;padding:10px 12px;background:var(--surface-2);border-radius:8px;align-items:center;justify-content:space-between;">
           <div>
@@ -5745,7 +5746,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v304 · icon-96";
+const APP_VERSION = "v305 · camera-fix";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -10230,6 +10231,16 @@ document.querySelectorAll('#ccMediaTypePills .cc-pill').forEach(p => {
     if (ccState.mediaType === 'photo') fileInput.accept = 'image/*';
     else if (ccState.mediaType === 'video') fileInput.accept = 'video/*';
     else if (ccState.mediaType === 'audio') fileInput.accept = 'audio/*';
+    // Sync camera input + button label
+    const camInput = document.getElementById('ccFileCamera');
+    const camBtn = document.getElementById('ccCameraBtn');
+    if (ccState.mediaType === 'photo') {
+      camInput.accept = 'image/*'; if (camBtn) { camBtn.textContent = '📷 Take Photo'; camBtn.style.display = ''; }
+    } else if (ccState.mediaType === 'video') {
+      camInput.accept = 'video/*'; if (camBtn) { camBtn.textContent = '🎬 Record Video'; camBtn.style.display = ''; }
+    } else {
+      if (camBtn) camBtn.style.display = 'none';
+    }
     clearMediaPreview();
   });
 });
@@ -11485,9 +11496,23 @@ function openSubmitEntry(entryToEdit = null) {
   const label = { photo: 'photo', video: 'video', audio: 'audio', text: 'text' }[ch.media_type] || 'entry';
   document.getElementById('seMediaTypeLabel').textContent = label;
   const fileInput = document.getElementById('seFile');
-  if (ch.media_type === 'photo') fileInput.accept = 'image/*';
-  else if (ch.media_type === 'video') fileInput.accept = 'video/*';
-  else if (ch.media_type === 'audio') fileInput.accept = 'audio/*';
+  const cameraInput = document.getElementById('seFileCamera');
+  const cameraBtn = document.getElementById('seCameraBtn');
+  if (ch.media_type === 'photo') {
+    fileInput.accept = 'image/*';
+    cameraInput.accept = 'image/*';
+    if (cameraBtn) { cameraBtn.textContent = '📷 Take Photo'; cameraBtn.onclick = () => cameraInput.click(); cameraBtn.style.display = ''; }
+  } else if (ch.media_type === 'video') {
+    fileInput.accept = 'video/*';
+    cameraInput.accept = 'video/*';
+    if (cameraBtn) { cameraBtn.textContent = '🎬 Record Video'; cameraBtn.onclick = () => cameraInput.click(); cameraBtn.style.display = ''; }
+  } else if (ch.media_type === 'audio') {
+    fileInput.accept = 'audio/*';
+    cameraInput.accept = 'audio/*';
+    if (cameraBtn) cameraBtn.style.display = 'none';
+  } else {
+    if (cameraBtn) cameraBtn.style.display = 'none';
+  }
 
   // Pre-fill if editing
   const submitBtn = document.querySelector('#submitEntryForm button[type="submit"]');
