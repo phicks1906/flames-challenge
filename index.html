@@ -5841,7 +5841,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v344 · standings-scroll";
+const APP_VERSION = "v345 · self-vote";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -10904,7 +10904,7 @@ function renderChallenges() {
       } else {
         mHtml = `<div class="fcc-entry-media fcc-entry-placeholder">${catIcons[ch.category]||'🎬'}</div>`;
       }
-      const voteBtn = canVoteCh && !isMyEntry && state.profile
+      const voteBtn = canVoteCh && state.profile
         ? `<button class="fcc-vote-btn${iVoted?' voted':''}" data-fcc-vote="${e.id}" data-fcc-chid="${ch.id}">${iVoted?'✓ Voted':'🗳️ Vote'}</button>`
         : isMyEntry ? `<span class="fcc-your-entry">Your entry</span>` : '';
       return `<div class="fcc-entry-card" style="cursor:pointer;" data-entry-open="${ch.id}" data-entry-id="${e.id}">${mHtml}<div class="fcc-entry-footer"><div class="fcc-entry-avatar">${avatarInner(sub.avatar)}</div><div class="fcc-entry-name">${escapeHtml(sub.name)}</div>${voteBtn}</div></div>`;
@@ -11264,13 +11264,10 @@ function renderChallengeDetail() {
 
     let actionsHtml = '';
     if (status === 'voting' || status === 'submitting') {
-      if (isMyEntry) {
-        actionsHtml = '<span class="cd-entry-tag">Your entry</span>';
-      } else if (state.profile) {
-        actionsHtml = `<button class="btn-vote ${iVoted ? 'is-voted' : 'not-voted'}" data-vote-entry="${entry.id}">${iVoted ? '✓ Voted' : '🗳️ Vote'}</button>`;
+      if (state.profile) {
+        // Everyone — including the submitter — can cast their one vote
+        actionsHtml = `${isMyEntry ? '<span class="cd-entry-tag">Your entry</span> ' : ''}<button class="btn-vote ${iVoted ? 'is-voted' : 'not-voted'}" data-vote-entry="${entry.id}">${iVoted ? '✓ Voted' : '🗳️ Vote'}</button>`;
       }
-    } else if (status === 'submitting' && isMyEntry) {
-      actionsHtml = '<span class="cd-entry-tag">Your entry</span>';
     }
     // (Closed challenges show the tally in the standings bar below, not as separate text.)
 
@@ -13134,7 +13131,7 @@ function renderFeedChallengeCard(ch) {
         const catIcons = {Art:'🎨',Photography:'📷',Music:'🎵',Writing:'✍️',Cooking:'🍳',Style:'👗',Sports:'🏆',Fitness:'💪',Comedy:'😂'};
         mediaHtml = `<div class="fcc-entry-media fcc-entry-placeholder">${catIcons[ch.category] || '🎬'}</div>`;
       }
-      const voteBtn = canVote && !isMyEntry && state.profile
+      const voteBtn = canVote && state.profile
         ? `<button class="fcc-vote-btn${iVoted ? ' voted' : ''}" data-fcc-vote="${e.id}" data-fcc-chid="${ch.id}">${iVoted ? '✓ Voted' : '🗳️ Vote'}</button>`
         : isMyEntry ? `<span class="fcc-your-entry">Your entry</span>` : '';
       return `<div class="fcc-entry-card" style="flex:0 0 72vw!important;min-width:72vw!important;max-width:280px!important;cursor:pointer;" data-entry-open="${ch.id}" data-entry-id="${e.id}">
@@ -14198,12 +14195,15 @@ function renderFvEntry(entry, ch, canVote, myVoteEntryId, status) {
     mediaHtml = `<div style="padding:32px 16px;font-family:var(--font-bricolage);font-size:20px;line-height:1.6;color:var(--text);background:var(--surface-2);min-height:120px;display:flex;align-items:center;">${escapeHtml(entry.caption)}</div>`;
   }
 
-  const voteBtn = canVote && !isMine
-    ? `<button class="btn btn-primary" style="padding:8px 18px;font-size:13px;" data-fv-vote="${entry.id}" data-fv-ch="${ch.id}">${iVoted ? '✓ Voted' : '🗳️ Vote'}</button>`
-    : isMine ? `<div style="display:flex;gap:8px;align-items:center;">
+  const fvVoteBtnHtml = canVote && state.profile
+    ? `<button class="btn btn-primary" style="padding:8px 18px;font-size:13px;" data-fv-vote="${entry.id}" data-fv-ch="${ch.id}">${iVoted ? '✓ Voted' : '🗳️ Vote'}</button>` : '';
+  const voteBtn = !isMine
+    ? fvVoteBtnHtml
+    : `<div style="display:flex;gap:8px;align-items:center;">
+        ${fvVoteBtnHtml}
         ${status === 'submitting' ? `<button style="background:none;border:1px solid var(--ember);color:var(--ember);border-radius:20px;padding:6px 12px;font-size:12px;cursor:pointer;" data-fv-edit="${entry.id}">✏️ Edit</button>` : ''}
         <button style="background:none;border:1px solid var(--error,#e53);color:var(--error,#e53);border-radius:20px;padding:6px 12px;font-size:12px;cursor:pointer;" data-fv-delete="${entry.id}" data-fv-ch="${ch.id}">🗑 Delete</button>
-      </div>` : '';
+      </div>`;
 
   // Each entry is a full-width snap card
   return `<div style="flex:0 0 100%;width:100%;scroll-snap-align:center;min-width:0;box-sizing:border-box;">
