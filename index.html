@@ -5633,8 +5633,6 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     </div>
     <!-- Vote standings — shown after casting a vote -->
     <div id="fvStandings" style="display:none;padding:0 16px 8px;"></div>
-    <!-- Dynamic challenger card — updates on swipe -->
-    <div id="fvChallengerCard" style="display:none;padding:0 16px 4px;"></div>
     <!-- Sticky action bar -->
     <div style="position:sticky;bottom:0;display:flex;gap:10px;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--border);background:var(--surface);z-index:2;">
       <button id="fvChallengeBtn" class="btn btn-primary" style="flex:1;padding:12px;font-size:14px;" onclick="openFeedViewerChallenge()"></button>
@@ -6034,7 +6032,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v360 · dedupe-badges";
+const APP_VERSION = "v361 · clean-card";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -14554,7 +14552,6 @@ async function openFeedViewer(chId) {
           d.style.background = i===idx ? 'var(--ember)' : 'var(--border-bright)';
           d.style.transform  = i===idx ? 'scale(1.3)' : 'scale(1)';
         });
-        renderFvChallengerCard(entries[idx], ch);
       }, { passive: true });
     }
 
@@ -14651,66 +14648,12 @@ async function openFeedViewer(chId) {
     console.error('feedViewer load', err);
     list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Couldn\'t load entries</div>';
   }
-  // Render challenger card for currently visible entry (first on load)
-  const fvEntriesList = (state.feedEntries || []).filter(e => e.challenge_id === ch?.id);
-  if (fvEntriesList.length) renderFvChallengerCard(fvEntriesList[0], ch);
   // Clear stale standings from previous session
   const fvStandingsEl = document.getElementById('fvStandings');
   if (fvStandingsEl) { fvStandingsEl.style.display = 'none'; fvStandingsEl.innerHTML = ''; }
   renderFvChallengersPanel(ch);
 }
 
-
-function renderFvChallengerCard(entry, ch) {
-  const panel = document.getElementById('fvChallengerCard');
-  if (!panel || !entry) { if(panel) panel.style.display='none'; return; }
-
-  const sub = entry.submitter || {};
-  const lbUsers = state.leaderboardData?.users || [];
-  const lb = lbUsers.find(u => u.id === entry.user_id) || {};
-  const cat = ch?.category || 'All';
-  const wins = lb.wins || 0;
-  const losses = lb.losses || 0;
-  const catWins = lb.rolling30ByCategory?.[cat] || 0;
-
-  const catSorted = [...lbUsers]
-    .filter(u => (u.rolling30ByCategory?.[cat] || 0) > 0)
-    .sort((a,b) => (b.rolling30ByCategory?.[cat]||0) - (a.rolling30ByCategory?.[cat]||0));
-  const rank = catSorted.findIndex(u => u.id === entry.user_id);
-  const rankNum = rank >= 0 ? rank + 1 : null;
-
-  const champTitles = getChampTitles();
-  const hofLog = getHofLog();
-  const titlesMap = computeHofTitles(hofLog);
-  const now = new Date();
-  const curMonth = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
-  const isChamp = champTitles[cat+'-'+curMonth]?.userId === entry.user_id;
-  const hofTitle = hofTitleLabel(titlesMap, entry.user_id);
-  const isMe = entry.user_id === state.profile?.id;
-
-  const rankEmoji = rankNum === 1 ? '🥇' : rankNum === 2 ? '🥈' : rankNum === 3 ? '🥉' : rankNum ? '#'+rankNum : null;
-  const recordStr = wins > 0 || losses > 0
-    ? wins+'W · '+losses+'L' + (catWins > 0 ? ' · '+catWins+' this month' : '')
-    : 'No record yet';
-
-  const badgeHtml = getUserBadges(entry.user_id, cat);
-
-  panel.innerHTML = '<div style="display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;cursor:pointer;" data-fv-uid="'+entry.user_id+'">' +
-    '<div class="cd-challenger-av">'+avatarInner(sub.avatar)+'</div>' +
-    '<div style="flex:1;min-width:0;">' +
-      '<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">' +
-        '<span style="font-weight:700;font-size:15px;color:var(--text);">'+escapeHtml(sub.name||'Unknown')+(isMe ? ' <span style="color:var(--ember);font-size:11px">(you)</span>' : '')+'</span>' +
-        badgeHtml +
-      '</div>' +
-      '<div style="font-size:12px;color:var(--text-muted);margin-top:2px;">'+escapeHtml(recordStr)+'</div>' +
-    '</div>' +
-  '</div>';
-
-  panel.querySelector('[data-fv-uid]')?.addEventListener('click', () => {
-    if (entry.user_id !== state.profile?.id) { closeFeedViewer(); openUserProfile(entry.user_id); }
-  });
-  panel.style.display = 'block';
-}
 
 function renderFvStandings(chId, votes) {
   const panel = document.getElementById('fvStandings');
@@ -14882,6 +14825,13 @@ function renderFvEntry(entry, ch, canVote, myVoteEntryId, status) {
       </div>`;
 
   // Each entry is a full-width snap card
+  // Record line — merged from the old challenger card (which was redundant)
+  const lbu = (state.leaderboardData?.users || []).find(u => u.id === entry.user_id) || {};
+  const catWins = lbu.rolling30ByCategory?.[ch.category] || 0;
+  const recordLine = (lbu.wins > 0 || lbu.losses > 0)
+    ? `${lbu.wins||0}W · ${lbu.losses||0}L${catWins > 0 ? ` · ${catWins} this month` : ''}`
+    : '';
+
   return `<div style="flex:0 0 100%;width:100%;scroll-snap-align:center;min-width:0;box-sizing:border-box;">
     ${mediaHtml}
     <div style="padding:12px 14px 16px;">
@@ -14892,7 +14842,10 @@ function renderFvEntry(entry, ch, canVote, myVoteEntryId, status) {
             <span style="font-weight:700;font-size:15px;cursor:pointer;" data-fv-user="${sub.id||''}">${escapeHtml(sub.name)}${isMine?' (you)':''}</span>
             <span>${getUserBadges(sub.id, ch.category)}</span>
           </div>
-          ${entry.caption && mediaType !== 'text' ? `<div style="font-size:13px;color:var(--text-dim);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(entry.caption)}</div>` : ''}
+          <div style="font-size:12px;color:var(--text-muted);margin-top:1px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            ${recordLine ? `<span>${escapeHtml(recordLine)}</span>` : ''}
+            ${entry.caption && mediaType !== 'text' ? `${recordLine ? '<span style="opacity:0.4">·</span>' : ''}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:50vw;">${escapeHtml(entry.caption)}</span>` : ''}
+          </div>
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
