@@ -6032,7 +6032,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v361 · clean-card";
+const APP_VERSION = "v363 · sd-notify";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -7304,7 +7304,25 @@ async function loadNotifications() {
     } catch (e) { console.warn('notif votes', e); }
   }
 
-  // 5. Entries submitted to my challenges
+  // 5. Pushed notifications (sudden death, championship won, qualified, etc.)
+  try {
+    const { data: pushed } = await db.from('notifications')
+      .select('id, type, message, challenge_id, read_at, created_at')
+      .eq('user_id', me)
+      .order('created_at', { ascending: false })
+      .limit(30);
+    (pushed || []).forEach(n => notifs.push({
+      type: n.type,
+      actorId: null,
+      ts: n.created_at,
+      text: n.message,
+      target: n.challenge_id ? { kind: 'challenge', id: n.challenge_id } : null,
+      read: !!n.read_at,
+      notifId: n.id,
+    }));
+  } catch(e) { console.warn('pushed notifs', e); }
+
+  // 6. Entries submitted to my challenges
   if (myChallengeIds.length) {
     try {
       const rows = await sel('entries', 'id, user_id, challenge_id', q => q.in('challenge_id', myChallengeIds), 'challenge entries');
@@ -9651,7 +9669,7 @@ async function detectChampionshipWinners() {
     try {
       const [entriesRes, votesRes] = await Promise.all([
         db.from('entries').select('id, user_id, submitter:profiles!entries_user_id_fkey(id, name, avatar)').eq('challenge_id', challengeId),
-        db.from('entry_votes').select('entry_id').eq('challenge_id', challengeId),
+        db.from('entry_votes').select('entry_id, voter_id').eq('challenge_id', challengeId),
       ]);
       const entries = entriesRes.data || [];
       const votes = votesRes.data || [];
@@ -9659,9 +9677,107 @@ async function detectChampionshipWinners() {
 
       const tally = {};
       votes.forEach(v => { tally[v.entry_id] = (tally[v.entry_id] || 0) + 1; });
-      let max = 0, winner = null;
-      entries.forEach(e => { const v = tally[e.id] || 0; if (v > max) { max = v; winner = e; } });
-      if (!winner || max === 0) continue;
+
+      // Find the top vote count and all entries that share it
+      let max = 0;
+      entries.forEach(e => { const v = tally[e.id] || 0; if (v > max) max = v; });
+
+      // If sudden_death is active, only consider the tied entries
+      const pool = ch.sudden_death && ch.sudden_death_entry_ids?.length
+        ? entries.filter(e => ch.sudden_death_entry_ids.includes(e.id))
+        : entries;
+
+      let poolMax = 0;
+      pool.forEach(e => { const v = tally[e.id] || 0; if (v > poolMax) poolMax = v; });
+      const topEntries = pool.filter(e => (tally[e.id] || 0) === poolMax && poolMax > 0);
+
+      if (!topEntries.length || poolMax === 0) continue;
+
+      // ── Tie detected ──────────────────────────────────────────────────────
+      if (topEntries.length > 1) {
+        if (ch.sudden_death) {
+          // Already in sudden death and still tied — record co-champions then stop
+          console.log(`[championship] ${meta.category} — still tied after sudden death, recording co-champions`);
+          for (const tied of topEntries) {
+            const sub = tied.submitter || {};
+            await db.from('hall_of_fame').insert({
+              user_id: tied.user_id, category: meta.category,
+              month: meta.month, challenge_id: challengeId, win_count: poolMax,
+            }).then(({ error }) => {
+              if (error && error.code !== '23505') console.warn('co-champion insert', error);
+            });
+            state.hofData = state.hofData || [];
+            state.hofData.unshift({ userId: tied.user_id, name: sub.name || 'Unknown',
+              avatar: sub.avatar || '🔥', category: meta.category, month: meta.month,
+              wins: poolMax, challengeId, fromChampionship: true });
+          }
+          toast(`⚡ ${meta.category} Championship: Co-Champions crowned after sudden death!`);
+        } else {
+          // First tie — full sudden death sequence
+          const newVoteEnd = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+          const tiedIds = topEntries.map(e => e.id);
+          const names = topEntries.map(e => e.submitter?.name || 'Unknown').join(' vs ');
+          const tiedUserIds = topEntries.map(e => e.user_id);
+
+          // 1. Capture all voter IDs BEFORE deleting
+          const previousVoterIds = [...new Set(
+            votes.map(v => v.voter_id).filter(id => id && !tiedUserIds.includes(id))
+          )];
+
+          // 2. Delete all existing votes — clean slate for sudden death
+          const { error: delErr } = await db.from('entry_votes').delete().eq('challenge_id', challengeId);
+          if (delErr) { console.warn('sudden death vote reset', delErr); continue; }
+
+          // 3. Flag the challenge and extend voting
+          const { error: sdErr } = await db.from('challenges').update({
+            voting_end: newVoteEnd, sudden_death: true, sudden_death_entry_ids: tiedIds,
+          }).eq('id', challengeId);
+          if (sdErr) { console.warn('sudden death update', sdErr); continue; }
+
+          // 4. Get followers of the tied players
+          const { data: followRows } = await db.from('follows')
+            .select('follower_id').in('following_id', tiedUserIds);
+          const followerIds = [...new Set(
+            (followRows || []).map(r => r.follower_id).filter(id => !tiedUserIds.includes(id))
+          )];
+
+          // 5. Build notification rows for all three audiences
+          const sdNow = new Date().toISOString();
+          const notifRows = [
+            ...tiedUserIds.map(uid => ({
+              user_id: uid, type: 'sudden_death', challenge_id: challengeId, created_at: sdNow,
+              message: `⚡ Sudden Death! The ${meta.category} Championship is tied. A new 48-hour vote is open — compete for the title!`,
+            })),
+            ...followerIds.map(uid => ({
+              user_id: uid, type: 'sudden_death', challenge_id: challengeId, created_at: sdNow,
+              message: `⚡ Sudden Death! The ${meta.category} Championship is tied: ${names}. Vote now to decide the champion!`,
+            })),
+            ...previousVoterIds.map(uid => ({
+              user_id: uid, type: 'sudden_death', challenge_id: challengeId, created_at: sdNow,
+              message: `⚡ The ${meta.category} Championship you voted in is tied! Voting resets — cast your vote again to crown the champion.`,
+            })),
+          ];
+          if (notifRows.length) {
+            db.from('notifications').insert(notifRows)
+              .then(({ error: nErr }) => { if (nErr) console.warn('sudden death notifs', nErr); });
+          }
+
+          // 6. Email to tied players (fire and forget)
+          db.functions.invoke('send-championship-email', {
+            body: { type: 'sudden_death', userIds: tiedUserIds,
+              category: meta.category, month: meta.month, challengeId }
+          }).catch(e => console.warn('sudden death email', e));
+
+          // 7. Refresh local state
+          await loadChallenges();
+          toast(`⚡ SUDDEN DEATH — ${meta.category} Championship is tied! ${names} — 48 hours to decide!`);
+          console.log(`[championship] ${meta.category} — SUDDEN DEATH triggered. Votes reset. Notified ${notifRows.length} users.`);
+        }
+        continue; // don't crown anyone yet
+      }
+
+      // ── Clear winner ──────────────────────────────────────────────────────
+      const winner = topEntries[0];
 
       const sub = winner.submitter || {};
       // Write to Supabase hall_of_fame
@@ -9670,7 +9786,7 @@ async function detectChampionshipWinners() {
         category: meta.category,
         month: meta.month,
         challenge_id: challengeId,
-        win_count: max,
+        win_count: poolMax,
       });
       if (error && error.code !== '23505') { // 23505 = unique violation (already recorded)
         console.warn('hall_of_fame insert', error);
@@ -11117,7 +11233,7 @@ function computeChallengeStatus(ch) {
   if (now < subDeadline) return 'submitting';
   if (now < voteEnd) {
     if (entryCount <= 1) return 'voided';
-    return 'voting';
+    return ch.sudden_death ? 'sudden_death' : 'voting';
   }
   return 'closed';
 }
@@ -11125,10 +11241,11 @@ function computeChallengeStatus(ch) {
 // One shared, action-first label set so every screen reads the same way.
 function challengePhase(stat) {
   return ({
-    submitting: { label: 'OPEN TO ENTER', cls: 'submitting' },
-    voting:     { label: 'VOTE NOW',      cls: 'voting' },
-    closed:     { label: 'DECIDED',       cls: 'closed' },
-    voided:     { label: 'NO CONTEST',    cls: 'voided' },
+    submitting:    { label: 'OPEN TO ENTER',    cls: 'submitting' },
+    voting:        { label: 'VOTE NOW',          cls: 'voting' },
+    sudden_death:  { label: '⚡ SUDDEN DEATH',   cls: 'voting' },
+    closed:        { label: 'DECIDED',           cls: 'closed' },
+    voided:        { label: 'NO CONTEST',        cls: 'voided' },
   })[stat] || { label: 'CHALLENGE', cls: '' };
 }
 
@@ -14504,8 +14621,12 @@ async function openFeedViewer(chId) {
     const entries = entriesRes.data || [];
     const votes   = votesRes.data  || [];
 
-    // Tally votes and store entries module-level for post-vote standings
-    _fvEntries = entries;
+    // During sudden death only show the tied entries
+    const visibleEntries = ch.sudden_death && ch.sudden_death_entry_ids?.length
+      ? entries.filter(e => ch.sudden_death_entry_ids.includes(e.id))
+      : entries;
+
+    _fvEntries = entries; // keep full list for standings
     _fvVoteCounts = {};
     votes.forEach(v => { _fvVoteCounts[v.entry_id] = (_fvVoteCounts[v.entry_id] || 0) + 1; });
     const myVoteEntryId = votes.find(v => v.voter_id === state.profile?.id)?.entry_id || null;
@@ -14517,9 +14638,9 @@ async function openFeedViewer(chId) {
     }
 
     const canVote = status === 'voting' || status === 'submitting';
-    list.innerHTML = entries.map(e => renderFvEntry(e, ch, canVote, myVoteEntryId, status)).join('');
+    list.innerHTML = visibleEntries.map(e => renderFvEntry(e, ch, canVote, myVoteEntryId, status)).join('');
 
-    // Update header button based on user's entry status
+    const total = visibleEntries.length;
     const userHasEntered = entries.some(e => e.user_id === state.profile?.id);
     if (status === 'submitting' && !userHasEntered) {
       btn.textContent = '🔥 Enter Challenge';
@@ -14538,11 +14659,10 @@ async function openFeedViewer(chId) {
     // Dots + counter
     const counter = document.getElementById('fvCounter');
     const dotsEl  = document.getElementById('fvDots');
-    const total = entries.length;
     if (counter) counter.textContent = total > 1 ? `1 of ${total}` : '';
     if (dotsEl) {
       dotsEl.innerHTML = total > 1
-        ? entries.map((_, i) => `<span style="width:7px;height:7px;border-radius:50%;background:${i===0?'var(--ember)':'var(--border-bright)'};transition:background 0.2s,transform 0.2s;display:inline-block;${i===0?'transform:scale(1.3)':''}"></span>`).join('')
+        ? visibleEntries.map((_, i) => `<span style="width:7px;height:7px;border-radius:50%;background:${i===0?'var(--ember)':'var(--border-bright)'};transition:background 0.2s,transform 0.2s;display:inline-block;${i===0?'transform:scale(1.3)':''}"></span>`).join('')
         : '';
       // Update dots + challenger card on scroll
       list.addEventListener('scroll', () => {
