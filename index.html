@@ -6032,7 +6032,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v364 · category-label";
+const APP_VERSION = "v365 · champ-month";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -7463,7 +7463,7 @@ async function loadNotifications() {
       const deadline = ch.submission_deadline ? new Date(ch.submission_deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
       notifs.push({
         type: 'champ_qualified', actorId: null, ts: null,
-        text: `⚡ You qualified for the ${ch.category} Championship! Submit your entry${deadline ? ` by ${deadline}` : ''}.`,
+        text: `⚡ You qualified for the ${ch.category} Championship${champMonthLabel(ch.id) ? ' (' + champMonthLabel(ch.id) + ')' : ''}! Submit your entry${deadline ? ` by ${deadline}` : ''}.`,
         target: { kind: 'challenge', id: ch.id }
       });
     });
@@ -7472,7 +7472,7 @@ async function loadNotifications() {
     (state.hofData || []).filter(r => r.userId === me).forEach(r => {
       notifs.push({
         type: 'champ_won', actorId: null, ts: null,
-        text: `👑 You won the ${r.category} Championship!`,
+        text: `👑 You won the ${r.category} Championship${r.month ? ' (' + formatStoredMonth(r.month) + ')' : ''}!`,
         target: { kind: 'leaderboard' }
       });
     });
@@ -7488,7 +7488,7 @@ async function loadNotifications() {
       (friendInvites || []).filter(r => r.challenge?.is_championship).forEach(r => {
         notifs.push({
           type: 'champ_friend_qualified', actorId: r.invited_user_id, ts: null,
-          text: `qualified for the ${r.challenge.category} Championship ⚡`,
+          text: `qualified for the ${r.challenge.category} Championship${r.challenge.id ? (() => { const ml = champMonthLabel(r.challenge.id); return ml ? ' (' + ml + ')' : ''; })() : ''} ⚡`,
           target: { kind: 'leaderboard' }
         });
       });
@@ -7497,7 +7497,7 @@ async function loadNotifications() {
       (state.hofData || []).filter(r => followeeIds.includes(r.userId)).forEach(r => {
         notifs.push({
           type: 'champ_friend_won', actorId: r.userId, ts: null,
-          text: `won the ${r.category} Championship 👑`,
+          text: `won the ${r.category} Championship${r.month ? ' (' + formatStoredMonth(r.month) + ')' : ''} 👑`,
           target: { kind: 'leaderboard' }
         });
       });
@@ -9397,6 +9397,23 @@ function enableTicker() {
   buildTicker();
 }
 
+// Returns "May '26" for a championship challenge, or '' if no launch record found
+function champMonthLabel(challengeId) {
+  const launch = (state.champLaunches || []).find(l => l.challenge_id === challengeId);
+  if (!launch?.month) return '';
+  const [y, m] = launch.month.split('-');
+  return new Date(parseInt(y), parseInt(m) - 1, 1)
+    .toLocaleString('default', { month: 'short' }) + ' \'' + String(y).slice(2);
+}
+
+// Formats a stored month string "2026-05" → "May '26"
+function formatStoredMonth(monthStr) {
+  if (!monthStr) return '';
+  const [y, m] = monthStr.split('-');
+  return new Date(parseInt(y), parseInt(m) - 1, 1)
+    .toLocaleString('default', { month: 'long', year: 'numeric' });
+}
+
 function buildTicker() {
   if (tickerDismissed()) return;
   const data = state.leaderboardData;
@@ -9417,7 +9434,8 @@ function buildTicker() {
     .forEach(ch => {
       if (!selectedCats.has(ch.category)) return;
       const action = computeChallengeStatus(ch) === 'voting' ? 'VOTE NOW' : 'ENTER NOW';
-      items.push({ icon: '', name: '', badge: 'champ', category: `⚡ ${ch.category} CHAMPIONSHIP`, text: action, grouped: true });
+      const mLabel = champMonthLabel(ch.id);
+      items.push({ icon: '', name: '', badge: 'champ', category: `⚡ ${ch.category.toUpperCase()} CHAMPIONSHIP${mLabel ? ' · ' + mLabel.toUpperCase() : ''}`, text: action, grouped: true });
     });
 
   // 1. Current Champions (from Championship Challenges) — announced with excitement
@@ -9941,8 +9959,16 @@ function renderChampionshipTab() {
   if (!data) { el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted)">Loading...</div>'; return; }
 
   const now = new Date();
-  const monthLabel = now.toLocaleString('default', { month: 'long', year: 'numeric' });
+  const curMonthStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
   const myId = state.profile?.id;
+
+  // Find the active championship month per category (from launch records, not current calendar month)
+  const getChampMonth = (cat) => {
+    const launch = (state.champLaunches || [])
+      .filter(l => l.category === cat)
+      .sort((a,b) => b.month.localeCompare(a.month))[0];
+    return launch?.month || curMonthStr;
+  };
 
   // Build sections — top 5 per category
   const sections = CATEGORIES.map(cat => {
@@ -9977,6 +10003,8 @@ function renderChampionshipTab() {
     const iQualify = myRank > 0 && myRank <= 3;
     const isChamp = myId && champion?.id === myId;
     const isLeadingCat = myId && currentLeader?.id === myId;
+    // The month this category is currently qualifying for (current calendar month)
+    const catChampMonth = formatStoredMonth(curMonthStr);
 
     // My status message
     let myStatus = '';
@@ -9984,11 +10012,11 @@ function renderChampionshipTab() {
       if (isChamp) {
         myStatus = `<div class="lb-champ-my-status defending">👑 You are the current ${cat} Champion — defend your title!</div>`;
       } else if (iQualify) {
-        myStatus = `<div class="lb-champ-my-status qualify">✅ You're #${myRank} — you qualify for the Championship Challenge this month.</div>`;
+        myStatus = `<div class="lb-champ-my-status qualify">✅ You're #${myRank} — you qualify for the ${catChampMonth} Championship Challenge.</div>`;
       } else if (myWins > 0) {
-        myStatus = `<div class="lb-champ-my-status progress">You're #${myRank} with ${myWins} win${myWins > 1 ? 's' : ''}. Reach top 3 to qualify for the Championship Challenge.</div>`;
+        myStatus = `<div class="lb-champ-my-status progress">You're #${myRank} with ${myWins} win${myWins > 1 ? 's' : ''}. Reach top 3 to qualify for the ${catChampMonth} Championship Challenge.</div>`;
       } else {
-        myStatus = `<div class="lb-champ-my-status none">Win a ${cat} challenge to start climbing toward the Championship.</div>`;
+        myStatus = `<div class="lb-champ-my-status none">Win a ${cat} challenge this month to start climbing toward the ${catChampMonth} Championship.</div>`;
       }
     }
 
@@ -10128,10 +10156,10 @@ async function launchChampionshipChallenge(category) {
     // Create the championship challenge
     const { data: ch, error: chErr } = await db.from('challenges').insert({
       creator_id: state.profile.id,
-      title: `⚡ ${category} Championship — ${monthLabel}`,
+      title: `⚡ ${category} Championship — ${formatStoredMonth(getChampMonth(category))}`,
       category,
       media_type: 'photo',
-      rules: `Official ${category} Championship Challenge for ${monthLabel}. Only the top performers from this month are invited. Best entry wins the Champion title.`,
+      rules: `Official ${category} Championship Challenge for ${formatStoredMonth(getChampMonth(category))}. Only the top performers from that month are invited to compete for the Champion title.`,
       submission_deadline: subDeadline,
       voting_end: voteEnd,
       is_public: false,
@@ -10197,10 +10225,10 @@ async function autoLaunchMonthlyChampionships(month) {
       const voteEnd = new Date(now.getTime() + 14 * 86400000).toISOString();
       const { data: ch, error: chErr } = await db.from('challenges').insert({
         creator_id: state.profile.id,
-        title: `⚡ ${cat} Championship — ${monthLabel}`,
+        title: `⚡ ${cat} Championship — ${formatStoredMonth(getChampMonth(cat))}`,
         category: cat,
         media_type: 'photo',
-        rules: `Official ${cat} Championship Challenge for ${monthLabel}. Top performers this month, invited to compete for the Champion title.`,
+        rules: `Official ${cat} Championship Challenge for ${formatStoredMonth(getChampMonth(cat))}. Top performers from that month are invited to compete for the Champion title.`,
         submission_deadline: subDeadline,
         voting_end: voteEnd,
         is_public: false,
@@ -11388,7 +11416,7 @@ function renderChallenges() {
       <div class="fcc-challenge-wrap" data-cid="${ch.id}">
         <div class="feed-challenge-card feed-challenge-expanded" data-chid="${ch.id}" style="padding:16px;cursor:pointer;">
           <div class="feed-poll-header">
-            <span class="feed-poll-tag" style="color:var(--ember);">${isChampionship ? '⚡ CHAMPIONSHIP' : '🏆 CHALLENGE'} <span style="opacity:0.55">·</span> ${escapeHtml((ch.category||'').toUpperCase())}</span>
+            <span class="feed-poll-tag" style="color:var(--ember);">${isChampionship ? `⚡ CHAMPIONSHIP · ${champMonthLabel(ch.id) ? champMonthLabel(ch.id).toUpperCase() + ' · ' : ''}` : '🏆 CHALLENGE · '}${escapeHtml((ch.category||'').toUpperCase())}</span>
             <span class="feed-poll-time">${countdownText}</span>
           </div>
           <div class="feed-challenge-label ${phase.cls}" style="margin-bottom:6px;"><span class="fcl-dot"></span>${phase.label}</div>
