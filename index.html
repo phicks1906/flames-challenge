@@ -5539,8 +5539,10 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       <div style="font-weight:600;margin-bottom:6px;">No entries yet</div>
       <div style="font-size:14px;">Be the first to enter this challenge</div>
     </div>
-    <!-- Challengers panel -->
-    <div id="fvChallengersPanel" style="display:none;padding:0 16px 12px;"></div>
+    <!-- Dynamic challenger card — updates on swipe -->
+    <div id="fvChallengerCard" style="display:none;padding:0 16px 4px;"></div>
+    <!-- Vote standings — shown after casting a vote -->
+    <div id="fvStandings" style="display:none;padding:0 16px 8px;"></div>
     <!-- Sticky action bar -->
     <div style="position:sticky;bottom:0;display:flex;gap:10px;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--border);background:var(--surface);z-index:2;">
       <button id="fvChallengeBtn" class="btn btn-primary" style="flex:1;padding:12px;font-size:14px;" onclick="openFeedViewerChallenge()"></button>
@@ -5930,7 +5932,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v353 · challengers-fv";
+const APP_VERSION = "v354 · challenger-card";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -14365,7 +14367,7 @@ async function openFeedViewer(chId) {
       dotsEl.innerHTML = total > 1
         ? entries.map((_, i) => `<span style="width:7px;height:7px;border-radius:50%;background:${i===0?'var(--ember)':'var(--border-bright)'};transition:background 0.2s,transform 0.2s;display:inline-block;${i===0?'transform:scale(1.3)':''}"></span>`).join('')
         : '';
-      // Update dots on scroll
+      // Update dots + challenger card on scroll
       list.addEventListener('scroll', () => {
         const idx = Math.round(list.scrollLeft / list.offsetWidth);
         if (counter) counter.textContent = total > 1 ? `${idx+1} of ${total}` : '';
@@ -14373,6 +14375,7 @@ async function openFeedViewer(chId) {
           d.style.background = i===idx ? 'var(--ember)' : 'var(--border-bright)';
           d.style.transform  = i===idx ? 'scale(1.3)' : 'scale(1)';
         });
+        renderFvChallengerCard(entries[idx], ch);
       }, { passive: true });
     }
 
@@ -14469,8 +14472,109 @@ async function openFeedViewer(chId) {
     console.error('feedViewer load', err);
     list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Couldn\'t load entries</div>';
   }
-  // Render challengers panel at the bottom (uses currentEntries set by loadChallengeDetail)
+  // Render challenger card for currently visible entry (first on load)
+  const fvEntriesList = (state.feedEntries || []).filter(e => e.challenge_id === ch?.id);
+  if (fvEntriesList.length) renderFvChallengerCard(fvEntriesList[0], ch);
+  // Clear stale standings from previous session
+  const fvStandingsEl = document.getElementById('fvStandings');
+  if (fvStandingsEl) { fvStandingsEl.style.display = 'none'; fvStandingsEl.innerHTML = ''; }
   renderFvChallengersPanel(ch);
+}
+
+
+function renderFvChallengerCard(entry, ch) {
+  const panel = document.getElementById('fvChallengerCard');
+  if (!panel || !entry) { if(panel) panel.style.display='none'; return; }
+
+  const sub = entry.submitter || {};
+  const lbUsers = state.leaderboardData?.users || [];
+  const lb = lbUsers.find(u => u.id === entry.user_id) || {};
+  const cat = ch?.category || 'All';
+  const wins = lb.wins || 0;
+  const losses = lb.losses || 0;
+  const catWins = lb.rolling30ByCategory?.[cat] || 0;
+
+  const catSorted = [...lbUsers]
+    .filter(u => (u.rolling30ByCategory?.[cat] || 0) > 0)
+    .sort((a,b) => (b.rolling30ByCategory?.[cat]||0) - (a.rolling30ByCategory?.[cat]||0));
+  const rank = catSorted.findIndex(u => u.id === entry.user_id);
+  const rankNum = rank >= 0 ? rank + 1 : null;
+
+  const champTitles = getChampTitles();
+  const hofLog = getHofLog();
+  const titlesMap = computeHofTitles(hofLog);
+  const now = new Date();
+  const curMonth = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  const isChamp = champTitles[cat+'-'+curMonth]?.userId === entry.user_id;
+  const hofTitle = hofTitleLabel(titlesMap, entry.user_id);
+  const isMe = entry.user_id === state.profile?.id;
+
+  const rankEmoji = rankNum === 1 ? '🥇' : rankNum === 2 ? '🥈' : rankNum === 3 ? '🥉' : rankNum ? '#'+rankNum : null;
+  const recordStr = wins > 0 || losses > 0
+    ? wins+'W · '+losses+'L' + (catWins > 0 ? ' · '+catWins+' this month' : '')
+    : 'No record yet';
+
+  const badges = [];
+  if (isChamp) badges.push('<span class="cd-challenger-badge">👑 Champ</span>');
+  if (hofTitle) badges.push('<span class="cd-challenger-badge">🌟 '+escapeHtml(hofTitle)+'</span>');
+  if (rankEmoji) badges.push('<span class="cd-challenger-badge" style="background:rgba(255,106,44,0.12);border-color:rgba(255,106,44,0.3);color:var(--ember);">'+rankEmoji+' Rank</span>');
+
+  panel.innerHTML = '<div style="display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;cursor:pointer;" data-fv-uid="'+entry.user_id+'">' +
+    '<div class="cd-challenger-av">'+avatarInner(sub.avatar)+'</div>' +
+    '<div style="flex:1;min-width:0;">' +
+      '<div style="font-weight:700;font-size:15px;color:var(--text);">'+escapeHtml(sub.name||'Unknown')+(isMe ? ' <span style="color:var(--ember);font-size:11px">(you)</span>' : '')+'</div>' +
+      '<div style="font-size:12px;color:var(--text-muted);margin-top:2px;">'+escapeHtml(recordStr)+'</div>' +
+      (badges.length ? '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:5px;">'+badges.join('')+'</div>' : '') +
+    '</div>' +
+  '</div>';
+
+  panel.querySelector('[data-fv-uid]')?.addEventListener('click', () => {
+    if (entry.user_id !== state.profile?.id) { closeFeedViewer(); openUserProfile(entry.user_id); }
+  });
+  panel.style.display = 'block';
+}
+
+function renderFvStandings(chId, votes) {
+  const panel = document.getElementById('fvStandings');
+  if (!panel) return;
+  const entries = (state.feedEntries || []).filter(e => e.challenge_id === chId);
+  if (!entries.length) { panel.style.display = 'none'; return; }
+
+  const tally = {};
+  votes.forEach(v => { tally[v.entry_id] = (tally[v.entry_id] || 0) + 1; });
+  const total = votes.length;
+  const myVoteEntryId = votes.find(v => v.voter_id === state.profile?.id)?.entry_id;
+
+  const sorted = [...entries]
+    .map(e => ({ e, v: tally[e.id] || 0 }))
+    .sort((a,b) => b.v - a.v);
+
+  const medals = ['🥇','🥈','🥉'];
+  panel.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;animation:fadeUp 0.3s ease;">' +
+    '<div style="font-family:var(--font-display);font-size:12px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:10px;">🏆 Current Standings</div>' +
+    sorted.map(({e, v}, i) => {
+      const sub = e.submitter || {};
+      const pct = total > 0 ? Math.round(v/total*100) : 0;
+      const isMyPick = e.id === myVoteEntryId;
+      return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);">' +
+        '<span style="font-size:18px;width:26px;flex-shrink:0;">'+(medals[i]||'#'+(i+1))+'</span>' +
+        '<div style="width:30px;height:30px;border-radius:50%;overflow:hidden;flex-shrink:0;background:linear-gradient(135deg,var(--ember),var(--coral));display:grid;place-items:center;font-size:14px;">'+avatarInner(sub.avatar)+'</div>' +
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escapeHtml(sub.name||'Unknown')+(isMyPick ? ' <span style="color:var(--ember);font-size:10px">· your vote</span>' : '')+'</div>' +
+          '<div style="height:4px;background:var(--overlay-2);border-radius:2px;margin-top:3px;overflow:hidden;"><div style="height:100%;width:'+pct+'%;background:'+( i===0&&v>0?'var(--gold)':'var(--ember)')+';border-radius:2px;transition:width 0.6s ease;"></div></div>' +
+        '</div>' +
+        '<span style="font-size:12px;font-weight:700;color:'+(i===0&&v>0?'var(--gold)':'var(--text-muted)')+';flex-shrink:0;">'+pct+'%</span>' +
+      '</div>';
+    }).join('') +
+    '<div style="font-size:11px;color:var(--text-muted);margin-top:8px;text-align:center;">'+total+' vote'+(total===1?'':'s')+' · '+entries.length+' entr'+(entries.length===1?'y':'ies')+'</div>' +
+  '</div>';
+
+  panel.style.display = 'block';
+  // Scroll to reveal standings
+  setTimeout(() => {
+    const modal = document.getElementById('feedViewerModal');
+    if (modal) modal.scrollTo({ top: modal.scrollHeight, behavior: 'smooth' });
+  }, 100);
 }
 
 function renderFvChallengersPanel(ch) {
@@ -14631,15 +14735,28 @@ async function fvVote(btn, chId) {
   try { navigator.vibrate && navigator.vibrate(10); } catch(e) {}
   const entryId = btn.dataset.fvVote;
   btn.disabled = true;
-  btn.textContent = '⏳';
+  btn.textContent = '⏳ Counting...';
   try {
     await db.from('entry_votes').upsert(
       { challenge_id: chId, entry_id: entryId, voter_id: state.profile.id },
       { onConflict: 'challenge_id,voter_id' }
     );
     toast('🗳️ Vote cast');
-    openFeedViewer(chId); // refresh
-  } catch(e) { toast('Vote failed'); btn.disabled = false; }
+    // Update button state without full reload
+    btn.textContent = '✓ Voted';
+    btn.style.background = 'var(--ember)';
+    btn.disabled = true;
+    // Load fresh vote counts and show standings
+    const { data: votes } = await db.from('entry_votes')
+      .select('entry_id, voter_id')
+      .eq('challenge_id', chId);
+    if (votes) {
+      _fvVoteCounts = {};
+      votes.forEach(v => { _fvVoteCounts[v.entry_id] = (_fvVoteCounts[v.entry_id] || 0) + 1; });
+      renderFvStandings(chId, votes);
+      spawnEmberBurst(btn);
+    }
+  } catch(e) { toast('Vote failed'); btn.disabled = false; btn.textContent = '🗳 Vote'; }
 }
 
 async function fvLike(btn) {
