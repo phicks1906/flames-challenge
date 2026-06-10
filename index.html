@@ -3813,6 +3813,62 @@ body.theme-light .skeleton {
   padding: 16px;
   animation: fadeUp 0.35s ease;
 }
+
+/* ── Challengers panel ── */
+.cd-challengers-panel {
+  margin-top: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  animation: fadeUp 0.4s ease;
+}
+.cd-challengers-title {
+  font-family: var(--font-display);
+  font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-muted);
+  padding: 12px 16px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.cd-challenger-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer; transition: background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.cd-challenger-row:last-child { border-bottom: none; }
+.cd-challenger-row:active { background: var(--overlay-1); }
+.cd-challenger-av {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--ember), var(--coral));
+  display: grid; place-items: center; font-size: 18px;
+  flex-shrink: 0; overflow: hidden;
+}
+.cd-challenger-info { flex: 1; min-width: 0; }
+.cd-challenger-name {
+  font-weight: 700; font-size: 14px; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cd-challenger-meta {
+  font-size: 11px; color: var(--text-muted);
+  margin-top: 2px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.cd-challenger-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  background: rgba(255,200,87,0.15);
+  border: 1px solid rgba(255,200,87,0.3);
+  color: var(--gold);
+  border-radius: 100px;
+  padding: 1px 7px;
+  font-size: 10px; font-weight: 700;
+}
+.cd-challenger-rank {
+  font-family: var(--font-display);
+  font-size: 20px; letter-spacing: 0.02em;
+  color: var(--text-muted); flex-shrink: 0; width: 36px; text-align: center;
+}
+.cd-challenger-rank.top { color: var(--gold); }
 .cd-results-title {
   font-family: var(--font-display);
   font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em;
@@ -5094,6 +5150,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       <button class="btn btn-primary" id="cdAddEntryBtn" onclick="openSubmitEntry()" style="width:100%">+ Submit your entry</button>
     </div>
     <div id="cdResultsPanel" style="display:none"></div>
+    <div id="cdChallengersPanel" style="display:none"></div>
   </div>
 </div>
 
@@ -5871,7 +5928,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v351 · polish";
+const APP_VERSION = "v352 · challengers";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -11203,6 +11260,7 @@ async function openChallenge(ch) {
   }
   renderChallengeDetail();
   renderChallengeResults();
+  renderChallengersPanel();
 }
 
 function closeChallengeDetail() {
@@ -11604,6 +11662,86 @@ function renderChallengeDetail() {
   });
 }
 
+function renderChallengersPanel() {
+  const panel = document.getElementById('cdChallengersPanel');
+  if (!panel) return;
+  if (!state.currentEntries || !state.currentEntries.length) { panel.style.display = 'none'; return; }
+
+  const lbUsers = state.leaderboardData?.users || [];
+  const champTitles = getChampTitles();
+  const hofLog = getHofLog();
+  const titlesMap = computeHofTitles(hofLog);
+  const now = new Date();
+  const curMonth = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  const cat = state.currentChallenge?.category || 'All';
+
+  // Build a ranked list of entrants with their stats
+  const entrants = state.currentEntries.map(e => {
+    const sub = e.submitter || {};
+    const lb = lbUsers.find(u => u.id === e.user_id) || {};
+
+    // All-time wins from leaderboard data (computed from last 30 days — best we have)
+    const wins = lb.wins || 0;
+    const losses = lb.losses || 0;
+    const catWins = lb.rolling30ByCategory?.[cat] || 0;
+
+    // Monthly rank in this category
+    const catSorted = [...lbUsers]
+      .filter(u => (u.rolling30ByCategory?.[cat] || 0) > 0)
+      .sort((a,b) => (b.rolling30ByCategory?.[cat]||0) - (a.rolling30ByCategory?.[cat]||0));
+    const rank = catSorted.findIndex(u => u.id === e.user_id);
+    const rankNum = rank >= 0 ? rank + 1 : null;
+
+    // Champion badge
+    const champKey = cat + '-' + curMonth;
+    const isChamp = champTitles[champKey]?.userId === e.user_id;
+    const hofTitles = hofTitleLabel(titlesMap, e.user_id);
+
+    return { userId: e.user_id, name: sub.name || 'Unknown', avatar: sub.avatar || '🔥',
+             wins, losses, catWins, rankNum, isChamp, hofTitles };
+  });
+
+  const rankEmoji = n => n === 1 ? '🥇' : n === 2 ? '🥈' : n === 3 ? '🥉' : '#' + n;
+
+  panel.innerHTML = '<div class="cd-challengers-panel">' +
+    '<div class="cd-challengers-title">⚔️ Challengers</div>' +
+    entrants.map(c => {
+      const rankHtml = c.rankNum
+        ? '<div class="cd-challenger-rank' + (c.rankNum <= 3 ? ' top' : '') + '">' + rankEmoji(c.rankNum) + '</div>'
+        : '<div class="cd-challenger-rank"></div>';
+
+      const badges = [];
+      if (c.isChamp) badges.push('<span class="cd-challenger-badge">👑 Champ</span>');
+      if (c.hofTitles) badges.push('<span class="cd-challenger-badge">🌟 ' + escapeHtml(c.hofTitles) + '</span>');
+
+      const record = c.wins > 0 || c.losses > 0
+        ? c.wins + 'W · ' + c.losses + 'L' + (c.catWins > 0 ? ' · ' + c.catWins + ' this month' : '')
+        : 'No record yet';
+
+      const isMe = c.userId === state.profile?.id;
+      return '<div class="cd-challenger-row" data-uid="' + c.userId + '">' +
+        rankHtml +
+        '<div class="cd-challenger-av">' + avatarInner(c.avatar) + '</div>' +
+        '<div class="cd-challenger-info">' +
+          '<div class="cd-challenger-name">' + escapeHtml(c.name) + (isMe ? ' <span style="color:var(--ember);font-size:11px">(you)</span>' : '') + '</div>' +
+          '<div class="cd-challenger-meta">' + escapeHtml(record) +
+            (badges.length ? '<span style="display:inline-flex;gap:4px;flex-wrap:wrap">' + badges.join('') + '</span>' : '') +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('') +
+  '</div>';
+
+  // Wire profile taps
+  panel.querySelectorAll('[data-uid]').forEach(row => {
+    row.addEventListener('click', () => {
+      if (row.dataset.uid !== state.profile?.id) openUserProfile(row.dataset.uid);
+    });
+  });
+
+  panel.style.display = 'block';
+}
+
 function renderChallengeResults() {
   const panel = document.getElementById('cdResultsPanel');
   if (!panel) return;
@@ -11697,7 +11835,7 @@ async function voteOnEntry(entryId) {
   setTimeout(() => {
     const grid = document.getElementById('cdEntriesGrid');
     if (grid) grid.scrollLeft = 0;
-    renderChallengeResults();
+    renderChallengeResults(); renderChallengersPanel();
     // Ember burst on the voted entry card
     setTimeout(() => {
       const votedCard = document.querySelector(`.cd-entry[data-entry-id="${entryId}"]`);
@@ -15136,7 +15274,7 @@ async function toggleFollowFromSheet(userId) {
     if (state.currentView === 'feed') renderFeed();
     // Always re-render challenge detail if open — removes stale + badges
     if (state.currentChallenge) {
-      try { renderChallengeDetail(); renderChallengeResults(); } catch (e) {}
+      try { renderChallengeDetail(); renderChallengeResults(); renderChallengersPanel(); } catch (e) {}
     }
   } catch (err) {
     console.error('follow toggle error', err);
@@ -15274,7 +15412,7 @@ async function renderFindPeopleResults(query) {
             btn.classList.add('following');
           }
           if (state.currentView === 'feed') renderFeed();
-          if (state.currentChallenge) { try { renderChallengeDetail(); renderChallengeResults(); } catch (e) {} }
+          if (state.currentChallenge) { try { renderChallengeDetail(); renderChallengeResults(); renderChallengersPanel(); } catch (e) {} }
         } catch (err) {
           console.error('follow toggle from search error', err);
           toast('Follow failed');
