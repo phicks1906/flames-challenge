@@ -3911,19 +3911,19 @@ body.theme-light .skeleton {
   --badge-text: #9ade99;
   --badge-glow: rgba(106,191,105,0.3);
 }
-.fc-badge-competitor {
-  --badge-border: var(--ember);
-  --badge-grad: linear-gradient(135deg, #3d1a00, #7a2e00);
-  --badge-text: #ff9a6c;
-  --badge-glow: rgba(255,106,44,0.35);
-}
 .fc-badge-champ {
   --badge-border: #ffb300;
   --badge-grad: linear-gradient(135deg, #3d2800, #8a5500);
   --badge-text: #ffd54f;
   --badge-glow: rgba(255,179,0,0.5);
 }
-.fc-badge-legend {
+.fc-badge-rising {
+  --badge-border: #69c4ff;
+  --badge-grad: linear-gradient(135deg, #001e3d, #003a7a);
+  --badge-text: #90d4ff;
+  --badge-glow: rgba(105,196,255,0.4);
+}
+.fc-badge-established {
   --badge-border: #ffc857;
   --badge-grad: linear-gradient(135deg, #1a1400, #3d2a00);
   --badge-text: #ffd980;
@@ -3954,9 +3954,9 @@ body.theme-light .skeleton {
   --badge-glow: rgba(255,106,44,0.45);
 }
 body.theme-light .fc-badge-rookie     { --badge-grad: linear-gradient(135deg, #e8f5e9, #c8e6c9); --badge-text: #2e7d32; }
-body.theme-light .fc-badge-competitor { --badge-grad: linear-gradient(135deg, #fff3e0, #ffe0b2); --badge-text: #bf360c; }
 body.theme-light .fc-badge-champ      { --badge-grad: linear-gradient(135deg, #fff8e1, #ffecb3); --badge-text: #b8860b; }
-body.theme-light .fc-badge-legend     { --badge-grad: linear-gradient(135deg, #fff8e1, #ffe9a8); --badge-text: #9a7400; }
+body.theme-light .fc-badge-rising { --badge-grad: linear-gradient(135deg, #e3f2fd, #bbdefb); --badge-text: #01579b; }
+body.theme-light .fc-badge-established     { --badge-grad: linear-gradient(135deg, #fff8e1, #ffe9a8); --badge-text: #9a7400; }
 body.theme-light .fc-badge-icon       { --badge-grad: linear-gradient(135deg, #e1f5fe, #b3e5fc); --badge-text: #01579b; }
 body.theme-light .fc-badge-immortal   { --badge-grad: linear-gradient(135deg, #f3e5f5, #e1bee7); --badge-text: #6a1b9a; }
 body.theme-light .fc-badge-goat       { --badge-grad: linear-gradient(135deg, #fffde7, #fff59d); --badge-text: #8a6d00; }
@@ -6032,7 +6032,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v366 · categories-fix";
+const APP_VERSION = "v369 · founder-crown";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -11241,12 +11241,9 @@ async function loadChallenges(opts = {}) {
     state.entryCounts = {};
     state.creatorEntries = {};
     state._entrantIds = new Set();
-    state._entrantsLoaded = !!entries; // only trust Rookie/Competitor distinction after a successful full load
   }
-  state._entrantIds = state._entrantIds || new Set();
   (entries || []).forEach(e => {
     state.entryCounts[e.challenge_id] = (state.entryCounts[e.challenge_id] || 0) + 1;
-    state._entrantIds.add(e.user_id);
     const ch = state.challenges.find(c => c.id === e.challenge_id);
     if (ch && e.user_id === ch.creator_id) state.creatorEntries[e.challenge_id] = e;
   });
@@ -14513,31 +14510,22 @@ function getPrimaryBadge(userId, size = 24) {
 
   // Founder — permanent, CSS chip for now (artwork replaces later)
   if (FOUNDERS.includes(userId)) {
-    return `<span class="fc-badge fc-badge-founder" title="Founder">🔥 Founder</span>`;
+    return `<span class="fc-badge fc-badge-founder" title="Founder">👑 Founder</span>`;
   }
 
   // Championship wins from hall_of_fame
   const champWins = (state.hofData || []).filter(r => r.userId === userId).length;
 
-  // HOF tiers (5+ wins) — CSS chips, artwork replaces later
-  if (champWins >= 20) return `<span class="fc-badge fc-badge-goat"    title="${champWins} titles">🐐 G.O.A.T.</span>`;
-  if (champWins >= 15) return `<span class="fc-badge fc-badge-immortal" title="${champWins} titles">🔱 Immortal</span>`;
-  if (champWins >= 10) return `<span class="fc-badge fc-badge-icon"     title="${champWins} titles">⚡ Icon</span>`;
-  if (champWins >= 5)  return `<span class="fc-badge fc-badge-legend"   title="${champWins} titles">🌟 Legend</span>`;
+  // HOF tiers — CSS chips, artwork replaces later
+  if (champWins >= 20) return `<span class="fc-badge fc-badge-goat"        title="${champWins} titles">🐐 G.O.A.T.</span>`;
+  if (champWins >= 15) return `<span class="fc-badge fc-badge-immortal"    title="${champWins} titles">🔱 Immortal</span>`;
+  if (champWins >= 10) return `<span class="fc-badge fc-badge-icon"        title="${champWins} titles">⚡ Icon</span>`;
+  if (champWins >= 5)  return `<span class="fc-badge fc-badge-established" title="${champWins} titles">🏛️ Established</span>`;
 
-  // Nx Champion (1–4 wins) — gold chip with count
-  if (champWins >= 1) {
-    return `<span class="fc-badge fc-badge-champ" title="${champWins}x Champion">${champWins}x 👑</span>`;
-  }
+  // Rising — 1–4 championship wins
+  if (champWins >= 1)  return `<span class="fc-badge fc-badge-rising"      title="${champWins}x Champion">⬆️ Rising</span>`;
 
-  // Competitor / Rookie — only shown after entry data is confirmed loaded
-  if (!state._entrantsLoaded) return '';
-
-  if (state._entrantIds?.has(userId)) {
-    return `<span class="fc-badge fc-badge-competitor" title="Competitor">🔥 Competitor</span>`;
-  }
-
-  // Rookie — the starting badge. Everyone has one. The motivation to compete.
+  // Rookie — the default skin, everyone. Gap to Rising is the motivation.
   return `<span class="fc-badge fc-badge-rookie" title="Rookie">🔰 Rookie</span>`;
 }
 
@@ -14547,13 +14535,13 @@ function openBadgeLegend() {
   if (!list) return;
   const rows = [
     { badge: '<span class="fc-badge fc-badge-rookie">🔰 Rookie</span>',         name: 'Rookie',     desc: 'Just joined. Enter your first challenge to level up.' },
-    { badge: '<span class="fc-badge fc-badge-competitor">🔥 Competitor</span>', name: 'Competitor', desc: 'Has entered at least one challenge.' },
-    { badge: '<span class="fc-badge fc-badge-champ">1x 👑</span>',              name: 'Champion',   desc: 'Won a monthly championship. The number shows your total titles.' },
-    { badge: '<span class="fc-badge fc-badge-legend">🌟 Legend</span>',         name: 'Legend',     desc: '5+ championship wins. You\'re on the board.' },
+    { badge: '<span class="fc-badge fc-badge-rising">⬆️ Rising</span>',          name: 'Rising',     desc: '1–4 championship wins. You\'re on the board.' },
+    { badge: '<span class="fc-badge fc-badge-established">🏛️ Established</span>',  name: 'Established',desc: '5–9 wins. You\'re in the Hall of Fame and just getting started.' },
+    { badge: '<span class="fc-badge fc-badge-established">🏛️ Established</span>', name: 'Established',     desc: '5+ championship wins. You\'re on the board.' },
     { badge: '<span class="fc-badge fc-badge-icon">⚡ Icon</span>',             name: 'Icon',       desc: '10+ wins. A cultural force on this platform.' },
     { badge: '<span class="fc-badge fc-badge-immortal">🔱 Immortal</span>',     name: 'Immortal',   desc: '15+ wins. Beyond human.' },
     { badge: '<span class="fc-badge fc-badge-goat">🐐 G.O.A.T.</span>',        name: 'G.O.A.T.',   desc: '20+ wins. The apex of achievement.' },
-    { badge: '<span class="fc-badge fc-badge-founder">🔥 Founder</span>',       name: 'Founder',    desc: 'Built this platform before anyone else was here. Permanent.' },
+    { badge: '<span class="fc-badge fc-badge-founder">👑 Founder</span>',       name: 'Founder',    desc: 'Built this platform before anyone else was here. Permanent.' },
   ];
   list.innerHTML = rows.map(r => `
     <div style="display:flex;align-items:center;gap:12px;padding:8px 4px;border-bottom:1px solid var(--border);">
