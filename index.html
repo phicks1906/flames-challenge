@@ -5539,6 +5539,8 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       <div style="font-weight:600;margin-bottom:6px;">No entries yet</div>
       <div style="font-size:14px;">Be the first to enter this challenge</div>
     </div>
+    <!-- Challengers panel -->
+    <div id="fvChallengersPanel" style="display:none;padding:0 16px 12px;"></div>
     <!-- Sticky action bar -->
     <div style="position:sticky;bottom:0;display:flex;gap:10px;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--border);background:var(--surface);z-index:2;">
       <button id="fvChallengeBtn" class="btn btn-primary" style="flex:1;padding:12px;font-size:14px;" onclick="openFeedViewerChallenge()"></button>
@@ -5928,7 +5930,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v352 · challengers";
+const APP_VERSION = "v353 · challengers-fv";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -14467,6 +14469,79 @@ async function openFeedViewer(chId) {
     console.error('feedViewer load', err);
     list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Couldn\'t load entries</div>';
   }
+  // Render challengers panel at the bottom (uses currentEntries set by loadChallengeDetail)
+  renderFvChallengersPanel(ch);
+}
+
+function renderFvChallengersPanel(ch) {
+  const panel = document.getElementById('fvChallengersPanel');
+  if (!panel) return;
+
+  // Use feedEntries scoped to this challenge as our entry list
+  const entries = (state.feedEntries || []).filter(e => e.challenge_id === ch?.id);
+  if (!entries.length) { panel.style.display = 'none'; return; }
+
+  const lbUsers = state.leaderboardData?.users || [];
+  const champTitles = getChampTitles();
+  const hofLog = getHofLog();
+  const titlesMap = computeHofTitles(hofLog);
+  const now = new Date();
+  const curMonth = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  const cat = ch?.category || 'All';
+
+  const entrants = entries.map(e => {
+    const sub = e.submitter || {};
+    const lb = lbUsers.find(u => u.id === e.user_id) || {};
+    const wins = lb.wins || 0;
+    const losses = lb.losses || 0;
+    const catWins = lb.rolling30ByCategory?.[cat] || 0;
+    const catSorted = [...lbUsers]
+      .filter(u => (u.rolling30ByCategory?.[cat] || 0) > 0)
+      .sort((a,b) => (b.rolling30ByCategory?.[cat]||0) - (a.rolling30ByCategory?.[cat]||0));
+    const rank = catSorted.findIndex(u => u.id === e.user_id);
+    const rankNum = rank >= 0 ? rank + 1 : null;
+    const champKey = cat + '-' + curMonth;
+    const isChamp = champTitles[champKey]?.userId === e.user_id;
+    const hofTitles = hofTitleLabel(titlesMap, e.user_id);
+    return { userId: e.user_id, name: sub.name || 'Unknown', avatar: sub.avatar || '🔥',
+             wins, losses, catWins, rankNum, isChamp, hofTitles };
+  });
+
+  const rankEmoji = n => n === 1 ? '🥇' : n === 2 ? '🥈' : n === 3 ? '🥉' : '#' + n;
+
+  panel.innerHTML = '<div class="cd-challengers-panel">' +
+    '<div class="cd-challengers-title">⚔️ Challengers</div>' +
+    entrants.map(c => {
+      const rankHtml = c.rankNum
+        ? '<div class="cd-challenger-rank' + (c.rankNum <= 3 ? ' top' : '') + '">' + rankEmoji(c.rankNum) + '</div>'
+        : '<div class="cd-challenger-rank"></div>';
+      const badges = [];
+      if (c.isChamp) badges.push('<span class="cd-challenger-badge">👑 Champ</span>');
+      if (c.hofTitles) badges.push('<span class="cd-challenger-badge">🌟 ' + escapeHtml(c.hofTitles) + '</span>');
+      const record = c.wins > 0 || c.losses > 0
+        ? c.wins + 'W · ' + c.losses + 'L' + (c.catWins > 0 ? ' · ' + c.catWins + ' this month' : '')
+        : 'No record yet';
+      const isMe = c.userId === state.profile?.id;
+      return '<div class="cd-challenger-row" data-fv-uid="' + c.userId + '">' +
+        rankHtml +
+        '<div class="cd-challenger-av">' + avatarInner(c.avatar) + '</div>' +
+        '<div class="cd-challenger-info">' +
+          '<div class="cd-challenger-name">' + escapeHtml(c.name) + (isMe ? ' <span style="color:var(--ember);font-size:11px">(you)</span>' : '') + '</div>' +
+          '<div class="cd-challenger-meta">' + escapeHtml(record) +
+            (badges.length ? '<span style="display:inline-flex;gap:4px;flex-wrap:wrap">' + badges.join('') + '</span>' : '') +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('') +
+  '</div>';
+
+  panel.querySelectorAll('[data-fv-uid]').forEach(row => {
+    row.addEventListener('click', () => {
+      if (row.dataset.fvUid !== state.profile?.id) { closeFeedViewer(); openUserProfile(row.dataset.fvUid); }
+    });
+  });
+
+  panel.style.display = 'block';
 }
 
 function renderFvEntry(entry, ch, canVote, myVoteEntryId, status) {
