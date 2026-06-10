@@ -5539,10 +5539,10 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       <div style="font-weight:600;margin-bottom:6px;">No entries yet</div>
       <div style="font-size:14px;">Be the first to enter this challenge</div>
     </div>
-    <!-- Dynamic challenger card — updates on swipe -->
-    <div id="fvChallengerCard" style="display:none;padding:0 16px 4px;"></div>
     <!-- Vote standings — shown after casting a vote -->
     <div id="fvStandings" style="display:none;padding:0 16px 8px;"></div>
+    <!-- Dynamic challenger card — updates on swipe -->
+    <div id="fvChallengerCard" style="display:none;padding:0 16px 4px;"></div>
     <!-- Sticky action bar -->
     <div style="position:sticky;bottom:0;display:flex;gap:10px;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--border);background:var(--surface);z-index:2;">
       <button id="fvChallengeBtn" class="btn btn-primary" style="flex:1;padding:12px;font-size:14px;" onclick="openFeedViewerChallenge()"></button>
@@ -5932,7 +5932,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v354 · challenger-card";
+const APP_VERSION = "v355 · entry-layout";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -14285,6 +14285,7 @@ function getUserBadges(userId, category) {
 // "View Challenge" button opens the full challenge detail.
 let _fvChallenge = null;
 let _fvVoteCounts = {}; // entryId → count
+let _fvEntries = [];    // entries loaded by openFeedViewer — used by standings
 
 async function openFeedViewer(chId) {
   const ch = state.challenges.find(c => c.id === chId) || state.currentChallenge;
@@ -14328,7 +14329,8 @@ async function openFeedViewer(chId) {
     const entries = entriesRes.data || [];
     const votes   = votesRes.data  || [];
 
-    // Tally votes
+    // Tally votes and store entries module-level for post-vote standings
+    _fvEntries = entries;
     _fvVoteCounts = {};
     votes.forEach(v => { _fvVoteCounts[v.entry_id] = (_fvVoteCounts[v.entry_id] || 0) + 1; });
     const myVoteEntryId = votes.find(v => v.voter_id === state.profile?.id)?.entry_id || null;
@@ -14514,17 +14516,18 @@ function renderFvChallengerCard(entry, ch) {
     ? wins+'W · '+losses+'L' + (catWins > 0 ? ' · '+catWins+' this month' : '')
     : 'No record yet';
 
-  const badges = [];
-  if (isChamp) badges.push('<span class="cd-challenger-badge">👑 Champ</span>');
-  if (hofTitle) badges.push('<span class="cd-challenger-badge">🌟 '+escapeHtml(hofTitle)+'</span>');
-  if (rankEmoji) badges.push('<span class="cd-challenger-badge" style="background:rgba(255,106,44,0.12);border-color:rgba(255,106,44,0.3);color:var(--ember);">'+rankEmoji+' Rank</span>');
+  const badgeHtml = getUserBadges(entry.user_id, cat);
+  const hofBadge = hofTitle ? `<span class="cd-challenger-badge">🌟 ${escapeHtml(hofTitle)}</span>` : '';
+  const rankBadge = rankEmoji ? `<span class="cd-challenger-badge" style="background:rgba(255,106,44,0.12);border-color:rgba(255,106,44,0.3);color:var(--ember);">${rankEmoji} Rank</span>` : '';
 
   panel.innerHTML = '<div style="display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;cursor:pointer;" data-fv-uid="'+entry.user_id+'">' +
     '<div class="cd-challenger-av">'+avatarInner(sub.avatar)+'</div>' +
     '<div style="flex:1;min-width:0;">' +
-      '<div style="font-weight:700;font-size:15px;color:var(--text);">'+escapeHtml(sub.name||'Unknown')+(isMe ? ' <span style="color:var(--ember);font-size:11px">(you)</span>' : '')+'</div>' +
+      '<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">' +
+        '<span style="font-weight:700;font-size:15px;color:var(--text);">'+escapeHtml(sub.name||'Unknown')+(isMe ? ' <span style="color:var(--ember);font-size:11px">(you)</span>' : '')+'</span>' +
+        badgeHtml + rankBadge + hofBadge +
+      '</div>' +
       '<div style="font-size:12px;color:var(--text-muted);margin-top:2px;">'+escapeHtml(recordStr)+'</div>' +
-      (badges.length ? '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:5px;">'+badges.join('')+'</div>' : '') +
     '</div>' +
   '</div>';
 
@@ -14707,7 +14710,7 @@ function renderFvEntry(entry, ch, canVote, myVoteEntryId, status) {
   return `<div style="flex:0 0 100%;width:100%;scroll-snap-align:center;min-width:0;box-sizing:border-box;">
     ${mediaHtml}
     <div style="padding:12px 14px 16px;">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
         <div style="width:38px;height:38px;border-radius:50%;overflow:hidden;flex-shrink:0;background:linear-gradient(135deg,var(--ember),var(--coral));display:grid;place-items:center;font-size:18px;cursor:pointer;" data-fv-user="${sub.id||''}">${avatarInner(sub.avatar)}</div>
         <div style="flex:1;min-width:0;">
           <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
@@ -14716,15 +14719,15 @@ function renderFvEntry(entry, ch, canVote, myVoteEntryId, status) {
           </div>
           ${entry.caption && mediaType !== 'text' ? `<div style="font-size:13px;color:var(--text-dim);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(entry.caption)}</div>` : ''}
         </div>
-        ${voteBtn}
       </div>
-      <div style="display:flex;align-items:center;gap:10px;">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <button class="flame-btn${iLiked?' liked':''}" data-fv-like="${entry.id}">
           <span class="flame-icon">🔥</span><span>${likeCount}</span>
         </button>
         <button class="comment-btn" data-fv-comment="${entry.id}">
           <span class="comment-icon">💬</span><span>${commentCount}</span>
         </button>
+        ${voteBtn ? `<div style="margin-left:auto;">${voteBtn}</div>` : ''}
       </div>
     </div>
   </div>`;
@@ -14742,21 +14745,30 @@ async function fvVote(btn, chId) {
       { onConflict: 'challenge_id,voter_id' }
     );
     toast('🗳️ Vote cast');
-    // Update button state without full reload
     btn.textContent = '✓ Voted';
     btn.style.background = 'var(--ember)';
     btn.disabled = true;
-    // Load fresh vote counts and show standings
-    const { data: votes } = await db.from('entry_votes')
+    spawnEmberBurst(btn);
+
+    // Fetch fresh vote counts for standings
+    const { data: votes, error: vErr } = await db.from('entry_votes')
       .select('entry_id, voter_id')
       .eq('challenge_id', chId);
-    if (votes) {
-      _fvVoteCounts = {};
-      votes.forEach(v => { _fvVoteCounts[v.entry_id] = (_fvVoteCounts[v.entry_id] || 0) + 1; });
-      renderFvStandings(chId, votes);
-      spawnEmberBurst(btn);
-    }
-  } catch(e) { toast('Vote failed'); btn.disabled = false; btn.textContent = '🗳 Vote'; }
+
+    if (vErr) { console.warn('standings fetch', vErr); return; }
+
+    // Update cached vote counts
+    _fvVoteCounts = {};
+    (votes || []).forEach(v => { _fvVoteCounts[v.entry_id] = (_fvVoteCounts[v.entry_id] || 0) + 1; });
+
+    // Use _fvEntries (loaded by openFeedViewer) for accurate standings
+    renderFvStandings(chId, votes || [], _fvEntries || []);
+  } catch(e) {
+    console.error('fvVote error', e);
+    toast('Vote failed');
+    btn.disabled = false;
+    btn.textContent = '🗳 Vote';
+  }
 }
 
 async function fvLike(btn) {
