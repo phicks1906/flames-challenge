@@ -3869,6 +3869,50 @@ body.theme-light .skeleton {
   color: var(--text-muted); flex-shrink: 0; width: 36px; text-align: center;
 }
 .cd-challenger-rank.top { color: var(--gold); }
+
+/* ── Badge ladder chips ── */
+.fc-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border-radius: 6px;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  vertical-align: middle;
+  position: relative;
+  overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.fc-badge::before {
+  content: "";
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 50%;
+  background: linear-gradient(180deg, rgba(255,255,255,0.07) 0%, transparent 100%);
+  pointer-events: none;
+}
+.fc-badge-rookie {
+  background: linear-gradient(135deg, #1a2e1a, #2e4a2e);
+  border: 1.5px solid #6abf69;
+  color: #9ade99;
+  box-shadow: 0 0 6px rgba(106,191,105,0.25), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.fc-badge-competitor {
+  background: linear-gradient(135deg, #3d1a00, #7a2e00);
+  border: 1.5px solid var(--ember);
+  color: #ff9a6c;
+  box-shadow: 0 0 6px rgba(255,106,44,0.3), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.fc-badge-champ {
+  background: linear-gradient(135deg, #3d2800, #8a5500);
+  border: 1.5px solid #ffb300;
+  color: #ffd54f;
+  box-shadow: 0 0 8px rgba(255,179,0,0.45), inset 0 1px 0 rgba(255,255,255,0.1);
+}
+body.theme-light .fc-badge-rookie { background: linear-gradient(135deg, #e8f5e9, #c8e6c9); color: #2e7d32; }
+body.theme-light .fc-badge-competitor { background: linear-gradient(135deg, #fff3e0, #ffe0b2); color: #bf360c; }
+body.theme-light .fc-badge-champ { background: linear-gradient(135deg, #fff8e1, #ffecb3); color: #b8860b; }
 .cd-results-title {
   font-family: var(--font-display);
   font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em;
@@ -5932,7 +5976,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v355 · entry-layout";
+const APP_VERSION = "v356 · badge-ladder";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -10996,9 +11040,12 @@ async function loadChallenges(opts = {}) {
   if (!opts.incremental) {
     state.entryCounts = {};
     state.creatorEntries = {};
+    state._entrantIds = new Set();
   }
+  state._entrantIds = state._entrantIds || new Set();
   (entries || []).forEach(e => {
     state.entryCounts[e.challenge_id] = (state.entryCounts[e.challenge_id] || 0) + 1;
+    state._entrantIds.add(e.user_id);
     const ch = state.challenges.find(c => c.id === e.challenge_id);
     if (ch && e.user_id === ch.creator_id) state.creatorEntries[e.challenge_id] = e;
   });
@@ -14255,25 +14302,48 @@ function closeFollowingSheet() {
 
 // ── ENTRY BADGES ─────────────────────────────────────────────────────────────
 // Returns badge HTML for a user on a given challenge category
-function getUserBadges(userId, category) {
-  if (!userId || !state.leaderboardData) return '';
-  const badges = [];
-  const { users, leaders, champions } = state.leaderboardData;
+// ── Badge ladder ──────────────────────────────────────────────────────────────
+// Everyone has exactly one primary badge — their highest achievement:
+// Founder (hardcoded) > HOF tier (5+ champ wins, Eric's artwork via getHofBadge) >
+// Nx Champion (1-4 wins) > Competitor (entered ≥1) > Rookie (signed up, default skin)
+function getPrimaryBadge(userId, size = 24) {
+  if (!userId) return '';
 
-  // Category rank badge (top 3 in rolling 30d)
-  if (category) {
-    const ranked = [...(users || [])]
-      .filter(u => (u.rolling30ByCategory?.[category] || 0) > 0)
-      .sort((a, b) => (b.rolling30ByCategory?.[category] || 0) - (a.rolling30ByCategory?.[category] || 0));
-    const idx = ranked.findIndex(u => u.id === userId);
-    if (idx === 0) badges.push('<span title="Category Leader" style="font-size:14px;">🥇</span>');
-    else if (idx === 1) badges.push('<span title="2nd in category" style="font-size:14px;">🥈</span>');
-    else if (idx === 2) badges.push('<span title="3rd in category" style="font-size:14px;">🥉</span>');
+  // Founder + HOF tiers (5+ wins) — existing artwork badges from Assets/Badges/
+  const hofBadge = getHofBadge(userId, size);
+  if (hofBadge) return hofBadge;
+
+  // Nx Champion (1-4 championship wins) — gold chip with count
+  const champWins = (state.hofData || []).filter(r => r.userId === userId).length;
+  if (champWins >= 1) {
+    return `<span class="fc-badge fc-badge-champ" title="${champWins}x Champion">${champWins}x 👑</span>`;
   }
 
-  // Champion badge
-  if (champions && Object.values(champions).includes(userId)) {
-    badges.push('<span title="Champion" style="font-size:14px;">👑</span>');
+  // Competitor — has entered at least one challenge
+  if (state._entrantIds && state._entrantIds.has(userId)) {
+    return `<span class="fc-badge fc-badge-competitor" title="Competitor">🔥</span>`;
+  }
+
+  // Rookie — signed up, no entries yet (the default skin, never insulting)
+  return `<span class="fc-badge fc-badge-rookie" title="Rookie — enter your first challenge!">🌱</span>`;
+}
+
+function getUserBadges(userId, category) {
+  if (!userId) return '';
+  const badges = [getPrimaryBadge(userId)];
+
+  if (state.leaderboardData) {
+    const { users } = state.leaderboardData;
+    // Category rank medal (top 3 this month) — secondary, shown next to primary badge
+    if (category) {
+      const ranked = [...(users || [])]
+        .filter(u => (u.rolling30ByCategory?.[category] || 0) > 0)
+        .sort((a, b) => (b.rolling30ByCategory?.[category] || 0) - (a.rolling30ByCategory?.[category] || 0));
+      const idx = ranked.findIndex(u => u.id === userId);
+      if (idx === 0) badges.push('<span title="Category Leader" style="font-size:14px;">🥇</span>');
+      else if (idx === 1) badges.push('<span title="2nd in category" style="font-size:14px;">🥈</span>');
+      else if (idx === 2) badges.push('<span title="3rd in category" style="font-size:14px;">🥉</span>');
+    }
   }
 
   return badges.join('');
