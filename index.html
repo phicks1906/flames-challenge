@@ -6032,7 +6032,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v370 · media-label";
+const APP_VERSION = "v371 · lazy-video";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -9399,6 +9399,32 @@ function enableTicker() {
 
 // Returns "May '26" for a championship challenge, or '' if no launch record found
 // Returns a short media type label for challenge cards
+// ── Lazy video thumbnails ──────────────────────────────────────────────────────
+// Entries without poster_url show a video element with data-src (no download).
+// When the card scrolls into view, src is set and the video starts loading.
+// Only the visible card(s) download at any time — no grey boxes, low bandwidth.
+let _lazyVideoObserver = null;
+function wireLazyVideoThumbnails(container) {
+  const targets = (container || document).querySelectorAll('video[data-lazy-video][data-src]');
+  if (!targets.length) return;
+
+  if (!_lazyVideoObserver) {
+    _lazyVideoObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        const vid = entry.target;
+        if (vid.src || !vid.dataset.src) return; // already loaded
+        vid.src = vid.dataset.src;
+        vid.load();
+        vid.play().catch(() => {});
+        _lazyVideoObserver.unobserve(vid);
+      });
+    }, { threshold: 0.1, rootMargin: '100px' });
+  }
+
+  targets.forEach(vid => _lazyVideoObserver.observe(vid));
+}
+
 function mediaTypeLabel(mt) {
   return { photo: '📷 PHOTO', video: '📹 VIDEO', audio: '🎙️ AUDIO', text: '✍️ TEXT' }[mt] || '';
 }
@@ -11367,7 +11393,7 @@ function renderChallenges() {
       } else if (eMt === 'video' && e.media_url) {
         mHtml = e.poster_url
           ? `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}"><img src="${escapeHtml(e.poster_url)}" style="width:100%;height:100%;object-fit:cover;display:block"><div class="fcc-play-overlay">▶</div></div>`
-          : `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}" style="position:relative;"><video src="${escapeHtml(e.media_url)}" autoplay muted playsinline loop preload="metadata" style="width:100%;height:100%;object-fit:cover;display:block;"></video><div class="fcc-play-overlay">▶</div></div>`;
+          : `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}" style="position:relative;"><video data-src="${escapeHtml(e.media_url)}" autoplay muted playsinline loop preload="none" data-lazy-video style="width:100%;height:100%;object-fit:cover;display:block;"></video><div class="fcc-play-overlay">▶</div></div>`;
       } else if (eMt === 'audio') {
         mHtml = e.media_url
           ? `<div class="fcc-entry-media" style="background:var(--surface-2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:12px;">
@@ -11726,7 +11752,7 @@ function renderChallengeDetail() {
       } else {
         // No poster — use autoplay muted video to show first frame (same as feed cards)
         mediaHtml = `<div style="position:relative;cursor:pointer;" data-open-entry="${entry.id}" data-open-ch="${entry.challenge_id}">
-          <video src="${escapeHtml(entry.media_url)}" autoplay muted playsinline loop preload="metadata"
+          <video data-src="${escapeHtml(entry.media_url)}" autoplay muted playsinline loop preload="none" data-lazy-video
             style="width:100%;height:100%;object-fit:cover;display:block;border-radius:8px;pointer-events:none;"></video>
           <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;border-radius:8px;">
             <div style="width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;font-size:20px;">▶</div>
@@ -13365,6 +13391,7 @@ function renderFeed() {
 
   // ── Double-tap to like — post media and entry media ───────────────────────
   wireDoubleTapLike(c);
+  wireLazyVideoThumbnails(c);
 
 
   // Wire feed drawers — vote and submit buttons
@@ -13496,6 +13523,7 @@ function renderFeed() {
 
   // Wire curtain reveals after paint so getBoundingClientRect is accurate
   requestAnimationFrame(() => setTimeout(wireWinnerReveals, 400));
+  requestAnimationFrame(() => wireLazyVideoThumbnails(document.getElementById('challengesGrid')));
 
   maybeStartTour();
 
@@ -13591,7 +13619,7 @@ function renderFlyerCard(p) {
       ${p.media_url
         ? (p.media_type === 'video'
             ? `<div style="position:relative;cursor:pointer;" data-flyer-viewer="${p.challenge_id||''}">
-                <video src="${escapeHtml(p.media_url)}" autoplay muted playsinline loop preload="metadata" style="width:100%;max-height:420px;object-fit:cover;display:block;pointer-events:none;"></video>
+                <video data-src="${escapeHtml(p.media_url)}" autoplay muted playsinline loop preload="none" data-lazy-video style="width:100%;max-height:420px;object-fit:cover;display:block;pointer-events:none;"></video>
                 <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">
                   <div style="width:52px;height:52px;border-radius:50%;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;font-size:22px;">▶</div>
                 </div>
@@ -13687,7 +13715,7 @@ function renderFeedChallengeCard(ch) {
         } else {
           // No poster — use muted autoplay video to show first frame
           mediaHtml = `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}" style="position:relative;">
-            <video src="${escapeHtml(e.media_url)}" autoplay muted playsinline loop preload="metadata" style="width:100%;height:100%;object-fit:cover;display:block;"></video>
+            <video data-src="${escapeHtml(e.media_url)}" autoplay muted playsinline loop preload="none" data-lazy-video style="width:100%;height:100%;object-fit:cover;display:block;"></video>
             <div class="fcc-play-overlay">▶</div>
           </div>`;
         }
@@ -14939,7 +14967,7 @@ function renderFvEntry(entry, ch, canVote, myVoteEntryId, status) {
       </div>`;
     } else {
       mediaHtml = `<div style="position:relative;cursor:pointer;" data-fv-play="${escapeHtml(entry.media_url)}">
-        <video src="${escapeHtml(entry.media_url)}" autoplay muted playsinline loop preload="metadata"
+        <video data-src="${escapeHtml(entry.media_url)}" autoplay muted playsinline loop preload="none" data-lazy-video
           style="width:100%;max-height:55vmax;object-fit:cover;display:block;pointer-events:none;"></video>
         <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">
           <div style="width:56px;height:56px;border-radius:50%;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;font-size:24px;">▶</div>
