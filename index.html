@@ -6065,7 +6065,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v383 · close-pause";
+const APP_VERSION = "v386 · hls-everywhere";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -9450,6 +9450,7 @@ function wireLazyVideoThumbnails(container) {
         vid.preload = 'metadata'; // allow first-frame fetch (attr is none until now)
         vid.src = vid.dataset.src;
         vid.load(); // shows first frame, no audio session competition
+        attachHlsIfNeeded(vid);
         _lazyVideoObserver.unobserve(vid);
       });
     }, { threshold: 0.1, rootMargin: '100px' });
@@ -10519,12 +10520,14 @@ function _renderEvEntry() {
   } else if (entryMediaType === 'video' && entry.media_url) {
     // Free decoder slots — pause all other videos before autoplay with sound
     document.querySelectorAll('video').forEach(v => { try { v.pause(); } catch(_) {} });
+    // iOS Safari plays HLS (.m3u8) natively via the src attribute — no extra handling needed
     mediaContent.innerHTML = `<video
       src="${escapeHtml(entry.media_url)}"
       ${entry.poster_url ? `poster="${escapeHtml(entry.poster_url)}"` : ''}
       controls autoplay playsinline preload="auto"
       style="width:100%;max-height:60vh;display:block;">
     </video>`;
+    attachHlsIfNeeded(mediaContent.querySelector('video'));
   } else if (entryMediaType === 'audio' && entry.media_url) {
     mediaContent.innerHTML = `<div style="padding:20px;"><audio src="${escapeHtml(entry.media_url)}" controls preload="metadata" style="width:100%"></audio></div>`;
   } else if (entry.caption) {
@@ -10772,6 +10775,77 @@ function confirmSheet(message, confirmLabel = 'Confirm', cancelLabel = 'Cancel')
 ========================================================= */
 
 const CATEGORIES = ['Art', 'Photography', 'Music', 'Writing', 'Cooking', 'Style', 'Sports', 'Fitness', 'Comedy', 'Other'];
+
+// ── Bunny Stream ─────────────────────────────────────────────────────────────
+// ⚠️ TODO before public launch: proxy uploads through a Supabase Edge Function
+// so this key is never exposed in client HTML. Library-scoped key, low blast radius for testing.
+const BUNNY_LIBRARY_ID = '681006';
+const BUNNY_API_KEY    = 'dd470d39-fa4b-49b5-8349baec5af4-993d-42ca';
+const BUNNY_CDN_HOST   = 'vz-9735d175-590.b-cdn.net';
+
+async function uploadToBunnyStream(file, titleHint, onProgress) {
+  // 1. Create a video slot in the library
+  onProgress && onProgress(5);
+  const createRes = await fetch(`https://video.bunnycdn.com/library/${BUNNY_LIBRARY_ID}/videos`, {
+    method: 'POST',
+    headers: { 'AccessKey': BUNNY_API_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title: titleHint || file.name || 'video' }),
+  });
+  if (!createRes.ok) throw new Error(`Bunny create failed (${createRes.status})`);
+  const { guid: videoId } = await createRes.json();
+
+  // 2. Upload the file — use XMLHttpRequest for progress reporting
+  await new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', `https://video.bunnycdn.com/library/${BUNNY_LIBRARY_ID}/videos/${videoId}`);
+    xhr.setRequestHeader('AccessKey', BUNNY_API_KEY);
+    xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) onProgress(Math.round(5 + (e.loaded / e.total) * 90));
+    };
+    xhr.onload = () => xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Bunny upload failed (${xhr.status})`));
+    xhr.onerror = () => reject(new Error('Bunny upload network error'));
+    xhr.send(file);
+  });
+
+  onProgress && onProgress(100);
+  return {
+    mediaUrl:  `https://${BUNNY_CDN_HOST}/${videoId}/playlist.m3u8`,
+    posterUrl: `https://${BUNNY_CDN_HOST}/${videoId}/thumbnail.jpg`,
+    videoId,
+  };
+}
+
+// ── HLS playback for non-Safari browsers ─────────────────────────────────────
+// Safari plays .m3u8 natively. Chrome/Firefox/Edge need hls.js, loaded on demand.
+let _hlsLibPromise = null;
+function loadHlsLib() {
+  if (window.Hls) return Promise.resolve();
+  if (_hlsLibPromise) return _hlsLibPromise;
+  _hlsLibPromise = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js';
+    s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+  return _hlsLibPromise;
+}
+
+async function attachHlsIfNeeded(vid) {
+  if (!vid) return;
+  const src = vid.src || vid.dataset.src || '';
+  if (!src.includes('.m3u8')) return;                              // not HLS
+  if (vid.canPlayType('application/vnd.apple.mpegurl')) return;    // Safari native
+  try {
+    await loadHlsLib();
+    if (!window.Hls || !Hls.isSupported()) return;
+    const url = vid.src || vid.dataset.src;
+    vid.removeAttribute('src');
+    const hls = new Hls();
+    hls.loadSource(url);
+    hls.attachMedia(vid);
+  } catch(e) { console.warn('hls.js unavailable', e); }
+}
 
 // Hall of Fame founders — permanent, displayed everywhere
 const FOUNDERS = [
@@ -11194,37 +11268,32 @@ document.getElementById('createChallengeForm').addEventListener('submit', async 
         }
       }
       btn.textContent = 'Uploading... 0%';
-      const rawExt = (ccState.file.name.split('.').pop() || 'bin').toLowerCase();
-      const ext = (ccShouldCompress && fileToUpload !== ccState.file) ? 'mp4' : rawExt;
-      const filename = `${state.profile.id}/${Date.now()}.${ext}`;
-      let mediaResult;
-      try {
-        mediaResult = await uploadChunked('challenge-media', filename, fileToUpload, pct => {
+      // ── Video → Bunny Stream; photo/audio → Supabase Storage ──
+      if (ccState.mediaType === 'video') {
+        const bunny = await uploadToBunnyStream(fileToUpload, title, pct => {
           btn.textContent = `Uploading... ${pct}%`;
         });
-      } catch(upErr) {
-        const { error: uploadError } = await db.storage
-          .from('challenge-media')
-          .upload(filename, fileToUpload, { cacheControl: '3600', upsert: false });
-        if (uploadError) throw new Error('Upload failed: ' + uploadError.message);
-        const { data: pub } = db.storage.from('challenge-media').getPublicUrl(filename);
-        mediaResult = { publicUrl: pub.publicUrl };
-      }
-      mediaUrl = mediaResult.publicUrl;
-      // Capture poster frame for videos — use compressed file if available (H.264 decodable)
-      if (ccState.mediaType === 'video') {
+        mediaUrl  = bunny.mediaUrl;
+        posterUrl = bunny.posterUrl; // Bunny auto-generates thumbnail
+      } else {
+        const rawExt = (ccState.file.name.split('.').pop() || 'bin').toLowerCase();
+        const ext = (ccShouldCompress && fileToUpload !== ccState.file) ? 'mp4' : rawExt;
+        const filename = `${state.profile.id}/${Date.now()}.${ext}`;
+        let mediaResult;
         try {
-          const posterSource = (fileToUpload !== ccState.file) ? fileToUpload : ccState.file;
-          const poster = await captureVideoPoster(posterSource);
-          if (poster) {
-            const pf = `${state.profile.id}/${Date.now()}_poster.${poster.ext}`;
-            const pu = await db.storage.from('challenge-media').upload(pf, poster.blob, { cacheControl: '86400', upsert: false });
-            if (!pu.error) {
-              const { data: ppub } = db.storage.from('challenge-media').getPublicUrl(pf);
-              posterUrl = ppub.publicUrl;
-            }
-          }
-        } catch(e) { console.warn('poster capture failed', e); }
+          mediaResult = await uploadChunked('challenge-media', filename, fileToUpload, pct => {
+            btn.textContent = `Uploading... ${pct}%`;
+          });
+        } catch(upErr) {
+          const { error: uploadError } = await db.storage
+            .from('challenge-media')
+            .upload(filename, fileToUpload, { cacheControl: '3600', upsert: false });
+          if (uploadError) throw new Error('Upload failed: ' + uploadError.message);
+          const { data: pub } = db.storage.from('challenge-media').getPublicUrl(filename);
+          mediaResult = { publicUrl: pub.publicUrl };
+        }
+        mediaUrl = mediaResult.publicUrl;
+        // No poster needed: photos ARE the image; Bunny generates video thumbnails
       }
     }
 
@@ -12412,36 +12481,32 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
         } catch(e) { seFileToUpload = seState.file; }
       }
       btn.textContent = 'Uploading... 0%';
-      const seRawExt = ((seState.file.name || '').split('.').pop() || 'jpg').toLowerCase();
-      const ext = (seShouldCompress && seFileToUpload !== seState.file) ? 'mp4' : seRawExt;
-      const filename = `${state.profile.id}/${Date.now()}.${ext}`;
-      let seMediaResult;
-      try {
-        seMediaResult = await uploadChunked('challenge-media', filename, seFileToUpload, pct => {
+      // ── Video → Bunny Stream; photo/audio → Supabase Storage ──
+      if (ch.media_type === 'video') {
+        const bunny = await uploadToBunnyStream(seFileToUpload, ch.title, pct => {
           btn.textContent = `Uploading... ${pct}%`;
         });
-      } catch(e) {
-        const { error: uploadError } = await db.storage
-          .from('challenge-media')
-          .upload(filename, seFileToUpload, { cacheControl: '3600', upsert: false });
-        if (uploadError) throw new Error('Upload failed: ' + uploadError.message);
-        const { data: spub } = db.storage.from('challenge-media').getPublicUrl(filename);
-        seMediaResult = { publicUrl: spub.publicUrl };
-      }
-      mediaUrl = seMediaResult.publicUrl;
-      // Capture poster frame for videos
-      if (ch.media_type === 'video') {
+        mediaUrl  = bunny.mediaUrl;
+        posterUrl = bunny.posterUrl; // Bunny auto-generates thumbnail
+      } else {
+        const seRawExt = ((seState.file.name || '').split('.').pop() || 'jpg').toLowerCase();
+        const ext = (seShouldCompress && seFileToUpload !== seState.file) ? 'mp4' : seRawExt;
+        const filename = `${state.profile.id}/${Date.now()}.${ext}`;
+        let seMediaResult;
         try {
-          const poster = await captureVideoPoster(seState.file);
-          if (poster) {
-            const pf = `${state.profile.id}/${Date.now()}_poster.${poster.ext}`;
-            const pu = await db.storage.from('challenge-media').upload(pf, poster.blob, { cacheControl: '86400', upsert: false });
-            if (!pu.error) {
-              const { data: ppub } = db.storage.from('challenge-media').getPublicUrl(pf);
-              posterUrl = ppub.publicUrl;
-            }
-          }
-        } catch(e) { console.warn('poster capture failed', e); }
+          seMediaResult = await uploadChunked('challenge-media', filename, seFileToUpload, pct => {
+            btn.textContent = `Uploading... ${pct}%`;
+          });
+        } catch(e) {
+          const { error: uploadError } = await db.storage
+            .from('challenge-media')
+            .upload(filename, seFileToUpload, { cacheControl: '3600', upsert: false });
+          if (uploadError) throw new Error('Upload failed: ' + uploadError.message);
+          const { data: spub } = db.storage.from('challenge-media').getPublicUrl(filename);
+          seMediaResult = { publicUrl: spub.publicUrl };
+        }
+        mediaUrl = seMediaResult.publicUrl;
+        // No poster needed: photos ARE the image; Bunny generates video thumbnails
       }
     }
     btn.textContent = seState.editingEntry ? 'Saving...' : 'Submitting...';
@@ -14797,6 +14862,7 @@ async function openFeedViewer(chId) {
       newVid.preload = 'auto';
       newVid.style.cssText = 'width:100%;max-height:55vmax;display:block;background:#000;border-radius:4px;';
       target.replaceWith(newVid);
+      attachHlsIfNeeded(newVid).then(() => newVid.play().catch(() => {}));
       newVid.play().catch(() => {});
     }, { once: false });
 
