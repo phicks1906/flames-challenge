@@ -6118,7 +6118,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v397 · comments-layer";
+const APP_VERSION = "v398 · comment-count";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -8165,8 +8165,11 @@ function bumpCommentCount(type, id, delta) {
     if (el) el.textContent = state.postCommentCounts[id];
   } else {
     state.entryCommentCounts[id] = Math.max(0, (state.entryCommentCounts[id] || 0) + delta);
+    // Update both the challenge-detail button and the feed-viewer button
     const el = document.querySelector(`[data-comment-entry="${id}"] .comment-count`);
     if (el) el.textContent = state.entryCommentCounts[id];
+    const fvEl = document.querySelector(`[data-fv-comment="${id}"] span:last-child`);
+    if (fvEl) fvEl.textContent = state.entryCommentCounts[id];
   }
 }
 
