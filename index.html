@@ -6065,7 +6065,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v379 · decoder-fix";
+const APP_VERSION = "v380 · video-audit";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -10516,6 +10516,8 @@ function _renderEvEntry() {
   if (entryMediaType === 'photo' && entry.media_url) {
     mediaContent.innerHTML = `<img src="${escapeHtml(entry.media_url)}" alt="" style="width:100%;max-height:60vh;object-fit:contain;display:block;">`;
   } else if (entryMediaType === 'video' && entry.media_url) {
+    // Free decoder slots — pause all other videos before autoplay with sound
+    document.querySelectorAll('video').forEach(v => { try { v.pause(); } catch(_) {} });
     mediaContent.innerHTML = `<video
       src="${escapeHtml(entry.media_url)}"
       ${entry.poster_url ? `poster="${escapeHtml(entry.poster_url)}"` : ''}
@@ -13827,7 +13829,9 @@ function renderFeedWinnerCard({ challenge, entry }) {
   } else if (entry.media_type === 'video' && entry.media_url) {
     mediaHtml = entry.poster_url
       ? `<div style="position:relative;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><img src="${escapeHtml(entry.poster_url)}" style="width:100%;max-height:300px;object-fit:cover;display:block;"><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.3);font-size:48px;">▶</div></div>`
-      : `<div style="position:relative;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><video src="${escapeHtml(entry.media_url)}" autoplay muted playsinline loop style="width:100%;max-height:300px;object-fit:cover;display:block;"></video><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:48px;pointer-events:none;">▶</div></div>`;
+      : entry.poster_url
+        ? `<div style="position:relative;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><img src="${escapeHtml(entry.poster_url)}" style="width:100%;max-height:300px;object-fit:cover;display:block;"><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:48px;pointer-events:none;">▶</div></div>`
+        : `<div style="position:relative;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><video data-src="${escapeHtml(entry.media_url)}" muted playsinline preload="none" data-lazy-video style="width:100%;max-height:300px;object-fit:cover;display:block;"></video><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:48px;pointer-events:none;">▶</div></div>`;
   } else if (entry.media_type === 'audio' && entry.media_url) {
     mediaHtml = `<div style="padding:16px;background:var(--surface-2);display:flex;align-items:center;gap:12px;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><span style="font-size:36px">🎙️</span><audio src="${escapeHtml(entry.media_url)}" controls preload="metadata" style="flex:1;height:36px"></audio></div>`;
   } else {
@@ -14999,7 +15003,6 @@ function renderFvEntry(entry, ch, canVote, myVoteEntryId, status) {
     if (entry.poster_url) {
       mediaHtml = `<div style="position:relative;cursor:pointer;" data-fv-play="${escapeHtml(entry.media_url)}" data-fv-poster="${escapeHtml(entry.poster_url)}">
         <img src="${escapeHtml(entry.poster_url)}" style="width:100%;max-height:55vmax;object-fit:cover;display:block;">
-        <video src="${escapeHtml(entry.media_url)}" preload="metadata" style="display:none;" playsinline></video>
         <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">
           <div style="width:56px;height:56px;border-radius:50%;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;font-size:24px;">▶</div>
         </div>
@@ -15198,7 +15201,11 @@ function wireWinnerReveals() {
         if (vid) {
           vid.style.opacity = '0.55';
           // Fade fire out after reveal completes so winner content shows clean
-          setTimeout(() => { vid.style.opacity = '0'; }, 1100);
+          setTimeout(() => {
+            vid.style.opacity = '0';
+            // Release the decoder — pause and unload after fade completes
+            setTimeout(() => { try { vid.pause(); vid.removeAttribute('src'); vid.load(); } catch(_) {} }, 600);
+          }, 1100);
         }
       }, 1500);
     };
