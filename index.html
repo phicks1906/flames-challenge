@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FlamesChallenge — Sign In</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -409,22 +410,93 @@
 </div>
 
 <script>
+  const { createClient } = supabase;
+  const _supabase = createClient(
+    'https://sioalvawzayfphwzqctq.supabase.co',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNpb2Fsdmf3emF5ZnBod3pxY3RxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDk2NTYwMDAsImV4cCI6MjAyNTIzMjAwMH0.placeholder'
+  );
+
+  let currentTab = 'login';
+
   function setTab(btn, tab) {
+    currentTab = tab;
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     const submitBtn = document.querySelector('.submit-btn');
-    submitBtn.textContent = tab === 'login' ? '' : '';
-    submitBtn.style.setProperty('--btn-text', tab === 'login' ? '"Log in"' : '"Create account"');
     submitBtn.innerHTML = tab === 'login' ? 'Log in <span style="margin-left:4px;font-weight:300">→</span>' : 'Create account <span style="margin-left:4px;font-weight:300">→</span>';
-    document.getElementById('email').autocomplete = tab === 'login' ? 'email' : 'email';
     document.getElementById('password').autocomplete = tab === 'login' ? 'current-password' : 'new-password';
     document.querySelector('.forgot-row').style.display = tab === 'login' ? 'block' : 'none';
+    clearError();
   }
 
   function togglePassword() {
     const pw = document.getElementById('password');
     pw.type = pw.type === 'password' ? 'text' : 'password';
   }
+
+  function showError(msg) {
+    let el = document.getElementById('auth-error');
+    if (!el) {
+      el = document.createElement('p');
+      el.id = 'auth-error';
+      el.style.cssText = 'color:#E8521A;font-size:13px;margin-bottom:14px;text-align:center;';
+      document.querySelector('.submit-btn').before(el);
+    }
+    el.textContent = msg;
+  }
+
+  function clearError() {
+    const el = document.getElementById('auth-error');
+    if (el) el.textContent = '';
+  }
+
+  function setLoading(loading) {
+    const btn = document.querySelector('.submit-btn');
+    btn.disabled = loading;
+    btn.style.opacity = loading ? '0.7' : '1';
+  }
+
+  document.getElementById('login-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearError();
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+
+    if (!email || !password) {
+      showError('Please enter your email and password.');
+      return;
+    }
+
+    setLoading(true);
+
+    if (currentTab === 'login') {
+      const { error } = await _supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        showError(error.message);
+        setLoading(false);
+      } else {
+        window.location.href = '/';
+      }
+    } else {
+      const { error } = await _supabase.auth.signUp({ email, password });
+      if (error) {
+        showError(error.message);
+        setLoading(false);
+      } else {
+        showError('Check your email to confirm your account.');
+        setLoading(false);
+      }
+    }
+  });
+
+  document.querySelector('.social-btn').addEventListener('click', async (e) => {
+    e.preventDefault();
+    const { error } = await _supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin + '/' }
+    });
+    if (error) showError(error.message);
+  });
 </script>
 
 </body>
