@@ -6065,7 +6065,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v386 · hls-everywhere";
+const APP_VERSION = "v388 · video-root";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -8968,7 +8968,10 @@ function openProfile() {
 }
 
 function closeModals() {
-  document.querySelectorAll('.modal-backdrop').forEach(m => m.classList.remove('open'));
+  document.querySelectorAll('.modal-backdrop').forEach(m => {
+    m.querySelectorAll('video, audio').forEach(v => { try { v.pause(); v.currentTime = 0; } catch(_) {} });
+    m.classList.remove('open');
+  });
 }
 document.querySelectorAll('.modal-backdrop').forEach(m => {
   m.addEventListener('click', e => { if (e.target === m) closeModals(); });
@@ -10834,16 +10837,17 @@ function loadHlsLib() {
 async function attachHlsIfNeeded(vid) {
   if (!vid) return;
   const src = vid.src || vid.dataset.src || '';
-  if (!src.includes('.m3u8')) return;                              // not HLS
-  if (vid.canPlayType('application/vnd.apple.mpegurl')) return;    // Safari native
+  if (!src.includes('.m3u8')) return;                               // not HLS — nothing to do
+  if (vid.canPlayType('application/vnd.apple.mpegurl')) return;     // Safari/iOS — plays natively, skip hls.js
+  if (vid.dataset.hlsAttached) return;                              // already attached
   try {
     await loadHlsLib();
     if (!window.Hls || !Hls.isSupported()) return;
+    vid.dataset.hlsAttached = '1';
     const url = vid.src || vid.dataset.src;
-    vid.removeAttribute('src');
-    const hls = new Hls();
+    const hls = new Hls({ startLevel: -1 });                        // auto quality
     hls.loadSource(url);
-    hls.attachMedia(vid);
+    hls.attachMedia(vid);                                           // do NOT removeAttribute('src') — let hls.js manage it
   } catch(e) { console.warn('hls.js unavailable', e); }
 }
 
@@ -11502,8 +11506,8 @@ function renderChallenges() {
         mHtml = `<img src="${escapeHtml(e.media_url)}" class="fcc-entry-media" loading="lazy" onerror="this.style.display='none'">`;
       } else if (eMt === 'video' && e.media_url) {
         mHtml = e.poster_url
-          ? `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}"><img src="${escapeHtml(e.poster_url)}" style="width:100%;height:100%;object-fit:cover;display:block"><div class="fcc-play-overlay">▶</div></div>`
-          : `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}" style="position:relative;"><video data-src="${escapeHtml(e.media_url)}" muted playsinline preload="none" data-lazy-video style="width:100%;height:100%;object-fit:cover;display:block;"></video><div class="fcc-play-overlay">▶</div></div>`;
+          ? `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}" data-fcc-entry="${e.id}"><img src="${escapeHtml(e.poster_url)}" style="width:100%;height:100%;object-fit:cover;display:block"><div class="fcc-play-overlay">▶</div></div>`
+          : `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}" data-fcc-entry="${e.id}" style="position:relative;"><video data-src="${escapeHtml(e.media_url)}" muted playsinline preload="none" data-lazy-video style="width:100%;height:100%;object-fit:cover;display:block;"></video><div class="fcc-play-overlay">▶</div></div>`;
       } else if (eMt === 'audio') {
         mHtml = e.media_url
           ? `<div class="fcc-entry-media" style="background:var(--surface-2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:12px;">
@@ -13550,7 +13554,7 @@ function renderFeed() {
     drawer.querySelectorAll('[data-fcc-open]').forEach(el => {
       el.addEventListener('click', e => {
         e.stopPropagation();
-        openFeedViewer(el.dataset.fccOpen);
+        openFeedViewer(el.dataset.fccOpen, el.dataset.fccEntry || null);
       });
     });
   });
@@ -13597,7 +13601,7 @@ function renderFeed() {
   c.querySelectorAll('[data-fcc-open]').forEach(el => {
     el.addEventListener('click', e => {
       e.stopPropagation();
-      openFeedViewer(el.dataset.fccOpen);
+      openFeedViewer(el.dataset.fccOpen, el.dataset.fccEntry || null);
     });
   });
 
@@ -14747,7 +14751,7 @@ let _fvChallenge = null;
 let _fvVoteCounts = {}; // entryId → count
 let _fvEntries = [];    // entries loaded by openFeedViewer — used by standings
 
-async function openFeedViewer(chId) {
+async function openFeedViewer(chId, startEntryId = null) {
   const ch = state.challenges.find(c => c.id === chId) || state.currentChallenge;
   if (!ch) return;
   _fvChallenge = ch;
@@ -14862,11 +14866,18 @@ async function openFeedViewer(chId) {
       newVid.preload = 'auto';
       newVid.style.cssText = 'width:100%;max-height:55vmax;display:block;background:#000;border-radius:4px;';
       target.replaceWith(newVid);
-      attachHlsIfNeeded(newVid).then(() => newVid.play().catch(() => {}));
+      // Call play() synchronously within the user gesture (iOS requires this)
+      // attachHlsIfNeeded is a no-op on Safari/iOS — only fires for Chrome/Firefox
       newVid.play().catch(() => {});
+      attachHlsIfNeeded(newVid); // non-blocking, Safari exits immediately
     }, { once: false });
 
     // Wire events
+    // Scroll to the tapped entry if specified
+    if (startEntryId) {
+      const idx = visibleEntries.findIndex(e => e.id === startEntryId);
+      if (idx > 0) requestAnimationFrame(() => { list.scrollLeft = idx * list.offsetWidth; });
+    }
     wireLazyVideoThumbnails(list);
     list.querySelectorAll('[data-fv-vote]').forEach(btn => {
       btn.addEventListener('click', e => { e.stopPropagation(); fvVote(btn, chId); });
@@ -15070,7 +15081,7 @@ function renderFvEntry(entry, ch, canVote, myVoteEntryId, status) {
   if (!mediaType && entry.media_url) {
     const u = entry.media_url.toLowerCase();
     if (/\.(jpg|jpeg|png|gif|webp|heic)/.test(u)) mediaType = 'photo';
-    else if (/\.(mp4|mov|m4v|avi|webm|mkv)/.test(u)) mediaType = 'video';
+    else if (/\.(mp4|mov|m4v|avi|webm|mkv)/.test(u) || u.includes('.m3u8')) mediaType = 'video';
     else if (/\.(mp3|m4a|wav|aac|ogg|flac)/.test(u)) mediaType = 'audio';
   }
 
