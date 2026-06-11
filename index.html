@@ -6065,7 +6065,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v388 · video-root";
+const APP_VERSION = "v389 · live-previews";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -9435,28 +9435,54 @@ function enableTicker() {
 
 // Returns "May '26" for a championship challenge, or '' if no launch record found
 // Returns a short media type label for challenge cards
-// ── Lazy video thumbnails ──────────────────────────────────────────────────────
-// Entries without poster_url show a video element with data-src (no download).
-// When the card scrolls into view, src is set and the video starts loading.
-// Only the visible card(s) download at any time — no grey boxes, low bandwidth.
+// ── Lazy video thumbnails with one-at-a-time autoplay ─────────────────────────
+// Entries without poster_url show a video with data-src (nothing downloads).
+// When a card becomes the most visible one, it loads, plays muted and loops —
+// exactly ONE plays at a time (TikTok pattern). It pauses when scrolled away.
+// Bandwidth = one active stream max, decoders never pile up.
 let _lazyVideoObserver = null;
+let _activePreview = null;
+
+function _startPreview(vid) {
+  if (_activePreview === vid) return;
+  // Never steal the audio session from a real (unmuted) playback
+  const audioActive = [...document.querySelectorAll('video')].some(v => !v.muted && !v.paused);
+  if (audioActive) return;
+  if (_activePreview) { try { _activePreview.pause(); } catch(_) {} }
+  _activePreview = vid;
+  if (!vid.src && vid.dataset.src) {
+    vid.preload = 'auto';
+    vid.src = vid.dataset.src;
+    attachHlsIfNeeded(vid);
+  }
+  vid.muted = true;
+  vid.loop = true;
+  vid.play().catch(() => {});
+}
+
+function _stopPreview(vid) {
+  try { vid.pause(); } catch(_) {}
+  if (_activePreview === vid) _activePreview = null;
+}
+
 function wireLazyVideoThumbnails(container) {
   const targets = (container || document).querySelectorAll('video[data-lazy-video][data-src]');
   if (!targets.length) return;
 
   if (!_lazyVideoObserver) {
     _lazyVideoObserver = new IntersectionObserver((entries) => {
+      // Most visible candidate wins; everything else pauses
+      let best = null, bestRatio = 0;
       entries.forEach(entry => {
-        if (!entry.isIntersecting) return;
-        const vid = entry.target;
-        if (vid.src || !vid.dataset.src) return; // already loaded
-        vid.preload = 'metadata'; // allow first-frame fetch (attr is none until now)
-        vid.src = vid.dataset.src;
-        vid.load(); // shows first frame, no audio session competition
-        attachHlsIfNeeded(vid);
-        _lazyVideoObserver.unobserve(vid);
+        if (entry.isIntersecting && entry.intersectionRatio > bestRatio) {
+          best = entry.target; bestRatio = entry.intersectionRatio;
+        }
+        if (!entry.isIntersecting && entry.target === _activePreview) {
+          _stopPreview(entry.target);
+        }
       });
-    }, { threshold: 0.1, rootMargin: '100px' });
+      if (best && bestRatio >= 0.5) _startPreview(best);
+    }, { threshold: [0, 0.5, 0.75, 1] });
   }
 
   targets.forEach(vid => _lazyVideoObserver.observe(vid));
@@ -11506,7 +11532,7 @@ function renderChallenges() {
         mHtml = `<img src="${escapeHtml(e.media_url)}" class="fcc-entry-media" loading="lazy" onerror="this.style.display='none'">`;
       } else if (eMt === 'video' && e.media_url) {
         mHtml = e.poster_url
-          ? `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}" data-fcc-entry="${e.id}"><img src="${escapeHtml(e.poster_url)}" style="width:100%;height:100%;object-fit:cover;display:block"><div class="fcc-play-overlay">▶</div></div>`
+          ? `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}" data-fcc-entry="${e.id}"><video data-src="${escapeHtml(e.media_url)}" poster="${escapeHtml(e.poster_url)}" muted playsinline preload="none" data-lazy-video style="width:100%;height:100%;object-fit:cover;display:block;"></video><div class="fcc-play-overlay">▶</div></div>`
           : `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}" data-fcc-entry="${e.id}" style="position:relative;"><video data-src="${escapeHtml(e.media_url)}" muted playsinline preload="none" data-lazy-video style="width:100%;height:100%;object-fit:cover;display:block;"></video><div class="fcc-play-overlay">▶</div></div>`;
       } else if (eMt === 'audio') {
         mHtml = e.media_url
@@ -11742,6 +11768,8 @@ async function loadChallengeDetail(challengeId) {
 }
 
 function renderChallengeDetail() {
+  // Wire lazy preview videos after render completes
+  requestAnimationFrame(() => wireLazyVideoThumbnails(document.getElementById('challengeDetailSheet')));
   const ch = state.currentChallenge;
   if (!ch) return;
 
@@ -11862,7 +11890,7 @@ function renderChallengeDetail() {
       // Use poster+overlay so external URLs don't break — same as feed card
       if (entry.poster_url) {
         mediaHtml = `<div style="position:relative;cursor:pointer;" onclick="openEntryViewer('${entry.id}','${entry.challenge_id}')">
-          <img src="${escapeHtml(entry.poster_url)}" style="width:100%;object-fit:cover;display:block;border-radius:8px;">
+          <video data-src="${escapeHtml(entry.media_url)}" poster="${escapeHtml(entry.poster_url)}" muted playsinline preload="none" data-lazy-video style="width:100%;object-fit:cover;display:block;border-radius:8px;pointer-events:none;"></video>
           <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.25);border-radius:8px;font-size:52px;">▶</div>
         </div>`;
       } else {
@@ -13823,7 +13851,7 @@ function renderFeedChallengeCard(ch) {
         if (e.poster_url) {
           // Show poster as a tappable image — tapping opens full detail
           mediaHtml = `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}">
-            <img src="${escapeHtml(e.poster_url)}" style="width:100%;height:100%;object-fit:cover;display:block">
+            <video data-src="${escapeHtml(e.media_url)}" poster="${escapeHtml(e.poster_url)}" muted playsinline preload="none" data-lazy-video style="width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;"></video>
             <div class="fcc-play-overlay">▶</div>
           </div>`;
         } else {
@@ -13905,9 +13933,9 @@ function renderFeedWinnerCard({ challenge, entry }) {
     mediaHtml = `<img src="${escapeHtml(entry.media_url)}" style="width:100%;max-height:300px;object-fit:cover;display:block;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}">`;
   } else if (entry.media_type === 'video' && entry.media_url) {
     mediaHtml = entry.poster_url
-      ? `<div style="position:relative;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><img src="${escapeHtml(entry.poster_url)}" style="width:100%;max-height:300px;object-fit:cover;display:block;"><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.3);font-size:48px;">▶</div></div>`
+      ? `<div style="position:relative;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><video data-src="${escapeHtml(entry.media_url)}" poster="${escapeHtml(entry.poster_url)}" muted playsinline preload="none" data-lazy-video style="width:100%;max-height:300px;object-fit:cover;display:block;pointer-events:none;"></video><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.3);font-size:48px;">▶</div></div>`
       : entry.poster_url
-        ? `<div style="position:relative;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><img src="${escapeHtml(entry.poster_url)}" style="width:100%;max-height:300px;object-fit:cover;display:block;"><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:48px;pointer-events:none;">▶</div></div>`
+        ? `<div style="position:relative;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><video data-src="${escapeHtml(entry.media_url)}" poster="${escapeHtml(entry.poster_url)}" muted playsinline preload="none" data-lazy-video style="width:100%;max-height:300px;object-fit:cover;display:block;pointer-events:none;"></video><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:48px;pointer-events:none;">▶</div></div>`
         : `<div style="position:relative;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><video data-src="${escapeHtml(entry.media_url)}" muted playsinline preload="none" data-lazy-video style="width:100%;max-height:300px;object-fit:cover;display:block;"></video><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:48px;pointer-events:none;">▶</div></div>`;
   } else if (entry.media_type === 'audio' && entry.media_url) {
     mediaHtml = `<div style="padding:16px;background:var(--surface-2);display:flex;align-items:center;gap:12px;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><span style="font-size:36px">🎙️</span><audio src="${escapeHtml(entry.media_url)}" controls preload="metadata" style="flex:1;height:36px"></audio></div>`;
@@ -15091,7 +15119,8 @@ function renderFvEntry(entry, ch, canVote, myVoteEntryId, status) {
   } else if (mediaType === 'video' && entry.media_url) {
     if (entry.poster_url) {
       mediaHtml = `<div style="position:relative;cursor:pointer;" data-fv-play="${escapeHtml(entry.media_url)}" data-fv-poster="${escapeHtml(entry.poster_url)}">
-        <img src="${escapeHtml(entry.poster_url)}" style="width:100%;max-height:55vmax;object-fit:cover;display:block;">
+        <video data-src="${escapeHtml(entry.media_url)}" poster="${escapeHtml(entry.poster_url)}" muted playsinline preload="none" data-lazy-video
+          style="width:100%;max-height:55vmax;object-fit:cover;display:block;pointer-events:none;"></video>
         <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">
           <div style="width:56px;height:56px;border-radius:50%;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;font-size:24px;">▶</div>
         </div>
