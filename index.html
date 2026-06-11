@@ -6065,7 +6065,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v380 · video-audit";
+const APP_VERSION = "v381 · delete-purge";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -10598,6 +10598,9 @@ function _renderEvEntry() {
       delBtn.disabled = true; delBtn.textContent = 'Deleting…';
       const { error } = await db.from('entries').delete().eq('id', entry.id).eq('user_id', state.profile.id);
       if (error) { toast('Delete failed: ' + error.message); delBtn.disabled = false; delBtn.textContent = '🗑 Delete'; return; }
+      // Purge from local caches immediately — incremental fetch never removes deleted rows
+      state.feedEntries = (state.feedEntries || []).filter(e => e.id !== entry.id);
+      if (state.entryCounts[entry.challenge_id] > 0) state.entryCounts[entry.challenge_id]--;
       toast('Entry deleted');
       closeEntryViewer();
       await loadFeedActivity();
@@ -14851,7 +14854,11 @@ async function openFeedViewer(chId) {
         btn.textContent = 'Deleting…'; btn.disabled = true;
         const { error } = await db.from('entries').delete().eq('id', entryId).eq('user_id', state.profile.id);
         if (error) { toast('Delete failed'); btn.disabled = false; btn.textContent = '🗑 Delete'; return; }
+        // Purge from local caches — incremental fetch never removes deleted rows
+        state.feedEntries = (state.feedEntries || []).filter(e => e.id !== entryId);
+        if (state.entryCounts[chId] > 0) state.entryCounts[chId]--;
         toast('Entry deleted');
+        renderFeed();
         openFeedViewer(chId);
       });
     });
