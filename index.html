@@ -5395,6 +5395,16 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 </div>
 
 <!-- COMMENTS SHEET (posts + entries) -->
+<div class="cd-sheet" id="postSheet" style="z-index:245">
+  <div class="cd-sheet-header">
+    <button class="cd-close" onclick="closePostView()" aria-label="Close">✕</button>
+    <div class="cd-sheet-title">
+      <h2 style="font-family:var(--font-display);font-size:18px;margin:0;">✍️ POST</h2>
+    </div>
+  </div>
+  <div id="postSheetBody" style="max-width:560px;margin:0 auto;padding:76px 16px 40px;"></div>
+</div>
+
 <div class="cd-sheet" id="commentSheet" style="z-index:270">
   <div class="cd-sheet-header">
     <button class="cd-close" onclick="closeComments()" aria-label="Close">×</button>
@@ -6120,7 +6130,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v408 · unique-edges";
+const APP_VERSION = "v410 · post-links-audit";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -7983,7 +7993,7 @@ function openNotifTarget(n) {
     switchView('leaderboard');
   } else if (t.kind === 'post' && t.id) {
     switchView('feed');
-    setTimeout(() => scrollToPost(t.id), 150);
+    openPostView(t.id);
   } else switchView('feed');
 }
 
@@ -8792,18 +8802,104 @@ async function promoteCopy() {
 }
 
 // Open a challenge/poll directly when arriving via a shared link
+async function openPostView(postId) {
+  const sheet = document.getElementById('postSheet');
+  const body = document.getElementById('postSheetBody');
+  if (!sheet || !body) return;
+
+  let p = (state.posts || []).find(x => x.id === postId);
+  if (!p) {
+    // Post not in the loaded feed (old or direct link) — fetch it directly
+    body.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px 0;">Loading…</div>';
+    sheet.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    const { data, error } = await db.from('posts')
+      .select('*, post_type, challenge_id, group_id, author:profiles!posts_user_id_fkey(id, name, avatar)')
+      .eq('id', postId)
+      .maybeSingle();
+    if (error || !data) {
+      body.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px 0;">This post is no longer available.</div>';
+      return;
+    }
+    p = data;
+    // Post wasn't in the feed cache — its like/comment counts aren't loaded. Fetch them
+    // so the card shows real numbers instead of zeros.
+    try {
+      const [likesRes, commentsRes] = await Promise.all([
+        db.from('post_likes').select('user_id').eq('post_id', postId),
+        db.from('comments').select('id', { count: 'exact', head: true }).eq('target_type', 'post').eq('target_id', postId),
+      ]);
+      const likeRows = likesRes.data || [];
+      state.postLikeCounts[postId] = likeRows.length;
+      if (state.profile && likeRows.some(r => r.user_id === state.profile.id)) state.myPostLikes.add(postId);
+      state.postCommentCounts[postId] = commentsRes.count || 0;
+    } catch(e) { console.warn('post counts fetch', e); }
+  } else {
+    sheet.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  body.innerHTML = renderPostCard(p);
+
+  // Wire interactions inside the sheet (feed wiring is scoped to the feed container)
+  body.querySelectorAll('[data-like-post]').forEach(btn => {
+    btn.addEventListener('click', e => { e.stopPropagation(); togglePostLike(btn.dataset.likePost, btn); });
+  });
+  body.querySelectorAll('[data-comment-post]').forEach(btn => {
+    btn.addEventListener('click', e => { e.stopPropagation(); openComments('post', btn.dataset.commentPost); });
+  });
+  body.querySelectorAll('[data-user-id]').forEach(el => {
+    el.addEventListener('click', e => { e.stopPropagation(); closePostView(); openUserProfile(el.dataset.userId); });
+  });
+  body.querySelectorAll('[data-show-likes]').forEach(el => {
+    el.addEventListener('click', e => { e.stopPropagation(); openLikersSheet(el.dataset.showLikes, el.dataset.showLikesId); });
+  });
+  body.querySelectorAll('[data-share-post]').forEach(btn => {
+    btn.addEventListener('click', e => { e.stopPropagation(); copyPostLink(btn.dataset.sharePost); });
+  });
+  // Flyer posts carry challenge CTA buttons — wire them to open the challenge viewer
+  body.querySelectorAll('[data-flyer-viewer]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      const chId = el.dataset.flyerViewer;
+      if (chId) { closePostView(); openFeedViewer(chId); }
+    });
+  });
+  wireLazyVideoThumbnails(body);
+}
+
+function closePostView() {
+  const sheet = document.getElementById('postSheet');
+  if (!sheet) return;
+  sheet.querySelectorAll('video, audio').forEach(m => { try { m.pause(); m.currentTime = 0; } catch(_) {} });
+  sheet.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function copyPostLink(postId) {
+  const url = `${window.location.origin}${window.location.pathname}?post=${postId}`;
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(url).then(() => toast('🔗 Link copied')).catch(() => prompt('Copy this link:', url));
+  } else {
+    prompt('Copy this link:', url);
+  }
+}
+
 function applyDeepLink() {
   let params;
   try { params = new URLSearchParams(window.location.search); } catch (e) { return; }
   const cid = params.get('c');
   const pollId = params.get('poll');
+  const postId = params.get('post');
   if (cid) {
     const ch = (state.challenges || []).find(c => c.id === cid);
     if (ch) openChallenge(ch);
   } else if (pollId) {
     switchView('polls');
+  } else if (postId) {
+    openPostView(postId);
   }
-  if (cid || pollId) {
+  if (cid || pollId || postId) {
     try { history.replaceState({}, '', window.location.pathname); } catch (e) {}
   }
 }
@@ -13564,6 +13660,13 @@ function renderFeed() {
       openComments('post', btn.dataset.commentPost);
     });
   });
+  // Wire up share/copy-link buttons
+  c.querySelectorAll('[data-share-post]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      copyPostLink(btn.dataset.sharePost);
+    });
+  });
   // Wire up user profile clicks (post authors)
   c.querySelectorAll('[data-user-id]').forEach(el => {
     el.addEventListener('click', e => {
@@ -13761,6 +13864,7 @@ function renderPostCard(p) {
           <span class="comment-icon">💬</span>
           <span class="comment-count">${state.postCommentCounts[p.id] || 0}</span>
         </button>
+        <button class="comment-btn" data-share-post="${p.id}" aria-label="Copy link" style="margin-left:auto;">🔗</button>
       </div>
     </div>`;
 }
