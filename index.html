@@ -3807,7 +3807,8 @@ body.theme-light .skeleton {
   overflow: hidden; position: relative;
   transition: transform 0.2s, border-color 0.2s;
 }
-.cd-entry.voted { border-color: var(--ember); box-shadow: 0 0 0 1px var(--ember); }
+/* Voted state intentionally has no border change — borders indicate card type,
+   not actions. The ✓ Voted button communicates the vote. */
 .cd-entry.winner { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold), 0 8px 30px -10px rgba(255,200,87,0.25); }
 .cd-medal {
   position: absolute; top: 10px; left: 10px;
@@ -3833,6 +3834,7 @@ body.theme-light .skeleton {
 }
 .cd-entry-caption { color: var(--text-dim); font-size: 14px; line-height: 1.45; }
 .cd-entry-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-top: 10px; border-top: 1px solid var(--border); }
+.cd-entry-credentials { font-size: 11.5px; color: var(--text-muted); margin: 2px 0 4px 40px; line-height: 1.5; }
 .cd-entry-tag {
   font-size: 11px; color: var(--text-muted);
   text-transform: uppercase; letter-spacing: 0.1em;
@@ -5328,7 +5330,6 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       <button class="btn btn-primary" id="cdAddEntryBtn" onclick="openSubmitEntry()" style="width:100%">+ Submit your entry</button>
     </div>
     <div id="cdResultsPanel" style="display:none"></div>
-    <div id="cdChallengersPanel" style="display:none"></div>
   </div>
 </div>
 
@@ -6118,7 +6119,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v403 · compress-fix";
+const APP_VERSION = "v407 · champ-audit";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -11757,7 +11758,6 @@ async function openChallenge(ch) {
   }
   renderChallengeDetail();
   renderChallengeResults();
-  renderChallengersPanel();
 }
 
 function closeChallengeDetail() {
@@ -12037,6 +12037,7 @@ function renderChallengeDetail() {
             <div class="avatar">${avatarInner(entry.submitter?.avatar)}</div>
             <span>${escapeHtml(entry.submitter?.name || 'Unknown')}${isMyEntry ? ' (you)' : (needsFollowPlus(entry.user_id) ? ' <span class="user-plus">+</span>' : '')}${getHofBadge(entry.user_id)}</span>
           </div>
+          ${champEntryCredentials(entry.user_id)}
           ${entry.media_type !== 'text' && entry.caption ? `<div class="cd-entry-caption">${formatBody(entry.caption)}</div>` : ''}
           ${actionsHtml ? `<div class="cd-entry-actions">${actionsHtml}</div>` : ''}
           ${standingHtml}
@@ -12163,86 +12164,45 @@ function renderChallengeDetail() {
   });
 }
 
-function renderChallengersPanel() {
-  const panel = document.getElementById('cdChallengersPanel');
-  if (!panel) return;
-  if (!state.currentEntries || !state.currentEntries.length) { panel.style.display = 'none'; return; }
+function champEntryCredentials(userId) {
+  // Inline competitor credentials for championship entry cards.
+  // Replaces the old separate Challengers panel — same data, rendered on the card.
+  const ch = state.currentChallenge;
+  if (!ch) return '';
+  const isChampionship = (state.champLaunches || []).some(l => l.challenge_id === ch.id);
+  if (!isChampionship) return '';
 
   const lbUsers = state.leaderboardData?.users || [];
-  const champTitles = getChampTitles();
-  const hofLog = getHofLog();
-  const titlesMap = computeHofTitles(hofLog);
+  const lb = lbUsers.find(u => u.id === userId) || {};
+  const cat = ch.category || 'All';
+  const wins = lb.wins || 0;
+  const losses = lb.losses || 0;
+  const catWins = lb.rolling30ByCategory?.[cat] || 0;
+
+  const catSorted = [...lbUsers]
+    .filter(u => (u.rolling30ByCategory?.[cat] || 0) > 0)
+    .sort((a,b) => (b.rolling30ByCategory?.[cat]||0) - (a.rolling30ByCategory?.[cat]||0));
+  const rank = catSorted.findIndex(u => u.id === userId);
+  const rankNum = rank >= 0 ? rank + 1 : null;
+  const rankEmoji = rankNum === 1 ? '🥇' : rankNum === 2 ? '🥈' : rankNum === 3 ? '🥉' : rankNum ? '#' + rankNum : '';
+
   const now = new Date();
   const curMonth = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
-  const cat = state.currentChallenge?.category || 'All';
+  const champTitles = getChampTitles();
+  const isChamp = champTitles[cat + '-' + curMonth]?.userId === userId;
+  const titlesMap = computeHofTitles(getHofLog());
+  const hofTitles = hofTitleLabel(titlesMap, userId);
 
-  // Build a ranked list of entrants with their stats
-  const entrants = state.currentEntries.map(e => {
-    const sub = e.submitter || {};
-    const lb = lbUsers.find(u => u.id === e.user_id) || {};
+  const parts = [];
+  if (rankEmoji) parts.push(rankEmoji + ' ' + cat);
+  if (wins > 0 || losses > 0) parts.push(wins + 'W · ' + losses + 'L');
+  if (catWins > 0) parts.push(catWins + ' this month');
+  if (isChamp) parts.push('👑 Champ');
+  if (hofTitles) parts.push('🌟 ' + escapeHtml(hofTitles));
+  if (!parts.length) return '';
 
-    // All-time wins from leaderboard data (computed from last 30 days — best we have)
-    const wins = lb.wins || 0;
-    const losses = lb.losses || 0;
-    const catWins = lb.rolling30ByCategory?.[cat] || 0;
-
-    // Monthly rank in this category
-    const catSorted = [...lbUsers]
-      .filter(u => (u.rolling30ByCategory?.[cat] || 0) > 0)
-      .sort((a,b) => (b.rolling30ByCategory?.[cat]||0) - (a.rolling30ByCategory?.[cat]||0));
-    const rank = catSorted.findIndex(u => u.id === e.user_id);
-    const rankNum = rank >= 0 ? rank + 1 : null;
-
-    // Champion badge
-    const champKey = cat + '-' + curMonth;
-    const isChamp = champTitles[champKey]?.userId === e.user_id;
-    const hofTitles = hofTitleLabel(titlesMap, e.user_id);
-
-    return { userId: e.user_id, name: sub.name || 'Unknown', avatar: sub.avatar || '🔥',
-             wins, losses, catWins, rankNum, isChamp, hofTitles };
-  });
-
-  const rankEmoji = n => n === 1 ? '🥇' : n === 2 ? '🥈' : n === 3 ? '🥉' : '#' + n;
-
-  panel.innerHTML = '<div class="cd-challengers-panel">' +
-    '<div class="cd-challengers-title">⚔️ Challengers</div>' +
-    entrants.map(c => {
-      const rankHtml = c.rankNum
-        ? '<div class="cd-challenger-rank' + (c.rankNum <= 3 ? ' top' : '') + '">' + rankEmoji(c.rankNum) + '</div>'
-        : '<div class="cd-challenger-rank"></div>';
-
-      const badges = [];
-      if (c.isChamp) badges.push('<span class="cd-challenger-badge">👑 Champ</span>');
-      if (c.hofTitles) badges.push('<span class="cd-challenger-badge">🌟 ' + escapeHtml(c.hofTitles) + '</span>');
-
-      const record = c.wins > 0 || c.losses > 0
-        ? c.wins + 'W · ' + c.losses + 'L' + (c.catWins > 0 ? ' · ' + c.catWins + ' this month' : '')
-        : 'No record yet';
-
-      const isMe = c.userId === state.profile?.id;
-      return '<div class="cd-challenger-row" data-uid="' + c.userId + '">' +
-        rankHtml +
-        '<div class="cd-challenger-av">' + avatarInner(c.avatar) + '</div>' +
-        '<div class="cd-challenger-info">' +
-          '<div class="cd-challenger-name">' + escapeHtml(c.name) + (isMe ? ' <span style="color:var(--ember);font-size:11px">(you)</span>' : '') + '</div>' +
-          '<div class="cd-challenger-meta">' + escapeHtml(record) +
-            (badges.length ? '<span style="display:inline-flex;gap:4px;flex-wrap:wrap">' + badges.join('') + '</span>' : '') +
-          '</div>' +
-        '</div>' +
-      '</div>';
-    }).join('') +
-  '</div>';
-
-  // Wire profile taps
-  panel.querySelectorAll('[data-uid]').forEach(row => {
-    row.addEventListener('click', () => {
-      if (row.dataset.uid !== state.profile?.id) openUserProfile(row.dataset.uid);
-    });
-  });
-
-  panel.style.display = 'block';
+  return '<div class="cd-entry-credentials">' + parts.join(' <span style="opacity:0.4">·</span> ') + '</div>';
 }
-
 function renderChallengeResults() {
   const panel = document.getElementById('cdResultsPanel');
   if (!panel) return;
@@ -12252,10 +12212,10 @@ function renderChallengeResults() {
     return;
   }
   const status = computeChallengeStatus(ch);
-  const iHaveVoted = !!state.myCurrentVote;
   const isClosed = status === 'closed';
-  const canVoteStatus = status === 'voting' || status === 'submitting';
-  if (!iHaveVoted && !isClosed) { panel.style.display = 'none'; return; }
+  // Live standings now show inline on each entry card — this panel only
+  // renders the Final Standings summary once the challenge closes.
+  if (!isClosed) { panel.style.display = 'none'; return; }
 
   const voteCountByEntry = {};
   state.currentVotes.forEach(v => { voteCountByEntry[v.entry_id] = (voteCountByEntry[v.entry_id] || 0) + 1; });
@@ -12267,7 +12227,7 @@ function renderChallengeResults() {
     .slice(0, 3);
 
   const medals = ['🥇', '🥈', '🥉'];
-  const rankLabels = ['Leading', '2nd', '3rd'];
+  const rankLabels = ['Winner', '2nd', '3rd']; // panel renders only on closed challenges
   const rowsHtml = sorted.map(({ e, votes }, i) => {
     const pct = totalVotes > 0 ? Math.round((votes / totalVotes) * 100) : 0;
     const sub = e.submitter || { name: 'Unknown', avatar: '🔥' };
@@ -12336,7 +12296,7 @@ async function voteOnEntry(entryId) {
   setTimeout(() => {
     const grid = document.getElementById('cdEntriesGrid');
     if (grid) grid.scrollLeft = 0;
-    renderChallengeResults(); renderChallengersPanel();
+    renderChallengeResults();
     // Ember burst on the voted entry card
     setTimeout(() => {
       const votedCard = document.querySelector(`.cd-entry[data-entry-id="${entryId}"]`);
@@ -13823,7 +13783,7 @@ function renderFlyerCard(p) {
                     ch && isVoting ? `⏱ ${formatCountdown(ch.voting_end)}` : '';
 
   return `
-    <div class="post-card" data-pid="${p.id}" style="padding:0;overflow:hidden;border:1px solid var(--border);border-left:3px solid rgba(167,139,250,0.85);">
+    <div class="post-card" data-pid="${p.id}" style="padding:0;overflow:hidden;border:1px solid var(--border);border-left:3px solid rgba(255,106,44,0.85);">
       <!-- Header row -->
       <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px;">
         <span class="feed-poll-tag" style="color:var(--ember);">📣 FLYER</span>
@@ -16024,7 +15984,7 @@ async function toggleFollowFromSheet(userId) {
     if (state.currentView === 'feed') renderFeed();
     // Always re-render challenge detail if open — removes stale + badges
     if (state.currentChallenge) {
-      try { renderChallengeDetail(); renderChallengeResults(); renderChallengersPanel(); } catch (e) {}
+      try { renderChallengeDetail(); renderChallengeResults(); } catch (e) {}
     }
   } catch (err) {
     console.error('follow toggle error', err);
@@ -16162,7 +16122,7 @@ async function renderFindPeopleResults(query) {
             btn.classList.add('following');
           }
           if (state.currentView === 'feed') renderFeed();
-          if (state.currentChallenge) { try { renderChallengeDetail(); renderChallengeResults(); renderChallengersPanel(); } catch (e) {} }
+          if (state.currentChallenge) { try { renderChallengeDetail(); renderChallengeResults(); } catch (e) {} }
         } catch (err) {
           console.error('follow toggle from search error', err);
           toast('Follow failed');
