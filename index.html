@@ -4757,7 +4757,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 </div>
 
 <!-- ============ APP VIEW (shown when logged in) ============ -->
-<div id="appView" style="display:none">
+<div id="appView" style="display:none;transition:opacity 0.25s ease;">
 
 <header class="nav">
   <div class="nav-inner">
@@ -6118,7 +6118,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v400 · ring-latest";
+const APP_VERSION = "v401 · load-fade";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -6710,8 +6710,16 @@ function showAuth() {
   resetAuthView();
 }
 function showApp() {
-  document.getElementById('authView').style.display = 'none';
-  document.getElementById('appView').style.display = 'block';
+  const auth = document.getElementById('authView');
+  const app  = document.getElementById('appView');
+  auth.style.opacity = '0';
+  setTimeout(() => {
+    auth.style.display = 'none';
+    auth.style.opacity = '';
+    app.style.display = 'block';
+    app.style.opacity = '0';
+    requestAnimationFrame(() => { app.style.opacity = '1'; });
+  }, 150);
   renderProfileChip();
   renderHeatCheck();
 }
