@@ -6118,7 +6118,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v398 · comment-count";
+const APP_VERSION = "v400 · ring-latest";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -10437,6 +10437,7 @@ async function loadFollowingAvatarRow() {
       .select('id, user_id, challenge_id, challenge:challenges!entries_challenge_id_fkey(id, title, submission_deadline, voting_end, status)')
       .in('user_id', followingIds)
       .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
+      .order('created_at', { ascending: false })
       .limit(100);
 
     // Map: userId → { hasActive, hasWon, entryId, challengeId }
@@ -10486,9 +10487,9 @@ async function loadFollowingAvatarRow() {
         </div>`;
     }).join('');
 
-    // Wire clicks
+    // Wire clicks — orange ring opens full challenge so you can see all entries + vote
     scroll.querySelectorAll('[data-entry-open]').forEach(el => {
-      el.addEventListener('click', () => openEntryViewer(el.dataset.entryId, el.dataset.entryOpen));
+      el.addEventListener('click', () => openFeedViewer(el.dataset.entryOpen, el.dataset.entryId));
     });
     scroll.querySelectorAll('[data-user-id]').forEach(el => {
       el.addEventListener('click', () => openUserProfile(el.dataset.userId));
