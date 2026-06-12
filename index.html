@@ -3046,6 +3046,9 @@ body.theme-light .skeleton {
   display: grid; place-items: center; font-size: 11px;
   flex-shrink: 0; overflow: hidden;
 }
+.fcc-entry-counts {
+  font-size: 11px; color: var(--text-muted); white-space: nowrap; flex-shrink: 0;
+}
 .fcc-entry-name {
   flex: 1; font-size: 11px; font-weight: 600;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -6130,7 +6133,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v410 · post-links-audit";
+const APP_VERSION = "v411 · entry-counts";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -7047,6 +7050,27 @@ async function loadFeedActivity(opts = {}) {
     // Advance watermarks so the next incremental fetch only gets delta rows
     if (newEntries.length) state._feedEntriesLastTs = newEntries[0].created_at;
     if (newVotes.length)   state._feedVotesLastTs   = newVotes[0].created_at;
+
+    // Seed like/comment counts for feed entries so drawer chips display without
+    // requiring a challenge-detail visit first. Lightweight: id columns only.
+    try {
+      const feedEntryIds = (state.feedEntries || []).slice(0, 200).map(e => e.id);
+      if (feedEntryIds.length) {
+        const [likesRes, commentsRes] = await Promise.all([
+          db.from('entry_likes').select('entry_id, user_id').in('entry_id', feedEntryIds),
+          db.from('comments').select('target_id').eq('target_type', 'entry').in('target_id', feedEntryIds),
+        ]);
+        const lc = {};
+        (likesRes.data || []).forEach(l => {
+          lc[l.entry_id] = (lc[l.entry_id] || 0) + 1;
+          if (state.profile && l.user_id === state.profile.id) (state.myEntryLikes = state.myEntryLikes || new Set()).add(l.entry_id);
+        });
+        Object.assign(state.entryLikeCounts, lc);
+        const cc = {};
+        (commentsRes.data || []).forEach(c => { cc[c.target_id] = (cc[c.target_id] || 0) + 1; });
+        Object.assign(state.entryCommentCounts, cc);
+      }
+    } catch(e) { console.warn('feed entry counts seed', e); }
 
   } catch (err) {
     console.error('feed activity load error', err);
@@ -11723,7 +11747,7 @@ function renderChallenges() {
       const voteBtn = canVoteCh && state.profile
         ? `<button class="fcc-vote-btn${iVoted?' voted':''}" data-fcc-vote="${e.id}" data-fcc-chid="${ch.id}">${iVoted?'✓ Voted':'🗳️ Vote'}</button>`
         : isMyEntry ? `<span class="fcc-your-entry">Your entry</span>` : '';
-      return `<div class="fcc-entry-card" style="cursor:pointer;" data-entry-open="${ch.id}" data-entry-id="${e.id}">${mHtml}<div class="fcc-entry-footer"><div class="fcc-entry-avatar">${avatarInner(sub.avatar)}</div><div class="fcc-entry-name">${escapeHtml(sub.name)}</div>${voteBtn}</div></div>`;
+      return `<div class="fcc-entry-card" style="cursor:pointer;" data-entry-open="${ch.id}" data-entry-id="${e.id}">${mHtml}<div class="fcc-entry-footer"><div class="fcc-entry-avatar">${avatarInner(sub.avatar)}</div><div class="fcc-entry-name">${escapeHtml(sub.name)}</div>${(state.entryLikeCounts[e.id] || state.entryCommentCounts[e.id]) ? `<div class="fcc-entry-counts">${state.entryLikeCounts[e.id] ? '🔥 ' + state.entryLikeCounts[e.id] : ''}${state.entryLikeCounts[e.id] && state.entryCommentCounts[e.id] ? ' · ' : ''}${state.entryCommentCounts[e.id] ? '💬 ' + state.entryCommentCounts[e.id] : ''}</div>` : ''}${voteBtn}</div></div>`;
     }).join('');
 
     const userEntry = chEntries.find(e => e.user_id === state.profile?.id);
@@ -14027,6 +14051,7 @@ function renderFeedChallengeCard(ch) {
         <div class="fcc-entry-footer">
           <div class="fcc-entry-avatar">${avatarInner(sub.avatar)}</div>
           <div class="fcc-entry-name">${escapeHtml(sub.name)}</div>
+          ${(state.entryLikeCounts[e.id] || state.entryCommentCounts[e.id]) ? `<div class="fcc-entry-counts">${state.entryLikeCounts[e.id] ? '🔥 ' + state.entryLikeCounts[e.id] : ''}${state.entryLikeCounts[e.id] && state.entryCommentCounts[e.id] ? ' · ' : ''}${state.entryCommentCounts[e.id] ? '💬 ' + state.entryCommentCounts[e.id] : ''}</div>` : ''}
           ${voteBtn}
         </div>
       </div>`;
