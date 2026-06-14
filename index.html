@@ -6133,7 +6133,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v413 · hls-no-preview";
+const APP_VERSION = "v414 · webp-preview";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -9641,15 +9641,37 @@ let _lazyVideoObserver = null;
 let _activePreview = null;
 let _userAudioActive = false; // set synchronously on user tap; blocks lazy previews
 
+function _bunnyPreviewUrl(src) {
+  // Bunny auto-generates an animated preview clip per video: /{guid}/preview.webp
+  // It's a tiny looping image — no decoder, no HLS stream. Perfect for thumbnails.
+  const m = src.match(/\/([0-9a-f-]{36})\/playlist\.m3u8/i);
+  return m ? src.replace('playlist.m3u8', 'preview.webp') : null;
+}
+
 function _startPreview(vid) {
   if (_activePreview === vid) return;
   if (_userAudioActive) return;
-  // HLS (.m3u8 Bunny) streams are too heavy to preview — manifest + segment fetches
-  // + decoder init compete with tap-to-play and choke iOS. Their poster shows instead;
-  // they stream only when tapped. Only cheap direct files (mp4/mov) get a motion preview.
   const src = vid.dataset.src || vid.src || '';
-  if (src.includes('.m3u8')) return;
-  if (_activePreview) { try { _activePreview.pause(); } catch(_) {} }
+
+  // HLS (Bunny) — overlay the animated preview.webp as an <img>. No streaming, no decoder.
+  const webp = _bunnyPreviewUrl(src);
+  if (webp) {
+    if (_activePreview) _stopPreview(_activePreview);
+    _activePreview = vid;
+    const host = vid.parentElement;
+    if (host && !host.querySelector('.fc-anim-preview')) {
+      const img = document.createElement('img');
+      img.className = 'fc-anim-preview';
+      img.src = webp;
+      img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;pointer-events:none;';
+      if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
+      host.appendChild(img);
+    }
+    return;
+  }
+
+  // Non-HLS (direct mp4/mov) — cheap muted video loop
+  if (_activePreview) { try { _stopPreview(_activePreview); } catch(_) {} }
   _activePreview = vid;
   if (!vid.src && vid.dataset.src) {
     vid.preload = 'auto';
@@ -9661,6 +9683,11 @@ function _startPreview(vid) {
 }
 
 function _stopPreview(vid) {
+  if (!vid) return;
+  // Remove any animated webp overlay
+  const host = vid.parentElement;
+  const img = host && host.querySelector('.fc-anim-preview');
+  if (img) img.remove();
   try { vid.pause(); } catch(_) {}
   if (_activePreview === vid) _activePreview = null;
 }
