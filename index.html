@@ -6133,7 +6133,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v411 · entry-counts";
+const APP_VERSION = "v412 · audio-flag";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -9639,12 +9639,14 @@ function enableTicker() {
 // Bandwidth = one active stream max, decoders never pile up.
 let _lazyVideoObserver = null;
 let _activePreview = null;
+let _userAudioActive = false; // set synchronously on user tap; blocks lazy previews
 
 function _startPreview(vid) {
   if (_activePreview === vid) return;
-  // Never steal the audio session from a real (unmuted) playback
-  const audioActive = [...document.querySelectorAll('video')].some(v => !v.muted && !v.paused);
-  if (audioActive) return;
+  // Never steal the audio session from a user-initiated (unmuted) playback.
+  // _userAudioActive is set synchronously on tap — before play() resolves —
+  // so the DOM-query race condition can't let a preview steal the audio session.
+  if (_userAudioActive) return;
   if (_activePreview) { try { _activePreview.pause(); } catch(_) {} }
   _activePreview = vid;
   if (!vid.src && vid.dataset.src) {
@@ -15056,6 +15058,7 @@ async function openFeedViewer(chId, startEntryId = null) {
       const src = target.dataset.fvPlay;
       // Free up iOS decoder slots — pause every other video first
       document.querySelectorAll('video').forEach(v => { try { v.pause(); } catch(_) {} });
+      _userAudioActive = true; // block lazy previews immediately — before play() resolves
       const newVid = document.createElement('video');
       newVid.src = src;
       newVid.controls = true;
@@ -15063,11 +15066,12 @@ async function openFeedViewer(chId, startEntryId = null) {
       newVid.playsInline = true;
       newVid.preload = 'auto';
       newVid.style.cssText = 'width:100%;max-height:55vmax;display:block;background:#000;border-radius:4px;';
+      newVid.addEventListener('ended', () => { _userAudioActive = false; });
+      newVid.addEventListener('pause', () => { if (newVid.ended || newVid.currentTime === 0) _userAudioActive = false; });
       target.replaceWith(newVid);
       // Call play() synchronously within the user gesture (iOS requires this)
-      // attachHlsIfNeeded is a no-op on Safari/iOS — only fires for Chrome/Firefox
-      newVid.play().catch(() => {});
-      attachHlsIfNeeded(newVid); // non-blocking, Safari exits immediately
+      newVid.play().catch(() => { _userAudioActive = false; });
+      attachHlsIfNeeded(newVid);
     }, { once: false });
 
     // Wire events
@@ -15462,10 +15466,10 @@ async function deleteFvEntry(entryId, chId) {
 
 function closeFeedViewer() {
   const sheet = document.getElementById('feedViewerSheet');
-  // Stop any playing media — hidden sheets keep playing audio otherwise
   sheet.querySelectorAll('video, audio').forEach(m => {
     try { m.pause(); m.currentTime = 0; } catch(_) {}
   });
+  _userAudioActive = false; // viewer closed — previews can resume
   sheet.classList.remove('open');
   document.body.style.overflow = '';
   _fvChallenge = null;
