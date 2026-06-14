@@ -6133,7 +6133,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v414 · webp-preview";
+const APP_VERSION = "v415 · viewer-fixes";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -15086,8 +15086,10 @@ async function openFeedViewer(chId, startEntryId = null) {
       const src = target.dataset.fvPlay;
       // Free up iOS decoder slots — pause every other video first
       document.querySelectorAll('video').forEach(v => { try { v.pause(); } catch(_) {} });
-      // Fully release the preview system so it can't pause/compete with this playback
-      if (_activePreview) { try { _activePreview.pause(); } catch(_) {} _activePreview = null; }
+      // Fully release the preview system + remove any animated webp overlay covering this card
+      if (_activePreview) { try { _stopPreview(_activePreview); } catch(_) {} _activePreview = null; }
+      const parentCard = target.closest('.fcc-entry-card, [data-fcc-entry], .fv-entry') || target.parentElement;
+      if (parentCard) parentCard.querySelectorAll('.fc-anim-preview').forEach(el => el.remove());
       _userAudioActive = true; // block lazy previews immediately — before play() resolves
       const newVid = document.createElement('video');
       newVid.src = src;
@@ -15106,10 +15108,17 @@ async function openFeedViewer(chId, startEntryId = null) {
     }, { once: false });
 
     // Wire events
-    // Scroll to the tapped entry if specified
+    // Scroll to the tapped entry if specified — use the real element position
+    // after layout settles (offsetWidth is 0 on the first frame).
     if (startEntryId) {
       const idx = visibleEntries.findIndex(e => e.id === startEntryId);
-      if (idx > 0) requestAnimationFrame(() => { list.scrollLeft = idx * list.offsetWidth; });
+      if (idx >= 0) {
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          const cards = list.children;
+          const targetCard = cards[idx];
+          if (targetCard) list.scrollLeft = targetCard.offsetLeft;
+        }));
+      }
     }
     wireLazyVideoThumbnails(list);
     list.querySelectorAll('[data-fv-vote]').forEach(btn => {
