@@ -6133,7 +6133,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v418 · scroll-snap-fix";
+const APP_VERSION = "v419 · debug-logger";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -9656,6 +9656,7 @@ function _startPreview(vid) {
   // HLS (Bunny) — overlay the animated preview.webp as an <img>. No streaming, no decoder.
   const webp = _bunnyPreviewUrl(src);
   if (webp) {
+    dlog('preview', 'webp-start', { webp: webp.slice(-40) });
     if (_activePreview) _stopPreview(_activePreview);
     _activePreview = vid;
     const host = vid.parentElement;
@@ -10999,6 +11000,54 @@ function avatarInner(avatar) {
 }
 
 let toastTimer;
+// ── In-app debug logger ───────────────────────────────────────────────────────
+// iPhone-only dev: no desktop console available. This puts a console IN the app.
+// Toggle: tap the version stamp in the avatar menu 5× to show/hide. Off by default.
+// dlog('video', 'tap-play', { entry: id }) → timestamped line in the overlay.
+let _debugLogOn = false;
+const _debugLines = [];
+function dlog(tag, msg, data) {
+  if (!_debugLogOn) return;
+  const t = new Date().toISOString().slice(11, 23);
+  const line = `${t} [${tag}] ${msg}` + (data ? ' ' + JSON.stringify(data) : '');
+  _debugLines.push(line);
+  if (_debugLines.length > 200) _debugLines.shift();
+  const body = document.getElementById('debugLogBody');
+  if (body) { body.textContent = _debugLines.join('\n'); body.scrollTop = body.scrollHeight; }
+}
+function toggleDebugLog() {
+  _debugLogOn = !_debugLogOn;
+  let panel = document.getElementById('debugLogPanel');
+  if (_debugLogOn && !panel) {
+    panel = document.createElement('div');
+    panel.id = 'debugLogPanel';
+    panel.style.cssText = 'position:fixed;left:0;right:0;bottom:0;height:38vh;z-index:99999;background:rgba(0,0,0,0.92);color:#0f0;font:10px/1.4 monospace;display:flex;flex-direction:column;border-top:2px solid #0f0;';
+    panel.innerHTML = `<div style="display:flex;justify-content:space-between;padding:4px 8px;background:#0a0a0a;color:#fff;flex-shrink:0;">
+      <span>🐛 Video Debug Log</span>
+      <span><button onclick="_debugLines.length=0;document.getElementById('debugLogBody').textContent='';" style="background:none;border:1px solid #555;color:#fff;margin-right:6px;border-radius:3px;">Clear</button><button onclick="copyDebugLog()" style="background:none;border:1px solid #555;color:#fff;margin-right:6px;border-radius:3px;">Copy</button><button onclick="toggleDebugLog()" style="background:none;border:1px solid #555;color:#fff;border-radius:3px;">✕</button></span>
+    </div>
+    <pre id="debugLogBody" style="margin:0;padding:6px 8px;overflow:auto;flex:1;white-space:pre-wrap;word-break:break-all;"></pre>`;
+    document.body.appendChild(panel);
+    const body = document.getElementById('debugLogBody');
+    if (body) body.textContent = _debugLines.join('\n');
+    toast('🐛 Debug log ON');
+  } else if (!_debugLogOn && panel) {
+    panel.remove();
+    toast('Debug log OFF');
+  }
+}
+function copyDebugLog() {
+  const text = _debugLines.join('\n');
+  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(() => toast('Log copied')).catch(() => {});
+}
+let _versionTapCount = 0, _versionTapTimer = null;
+function _onVersionTap() {
+  _versionTapCount++;
+  clearTimeout(_versionTapTimer);
+  _versionTapTimer = setTimeout(() => { _versionTapCount = 0; }, 1500);
+  if (_versionTapCount >= 5) { _versionTapCount = 0; toggleDebugLog(); }
+}
+
 function toast(msg) {
   const t = document.getElementById('toast');
   t.textContent = '🔥 ' + msg;
@@ -15082,6 +15131,7 @@ async function openFeedViewer(chId, startEntryId = null) {
       const target = e.target.closest('[data-fv-play]');
       if (!target) return;
       const src = target.dataset.fvPlay;
+      dlog('video', 'tap-play', { src: src.slice(-40) });
       // Free up iOS decoder slots — pause every other video first
       document.querySelectorAll('video').forEach(v => { try { v.pause(); } catch(_) {} });
       if (_activePreview) { try { _stopPreview(_activePreview); } catch(_) {} _activePreview = null; }
@@ -15111,6 +15161,7 @@ async function openFeedViewer(chId, startEntryId = null) {
     // restore it. visibleEntries is the viewer's own order, so idx matches the rendered cards.
     if (startEntryId) {
       const idx = visibleEntries.findIndex(e => e.id === startEntryId);
+      dlog('viewer', 'scroll-target', { startEntryId, idx, total: visibleEntries.length });
       if (idx > 0) {
         let tries = 0;
         const doScroll = () => {
@@ -15119,6 +15170,7 @@ async function openFeedViewer(chId, startEntryId = null) {
             const prevSnap = list.style.scrollSnapType;
             list.style.scrollSnapType = 'none';
             list.scrollLeft = idx * w;
+            dlog('viewer', 'scrolled', { idx, w, scrollLeft: list.scrollLeft });
             // Restore snap on the next frame, once positioned
             requestAnimationFrame(() => { list.style.scrollSnapType = prevSnap || ''; });
           } else if (tries++ < 30) {
@@ -15513,6 +15565,7 @@ async function deleteFvEntry(entryId, chId) {
 }
 
 function closeFeedViewer() {
+  dlog('viewer', 'close-feed');
   const sheet = document.getElementById('feedViewerSheet');
   sheet.querySelectorAll('video, audio').forEach(m => {
     try { m.pause(); m.currentTime = 0; m.src = ''; m.load(); } catch(_) {}
@@ -16340,7 +16393,7 @@ db.from('users').select('id').limit(1).then(() => {}, () => {});
 (async function boot() {
   // Stamp the running version so it's easy to confirm what's live
   const vEl = document.getElementById('appVersion');
-  if (vEl) vEl.textContent = 'FlamesChallenge · ' + APP_VERSION;
+  if (vEl) { vEl.textContent = 'FlamesChallenge · ' + APP_VERSION; vEl.style.cursor = 'pointer'; vEl.addEventListener('click', _onVersionTap); }
   // Get initial session
   const { data: { session } } = await db.auth.getSession();
   state.session = session;
