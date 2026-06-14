@@ -1981,6 +1981,11 @@ body.theme-light .hc-view-stats { border-color: var(--ember); color: var(--ember
   border-bottom: 1px solid var(--border);
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  position: sticky;
+  top: 64px; /* clear the fixed .cd-sheet-header */
+  margin-top: 64px; /* push first tabs row out from under the header */
+  background: var(--bg);
+  z-index: 5;
 }
 .record-tab {
   flex-shrink: 0;
@@ -1999,6 +2004,16 @@ body.theme-light .hc-view-stats { border-color: var(--ember); color: var(--ember
   border-color: var(--ember);
   color: #fff;
 }
+.record-sort-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 2px 12px; flex-wrap: wrap;
+}
+.record-sort-label { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+.record-sort-btn {
+  background: none; border: none; color: var(--text-muted);
+  font-size: 12px; font-weight: 600; cursor: pointer; padding: 4px 6px; border-radius: 6px;
+}
+.record-sort-btn.active { color: var(--ember); background: rgba(255,106,44,0.1); }
 .record-tab .count {
   margin-left: 6px;
   opacity: 0.7;
@@ -6133,7 +6148,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v419 · debug-logger";
+const APP_VERSION = "v420 · record-sort";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -7919,9 +7934,22 @@ function renderRecord() {
     list.innerHTML = `<div class="record-empty">${msg}</div>`;
     return;
   }
+  // Sort the filtered list per the chosen sort mode
+  const sortMode = state.recordSort || 'newest';
+  filtered.sort((a, b) => {
+    if (sortMode === 'oldest') return new Date(a.myCreated || 0) - new Date(b.myCreated || 0);
+    if (sortMode === 'votes')  return (b.myVotes || 0) - (a.myVotes || 0);
+    return new Date(b.myCreated || 0) - new Date(a.myCreated || 0); // newest (default)
+  });
   const catIcon = { singing: '🎤', dunk: '🏀', drawing: '🎨', rap: '🎙️', fashion: '👗', other: '🔥' };
   const badgeLabel = { won: '🥇 Won', lost: 'Lost', tied: '🤝 Tied', pending: 'Pending', voided: 'Void' };
-  list.innerHTML = filtered.map(r => {
+  // Sort row above the list
+  const sortRow = `<div class="record-sort-row">
+    <span class="record-sort-label">Sort:</span>
+    ${[['newest','Newest'],['oldest','Oldest'],['votes','Most votes']].map(([k,l]) =>
+      `<button class="record-sort-btn ${sortMode===k?'active':''}" onclick="setRecordSort('${k}')">${l}</button>`).join('')}
+  </div>`;
+  list.innerHTML = sortRow + filtered.map(r => {
     const ch = r.challenge;
     const icon = catIcon[ch.category] || '🎬';
     const date = r.myCreated ? new Date(r.myCreated).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
@@ -7962,6 +7990,11 @@ function renderRecord() {
 
 function setRecordFilter(f) {
   state.recordFilter = f;
+  renderRecord();
+}
+
+function setRecordSort(s) {
+  state.recordSort = s;
   renderRecord();
 }
 
