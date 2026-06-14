@@ -6133,7 +6133,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v416 · viewer-fixes2";
+const APP_VERSION = "v417 · transcript-fixes";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -10888,7 +10888,7 @@ async function toggleEntryLikeFromViewer(entryId) {
 function closeEntryViewer() {
   document.getElementById('entryViewerSheet').classList.remove('open');
   document.body.style.overflow = '';
-  document.getElementById('evMedia').querySelectorAll('video,audio').forEach(m => { m.pause(); m.currentTime = 0; });
+  document.getElementById('evMedia').querySelectorAll('video,audio').forEach(m => { try { m.pause(); m.currentTime = 0; m.src = ''; m.load(); } catch(_) {} });
   _evEntry = null;
   _evChallenge = null;
   _evEntries = [];
@@ -15081,30 +15081,25 @@ async function openFeedViewer(chId, startEntryId = null) {
     list.addEventListener('click', e => {
       const target = e.target.closest('[data-fv-play]');
       if (!target) return;
-      // Always create a fresh video element — repurposing the lazy thumbnail
-      // causes 0:00 freeze on iOS when src/muted state is changed mid-load.
       const src = target.dataset.fvPlay;
       // Free up iOS decoder slots — pause every other video first
       document.querySelectorAll('video').forEach(v => { try { v.pause(); } catch(_) {} });
-      // Fully release the preview system. The animated webp overlay lives INSIDE the
-      // play target (appended to the video's parent = this same div), so clear it here.
       if (_activePreview) { try { _stopPreview(_activePreview); } catch(_) {} _activePreview = null; }
-      target.querySelectorAll('.fc-anim-preview').forEach(el => el.remove());
       _userAudioActive = true; // block lazy previews immediately — before play() resolves
-      const newVid = document.createElement('video');
-      newVid.src = src;
-      newVid.controls = true;
-      newVid.autoplay = true;
-      newVid.playsInline = true;
-      newVid.muted = false;        // explicit — this is a user-initiated play with sound
-      newVid.preload = 'auto';
-      newVid.style.cssText = 'width:100%;max-height:55vmax;display:block;background:#000;border-radius:4px;';
-      newVid.addEventListener('ended', () => { _userAudioActive = false; });
-      newVid.addEventListener('pause', () => { if (newVid.ended || newVid.currentTime === 0) _userAudioActive = false; });
-      target.replaceWith(newVid);
-      // Synchronous play() within the tap gesture (iOS requirement)
-      newVid.play().catch(() => { _userAudioActive = false; });
-      attachHlsIfNeeded(newVid);
+      // Insert the video while target is still in the DOM, grab the live reference,
+      // THEN remove target (which contains poster + webp overlay). Using outerHTML or
+      // replaceWith detaches target first and the play() reference is lost → freeze/2-tap.
+      const isHls = src.includes('.m3u8');
+      target.insertAdjacentHTML('afterend',
+        `<video src="${escapeHtml(src)}" controls autoplay playsinline preload="auto" style="width:100%;max-height:55vmax;display:block;background:#000;border-radius:4px;"></video>`);
+      const vid = target.nextElementSibling;
+      target.remove();
+      if (vid) {
+        vid.addEventListener('ended', () => { _userAudioActive = false; });
+        vid.addEventListener('pause', () => { if (vid.ended || vid.currentTime === 0) _userAudioActive = false; });
+        vid.play().catch(() => { _userAudioActive = false; });
+        if (isHls) attachHlsIfNeeded(vid);
+      }
     }, { once: false });
 
     // Wire events
@@ -15513,7 +15508,7 @@ async function deleteFvEntry(entryId, chId) {
 function closeFeedViewer() {
   const sheet = document.getElementById('feedViewerSheet');
   sheet.querySelectorAll('video, audio').forEach(m => {
-    try { m.pause(); m.currentTime = 0; } catch(_) {}
+    try { m.pause(); m.currentTime = 0; m.src = ''; m.load(); } catch(_) {}
   });
   _userAudioActive = false; // viewer closed — previews can resume
   sheet.classList.remove('open');
