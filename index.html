@@ -6178,7 +6178,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v425 · one-entry-per-user";
+const APP_VERSION = "v427 · audio-debug";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -7799,15 +7799,18 @@ function openRecordSheet(filter) {
 }
 function followFromRecord(userId) {
   if (!state.profile || !userId) return;
-  const alreadyFollowing = (state.follows || []).some(f => f.following_id === userId);
-  if (alreadyFollowing) return;
-  db.from('follows').insert({ follower_id: state.profile.id, following_id: userId })
+  if (state.myFollowing && state.myFollowing.has(userId)) return; // already following
+  db.from('follows').insert({ follower_id: state.profile.id, followee_id: userId })
     .then(({ error }) => {
       if (!error) {
-        if (!state.follows) state.follows = [];
-        state.follows.push({ follower_id: state.profile.id, following_id: userId });
+        if (!state.myFollowing) state.myFollowing = new Set();
+        state.myFollowing.add(userId);
+        state.followerCounts = state.followerCounts || {};
+        state.followerCounts[userId] = (state.followerCounts[userId] || 0) + 1;
         renderRecord();
         toast('Following!');
+      } else {
+        console.warn('followFromRecord', error);
       }
     });
 }
@@ -7997,7 +8000,7 @@ function renderRecord() {
       const winner = (state.winnerProfiles || {})[r.winnerUserId]
         || (state.leaderboardData?.users || []).find(u => u.id === r.winnerUserId);
       if (winner) {
-        const isFollowing = (state.follows || []).some(f => f.following_id === winner.id);
+        const isFollowing = !!(state.myFollowing && state.myFollowing.has(winner.id));
         const avatarHtml = winner.avatar
           ? `<img src="${escapeHtml(winner.avatar)}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0">`
           : `<div style="width:24px;height:24px;border-radius:50%;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0">🔥</div>`;
@@ -10103,7 +10106,7 @@ async function detectRegularSuddenDeath() {
       if (sdErr) { console.warn('SD update', sdErr); continue; }
 
       const { data: followRows } = await db.from('follows')
-        .select('follower_id').in('following_id', tiedUserIds);
+        .select('follower_id').in('followee_id', tiedUserIds);
       const followerIds = [...new Set((followRows || []).map(r => r.follower_id).filter(id => !tiedUserIds.includes(id)))];
 
       const sdNow = new Date().toISOString();
@@ -10221,7 +10224,7 @@ async function detectChampionshipWinners() {
 
           // 4. Get followers of the tied players
           const { data: followRows } = await db.from('follows')
-            .select('follower_id').in('following_id', tiedUserIds);
+            .select('follower_id').in('followee_id', tiedUserIds);
           const followerIds = [...new Set(
             (followRows || []).map(r => r.follower_id).filter(id => !tiedUserIds.includes(id))
           )];
@@ -15389,9 +15392,15 @@ async function openFeedViewer(chId, startEntryId = null) {
       const vid = target.nextElementSibling;
       target.remove();
       if (vid) {
-        vid.addEventListener('ended', () => { _userAudioActive = false; });
-        vid.addEventListener('pause', () => { if (vid.ended || vid.currentTime === 0) _userAudioActive = false; });
-        vid.play().catch(() => { _userAudioActive = false; });
+        vid.addEventListener('ended', () => { dlog('audio', 'ended', { t: vid.currentTime }); _userAudioActive = false; });
+        vid.addEventListener('pause', () => { dlog('audio', 'pause', { t: vid.currentTime, ended: vid.ended }); if (vid.ended || vid.currentTime === 0) _userAudioActive = false; });
+        vid.addEventListener('playing', () => dlog('audio', 'playing', { muted: vid.muted, vol: vid.volume, t: vid.currentTime }));
+        vid.addEventListener('volumechange', () => dlog('audio', 'volumechange', { muted: vid.muted, vol: vid.volume }));
+        vid.addEventListener('waiting', () => dlog('audio', 'waiting (buffering)', { t: vid.currentTime }));
+        vid.addEventListener('stalled', () => dlog('audio', 'stalled', { t: vid.currentTime }));
+        vid.addEventListener('suspend', () => dlog('audio', 'suspend', { t: vid.currentTime }));
+        vid.addEventListener('ratechange', () => dlog('audio', 'ratechange', { rate: vid.playbackRate }));
+        vid.play().catch((e) => { dlog('audio', 'play-rejected', { err: String(e).slice(0,40) }); _userAudioActive = false; });
         if (isHls) attachHlsIfNeeded(vid);
       }
     }, { once: false });
