@@ -3010,6 +3010,12 @@ body.theme-light .skeleton {
 
 #ccCompressCheck:checked + #ccCompressSlider,
 #seCompressCheck:checked + #seCompressSlider { background: var(--ember) !important; }
+#ccSuddenDeathCheck:checked + #ccSuddenDeathSlider { background: var(--ember) !important; }
+#ccSuddenDeathSlider::after {
+  content:''; position:absolute; width:18px; height:18px; border-radius:50%;
+  background:#fff; top:3px; left:3px; transition:0.2s;
+}
+#ccSuddenDeathCheck:checked + #ccSuddenDeathSlider::after { transform: translateX(20px); }
 #ccCompressSlider::after, #seCompressSlider::after {
   content:''; position:absolute; width:18px; height:18px; border-radius:50%;
   background:#fff; top:3px; left:3px; transition:0.2s;
@@ -5198,6 +5204,19 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
         <div class="cc-preview" id="ccPreview" style="display:none"></div>
       </div>
 
+      <div class="cc-field">
+        <div style="padding:10px 12px;background:var(--surface-2);border-radius:8px;display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:var(--text);">⚡ Sudden death on tie</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">If voting ends tied, a 48-hour runoff decides the winner.</div>
+          </div>
+          <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;margin-left:12px;">
+            <input type="checkbox" id="ccSuddenDeathCheck" style="opacity:0;width:0;height:0;">
+            <span onclick="document.getElementById('ccSuddenDeathCheck').click()" style="position:absolute;cursor:pointer;inset:0;background:var(--border);border-radius:12px;transition:0.2s;" id="ccSuddenDeathSlider"></span>
+          </label>
+        </div>
+      </div>
+
       <div class="cc-field" id="ccTextField" style="display:none">
         <label for="ccTextEntry">Your text entry</label>
         <textarea id="ccTextEntry" maxlength="500" placeholder="Write your entry..."></textarea>
@@ -6148,7 +6167,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v420 · record-sort";
+const APP_VERSION = "v422 · sudden-death-regular";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -6792,6 +6811,7 @@ function switchView(view) {
       if (state.currentView === 'leaderboard') renderLeaderboard();
       buildTicker();
     }).catch(e => console.warn('championship detect', e));
+    detectRegularSuddenDeath().catch(e => console.warn('regular sudden death detect', e));
     if (isAdmin() && state.profile) {
       const now = new Date();
       const month = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
@@ -10022,6 +10042,87 @@ function saveHofLog() { /* no-op: replaced by Supabase insert */ }
 // ── End championship state accessors ─────────────────────────────────────────
 
 // Scan closed championship challenges and crown the winner
+async function detectRegularSuddenDeath() {
+  // Regular challenges that opted into sudden death: if voting closed tied, trigger a
+  // 48h runoff among the tied entries. Reuses the championship sudden-death mechanism
+  // (vote reset + flag + extend + notify) minus the HOF/championship-email parts.
+  if (!isAdmin() || !state.profile) return;
+  const now = new Date();
+  const champIds = getChampIds();
+
+  const candidates = (state.challenges || []).filter(ch =>
+    ch.allow_sudden_death &&
+    !ch.sudden_death &&                       // not already in a runoff
+    !champIds[ch.id] &&                        // championships handled separately
+    ch.voting_end && new Date(ch.voting_end) <= now
+  );
+
+  for (const ch of candidates) {
+    try {
+      const [entriesRes, votesRes] = await Promise.all([
+        db.from('entries').select('id, user_id, submitter:profiles!entries_user_id_fkey(id, name, avatar)').eq('challenge_id', ch.id),
+        db.from('entry_votes').select('entry_id, voter_id').eq('challenge_id', ch.id),
+      ]);
+      const entries = entriesRes.data || [];
+      const votes = votesRes.data || [];
+      if (entries.length < 2 || !votes.length) continue;
+
+      const tally = {};
+      votes.forEach(v => { tally[v.entry_id] = (tally[v.entry_id] || 0) + 1; });
+      let max = 0;
+      entries.forEach(e => { const v = tally[e.id] || 0; if (v > max) max = v; });
+      if (max === 0) continue;
+      const topEntries = entries.filter(e => (tally[e.id] || 0) === max);
+      if (topEntries.length < 2) continue; // no tie — normal winner logic handles it
+
+      // ── Tie → trigger sudden death ──
+      const tiedIds = topEntries.map(e => e.id);
+      const tiedUserIds = [...new Set(topEntries.map(e => e.user_id).filter(Boolean))];
+      const names = topEntries.map(e => e.submitter?.name || 'Someone').join(' vs ');
+      const newVoteEnd = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+
+      const previousVoterIds = [...new Set(votes.map(v => v.voter_id).filter(id => id && !tiedUserIds.includes(id)))];
+
+      const { error: delErr } = await db.from('entry_votes').delete().eq('challenge_id', ch.id);
+      if (delErr) { console.warn('SD vote reset', delErr); continue; }
+
+      const { error: sdErr } = await db.from('challenges').update({
+        voting_end: newVoteEnd, sudden_death: true, sudden_death_entry_ids: tiedIds,
+      }).eq('id', ch.id);
+      if (sdErr) { console.warn('SD update', sdErr); continue; }
+
+      const { data: followRows } = await db.from('follows')
+        .select('follower_id').in('following_id', tiedUserIds);
+      const followerIds = [...new Set((followRows || []).map(r => r.follower_id).filter(id => !tiedUserIds.includes(id)))];
+
+      const sdNow = new Date().toISOString();
+      const title = ch.title || 'Challenge';
+      const notifRows = [
+        ...tiedUserIds.map(uid => ({
+          user_id: uid, type: 'sudden_death', challenge_id: ch.id, created_at: sdNow,
+          message: `⚡ Sudden Death! "${title}" is tied. A new 48-hour vote is open — compete to win!`,
+        })),
+        ...followerIds.map(uid => ({
+          user_id: uid, type: 'sudden_death', challenge_id: ch.id, created_at: sdNow,
+          message: `⚡ Sudden Death! "${title}" is tied: ${names}. Vote now to decide the winner!`,
+        })),
+        ...previousVoterIds.map(uid => ({
+          user_id: uid, type: 'sudden_death', challenge_id: ch.id, created_at: sdNow,
+          message: `⚡ "${title}" is tied! Voting resets — cast your vote again to break the tie.`,
+        })),
+      ];
+      if (notifRows.length) {
+        db.from('notifications').insert(notifRows)
+          .then(({ error: nErr }) => { if (nErr) console.warn('SD notifs', nErr); });
+      }
+
+      await loadChallenges();
+      toast(`⚡ SUDDEN DEATH — "${title}" is tied! ${names} — 48 hours to decide!`);
+      console.log(`[sudden-death] "${title}" tied. Votes reset. Notified ${notifRows.length} users.`);
+    } catch (e) { console.warn('regular sudden death', e); }
+  }
+}
+
 async function detectChampionshipWinners() {
   if (!isAdmin() || !state.profile) return; // only admin detects and records winners
   const champIds = getChampIds();
@@ -11647,6 +11748,7 @@ document.getElementById('createChallengeForm').addEventListener('submit', async 
       submission_deadline: new Date(subDeadline).toISOString(),
       voting_end: new Date(voteEnd).toISOString(),
       is_public: ccState.visibility === 'public',
+      allow_sudden_death: !!document.getElementById('ccSuddenDeathCheck')?.checked,
       status: 'submitting',
     }).select().single();
     if (chError) throw new Error('Challenge create failed: ' + chError.message);
@@ -12461,15 +12563,20 @@ function renderChallengeResults() {
 
   const medals = ['🥇', '🥈', '🥉'];
   const rankLabels = ['Winner', '2nd', '3rd']; // panel renders only on closed challenges
+  // Detect ties: entries sharing a vote count get the same rank + tie icon (not distinct medals)
+  const topVotes = sorted.length ? sorted[0].votes : 0;
+  const tiedAtTop = topVotes > 0 && sorted.filter(s => s.votes === topVotes).length > 1;
   const rowsHtml = sorted.map(({ e, votes }, i) => {
     const pct = totalVotes > 0 ? Math.round((votes / totalVotes) * 100) : 0;
     const sub = e.submitter || { name: 'Unknown', avatar: '🔥' };
-    const isLeading = i === 0 && votes > 0;
+    const isTiedTop = tiedAtTop && votes === topVotes;
+    const isLeading = i === 0 && votes > 0 && !isTiedTop;
     const isMyPick = state.myCurrentVote === e.id;
-    const rankLabel = votes > 0 ? rankLabels[i] || ('#' + (i+1)) : 'No votes';
+    const rankIcon = isTiedTop ? '🤝' : (votes > 0 ? (medals[i] || '#' + (i+1)) : '#' + (i+1));
+    const rankLabel = isTiedTop ? 'Tied' : (votes > 0 ? rankLabels[i] || ('#' + (i+1)) : 'No votes');
     const canFollow = e.user_id && e.user_id !== state.profile?.id;
-    return `<div class="cd-results-row${isLeading ? ' leading' : ''}${isMyPick ? ' my-pick' : ''}">
-      <div class="cd-results-rank">${medals[i] || '#' + (i+1)}</div>
+    return `<div class="cd-results-row${isLeading ? ' leading' : ''}${isMyPick ? ' my-pick' : ''}${isTiedTop ? ' tied' : ''}">
+      <div class="cd-results-rank">${rankIcon}</div>
       <div class="cd-results-avatar${canFollow ? ' user-clickable' : ''}" ${canFollow ? `data-open-uid="${e.user_id}"` : ''}>${avatarInner(sub.avatar)}</div>
       <div class="cd-results-info">
         <div class="cd-results-name${canFollow ? ' user-clickable' : ''}" ${canFollow ? `data-open-uid="${e.user_id}"` : ''}>${escapeHtml(sub.name)}${isMyPick ? ' <span style="color:var(--ember);font-size:11px;font-weight:400">· your pick</span>' : ''}${needsFollowPlus(e.user_id) ? ' <span class="user-plus">+</span>' : ''}</div>
