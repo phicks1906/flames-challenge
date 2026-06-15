@@ -3113,6 +3113,17 @@ body.theme-light .skeleton {
 .feed-poll-card:hover { border-color: rgba(167, 139, 250, 0.5); }
 .feed-poll-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .feed-poll-tag { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #a78bfa; text-transform: uppercase; }
+.hof-card {
+  border-left: 3px solid #d946ef !important;
+  background: linear-gradient(180deg, rgba(217,70,239,0.06), transparent 60%);
+}
+.hof-card-avatar {
+  width: 46px; height: 46px; border-radius: 50%; overflow: hidden; flex-shrink: 0;
+  border: 2px solid #d946ef; display: flex; align-items: center; justify-content: center;
+  font-size: 22px; background: var(--surface-2);
+}
+.hof-card-headline { font-weight: 700; font-size: 15px; color: var(--text); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.hof-card-sub { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
 .feed-poll-time { font-size: 12px; color: var(--text-muted); }
 .feed-poll-question { font-family: var(--font-bricolage); font-weight: 600; font-size: 17px; line-height: 1.3; margin-bottom: 12px; color: var(--text); }
 .feed-poll-options { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
@@ -6167,7 +6178,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v422 · sudden-death-regular";
+const APP_VERSION = "v423 · hof-feed-cards";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -13761,7 +13772,41 @@ function renderFeed() {
 
   // Deduplicate by challenge: keep the best-scored item per challenge ID
   // Exclude championship challenges from the regular scored feed (they're pinned above)
-  const allRaw = [...postItems, ...challengeItems.filter(i => !i.data.is_championship), ...winnerItems, ...pollItems];
+  // ── Hall of Fame announcements (inductions + tier promotions) ──────────────
+  // Inductions: each championship win in hofData. Promotions: when a player's
+  // cumulative championship count crosses a tier threshold (5/10/15/20).
+  const TIER_THRESHOLDS = [
+    { at: 20, name: 'G.O.A.T.' },
+    { at: 15, name: 'Immortal' },
+    { at: 10, name: 'Icon' },
+    { at: 5,  name: 'Legend' },
+  ];
+  const hofItems = [];
+  {
+    const inductions = [...(state.hofData || [])].filter(r => r.userId);
+    const winsByUser = {};
+    // Chronological by month so cumulative counts cross thresholds in order
+    const chrono = [...inductions].sort((a, b) => (a.month || '').localeCompare(b.month || ''));
+    chrono.forEach(r => {
+      winsByUser[r.userId] = (winsByUser[r.userId] || 0) + 1;
+      const count = winsByUser[r.userId];
+      hofItems.push({
+        kind: 'hof', sortKey: r.month ? `${r.month}-15T12:00:00.000Z` : new Date().toISOString(),
+        data: { type: 'induction', userId: r.userId, name: r.name, avatar: r.avatar,
+                category: r.category, month: r.month, winNumber: count, challengeId: r.challengeId }
+      });
+      const crossed = TIER_THRESHOLDS.find(t => t.at === count);
+      if (crossed) {
+        hofItems.push({
+          kind: 'hof', sortKey: r.month ? `${r.month}-15T12:01:00.000Z` : new Date().toISOString(),
+          data: { type: 'promotion', userId: r.userId, name: r.name, avatar: r.avatar,
+                  tier: crossed.name, wins: count }
+        });
+      }
+    });
+  }
+
+  const allRaw = [...postItems, ...challengeItems.filter(i => !i.data.is_championship), ...winnerItems, ...pollItems, ...hofItems];
   allRaw.sort((a, b) => itemScore(b) - itemScore(a));
 
   const seenChallengeIds = new Set();
@@ -13824,6 +13869,7 @@ function renderFeed() {
     if (item.kind === 'entry') return renderFeedEntryCard(item.data);
     if (item.kind === 'winner') return renderFeedWinnerCard(item.data);
     if (item.kind === 'poll') return renderFeedPollCard(item.data);
+    if (item.kind === 'hof') return renderHofCard(item.data);
     return '';
   }).join('');
 
@@ -14307,6 +14353,43 @@ function renderFeedEntryCard({ entry, challenge }) {
         <div class="fa-time">🎬 ${timeAgo(entry.created_at)}</div>
       </div>
     </div>`;
+}
+
+function renderHofCard(d) {
+  const catLabel = { singing: 'Music', dunk: 'Dunk', drawing: 'Drawing', rap: 'Rap', fashion: 'Fashion', other: 'Open' };
+  const clickable = d.userId && d.userId !== state.profile?.id;
+  const userAttr = clickable ? `data-user-id="${d.userId}" class="user-clickable"` : '';
+  const plus = needsFollowPlus(d.userId) ? ' <span class="user-plus">+</span>' : '';
+  const badge = getHofBadge(d.userId, 30) || '';
+  const monthLabel = d.month ? (() => {
+    const [y, m] = d.month.split('-');
+    return new Date(+y, +m - 1, 1).toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+  })() : '';
+
+  let tag, headline, sub;
+  if (d.type === 'promotion') {
+    tag = '💎 HALL OF FAME · PROMOTION';
+    headline = `${escapeHtml(d.name)} reached ${escapeHtml(d.tier)}`;
+    sub = `${d.wins} championship${d.wins === 1 ? '' : 's'} — a new tier unlocked.`;
+  } else {
+    tag = '💎 HALL OF FAME · INDUCTION';
+    const cat = catLabel[d.category] || (d.category ? d.category[0].toUpperCase() + d.category.slice(1) : 'Open');
+    headline = `${escapeHtml(d.name)} — ${escapeHtml(cat)} Champion`;
+    sub = `Championship win #${d.winNumber}${monthLabel ? ' · ' + monthLabel : ''} — enshrined in the Hall of Fame.`;
+  }
+
+  return `<div class="feed-card hof-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px 0">
+      <span class="feed-poll-tag" style="color:#d946ef;">${tag}</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;padding:12px 14px 14px">
+      <div class="hof-card-avatar" ${userAttr}>${avatarInner(d.avatar)}</div>
+      <div style="flex:1;min-width:0">
+        <div class="hof-card-headline" ${userAttr}>${headline}${plus} ${badge}</div>
+        <div class="hof-card-sub">${sub}</div>
+      </div>
+    </div>
+  </div>`;
 }
 
 function renderFeedWinnerCard({ challenge, entry }) {
