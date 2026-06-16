@@ -6178,7 +6178,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v435 · entry-id-all-cards"
+const APP_VERSION = "v436 · no-client-compress"
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -11712,7 +11712,11 @@ document.getElementById('createChallengeForm').addEventListener('submit', async 
     if (ccState.mediaType !== 'text') {
       // Compress if user opted in
       let fileToUpload = ccState.file;
-      const ccShouldCompress = document.getElementById('ccCompressCheck')?.checked && ccState.mediaType === 'video';
+      // NOTE: client-side video compression DISABLED. The MediaRecorder/canvas re-mux
+      // corrupted the audio track, causing audio to cut ~2s into Bunny's HLS playback
+      // (confirmed: Bunny plays the uncompressed original fine). Bunny transcodes and
+      // compresses every upload server-side anyway, so client compression is redundant.
+      const ccShouldCompress = false && document.getElementById('ccCompressCheck')?.checked && ccState.mediaType === 'video';
       if (ccShouldCompress) {
         btn.textContent = 'Compressing... 0%';
         try {
@@ -12912,7 +12916,9 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
       // Compress if user opted in
       let seFileToUpload = seState.file;
       const seIsVideo = (seState.file.type || '').startsWith('video') || /\.(mp4|mov|m4v|webm)$/i.test(seState.file.name || '');
-      const seShouldCompress = document.getElementById('seCompressCheck')?.checked && seIsVideo;
+      // NOTE: client-side video compression DISABLED — see create-challenge note.
+      // The re-mux corrupted audio (cut ~2s into Bunny HLS). Bunny compresses server-side.
+      const seShouldCompress = false && document.getElementById('seCompressCheck')?.checked && seIsVideo;
       if (seShouldCompress) {
         btn.textContent = 'Compressing... 0%';
         try {
