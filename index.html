@@ -6178,7 +6178,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v427 · audio-debug";
+const APP_VERSION = "v429 · restore-v388-play";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -15383,26 +15383,23 @@ async function openFeedViewer(chId, startEntryId = null) {
       document.querySelectorAll('video').forEach(v => { try { v.pause(); } catch(_) {} });
       if (_activePreview) { try { _stopPreview(_activePreview); } catch(_) {} _activePreview = null; }
       _userAudioActive = true; // block lazy previews immediately — before play() resolves
-      // Insert the video while target is still in the DOM, grab the live reference,
-      // THEN remove target (which contains poster + webp overlay). Using outerHTML or
-      // replaceWith detaches target first and the play() reference is lost → freeze/2-tap.
-      const isHls = src.includes('.m3u8');
-      target.insertAdjacentHTML('afterend',
-        `<video src="${escapeHtml(src)}" controls autoplay playsinline preload="auto" style="width:100%;max-height:55vmax;display:block;background:#000;border-radius:4px;"></video>`);
-      const vid = target.nextElementSibling;
-      target.remove();
-      if (vid) {
-        vid.addEventListener('ended', () => { dlog('audio', 'ended', { t: vid.currentTime }); _userAudioActive = false; });
-        vid.addEventListener('pause', () => { dlog('audio', 'pause', { t: vid.currentTime, ended: vid.ended }); if (vid.ended || vid.currentTime === 0) _userAudioActive = false; });
-        vid.addEventListener('playing', () => dlog('audio', 'playing', { muted: vid.muted, vol: vid.volume, t: vid.currentTime }));
-        vid.addEventListener('volumechange', () => dlog('audio', 'volumechange', { muted: vid.muted, vol: vid.volume }));
-        vid.addEventListener('waiting', () => dlog('audio', 'waiting (buffering)', { t: vid.currentTime }));
-        vid.addEventListener('stalled', () => dlog('audio', 'stalled', { t: vid.currentTime }));
-        vid.addEventListener('suspend', () => dlog('audio', 'suspend', { t: vid.currentTime }));
-        vid.addEventListener('ratechange', () => dlog('audio', 'ratechange', { rate: vid.playbackRate }));
-        vid.play().catch((e) => { dlog('audio', 'play-rejected', { err: String(e).slice(0,40) }); _userAudioActive = false; });
-        if (isHls) attachHlsIfNeeded(vid);
-      }
+      // PROVEN PATTERN (v388, worked for weeks): create element, set src, set props,
+      // replaceWith, then SYNCHRONOUS play() inside the gesture. No load(), no async
+      // DOM work between tap and play() — iOS drops audio / blocks autoplay otherwise.
+      const newVid = document.createElement('video');
+      newVid.src = src;
+      newVid.controls = true;
+      newVid.autoplay = true;
+      newVid.playsInline = true;
+      newVid.preload = 'auto';
+      newVid.style.cssText = 'width:100%;max-height:55vmax;display:block;background:#000;border-radius:4px;';
+      newVid.addEventListener('ended', () => { dlog('audio', 'ended', { t: newVid.currentTime }); _userAudioActive = false; });
+      newVid.addEventListener('pause', () => { dlog('audio', 'pause', { t: newVid.currentTime, ended: newVid.ended }); if (newVid.ended || newVid.currentTime === 0) _userAudioActive = false; });
+      newVid.addEventListener('playing', () => dlog('audio', 'playing', { muted: newVid.muted, t: newVid.currentTime }));
+      newVid.addEventListener('stalled', () => dlog('audio', 'stalled', { t: newVid.currentTime }));
+      target.replaceWith(newVid);
+      newVid.play().catch(() => {});      // synchronous within the gesture
+      attachHlsIfNeeded(newVid);          // no-op on iOS, non-blocking
     }, { once: false });
 
     // Wire events
