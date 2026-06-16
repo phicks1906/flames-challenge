@@ -6178,7 +6178,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v429 · restore-v388-play";
+const APP_VERSION = "v430 · single-listener-fix";
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -15374,7 +15374,13 @@ async function openFeedViewer(chId, startEntryId = null) {
     // Tap poster → promote the pre-buffered hidden video to the playback position.
     // replaceWith() moves the existing DOM element (never serializes to HTML, so the
     // muted attribute is truly removed) and the video is already buffering from preload.
-    list.addEventListener('click', e => {
+    // Attach the play handler ONCE — openFeedViewer runs on every open, and
+    // re-adding this listener each time made one tap fire N times (duplicate video
+    // elements that paused each other ~0.15s in → sound cut + two-tap). The flag
+    // ensures a single delegated listener for the lifetime of the list element.
+    if (!list.dataset.fvPlayWired) {
+      list.dataset.fvPlayWired = '1';
+      list.addEventListener('click', e => {
       const target = e.target.closest('[data-fv-play]');
       if (!target) return;
       const src = target.dataset.fvPlay;
@@ -15401,6 +15407,7 @@ async function openFeedViewer(chId, startEntryId = null) {
       newVid.play().catch(() => {});      // synchronous within the gesture
       attachHlsIfNeeded(newVid);          // no-op on iOS, non-blocking
     }, { once: false });
+    } // end once-only fvPlayWired guard
 
     // Wire events
     // Scroll to the tapped entry. Each child is a full-width (flex:0 0 100%) snap page,
