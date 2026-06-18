@@ -5378,6 +5378,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     <div id="cdSubmitBtnWrap" style="padding:12px 0 4px;display:none;">
       <button class="btn btn-primary" id="cdAddEntryBtn" onclick="openSubmitEntry()" style="width:100%">+ Submit your entry</button>
     </div>
+    <div id="cdFullNote" style="display:none;text-align:center;padding:12px;margin:8px 0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-muted);font-size:13px;font-weight:600;"></div>
     <div id="cdResultsPanel" style="display:none"></div>
   </div>
 </div>
@@ -6178,7 +6179,10 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v437 · entry-viewer-x-fix"
+const APP_VERSION = "v439 · entry-cap"
+// Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
+// When reached, the challenge shows "Challenge full" and the submit path is blocked.
+const MAX_ENTRIES_PER_CHALLENGE = 20;
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -9628,6 +9632,14 @@ function renderLeaderboard() {
     return;
   }
 
+  // Competition ranking: users tied on BOTH sort keys share a rank. Medals 1-3, numbers after.
+  const lbRankByIndex = [];
+  ranked.forEach((u, i) => {
+    if (i === 0) { lbRankByIndex[i] = 1; return; }
+    const prev = ranked[i-1];
+    const tiedPrev = u.catWins === prev.catWins && u.catAllTime === prev.catAllTime;
+    lbRankByIndex[i] = tiedPrev ? lbRankByIndex[i-1] : i + 1;
+  });
   ranked.forEach((u, i) => {
     const isYou = state.profile && u.id === state.profile.id;
     const isLeader = u.id === leaderId;
@@ -9635,8 +9647,10 @@ function renderLeaderboard() {
     const isFollowing = state.myFollowing.has(u.id);
     const row = document.createElement('div');
     row.className = 'lb-row' + (isYou ? ' you' : '');
+    const lbRank = lbRankByIndex[i];
+    const lbRankIcon = lbRank === 1 ? '🥇' : lbRank === 2 ? '🥈' : lbRank === 3 ? '🥉' : '#' + lbRank;
     row.innerHTML = `
-      <div class="lb-rank">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '#' + (i+1)}</div>
+      <div class="lb-rank">${lbRankIcon}</div>
       <div class="lb-user" style="cursor:pointer" data-lb-uid="${u.id}">
         <div class="lb-avatar" style="position:relative">
           ${avatarInner(u.avatar)}
@@ -9847,7 +9861,16 @@ function buildTicker() {
         .slice(0, 3);
       if (!catUsers.length) return;
       const medals = ['🥇', '🥈', '🥉'];
-      const podiumText = catUsers.map((u, i) => `${medals[i]} ${u.name}`).join('  ');
+      // Competition ranking: tied users (same win count) share a medal. Compact single line.
+      const podiumText = catUsers.map((u, i) => {
+        let rank = 1;
+        for (let j = 1; j <= i; j++) {
+          const w = catUsers[j].rolling30ByCategory?.[cat] || 0;
+          const pw = catUsers[j-1].rolling30ByCategory?.[cat] || 0;
+          if (w !== pw) rank = j + 1;
+        }
+        return `${medals[rank - 1]} ${u.name}`;
+      }).join('  ');
       items.push({ icon: '', name: '', badge: 'leader', category: `${cat} TOP 3`, text: podiumText, grouped: true });
     });
 
@@ -10567,16 +10590,28 @@ function renderChampionshipTab() {
       ${myStatus}
       <div class="lb-champ-list-label">Top 3 Qualifiers</div>
       <div class="lb-champ-list">
-        ${top5.map((u, i) => {
-          const isYou = u.id === myId;
-          const wins = u.rolling30ByCategory[cat];
-          return `<div class="lb-champ-contender${isYou ? ' you' : ''}">
-            <div class="lb-champ-rank">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '#'+(i+1)}</div>
+        ${(() => {
+          // Competition ranking on win count: tied qualifiers share rank. Medals 1-3, numbers after.
+          const medals = ['🥇','🥈','🥉'];
+          const champRank = [];
+          top5.forEach((u, i) => {
+            const w = u.rolling30ByCategory[cat];
+            if (i === 0) { champRank[i] = 1; return; }
+            champRank[i] = w === top5[i-1].rolling30ByCategory[cat] ? champRank[i-1] : i + 1;
+          });
+          return top5.map((u, i) => {
+            const isYou = u.id === myId;
+            const wins = u.rolling30ByCategory[cat];
+            const rank = champRank[i];
+            const rankIcon = rank <= 3 ? medals[rank - 1] : '#' + rank;
+            return `<div class="lb-champ-contender${isYou ? ' you' : ''}">
+            <div class="lb-champ-rank">${rankIcon}</div>
             <div class="lb-champ-cav">${avatarInner(u.avatar)}</div>
             <div class="lb-champ-cname">${escapeHtml(u.name)}${isYou ? ' <span style="color:var(--ember);font-size:11px">(you)</span>' : ''}</div>
             <div class="lb-champ-cwins">${wins} win${wins > 1 ? 's' : ''}</div>
           </div>`;
-        }).join('')}
+          }).join('');
+        })()}
         ${top5.length < 3 ? `<div style="padding:8px 0;font-size:12px;color:var(--text-muted);text-align:center">${3 - top5.length} spot${3 - top5.length > 1 ? 's' : ''} open — win a challenge to claim one</div>` : ''}
       </div>
     </div>`;
@@ -11945,7 +11980,8 @@ function renderChallenges() {
 
     const chEntries = (state.feedEntries || []).filter(e => e.challenge_id === ch.id);
     const canEnterCh = ch.computedStatus === 'submitting'
-      && state.profile && !chEntries.some(e => e.user_id === state.profile.id);
+      && state.profile && !chEntries.some(e => e.user_id === state.profile.id)
+      && chEntries.length < MAX_ENTRIES_PER_CHALLENGE;
     const canVoteCh = ch.computedStatus === 'voting';
 
     const entryCardsHtml = chEntries.map(e => {
@@ -12265,10 +12301,18 @@ function renderChallengeDetail() {
 
   // Submit button visibility
   const userHasEntered = state.profile && state.currentEntries.some(e => e.user_id === state.profile.id);
-  const canEnter = status === 'submitting' && !userHasEntered && state.profile;
+  const challengeFull = state.currentEntries.length >= MAX_ENTRIES_PER_CHALLENGE;
+  const canEnter = status === 'submitting' && !userHasEntered && !challengeFull && state.profile;
   document.getElementById('cdAddEntryBtn').style.display = canEnter ? 'block' : 'none';
   const cdWrap = document.getElementById('cdSubmitBtnWrap');
   if (cdWrap) cdWrap.style.display = canEnter ? 'block' : 'none';
+  // "Challenge full" note when at cap and user hasn't entered (only during submission phase)
+  const cdFullNote = document.getElementById('cdFullNote');
+  if (cdFullNote) {
+    const showFull = status === 'submitting' && challengeFull && !userHasEntered;
+    cdFullNote.style.display = showFull ? 'block' : 'none';
+    if (showFull) cdFullNote.textContent = `🚫 Challenge full — ${MAX_ENTRIES_PER_CHALLENGE} entries max`;
+  }
 
   // Entry count + grid
   document.getElementById('cdEntriesCount').textContent = `${state.currentEntries.length} ${state.currentEntries.length === 1 ? 'entry' : 'entries'}`;
@@ -12583,20 +12627,34 @@ function renderChallengeResults() {
     .slice(0, 3);
 
   const medals = ['🥇', '🥈', '🥉'];
-  const rankLabels = ['Winner', '2nd', '3rd']; // panel renders only on closed challenges
-  // Detect ties: entries sharing a vote count get the same rank + tie icon (not distinct medals)
-  const topVotes = sorted.length ? sorted[0].votes : 0;
-  const tiedAtTop = topVotes > 0 && sorted.filter(s => s.votes === topVotes).length > 1;
+  // Best-practice ranking: competition ranking (1224). Tied entries share a rank.
+  // Ranks 1-3 show medals (tied entries share the same medal — three 🥈 if tied 2nd).
+  // Rank 4+ shows the plain number (ten "5"s for a 10-way tie for 5th).
+  const rankByIndex = [];
+  sorted.forEach((s, i) => {
+    if (i === 0) { rankByIndex[i] = 1; return; }
+    rankByIndex[i] = s.votes === sorted[i - 1].votes ? rankByIndex[i - 1] : i + 1;
+  });
+  const isTiedAtIndex = (i) => {
+    const v = sorted[i].votes;
+    return sorted.filter(s => s.votes === v).length > 1;
+  };
   const rowsHtml = sorted.map(({ e, votes }, i) => {
     const pct = totalVotes > 0 ? Math.round((votes / totalVotes) * 100) : 0;
     const sub = e.submitter || { name: 'Unknown', avatar: '🔥' };
-    const isTiedTop = tiedAtTop && votes === topVotes;
-    const isLeading = i === 0 && votes > 0 && !isTiedTop;
+    const rank = rankByIndex[i];
+    const isTied = votes > 0 && isTiedAtIndex(i);
+    const isLeading = rank === 1 && votes > 0 && !isTied;
     const isMyPick = state.myCurrentVote === e.id;
-    const rankIcon = isTiedTop ? '🤝' : (votes > 0 ? (medals[i] || '#' + (i+1)) : '#' + (i+1));
-    const rankLabel = isTiedTop ? 'Tied' : (votes > 0 ? rankLabels[i] || ('#' + (i+1)) : 'No votes');
+    // Rank 1-3 → medal (shared when tied). Rank 4+ → plain number. No votes → positional #.
+    const rankIcon = votes === 0 ? '#' + (i + 1)
+      : (rank <= 3 ? medals[rank - 1] : rank);
+    const ordinal = rank === 1 ? 'Winner' : rank === 2 ? '2nd' : rank === 3 ? '3rd' : '#' + rank;
+    const rankLabel = votes === 0 ? 'No votes'
+      : isTied ? `Tied · ${ordinal}`
+      : ordinal;
     const canFollow = e.user_id && e.user_id !== state.profile?.id;
-    return `<div class="cd-results-row${isLeading ? ' leading' : ''}${isMyPick ? ' my-pick' : ''}${isTiedTop ? ' tied' : ''}">
+    return `<div class="cd-results-row${isLeading ? ' leading' : ''}${isMyPick ? ' my-pick' : ''}${isTied ? ' tied' : ''}">
       <div class="cd-results-rank">${rankIcon}</div>
       <div class="cd-results-avatar${canFollow ? ' user-clickable' : ''}" ${canFollow ? `data-open-uid="${e.user_id}"` : ''}>${avatarInner(sub.avatar)}</div>
       <div class="cd-results-info">
@@ -12908,6 +12966,17 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
         return;
       }
     } catch (dupErr) { console.warn('dup entry check', dupErr); /* non-fatal — DB constraint still guards */ }
+    // Entry cap backstop: block if challenge already at MAX_ENTRIES_PER_CHALLENGE.
+    try {
+      const { count: entryCount } = await db.from('entries')
+        .select('id', { count: 'exact', head: true }).eq('challenge_id', ch.id);
+      if (typeof entryCount === 'number' && entryCount >= MAX_ENTRIES_PER_CHALLENGE) {
+        errBox.textContent = `This challenge is full (${MAX_ENTRIES_PER_CHALLENGE} entries max). No more entries can be added.`;
+        errBox.classList.add('show');
+        btn.disabled = false;
+        return;
+      }
+    } catch (capErr) { console.warn('entry cap check', capErr); /* non-fatal */ }
   }
 
   try {
@@ -15552,20 +15621,29 @@ function renderFvStandings(chId, votes) {
     .sort((a,b) => b.v - a.v);
 
   const medals = ['🥇','🥈','🥉'];
+  // Competition ranking: tied entries share rank. Medals 1-3 (shared), plain numbers after.
+  const fvRank = [];
+  sorted.forEach((s, i) => {
+    if (i === 0) { fvRank[i] = 1; return; }
+    fvRank[i] = s.v === sorted[i-1].v ? fvRank[i-1] : i + 1;
+  });
   panel.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;animation:fadeUp 0.3s ease;">' +
     '<div style="font-family:var(--font-display);font-size:12px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:10px;">🏆 Current Standings</div>' +
     sorted.map(({e, v}, i) => {
       const sub = e.submitter || {};
       const pct = total > 0 ? Math.round(v/total*100) : 0;
       const isMyPick = e.id === myVoteEntryId;
+      const rank = fvRank[i];
+      const isTop = rank === 1 && v > 0;
+      const rankIcon = v === 0 ? '#'+(i+1) : (rank <= 3 ? medals[rank-1] : rank);
       return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);">' +
-        '<span style="font-size:18px;width:26px;flex-shrink:0;">'+(medals[i]||'#'+(i+1))+'</span>' +
+        '<span style="font-size:18px;width:26px;flex-shrink:0;">'+rankIcon+'</span>' +
         '<div style="width:30px;height:30px;border-radius:50%;overflow:hidden;flex-shrink:0;background:linear-gradient(135deg,var(--ember),var(--coral));display:grid;place-items:center;font-size:14px;">'+avatarInner(sub.avatar)+'</div>' +
         '<div style="flex:1;min-width:0;">' +
           '<div style="font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escapeHtml(sub.name||'Unknown')+(isMyPick ? ' <span style="color:var(--ember);font-size:10px">· your vote</span>' : '')+'</div>' +
-          '<div style="height:4px;background:var(--overlay-2);border-radius:2px;margin-top:3px;overflow:hidden;"><div style="height:100%;width:'+pct+'%;background:'+( i===0&&v>0?'var(--gold)':'var(--ember)')+';border-radius:2px;transition:width 0.6s ease;"></div></div>' +
+          '<div style="height:4px;background:var(--overlay-2);border-radius:2px;margin-top:3px;overflow:hidden;"><div style="height:100%;width:'+pct+'%;background:'+( isTop?'var(--gold)':'var(--ember)')+';border-radius:2px;transition:width 0.6s ease;"></div></div>' +
         '</div>' +
-        '<span style="font-size:12px;font-weight:700;color:'+(i===0&&v>0?'var(--gold)':'var(--text-muted)')+';flex-shrink:0;">'+pct+'%</span>' +
+        '<span style="font-size:12px;font-weight:700;color:'+(isTop?'var(--gold)':'var(--text-muted)')+';flex-shrink:0;">'+pct+'%</span>' +
       '</div>';
     }).join('') +
     '<div style="font-size:11px;color:var(--text-muted);margin-top:8px;text-align:center;">'+total+' vote'+(total===1?'':'s')+' · '+entries.length+' entr'+(entries.length===1?'y':'ies')+'</div>' +
@@ -16700,13 +16778,20 @@ function openEntrantsSheet() {
 
   const sorted = [...state.currentEntries].sort((a, b) => (voteCounts[b.id] || 0) - (voteCounts[a.id] || 0));
   const medals = ['🥇', '🥈', '🥉'];
+  // Competition ranking: tied entries share rank. Medals 1-3 (shared), plain numbers after.
+  const esRank = [];
+  sorted.forEach((e, i) => {
+    if (i === 0) { esRank[i] = 1; return; }
+    esRank[i] = (voteCounts[e.id]||0) === (voteCounts[sorted[i-1].id]||0) ? esRank[i-1] : i + 1;
+  });
 
   document.getElementById('entrantsTitle').textContent = `Entrants (${sorted.length})`;
   document.getElementById('entrantsList').innerHTML = sorted.map((e, i) => {
     const votes = voteCounts[e.id] || 0;
     const sub = e.submitter || {};
-    const showMedal = isClosed && i < 3 && votes > 0 && sorted.length > 1;
-    const rank = showMedal ? medals[i] : (i + 1);
+    const rk = esRank[i];
+    const showMedal = isClosed && rk <= 3 && votes > 0 && sorted.length > 1;
+    const rank = showMedal ? medals[rk - 1] : rk;
     const isYou = state.profile && e.user_id === state.profile.id;
     return `
       <div class="entrant-row" data-jump-entry="${e.id}">
