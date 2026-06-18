@@ -469,6 +469,9 @@ body.theme-light .nav { background: rgba(255, 255, 255, 0.88); border-bottom-col
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
 }
+@keyframes fcspin {
+  to { transform: rotate(360deg); }
+}
 
 /* ============ SECTIONS ============ */
 .section {
@@ -6179,7 +6182,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v439 · entry-cap"
+const APP_VERSION = "v440 · encoding-placeholder"
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11308,6 +11311,91 @@ async function uploadToBunnyStream(file, titleHint, onProgress) {
   };
 }
 
+// Scans a rendered entry list for video hosts that are FRESH (created in the last
+// ~5 min) and may still be encoding on Bunny. For each not-yet-ready one, replaces
+// the poster/▶ with a processing placeholder and polls until ready, then restores
+// the original tappable thumbnail. Old videos are skipped entirely (no API calls).
+function _checkFreshVideoEncoding(container) {
+  if (!container) return;
+  const FRESH_MS = 5 * 60 * 1000; // only check videos posted within 5 minutes
+  const now = Date.now();
+  container.querySelectorAll('[data-fv-encguid]').forEach(host => {
+    const guid = host.dataset.fvEncguid;
+    if (!guid) return; // not a Bunny HLS video
+    const created = host.dataset.fvCreated ? new Date(host.dataset.fvCreated).getTime() : 0;
+    if (!created || (now - created) > FRESH_MS) return; // old enough to assume ready
+    if (_bunnyReadyCache.has(guid)) return; // already known good
+    // Preserve the original thumbnail so we can restore it once ready
+    const originalHtml = host.innerHTML;
+    const originalCursor = host.style.cursor;
+    const playUrl = host.dataset.fvPlay || '';
+    _bunnyVideoReady(guid).then(ready => {
+      if (ready === true) return; // already finished — leave thumbnail as-is
+      // Not ready: show placeholder + poll, restore thumbnail when done
+      host.style.cursor = 'default';
+      host.removeAttribute('data-fv-play'); // disable tap-to-play while processing
+      _mountProcessingPlaceholder(host, guid, () => {
+        host.innerHTML = originalHtml;
+        host.style.cursor = originalCursor;
+        host.setAttribute('data-fv-play', playUrl);
+      });
+    });
+  });
+}
+
+// ── Bunny encoding-status: fresh uploads need ~30s-2min to transcode to HLS ──
+// While encoding, the player shows a broken-looking gray box. Instead we show a
+// "Processing" placeholder and poll Bunny's status API, swapping in the real
+// player once status === 4 (Finished). Status codes: 0-3 = queued/processing,
+// 4 = finished, 5 = error, 6 = upload-failed.
+function _bunnyGuidFromUrl(src) {
+  const m = (src || '').match(/\/([0-9a-f-]{36})\/playlist\.m3u8/i);
+  return m ? m[1] : null;
+}
+const _bunnyReadyCache = new Set();   // guids known to be finished — skip re-checking
+async function _bunnyVideoReady(guid) {
+  if (!guid) return true;             // not a Bunny HLS url — assume playable
+  if (_bunnyReadyCache.has(guid)) return true;
+  try {
+    const res = await fetch(`https://video.bunnycdn.com/library/${BUNNY_LIBRARY_ID}/videos/${guid}`, {
+      headers: { 'AccessKey': BUNNY_API_KEY, 'accept': 'application/json' },
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    // status 4 = Finished (playable). 5/6 = error — treat as "stop waiting".
+    if (data.status === 4) { _bunnyReadyCache.add(guid); return true; }
+    if (data.status === 5 || data.status === 6) { return 'error'; }
+    return false;
+  } catch (e) { return false; }
+}
+// Renders a processing placeholder into `host`, polls until ready, then calls onReady().
+// `host` is the media container element. Returns a cancel function.
+function _mountProcessingPlaceholder(host, guid, onReady) {
+  if (!host) return () => {};
+  host.style.position = host.style.position || 'relative';
+  host.innerHTML = `<div class="fc-encoding-ph" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:var(--surface);color:var(--text-muted);font-size:13px;text-align:center;padding:16px;">
+    <div class="fc-encoding-spin" style="width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--ember);border-radius:50%;animation:fcspin 0.8s linear infinite;"></div>
+    <div>⏳ Processing video…<br><span style="font-size:11px;opacity:0.7;">Ready in a moment</span></div>
+  </div>`;
+  let cancelled = false;
+  let tries = 0;
+  const maxTries = 40; // ~40 × 4s = ~2.5 min ceiling
+  const tick = async () => {
+    if (cancelled) return;
+    const ready = await _bunnyVideoReady(guid);
+    if (cancelled) return;
+    if (ready === true) { onReady && onReady(); return; }
+    if (ready === 'error' || ++tries >= maxTries) {
+      const ph = host.querySelector('.fc-encoding-ph');
+      if (ph) ph.innerHTML = `<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:16px;">${ready === 'error' ? '⚠️ This video couldn\'t be processed.' : '⏳ Still processing — check back shortly.'}</div>`;
+      return;
+    }
+    setTimeout(tick, 4000);
+  };
+  tick();
+  return () => { cancelled = true; };
+}
+
 // ── HLS playback for non-Safari browsers ─────────────────────────────────────
 // Safari plays .m3u8 natively. Chrome/Firefox/Edge need hls.js, loaded on demand.
 let _hlsLibPromise = null;
@@ -15413,6 +15501,7 @@ async function openFeedViewer(chId, startEntryId = null) {
 
     const canVote = status === 'voting' || status === 'submitting';
     list.innerHTML = visibleEntries.map(e => renderFvEntry(e, ch, canVote, myVoteEntryId, status)).join('');
+    _checkFreshVideoEncoding(list);
 
     const total = visibleEntries.length;
     const userHasEntered = entries.some(e => e.user_id === state.profile?.id);
@@ -15751,14 +15840,14 @@ function renderFvEntry(entry, ch, canVote, myVoteEntryId, status) {
     // The lazy preview made the video "already playing" on open with no ▶, which
     // forced a wasted first tap. Here the first tap plays the real video with sound.
     if (entry.poster_url) {
-      mediaHtml = `<div style="position:relative;cursor:pointer;" data-fv-play="${escapeHtml(entry.media_url)}" data-fv-poster="${escapeHtml(entry.poster_url)}">
+      mediaHtml = `<div class="fv-media-host" style="position:relative;cursor:pointer;" data-fv-play="${escapeHtml(entry.media_url)}" data-fv-poster="${escapeHtml(entry.poster_url)}" data-fv-encguid="${_bunnyGuidFromUrl(entry.media_url)||''}" data-fv-created="${entry.created_at||''}">
         <img src="${escapeHtml(entry.poster_url)}" style="width:100%;max-height:55vmax;object-fit:cover;display:block;pointer-events:none;" loading="lazy">
         <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;">
           <div style="width:56px;height:56px;border-radius:50%;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;font-size:24px;">▶</div>
         </div>
       </div>`;
     } else {
-      mediaHtml = `<div style="position:relative;cursor:pointer;background:#000;min-height:200px;" data-fv-play="${escapeHtml(entry.media_url)}">
+      mediaHtml = `<div class="fv-media-host" style="position:relative;cursor:pointer;background:#000;min-height:200px;" data-fv-play="${escapeHtml(entry.media_url)}" data-fv-encguid="${_bunnyGuidFromUrl(entry.media_url)||''}" data-fv-created="${entry.created_at||''}">
         <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;">
           <div style="width:56px;height:56px;border-radius:50%;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;font-size:24px;">▶</div>
         </div>
