@@ -5533,6 +5533,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
         <input id="seCaption" type="text" maxlength="120" placeholder="Add a caption..." />
       </div>
       <div id="seError" class="auth-error"></div>
+      <div id="seSlowTip" style="display:none;background:var(--surface-2);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--gold);line-height:1.5;">⏳ Taking a while? Try stronger Wi‑Fi, or set <strong>Camera → Formats → Most Compatible</strong> for faster uploads. Keep this screen open.</div>
       <div class="cc-submit-area">
         <button type="submit" class="btn btn-primary" style="width:100%">🔥 Submit entry</button>
       </div>
@@ -6156,7 +6157,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v457 · dup-media-block"
+const APP_VERSION = "v459 · submit-hardening"
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11377,10 +11378,23 @@ function _bunnyGuidFromUrl(src) {
   const m = (src || '').match(/\/([0-9a-f-]{36})\/playlist\.m3u8/i);
   return m ? m[1] : null;
 }
-// SHA-256 hex of a file's bytes — used to block exact-duplicate media in a
-// challenge. Identical bytes → identical hash. (Re-encoded copies differ.)
+// Exact-duplicate key for a file — used to block the same media being entered
+// twice in a challenge. Hashes a BOUNDED sample (size + first/last 8MB) rather
+// than the whole file: loading a 500MB video fully into memory to hash it can
+// crash the tab on iOS. A byte-identical file always yields the same key, and
+// two distinct real videos effectively never collide. (Re-encodes differ.)
 async function fileSha256(file) {
-  const buf = await file.arrayBuffer();
+  const CHUNK = 8 * 1024 * 1024;
+  const parts = [new TextEncoder().encode('s' + file.size)];
+  if (file.size <= CHUNK * 2) {
+    parts.push(new Uint8Array(await file.arrayBuffer()));
+  } else {
+    parts.push(new Uint8Array(await file.slice(0, CHUNK).arrayBuffer()));
+    parts.push(new Uint8Array(await file.slice(file.size - CHUNK).arrayBuffer()));
+  }
+  const total = parts.reduce((n, p) => n + p.length, 0);
+  const buf = new Uint8Array(total);
+  let off = 0; for (const p of parts) { buf.set(p, off); off += p.length; }
   const digest = await crypto.subtle.digest('SHA-256', buf);
   return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
@@ -12992,13 +13006,10 @@ function seFileChangeHandler(e) {
     document.getElementById('seError').classList.add('show');
     e.target.value = ''; return;
   }
-  if (file.size > 100 * 1024 * 1024) {
-    const h = document.getElementById('seUploadHint');
-    if (h) { h.innerHTML = '⚠️ Large file (' + (file.size/1024/1024).toFixed(0) + 'MB) — upload may take several minutes on mobile. Consider trimming your video first.'; h.style.color = 'var(--gold)'; }
-  } else {
-    const h = document.getElementById('seUploadHint');
-    if (h) { h.textContent = 'Max 500MB · Keep videos under 2 min for best results'; h.style.color = ''; }
-  }
+  // No size-based warning — we only surface guidance when an upload is actually
+  // slow (see the slow-upload tip in the submit handler), so fast uploaders on
+  // any file size are never nagged.
+  { const h = document.getElementById('seUploadHint'); if (h) { h.textContent = 'Max 500MB'; h.style.color = ''; } }
   // Show compress toggle + tip for video files
   const seIsVideo = file.type.startsWith('video/') || /\.(mov|mp4|m4v|avi|webm)$/i.test(file.name);
   const seToggle = document.getElementById('seCompressToggle');
@@ -13099,6 +13110,8 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
   const btn = e.target.querySelector('button[type="submit"]');
   btn.disabled = true; const orig = btn.textContent;
   seState._mediaHash = null; // recomputed below only when a file is present
+  let _slowTipTimer = null;
+  { const st = document.getElementById('seSlowTip'); if (st) st.style.display = 'none'; }
 
   // Block a second entry from the same user (only when creating, not editing).
   // Mirrors the one-vote-per-challenge rule. Checked before upload so we don't
@@ -13167,6 +13180,13 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
         } catch(e) { seFileToUpload = seState.file; }
       }
       btn.textContent = 'Uploading... 0%';
+      // Slow-upload guidance (video only): reveal the tip only if the upload is
+      // still running after 15s (slow Wi-Fi / HEVC). Fast uploads never show it.
+      if (ch.media_type === 'video') {
+        _slowTipTimer = setTimeout(() => {
+          const st = document.getElementById('seSlowTip'); if (st) st.style.display = 'block';
+        }, 15000);
+      }
       // ── Video → Bunny Stream; photo/audio → Supabase Storage ──
       if (ch.media_type === 'video') {
         const bunny = await uploadToBunnyStream(seFileToUpload, ch.title, pct => {
@@ -13195,6 +13215,9 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
         // No poster needed: photos ARE the image; Bunny generates video thumbnails
       }
     }
+    // Upload done — stop and hide the slow-upload tip before DB writes/refreshes.
+    if (_slowTipTimer) { clearTimeout(_slowTipTimer); _slowTipTimer = null; }
+    { const st = document.getElementById('seSlowTip'); if (st) st.style.display = 'none'; }
     btn.textContent = seState.editingEntry ? 'Saving...' : 'Submitting...';
     const captionText = ch.media_type === 'text' ? textEntry : (caption || null);
 
@@ -13254,6 +13277,8 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
     errBox.classList.add('show');
   } finally {
     btn.disabled = false; btn.textContent = orig;
+    if (_slowTipTimer) clearTimeout(_slowTipTimer);
+    const st = document.getElementById('seSlowTip'); if (st) st.style.display = 'none';
   }
 });
 
