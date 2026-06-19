@@ -6156,7 +6156,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v453 · poster-upgrade"
+const APP_VERSION = "v454 · preview-onerror"
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -9723,8 +9723,12 @@ function _startPreview(vid) {
     if (host && !host.querySelector('.fc-anim-preview')) {
       const img = document.createElement('img');
       img.className = 'fc-anim-preview';
-      img.src = webp;
       img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;pointer-events:none;';
+      // Bunny's preview.webp 404s for some videos (same as thumbnail.jpg). With
+      // no handler the <img> paints a broken "?" glyph over the card — so on
+      // error just remove the overlay and leave the clean dark poster + ▶.
+      img.onerror = () => { dlog('preview', 'webp-404', { webp: webp.slice(-40) }); img.remove(); };
+      img.src = webp;
       if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
       host.appendChild(img);
     }
