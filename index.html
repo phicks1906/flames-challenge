@@ -6156,7 +6156,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v452 · poster-viewer"
+const APP_VERSION = "v453 · poster-upgrade"
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -9753,23 +9753,34 @@ function _stopPreview(vid) {
   if (_activePreview === vid) _activePreview = null;
 }
 
-// Bunny's thumbnail.jpg sometimes 404s (encode failed, or never generated for
-// older videos). A 404 poster on a <video> shows iOS's broken-image "?" glyph,
-// and there is NO onerror hook for a poster attribute. So probe each poster as
-// an Image; if it fails, swap it for a dark placeholder so the ▶ overlay reads
-// as a normal tappable thumbnail instead of a broken gray box. Fresh/still-
-// encoding videos are handled separately by _checkFreshVideoEncoding.
+// Bunny's thumbnail.jpg often 404s (Bunny isn't generating a still for these
+// videos), and iOS Safari will NOT re-render a <video> poster once it has tried
+// and failed to load one — so swapping a broken poster afterward does nothing.
+// The reliable approach: render a dark placeholder as the INITIAL poster (a
+// data-URI always loads, so the broken-image "?" glyph can never paint), stash
+// the real thumbnail in data-thumb, then upgrade to it only once it's confirmed
+// to load. We prefer Bunny's preview.webp — the logs show it loads reliably
+// where thumbnail.jpg does not. A clean dark box + ▶ reads as "tap to play",
+// never as broken. Fresh/still-encoding videos are handled by
+// _checkFreshVideoEncoding.
 const _DARK_POSTER = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFElEQVR42mOQIhEwjGoY1TB8NQAAeglOAUat07wAAAAASUVORK5CYII=";
+
+// Build the poster attribute for a video thumbnail. Always starts as the dark
+// placeholder; the real frame is carried in data-thumb for later upgrade.
+function _videoPosterAttr(mediaUrl, posterUrl) {
+  const real = _bunnyPreviewUrl(mediaUrl || '') || posterUrl || '';
+  return `poster="${_DARK_POSTER}"${real ? ` data-thumb="${escapeHtml(real)}"` : ''}`;
+}
+
 function _validateVideoPosters(container) {
-  (container || document).querySelectorAll('video[poster]').forEach(v => {
-    const url = v.getAttribute('poster');
-    if (!url || url.startsWith('data:')) return;
+  (container || document).querySelectorAll('video[data-thumb]').forEach(v => {
+    const real = v.getAttribute('data-thumb');
+    v.removeAttribute('data-thumb'); // only attempt once
+    if (!real) return;
     const probe = new Image();
-    probe.onerror = () => {
-      dlog('poster', 'bad-thumb', { url: url.slice(-40) });
-      v.setAttribute('poster', _DARK_POSTER);
-    };
-    probe.src = url;
+    probe.onload  = () => { v.setAttribute('poster', real); };
+    probe.onerror = () => { dlog('poster', 'bad-thumb', { url: real.slice(-40) }); };
+    probe.src = real;
   });
 }
 
@@ -10966,7 +10977,7 @@ function _renderEvEntry() {
     // iOS Safari plays HLS (.m3u8) natively via the src attribute — no extra handling needed
     mediaContent.innerHTML = `<video
       src="${escapeHtml(entry.media_url)}"
-      ${entry.poster_url ? `poster="${escapeHtml(entry.poster_url)}"` : ''}
+      ${_videoPosterAttr(entry.media_url, entry.poster_url)}
       controls autoplay playsinline preload="auto"
       style="width:100%;max-height:60vh;display:block;">
     </video>`;
@@ -12093,7 +12104,7 @@ function renderChallenges() {
         mHtml = `<img src="${escapeHtml(e.media_url)}" class="fcc-entry-media" loading="lazy" onerror="this.style.display='none'">`;
       } else if (eMt === 'video' && e.media_url) {
         mHtml = e.poster_url
-          ? `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}" data-fcc-entry="${e.id}" data-fv-encguid="${_bunnyGuidFromUrl(e.media_url)||''}" data-fv-created="${e.created_at||''}"><video data-src="${escapeHtml(e.media_url)}" poster="${escapeHtml(e.poster_url)}" muted playsinline preload="none" data-lazy-video style="width:100%;height:100%;object-fit:cover;display:block;"></video><div class="fcc-play-overlay">▶</div></div>`
+          ? `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}" data-fcc-entry="${e.id}" data-fv-encguid="${_bunnyGuidFromUrl(e.media_url)||''}" data-fv-created="${e.created_at||''}"><video data-src="${escapeHtml(e.media_url)}" ${_videoPosterAttr(e.media_url, e.poster_url)} muted playsinline preload="none" data-lazy-video style="width:100%;height:100%;object-fit:cover;display:block;"></video><div class="fcc-play-overlay">▶</div></div>`
           : `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}" data-fcc-entry="${e.id}" data-fv-encguid="${_bunnyGuidFromUrl(e.media_url)||''}" data-fv-created="${e.created_at||''}" style="position:relative;"><video data-src="${escapeHtml(e.media_url)}" muted playsinline preload="none" data-lazy-video style="width:100%;height:100%;object-fit:cover;display:block;"></video><div class="fcc-play-overlay">▶</div></div>`;
       } else if (eMt === 'audio') {
         mHtml = e.media_url
@@ -12458,7 +12469,7 @@ function renderChallengeDetail() {
       // Use poster+overlay so external URLs don't break — same as feed card
       if (entry.poster_url) {
         mediaHtml = `<div style="position:relative;cursor:pointer;" onclick="openEntryViewer('${entry.id}','${entry.challenge_id}')">
-          <video data-src="${escapeHtml(entry.media_url)}" poster="${escapeHtml(entry.poster_url)}" muted playsinline preload="none" data-lazy-video style="width:100%;object-fit:cover;display:block;border-radius:8px;pointer-events:none;"></video>
+          <video data-src="${escapeHtml(entry.media_url)}" ${_videoPosterAttr(entry.media_url, entry.poster_url)} muted playsinline preload="none" data-lazy-video style="width:100%;object-fit:cover;display:block;border-radius:8px;pointer-events:none;"></video>
           <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.25);border-radius:8px;font-size:52px;">▶</div>
         </div>`;
       } else {
@@ -12916,7 +12927,7 @@ function openSubmitEntry(entryToEdit = null) {
       let mediaEl = '';
       if (ch.media_type === 'photo') mediaEl = `<img src="${entryToEdit.media_url}" alt="Current">`;
       else if (ch.media_type === 'video') mediaEl = entryToEdit.poster_url
-        ? `<video src="${entryToEdit.media_url}" poster="${entryToEdit.poster_url}" controls></video>`
+        ? `<video src="${entryToEdit.media_url}" ${_videoPosterAttr(entryToEdit.media_url, entryToEdit.poster_url)} controls></video>`
         : `<video src="${entryToEdit.media_url}" controls></video>`;
       else if (ch.media_type === 'audio') mediaEl = `<div style="padding:16px;background:#0a0805"><audio preload="metadata" src="${entryToEdit.media_url}" controls style="width:100%"></audio></div>`;
       preview.innerHTML = mediaEl + `<div class="cc-preview-info"><span>Current file · tap below to replace</span></div>`;
@@ -14502,7 +14513,7 @@ function renderFeedChallengeCard(ch) {
         if (e.poster_url) {
           // Show poster as a tappable image — tapping opens full detail
           mediaHtml = `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}" data-fcc-entry="${e.id}">
-            <video data-src="${escapeHtml(e.media_url)}" poster="${escapeHtml(e.poster_url)}" muted playsinline preload="none" data-lazy-video style="width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;"></video>
+            <video data-src="${escapeHtml(e.media_url)}" ${_videoPosterAttr(e.media_url, e.poster_url)} muted playsinline preload="none" data-lazy-video style="width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;"></video>
             <div class="fcc-play-overlay">▶</div>
           </div>`;
         } else {
@@ -14622,9 +14633,9 @@ function renderFeedWinnerCard({ challenge, entry }) {
     mediaHtml = `<img src="${escapeHtml(entry.media_url)}" style="width:100%;max-height:300px;object-fit:cover;display:block;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}">`;
   } else if (entry.media_type === 'video' && entry.media_url) {
     mediaHtml = entry.poster_url
-      ? `<div style="position:relative;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><video data-src="${escapeHtml(entry.media_url)}" poster="${escapeHtml(entry.poster_url)}" muted playsinline preload="none" data-lazy-video style="width:100%;max-height:300px;object-fit:cover;display:block;pointer-events:none;"></video><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.3);font-size:48px;">▶</div></div>`
+      ? `<div style="position:relative;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><video data-src="${escapeHtml(entry.media_url)}" ${_videoPosterAttr(entry.media_url, entry.poster_url)} muted playsinline preload="none" data-lazy-video style="width:100%;max-height:300px;object-fit:cover;display:block;pointer-events:none;"></video><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.3);font-size:48px;">▶</div></div>`
       : entry.poster_url
-        ? `<div style="position:relative;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><video data-src="${escapeHtml(entry.media_url)}" poster="${escapeHtml(entry.poster_url)}" muted playsinline preload="none" data-lazy-video style="width:100%;max-height:300px;object-fit:cover;display:block;pointer-events:none;"></video><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:48px;pointer-events:none;">▶</div></div>`
+        ? `<div style="position:relative;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><video data-src="${escapeHtml(entry.media_url)}" ${_videoPosterAttr(entry.media_url, entry.poster_url)} muted playsinline preload="none" data-lazy-video style="width:100%;max-height:300px;object-fit:cover;display:block;pointer-events:none;"></video><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:48px;pointer-events:none;">▶</div></div>`
         : `<div style="position:relative;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><video data-src="${escapeHtml(entry.media_url)}" muted playsinline preload="none" data-lazy-video style="width:100%;max-height:300px;object-fit:cover;display:block;"></video><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:48px;pointer-events:none;">▶</div></div>`;
   } else if (entry.media_type === 'audio' && entry.media_url) {
     mediaHtml = `<div style="padding:16px;background:var(--surface-2);display:flex;align-items:center;gap:12px;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><span style="font-size:36px">🎙️</span><audio src="${escapeHtml(entry.media_url)}" controls preload="metadata" style="flex:1;height:36px"></audio></div>`;
@@ -15867,7 +15878,7 @@ function renderFvEntry(entry, ch, canVote, myVoteEntryId, status) {
     // The lazy preview made the video "already playing" on open with no ▶, which
     // forced a wasted first tap. Here the first tap plays the real video with sound.
     if (entry.poster_url) {
-      mediaHtml = `<div class="fv-media-host" style="position:relative;cursor:pointer;" data-fv-play="${escapeHtml(entry.media_url)}" data-fv-poster="${escapeHtml(entry.poster_url)}" data-fv-encguid="${_bunnyGuidFromUrl(entry.media_url)||''}" data-fv-created="${entry.created_at||''}">
+      mediaHtml = `<div class="fv-media-host" style="position:relative;cursor:pointer;" data-fv-play="${escapeHtml(entry.media_url)}" data-fv-${_videoPosterAttr(entry.media_url, entry.poster_url)} data-fv-encguid="${_bunnyGuidFromUrl(entry.media_url)||''}" data-fv-created="${entry.created_at||''}">
         <img src="${escapeHtml(entry.poster_url)}" style="width:100%;max-height:55vmax;object-fit:cover;display:block;pointer-events:none;" loading="lazy" onerror="this.style.display='none';var h=this.closest('.fv-media-host');if(h){h.style.background='#000';h.style.minHeight='200px';}">
         <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;">
           <div style="width:56px;height:56px;border-radius:50%;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;font-size:24px;">▶</div>
