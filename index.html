@@ -6156,7 +6156,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v446 · feed-card-encoding"
+const APP_VERSION = "v447 · enc-debug"
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11296,15 +11296,18 @@ function _checkFreshVideoEncoding(container) {
   const now = Date.now();
   container.querySelectorAll('[data-fv-encguid]').forEach(host => {
     const guid = host.dataset.fvEncguid;
-    if (!guid) return; // not a Bunny HLS video
+    if (!guid) { dlog('enc', 'skip-no-guid', { html: host.className }); return; } // not a Bunny HLS video
     const created = host.dataset.fvCreated ? new Date(host.dataset.fvCreated).getTime() : 0;
-    if (!created || (now - created) > FRESH_MS) return; // old enough to assume ready
-    if (_bunnyReadyCache.has(guid)) return; // already known good
+    const ageMin = created ? Math.round((now - created) / 60000) : -1;
+    if (!created || (now - created) > FRESH_MS) { dlog('enc', 'skip-too-old', { guid: guid.slice(0,8), ageMin }); return; }
+    if (_bunnyReadyCache.has(guid)) { dlog('enc', 'skip-cached-ready', { guid: guid.slice(0,8) }); return; }
+    dlog('enc', 'checking', { guid: guid.slice(0,8), ageMin });
     // Preserve the original thumbnail so we can restore it once ready
     const originalHtml = host.innerHTML;
     const originalCursor = host.style.cursor;
     const playUrl = host.dataset.fvPlay || '';
     _bunnyVideoReady(guid).then(ready => {
+      dlog('enc', 'ready-result', { guid: guid.slice(0,8), ready: String(ready) });
       if (ready === true) return; // already finished — leave thumbnail as-is
       // Not ready: show placeholder + poll, restore thumbnail when done
       host.style.cursor = 'default';
@@ -11338,13 +11341,14 @@ async function _bunnyVideoReady(guid) {
     const res = await fetch(`https://video.bunnycdn.com/library/${BUNNY_LIBRARY_ID}/videos/${guid}`, {
       headers: { 'AccessKey': BUNNY_API_KEY, 'accept': 'application/json' },
     });
-    if (!res.ok) return false;
+    if (!res.ok) { dlog('enc', 'fetch-not-ok', { status: res.status }); return false; }
     const data = await res.json();
+    dlog('enc', 'bunny-status', { s: data.status });
     // status 4 = Finished (playable). 5/6 = error — treat as "stop waiting".
     if (data.status === 4) { _bunnyReadyCache.add(guid); return true; }
     if (data.status === 5 || data.status === 6) { return 'error'; }
     return false;
-  } catch (e) { return false; }
+  } catch (e) { dlog('enc', 'fetch-threw', { e: String(e).slice(0,60) }); return false; }
 }
 // Renders a processing placeholder into `host`, polls until ready, then calls onReady().
 // `host` is the media container element. Returns a cancel function.
