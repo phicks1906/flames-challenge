@@ -6156,7 +6156,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v449 · poster-fallback"
+const APP_VERSION = "v450 · poster-probe"
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -9753,8 +9753,29 @@ function _stopPreview(vid) {
   if (_activePreview === vid) _activePreview = null;
 }
 
+// Bunny's thumbnail.jpg sometimes 404s (encode failed, or never generated for
+// older videos). A 404 poster on a <video> shows iOS's broken-image "?" glyph,
+// and there is NO onerror hook for a poster attribute. So probe each poster as
+// an Image; if it fails, swap it for a dark placeholder so the ▶ overlay reads
+// as a normal tappable thumbnail instead of a broken gray box. Fresh/still-
+// encoding videos are handled separately by _checkFreshVideoEncoding.
+const _DARK_POSTER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='320'%3E%3Crect width='320' height='320' fill='%231a1a1a'/%3E%3C/svg%3E";
+function _validateVideoPosters(container) {
+  (container || document).querySelectorAll('video[poster]').forEach(v => {
+    const url = v.getAttribute('poster');
+    if (!url || url.startsWith('data:')) return;
+    const probe = new Image();
+    probe.onerror = () => {
+      dlog('poster', 'bad-thumb', { url: url.slice(-40) });
+      v.setAttribute('poster', _DARK_POSTER);
+    };
+    probe.src = url;
+  });
+}
+
 function wireLazyVideoThumbnails(container) {
   _checkFreshVideoEncoding(container || document);
+  _validateVideoPosters(container || document);
   const targets = (container || document).querySelectorAll('video[data-lazy-video][data-src]');
   if (!targets.length) return;
 
