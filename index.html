@@ -6156,7 +6156,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v442 · remove-compress-ui"
+const APP_VERSION = "v444 · pick-loading-state"
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11291,7 +11291,7 @@ async function uploadToBunnyStream(file, titleHint, onProgress) {
 // the original tappable thumbnail. Old videos are skipped entirely (no API calls).
 function _checkFreshVideoEncoding(container) {
   if (!container) return;
-  const FRESH_MS = 5 * 60 * 1000; // only check videos posted within 5 minutes
+  const FRESH_MS = 30 * 60 * 1000; // check videos posted within 30 min (covers large/slow encodes)
   const now = Date.now();
   container.querySelectorAll('[data-fv-encguid]').forEach(host => {
     const guid = host.dataset.fvEncguid;
@@ -11353,7 +11353,7 @@ function _mountProcessingPlaceholder(host, guid, onReady) {
   </div>`;
   let cancelled = false;
   let tries = 0;
-  const maxTries = 40; // ~40 × 4s = ~2.5 min ceiling
+  const maxTries = 150; // ~150 × 4s = 10 min ceiling (covers large-file encodes)
   const tick = async () => {
     if (cancelled) return;
     const ready = await _bunnyVideoReady(guid);
@@ -12977,18 +12977,46 @@ function seFileChangeHandler(e) {
   seState.file = file;
   seState.fileUrl = URL.createObjectURL(file);
   const preview = document.getElementById('sePreview');
+  // Large videos take a few seconds to decode a preview frame. Show an instant
+  // "Loading" state the moment the file is picked so it's clear the tap registered.
+  if (ch.media_type === 'video') {
+    preview.style.display = 'block';
+    preview.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:32px 16px;background:var(--surface-2);border-radius:8px;color:var(--text-muted);font-size:13px;">
+      <div style="width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--ember);border-radius:50%;animation:fcspin 0.8s linear infinite;"></div>
+      <div>Loading video…</div>
+    </div>`;
+    document.getElementById('seUploadZone').classList.add('has-file');
+  }
   let mediaEl = '';
   if (ch.media_type === 'photo') mediaEl = `<img src="${seState.fileUrl}" alt="Preview">`;
-  else if (ch.media_type === 'video') mediaEl = `<video src="${seState.fileUrl}" controls></video>`;
+  else if (ch.media_type === 'video') mediaEl = `<video src="${seState.fileUrl}" controls preload="metadata"></video>`;
   else if (ch.media_type === 'audio') mediaEl = `<div style="padding:16px;background:#0a0805"><audio preload="metadata" src="${seState.fileUrl}" controls style="width:100%"></audio></div>`;
-  preview.innerHTML = mediaEl + `
+  const previewInfoHtml = `
     <div class="cc-preview-info">
       <span>${escapeHtml(file.name)} · ${(file.size/1024/1024).toFixed(1)} MB</span>
       <button type="button" class="cc-preview-remove" onclick="clearSubmitEntryPreview()">Remove</button>
     </div>
   `;
-  preview.style.display = 'block';
-  document.getElementById('seUploadZone').classList.add('has-file');
+  if (ch.media_type === 'video') {
+    // Spinner is already showing. Build the video off-screen; swap it in once a
+    // frame/metadata is ready so the user isn't staring at a frozen "Loading".
+    preview.dataset.swapped = '0';
+    const probe = document.createElement('video');
+    probe.src = seState.fileUrl;
+    probe.preload = 'metadata';
+    const swap = () => {
+      if (preview.dataset.swapped === '1') return;
+      preview.dataset.swapped = '1';
+      preview.innerHTML = `<video src="${seState.fileUrl}" controls preload="metadata"></video>` + previewInfoHtml;
+    };
+    probe.addEventListener('loadeddata', swap, { once: true });
+    probe.addEventListener('loadedmetadata', swap, { once: true });
+    setTimeout(swap, 8000); // safety: never hang on the spinner
+  } else {
+    preview.innerHTML = mediaEl + previewInfoHtml;
+    preview.style.display = 'block';
+    document.getElementById('seUploadZone').classList.add('has-file');
+  }
 }
 
 document.getElementById('submitEntryForm').addEventListener('submit', async (e) => {
