@@ -6156,7 +6156,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v445 · pick-loading-fix"
+const APP_VERSION = "v446 · feed-card-encoding"
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -9754,6 +9754,7 @@ function _stopPreview(vid) {
 }
 
 function wireLazyVideoThumbnails(container) {
+  _checkFreshVideoEncoding(container || document);
   const targets = (container || document).querySelectorAll('video[data-lazy-video][data-src]');
   if (!targets.length) return;
 
@@ -11312,6 +11313,9 @@ function _checkFreshVideoEncoding(container) {
         host.innerHTML = originalHtml;
         host.style.cursor = originalCursor;
         host.setAttribute('data-fv-play', playUrl);
+        // Re-arm lazy loading for the restored <video> (feed card thumbnails)
+        const restoredVid = host.querySelector('video[data-lazy-video][data-src]');
+        if (restoredVid && _lazyVideoObserver) _lazyVideoObserver.observe(restoredVid);
       });
     });
   });
@@ -12063,8 +12067,8 @@ function renderChallenges() {
         mHtml = `<img src="${escapeHtml(e.media_url)}" class="fcc-entry-media" loading="lazy" onerror="this.style.display='none'">`;
       } else if (eMt === 'video' && e.media_url) {
         mHtml = e.poster_url
-          ? `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}" data-fcc-entry="${e.id}"><video data-src="${escapeHtml(e.media_url)}" poster="${escapeHtml(e.poster_url)}" muted playsinline preload="none" data-lazy-video style="width:100%;height:100%;object-fit:cover;display:block;"></video><div class="fcc-play-overlay">▶</div></div>`
-          : `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}" data-fcc-entry="${e.id}" style="position:relative;"><video data-src="${escapeHtml(e.media_url)}" muted playsinline preload="none" data-lazy-video style="width:100%;height:100%;object-fit:cover;display:block;"></video><div class="fcc-play-overlay">▶</div></div>`;
+          ? `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}" data-fcc-entry="${e.id}" data-fv-encguid="${_bunnyGuidFromUrl(e.media_url)||''}" data-fv-created="${e.created_at||''}"><video data-src="${escapeHtml(e.media_url)}" poster="${escapeHtml(e.poster_url)}" muted playsinline preload="none" data-lazy-video style="width:100%;height:100%;object-fit:cover;display:block;"></video><div class="fcc-play-overlay">▶</div></div>`
+          : `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}" data-fcc-entry="${e.id}" data-fv-encguid="${_bunnyGuidFromUrl(e.media_url)||''}" data-fv-created="${e.created_at||''}" style="position:relative;"><video data-src="${escapeHtml(e.media_url)}" muted playsinline preload="none" data-lazy-video style="width:100%;height:100%;object-fit:cover;display:block;"></video><div class="fcc-play-overlay">▶</div></div>`;
       } else if (eMt === 'audio') {
         mHtml = e.media_url
           ? `<div class="fcc-entry-media" style="background:var(--surface-2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:12px;">
