@@ -6156,7 +6156,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v444 · pick-loading-state"
+const APP_VERSION = "v445 · pick-loading-fix"
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -12977,16 +12977,6 @@ function seFileChangeHandler(e) {
   seState.file = file;
   seState.fileUrl = URL.createObjectURL(file);
   const preview = document.getElementById('sePreview');
-  // Large videos take a few seconds to decode a preview frame. Show an instant
-  // "Loading" state the moment the file is picked so it's clear the tap registered.
-  if (ch.media_type === 'video') {
-    preview.style.display = 'block';
-    preview.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:32px 16px;background:var(--surface-2);border-radius:8px;color:var(--text-muted);font-size:13px;">
-      <div style="width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--ember);border-radius:50%;animation:fcspin 0.8s linear infinite;"></div>
-      <div>Loading video…</div>
-    </div>`;
-    document.getElementById('seUploadZone').classList.add('has-file');
-  }
   let mediaEl = '';
   if (ch.media_type === 'photo') mediaEl = `<img src="${seState.fileUrl}" alt="Preview">`;
   else if (ch.media_type === 'video') mediaEl = `<video src="${seState.fileUrl}" controls preload="metadata"></video>`;
@@ -12998,20 +12988,24 @@ function seFileChangeHandler(e) {
     </div>
   `;
   if (ch.media_type === 'video') {
-    // Spinner is already showing. Build the video off-screen; swap it in once a
-    // frame/metadata is ready so the user isn't staring at a frozen "Loading".
-    preview.dataset.swapped = '0';
-    const probe = document.createElement('video');
-    probe.src = seState.fileUrl;
-    probe.preload = 'metadata';
-    const swap = () => {
-      if (preview.dataset.swapped === '1') return;
-      preview.dataset.swapped = '1';
-      preview.innerHTML = `<video src="${seState.fileUrl}" controls preload="metadata"></video>` + previewInfoHtml;
-    };
-    probe.addEventListener('loadeddata', swap, { once: true });
-    probe.addEventListener('loadedmetadata', swap, { once: true });
-    setTimeout(swap, 8000); // safety: never hang on the spinner
+    // Render the real video with a spinner OVERLAY on top. The video's own
+    // loadeddata event removes the overlay. (Detached probe elements don't fire
+    // load events on iOS, so the video must be in the DOM.)
+    preview.style.display = 'block';
+    preview.innerHTML = `<div style="position:relative;">
+      <video src="${seState.fileUrl}" controls preload="metadata" playsinline style="width:100%;display:block;border-radius:8px;"></video>
+      <div id="sePreviewSpin" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:var(--surface-2);border-radius:8px;color:var(--text-muted);font-size:13px;">
+        <div style="width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--ember);border-radius:50%;animation:fcspin 0.8s linear infinite;"></div>
+        <div>Loading video…</div>
+      </div>
+    </div>` + previewInfoHtml;
+    document.getElementById('seUploadZone').classList.add('has-file');
+    const vEl = preview.querySelector('video');
+    const spin = document.getElementById('sePreviewSpin');
+    const hideSpin = () => { if (spin) spin.style.display = 'none'; };
+    vEl.addEventListener('loadeddata', hideSpin, { once: true });
+    vEl.addEventListener('loadedmetadata', hideSpin, { once: true });
+    setTimeout(hideSpin, 8000); // safety: never hang on the spinner
   } else {
     preview.innerHTML = mediaEl + previewInfoHtml;
     preview.style.display = 'block';
