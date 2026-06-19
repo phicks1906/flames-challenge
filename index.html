@@ -6157,7 +6157,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v460 · sudden-death-toggle"
+const APP_VERSION = "v461 · block-avi"
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -15050,6 +15050,14 @@ function validateFileType(file, expectedMediaType) {
   const isImage = mime.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|heic)$/.test(name);
   const isVideo = mime.startsWith('video/') || /\.(mp4|mov|m4v|avi|webm|mkv)$/.test(name);
   const isAudio = mime.startsWith('audio/') || /\.(mp3|m4a|wav|aac|ogg|flac)$/.test(name);
+
+  // AVI is a legacy container Bunny can't reliably transcode — the audio track
+  // usually survives but the video track doesn't, so it plays back audio-only.
+  // Reject it up front with clear guidance instead of producing a broken entry.
+  const isAvi = /\.avi$/.test(name) || mime.includes('msvideo') || mime === 'video/avi';
+  if (expectedMediaType === 'video' && isAvi) {
+    return 'AVI videos aren\'t supported. Please upload an MP4 or MOV instead.';
+  }
 
   if (expectedMediaType === 'photo' && !isImage) {
     return 'This is a photo challenge. Please select an image file (JPG, PNG, etc.)';
