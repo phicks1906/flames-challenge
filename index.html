@@ -6156,7 +6156,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v455 · processing-height"
+const APP_VERSION = "v456 · flyer-lands-feed"
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -8722,21 +8722,28 @@ async function postFlyerToFeed() {
       challenge_id: ch.id,
     };
 
-    let { error } = await db.from('posts').insert(postData);
+    let { data: inserted, error } = await db.from('posts').insert(postData).select('id').single();
 
     // If post_type/challenge_id columns don't exist yet, retry without them
     if (error && (error.message?.includes('post_type') || error.message?.includes('challenge_id'))) {
       console.warn('post_type/challenge_id columns missing — posting without them');
       delete postData.post_type;
       delete postData.challenge_id;
-      ({ error } = await db.from('posts').insert(postData));
+      ({ data: inserted, error } = await db.from('posts').insert(postData).select('id').single());
     }
 
     if (error) throw error;
 
     toast('🔥 Posted to your feed!');
     closePromote();
-    if (state.currentView === 'feed') { await loadPosts(); renderFeed(); }
+    // Land the user on the feed where the flyer now lives — not the challenge page
+    // they opened Promote from. Close the underlying challenge sheet, refresh the
+    // feed, switch to it, then scroll to + highlight the new flyer card.
+    closeChallengeDetail();
+    await loadPosts();
+    switchView('feed');
+    const newPostId = inserted?.id;
+    if (newPostId) requestAnimationFrame(() => scrollToPost(newPostId));
   } catch(err) {
     console.error('Post flyer error:', err);
     toast('Failed to post — try again');
