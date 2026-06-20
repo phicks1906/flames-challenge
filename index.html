@@ -6200,7 +6200,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v475 · notif-follow-event"
+const APP_VERSION = "v476 · notif-mention-event"
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -7545,6 +7545,7 @@ async function loadNotifications() {
   const NOTIF_TEXT = {
     challenge_invite: 'invited you to a private challenge',
     follow: 'started following you',
+    mention: 'mentioned you',
   };
   try {
     const { data: pushed } = await db.from('notifications')
@@ -7556,6 +7557,7 @@ async function loadNotifications() {
       const target =
         (n.target_type === 'challenge' && n.target_id) ? { kind: 'challenge', id: n.target_id } :
         (n.target_type === 'profile' && n.target_id) ? { kind: 'profile', id: n.target_id } :
+        (n.target_type === 'post' && n.target_id) ? { kind: 'post', id: n.target_id } :
         (n.target_type === 'group') ? { kind: 'groups' } :
         n.challenge_id ? { kind: 'challenge', id: n.challenge_id } : null;
       notifs.push({
@@ -7618,21 +7620,9 @@ async function loadNotifications() {
     });
   });
 
-  // 9. Mentions of me
-  try {
-    const rows = await sel('mentions', 'target_type, target_id, author_id', q => q.eq('mentioned_user_id', me), 'mentions');
-    rows.filter(r => r.author_id !== me).forEach(r => {
-      let target = { kind: 'feed' }, where = '';
-      if (r.target_type === 'entry') {
-        const cid = entryChallenge[r.target_id];
-        if (cid) { target = { kind: 'challenge', id: cid }; where = allChTitle[cid] ? ` in ${allChTitle[cid]}` : ''; }
-      } else if (r.target_type === 'post') {
-        target = { kind: 'post', id: r.target_id };
-      }
-      notifs.push({ type: 'mention', actorId: r.author_id, ts: r.created_at || null,
-        text: `mentioned you${where}`, target });
-    });
-  } catch (e) { console.warn('notif mentions', e); }
+  // 9. Mentions of me — now event-driven (server outbox → notifications table,
+  //    read in source #5). Entry mentions resolve to their challenge at write time;
+  //    post mentions target the post. Old client-side derivation removed.
 
   // 10. Replies to my comments
   try {
