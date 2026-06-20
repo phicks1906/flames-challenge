@@ -6166,7 +6166,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v466 · challenge-presets"
+const APP_VERSION = "v467 · vote-guard"
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -16076,10 +16076,11 @@ async function fvVote(btn, chId) {
   btn.disabled = true;
   btn.textContent = '⏳ Counting...';
   try {
-    await db.from('entry_votes').upsert(
+    const { error: upErr } = await db.from('entry_votes').upsert(
       { challenge_id: chId, entry_id: entryId, voter_id: state.profile.id },
       { onConflict: 'challenge_id,voter_id' }
     );
+    if (upErr) throw upErr;
     toast('🗳️ Vote cast');
     btn.textContent = '✓ Voted';
     btn.style.background = 'var(--ember)';
@@ -16101,7 +16102,7 @@ async function fvVote(btn, chId) {
     renderFvStandings(chId, votes || [], _fvEntries || []);
   } catch(e) {
     console.error('fvVote error', e);
-    toast('Vote failed');
+    toast('Vote failed: ' + (e.message || 'unknown'));
     btn.disabled = false;
     btn.textContent = '🗳 Vote';
   }
