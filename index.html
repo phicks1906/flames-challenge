@@ -1692,6 +1692,16 @@ body.theme-light .auth-form input { background: #ffffff; }
   margin-left: auto; background: none; border: none;
   font-size: 20px; cursor: pointer; padding: 4px 8px;
 }
+.np-reach { padding: 4px 0 14px; margin-bottom: 6px; border-bottom: 1px solid var(--border, #1f1a16); }
+.np-reach-head { font-weight: 700; font-size: 0.95rem; margin-bottom: 10px; }
+.np-reach-opts { display: flex; gap: 8px; flex-wrap: wrap; }
+.np-reach-opt {
+  flex: 1 1 auto; padding: 8px 10px; border-radius: 999px;
+  border: 1px solid var(--border); background: transparent; color: var(--text-dim);
+  font-weight: 600; font-size: 0.82rem; cursor: pointer; white-space: nowrap;
+}
+.np-reach-opt.active { background: var(--ember); border-color: var(--ember); color: #fff; }
+.np-reach-help { margin-top: 10px; font-size: 0.82rem; color: var(--text-dim); line-height: 1.4; }
 .np-list { display: flex; flex-direction: column; gap: 2px; }
 .np-row {
   display: flex; align-items: center; justify-content: space-between;
@@ -5521,6 +5531,15 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     <button class="modal-close-x" onclick="closeNotifSettings()" aria-label="Close">×</button>
     <h2>Notifications</h2>
     <p class="promote-sub">Choose which notifications show up in your bell.</p>
+    <div class="np-reach">
+      <div class="np-reach-head">🔒 Private challenge invites</div>
+      <div class="np-reach-opts" id="npReachOpts">
+        <button type="button" class="np-reach-opt" data-reach="everyone" onclick="setInviteReach('everyone',this)">Everyone</button>
+        <button type="button" class="np-reach-opt" data-reach="following" onclick="setInviteReach('following',this)">People I follow</button>
+        <button type="button" class="np-reach-opt" data-reach="nobody" onclick="setInviteReach('nobody',this)">No one</button>
+      </div>
+      <div class="np-reach-help" id="npReachHelp"></div>
+    </div>
     <div class="np-list" id="notifPrefList"></div>
     <button class="btn btn-primary" style="width:100%;margin-top:16px" onclick="closeNotifSettings()">Done</button>
   </div>
@@ -6181,7 +6200,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v471 · enter-vote-presets"
+const APP_VERSION = "v472 · invite-reach-setting"
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -7783,10 +7802,53 @@ function openNotifSettings() {
       setNotifPref(t.dataset.pref, nowOn);
     });
   });
+  renderInviteReach();
   document.getElementById('notifSettingsModal').classList.add('open');
 }
 function closeNotifSettings() {
   document.getElementById('notifSettingsModal').classList.remove('open');
+}
+// Reach selector — writes profiles.invite_reach, which the server-side outbox
+// worker reads to decide ping vs Requests-bucket vs drop for private invites.
+const INVITE_REACH_HELP = {
+  everyone: 'Anyone can invite you to a private challenge.',
+  following: 'Only people you follow reach your bell. Everyone else lands in Requests.',
+  nobody: 'Only people you follow can invite you. Other invites are blocked.'
+};
+function paintInviteReach(reach) {
+  document.querySelectorAll('#npReachOpts .np-reach-opt').forEach(b =>
+    b.classList.toggle('active', b.dataset.reach === reach));
+  const help = document.getElementById('npReachHelp');
+  if (help) help.textContent = INVITE_REACH_HELP[reach] || INVITE_REACH_HELP.everyone;
+}
+async function renderInviteReach() {
+  if (!state.profile) return;
+  let reach = state.profile.invite_reach;
+  if (!reach) {
+    paintInviteReach('everyone'); // optimistic default while we fetch
+    try {
+      const { data } = await db.from('profiles').select('invite_reach').eq('id', state.profile.id).maybeSingle();
+      reach = (data && data.invite_reach) || 'everyone';
+      state.profile.invite_reach = reach;
+    } catch (e) { reach = 'everyone'; }
+  }
+  paintInviteReach(reach);
+}
+async function setInviteReach(value, btn) {
+  if (!state.profile) return;
+  const prev = state.profile.invite_reach || 'everyone';
+  if (value === prev) return;
+  paintInviteReach(value);            // optimistic
+  state.profile.invite_reach = value;
+  try {
+    const { error } = await db.from('profiles').update({ invite_reach: value }).eq('id', state.profile.id);
+    if (error) throw error;
+    toast('Invite setting saved');
+  } catch (e) {
+    state.profile.invite_reach = prev;
+    paintInviteReach(prev);
+    toast('Could not save — try again');
+  }
 }
 
 function openNotifs() {
