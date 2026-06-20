@@ -1494,6 +1494,11 @@ body.theme-light .auth-form input { background: #ffffff; }
 }
 
 /* Notification list */
+.notif-tabs { display: flex; gap: 8px; padding: 2px 0 12px; }
+.notif-tab { flex: 0 0 auto; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--border); background: transparent; color: var(--text-dim); font-weight: 600; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+.notif-tab.active { background: var(--ember); border-color: var(--ember); color: #fff; }
+.notif-tab-count { background: var(--ember); color: #fff; border-radius: 999px; padding: 0 7px; font-size: 0.72rem; line-height: 1.5; min-width: 18px; text-align: center; }
+.notif-tab.active .notif-tab-count { background: rgba(255,255,255,0.28); }
 .notif-list { display: flex; flex-direction: column; gap: 2px; padding-bottom: 24px; }
 .notif-item {
   display: flex; align-items: flex-start; gap: 12px;
@@ -5231,22 +5236,31 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       </div>
 
       <div class="cc-field">
-        <label>Challenge length <span class="hint">(or set custom dates below)</span></label>
-        <div class="cc-pills" id="ccWindowPills" style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button type="button" class="cc-pill" onclick="setCcWindow(24,this)">24 hrs</button>
-          <button type="button" class="cc-pill" onclick="setCcWindow(48,this)">48 hrs</button>
-          <button type="button" class="cc-pill" onclick="setCcWindow(72,this)">72 hrs</button>
+        <label>Time to enter <span class="hint">(or set custom dates below)</span></label>
+        <div class="cc-pills" id="ccEnterPills" style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="cc-pill" onclick="setCcEnter(24,this)">24 hrs</button>
+          <button type="button" class="cc-pill" onclick="setCcEnter(48,this)">48 hrs</button>
+          <button type="button" class="cc-pill" onclick="setCcEnter(72,this)">72 hrs</button>
+        </div>
+      </div>
+
+      <div class="cc-field">
+        <label>Voting window <span class="hint">(after submissions close)</span></label>
+        <div class="cc-pills" id="ccVotePills" style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="cc-pill" onclick="setCcVote(24,this)">24 hrs</button>
+          <button type="button" class="cc-pill" onclick="setCcVote(48,this)">48 hrs</button>
+          <button type="button" class="cc-pill" onclick="setCcVote(72,this)">72 hrs</button>
         </div>
       </div>
 
       <div class="cc-dates-row">
         <div class="cc-field">
           <label for="ccSubDeadline">Submissions close</label>
-          <input id="ccSubDeadline" type="datetime-local" required oninput="ccClearWindowPills()" />
+          <input id="ccSubDeadline" type="datetime-local" required oninput="ccClearEnterPills()" />
         </div>
         <div class="cc-field">
           <label for="ccVotingEnd">Voting ends</label>
-          <input id="ccVotingEnd" type="datetime-local" required oninput="ccClearWindowPills()" />
+          <input id="ccVotingEnd" type="datetime-local" required oninput="ccClearVotePills()" />
         </div>
       </div>
 
@@ -5426,6 +5440,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     <button class="notif-settings-btn" onclick="openNotifSettings()" aria-label="Notification settings">⚙️</button>
   </div>
   <div class="cd-sheet-inner">
+    <div class="notif-tabs" id="notifTabs" style="display:none"></div>
     <div class="notif-list" id="notifList"></div>
   </div>
 </div>
@@ -6166,7 +6181,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v470 · notif-event-read"
+const APP_VERSION = "v471 · enter-vote-presets"
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -7370,7 +7385,7 @@ function isNotifUnread(n) {
   if (!seen) return true;
   return new Date(n.ts).getTime() > new Date(seen).getTime();
 }
-function unreadNotifCount() { return (state.notifs || []).filter(isNotifUnread).length; }
+function unreadNotifCount() { return (state.notifs || []).filter(n => !n.isRequest && isNotifUnread(n)).length; }
 
 function renderNotifBadge() {
   const badge = document.getElementById('notifBadge');
@@ -7775,6 +7790,7 @@ function closeNotifSettings() {
 }
 
 function openNotifs() {
+  state.notifTab = 'all';
   renderNotifs();
   document.getElementById('notifSheet').classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -8047,16 +8063,40 @@ function openRecordRow(challengeId) {
   else switchView('challenges');
 }
 
+function setNotifTab(t) { state.notifTab = t; renderNotifs(); }
+
 function renderNotifs() {
   const list = document.getElementById('notifList');
+  const tabsEl = document.getElementById('notifTabs');
   if (!list) return;
-  const notifs = state.notifs || [];
-  if (!notifs.length) {
-    list.innerHTML = `<div class="notif-empty"><div class="icon">🔔</div>No notifications yet.<br>When people like, follow, vote, or join your challenges, it'll show up here.</div>`;
+  const all = state.notifs || [];
+  const requests = all.filter(n => n.isRequest);
+  const main = all.filter(n => !n.isRequest);
+  // requests tab only exists when there are requests; otherwise force 'all'
+  const tab = (requests.length && state.notifTab === 'requests') ? 'requests' : 'all';
+  state.notifTab = tab;
+
+  if (tabsEl) {
+    if (requests.length) {
+      tabsEl.style.display = 'flex';
+      tabsEl.innerHTML =
+        `<button class="notif-tab ${tab === 'all' ? 'active' : ''}" onclick="setNotifTab('all')">All</button>` +
+        `<button class="notif-tab ${tab === 'requests' ? 'active' : ''}" onclick="setNotifTab('requests')">Requests <span class="notif-tab-count">${requests.length}</span></button>`;
+    } else {
+      tabsEl.style.display = 'none';
+      tabsEl.innerHTML = '';
+    }
+  }
+
+  const shown = tab === 'requests' ? requests : main;
+  if (!shown.length) {
+    list.innerHTML = tab === 'requests'
+      ? `<div class="notif-empty"><div class="icon">📥</div>No requests right now.<br>Invites from people you don't follow show up here.</div>`
+      : `<div class="notif-empty"><div class="icon">🔔</div>No notifications yet.<br>When people like, follow, vote, or join your challenges, it'll show up here.</div>`;
     return;
   }
   const kindIcon = { post_like: '🔥', entry_like: '🔥', follow: '👤', vote: '🗳️', entry: '🎬', comment: '💬', reply: '↩️', mention: '@', challenge_closed: '🏁', new_challenge: '🏆', new_poll: '🗳️', poll_ended: '📊', champ_qualified: '⚡', champ_won: '👑', champ_friend_qualified: '⚡', champ_friend_won: '👑', challenge_invite: '🔒', group_invite: '👥' };
-  list.innerHTML = notifs.map((n, i) => {
+  list.innerHTML = shown.map((n, i) => {
     const unread = isNotifUnread(n);
     const av = n.actor ? avatarInner(n.actor.avatar) : '🏁';
     const name = n.actor ? `<b>${escapeHtml(n.actor.name)}</b> ` : '';
@@ -8074,7 +8114,7 @@ function renderNotifs() {
     </div>`;
   }).join('');
   list.querySelectorAll('.notif-item').forEach(el => {
-    el.addEventListener('click', () => openNotifTarget(notifs[+el.dataset.notif]));
+    el.addEventListener('click', () => openNotifTarget(shown[+el.dataset.notif]));
   });
 }
 
@@ -11725,19 +11765,46 @@ function toDatetimeLocal(date) {
 }
 
 // Challenge-length presets: total length split 50/50 between entry window and voting window
-function setCcWindow(hours, btn) {
-  const now = Date.now();
-  const subClose = new Date(now + (hours / 2) * 3600000);
-  const voteEnd  = new Date(now + hours * 3600000);
+function _ccParseLocal(id) {
+  const el = document.getElementById(id);
+  if (!el || !el.value) return null;
+  const d = new Date(el.value);
+  return isNaN(d.getTime()) ? null : d;
+}
+// "Time to enter" pill: Submissions Close = now + hours, then re-anchor Voting Ends
+// off the new close using the selected (or default 24h) voting window.
+function setCcEnter(hours, btn) {
+  const subClose = new Date(Date.now() + hours * 3600000);
   const subEl = document.getElementById('ccSubDeadline');
   const voteEl = document.getElementById('ccVotingEnd');
   if (subEl) subEl.value = toDatetimeLocal(subClose);
-  if (voteEl) voteEl.value = toDatetimeLocal(voteEnd);
-  document.querySelectorAll('#ccWindowPills .cc-pill').forEach(p => p.classList.remove('selected'));
+  const vp = document.getElementById('ccVotePills');
+  const voteHours = parseInt(vp && vp.dataset.hours, 10) || 24;
+  if (voteEl) voteEl.value = toDatetimeLocal(new Date(subClose.getTime() + voteHours * 3600000));
+  const ep = document.getElementById('ccEnterPills');
+  if (ep) ep.dataset.hours = hours;
+  document.querySelectorAll('#ccEnterPills .cc-pill').forEach(p => p.classList.remove('selected'));
   if (btn) btn.classList.add('selected');
 }
-function ccClearWindowPills() {
-  document.querySelectorAll('#ccWindowPills .cc-pill').forEach(p => p.classList.remove('selected'));
+// "Voting window" pill: Voting Ends = Submissions Close + hours (anchored off the
+// current close date; falls back to now + entry window if close isn't set yet).
+function setCcVote(hours, btn) {
+  const ep = document.getElementById('ccEnterPills');
+  const enterHours = parseInt(ep && ep.dataset.hours, 10) || 24;
+  let anchor = _ccParseLocal('ccSubDeadline');
+  if (!anchor || anchor.getTime() <= Date.now()) anchor = new Date(Date.now() + enterHours * 3600000);
+  const voteEl = document.getElementById('ccVotingEnd');
+  if (voteEl) voteEl.value = toDatetimeLocal(new Date(anchor.getTime() + hours * 3600000));
+  const vp = document.getElementById('ccVotePills');
+  if (vp) vp.dataset.hours = hours;
+  document.querySelectorAll('#ccVotePills .cc-pill').forEach(p => p.classList.remove('selected'));
+  if (btn) btn.classList.add('selected');
+}
+function ccClearEnterPills() {
+  document.querySelectorAll('#ccEnterPills .cc-pill').forEach(p => p.classList.remove('selected'));
+}
+function ccClearVotePills() {
+  document.querySelectorAll('#ccVotePills .cc-pill').forEach(p => p.classList.remove('selected'));
 }
 
 async function openCreateChallenge() {
@@ -11747,7 +11814,10 @@ async function openCreateChallenge() {
   const voteEnd = new Date(now.getTime() + 7*24*60*60*1000);
   document.getElementById('ccSubDeadline').value = toDatetimeLocal(subClose);
   document.getElementById('ccVotingEnd').value = toDatetimeLocal(voteEnd);
-  ccClearWindowPills();
+  ccClearEnterPills();
+  ccClearVotePills();
+  const _ep = document.getElementById('ccEnterPills'); if (_ep) delete _ep.dataset.hours;
+  const _vp = document.getElementById('ccVotePills'); if (_vp) delete _vp.dataset.hours;
   // Reset invite state and load groups for the picker
   ccInviteState.selectedGroupIds = new Set();
   ccInviteState.individuals = new Map();
