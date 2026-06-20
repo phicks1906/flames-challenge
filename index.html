@@ -5230,14 +5230,23 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
         <input id="ccCaption" type="text" maxlength="120" placeholder="Add a caption to your entry..." />
       </div>
 
+      <div class="cc-field">
+        <label>Challenge length <span class="hint">(or set custom dates below)</span></label>
+        <div class="cc-pills" id="ccWindowPills" style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="cc-pill" onclick="setCcWindow(24,this)">24 hrs</button>
+          <button type="button" class="cc-pill" onclick="setCcWindow(48,this)">48 hrs</button>
+          <button type="button" class="cc-pill" onclick="setCcWindow(72,this)">72 hrs</button>
+        </div>
+      </div>
+
       <div class="cc-dates-row">
         <div class="cc-field">
           <label for="ccSubDeadline">Submissions close</label>
-          <input id="ccSubDeadline" type="datetime-local" required />
+          <input id="ccSubDeadline" type="datetime-local" required oninput="ccClearWindowPills()" />
         </div>
         <div class="cc-field">
           <label for="ccVotingEnd">Voting ends</label>
-          <input id="ccVotingEnd" type="datetime-local" required />
+          <input id="ccVotingEnd" type="datetime-local" required oninput="ccClearWindowPills()" />
         </div>
       </div>
 
@@ -6157,7 +6166,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v465 · vote-phase-copy"
+const APP_VERSION = "v466 · challenge-presets"
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11678,6 +11687,22 @@ function toDatetimeLocal(date) {
   return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+// Challenge-length presets: total length split 50/50 between entry window and voting window
+function setCcWindow(hours, btn) {
+  const now = Date.now();
+  const subClose = new Date(now + (hours / 2) * 3600000);
+  const voteEnd  = new Date(now + hours * 3600000);
+  const subEl = document.getElementById('ccSubDeadline');
+  const voteEl = document.getElementById('ccVotingEnd');
+  if (subEl) subEl.value = toDatetimeLocal(subClose);
+  if (voteEl) voteEl.value = toDatetimeLocal(voteEnd);
+  document.querySelectorAll('#ccWindowPills .cc-pill').forEach(p => p.classList.remove('selected'));
+  if (btn) btn.classList.add('selected');
+}
+function ccClearWindowPills() {
+  document.querySelectorAll('#ccWindowPills .cc-pill').forEach(p => p.classList.remove('selected'));
+}
+
 async function openCreateChallenge() {
   if (!state.profile) return;
   const now = new Date();
@@ -11685,6 +11710,7 @@ async function openCreateChallenge() {
   const voteEnd = new Date(now.getTime() + 7*24*60*60*1000);
   document.getElementById('ccSubDeadline').value = toDatetimeLocal(subClose);
   document.getElementById('ccVotingEnd').value = toDatetimeLocal(voteEnd);
+  ccClearWindowPills();
   // Reset invite state and load groups for the picker
   ccInviteState.selectedGroupIds = new Set();
   ccInviteState.individuals = new Map();
