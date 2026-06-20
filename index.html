@@ -3119,6 +3119,13 @@ body.theme-light .skeleton {
 }
 .fcc-submit-btn:active { background: rgba(255,106,44,0.1); }
 
+/* Brief highlight when jumping to a specific poll from the feed/deep-link */
+.poll-card.poll-highlight { animation: pollPulse 1.8s ease; }
+@keyframes pollPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,106,44,0); }
+  18% { box-shadow: 0 0 0 3px rgba(255,106,44,0.65); }
+}
+
 /* ── Feed poll card ── */
 .feed-poll-card {
   background: var(--surface);
@@ -6203,7 +6210,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v480 · viewer-sticky-x"
+const APP_VERSION = "v481 · poll-jump"
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -9136,7 +9143,7 @@ function applyDeepLink() {
     const ch = (state.challenges || []).find(c => c.id === cid);
     if (ch) openChallenge(ch);
   } else if (pollId) {
-    switchView('polls');
+    jumpToPoll(pollId);
   } else if (postId) {
     openPostView(postId);
   }
@@ -9510,6 +9517,23 @@ async function saveProfileEdits() {
 }
 
 /* ---------- POLLS ---------- */
+// Navigate to the polls page and scroll to a specific poll (from feed tap or deep-link).
+function jumpToPoll(pollId) {
+  switchView('polls');
+  if (!pollId) return;
+  const tryScroll = (attempt = 0) => {
+    const card = document.querySelector(`#pollsGrid .poll-card[data-pid="${pollId}"]`);
+    if (card) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      card.classList.add('poll-highlight');
+      setTimeout(() => card.classList.remove('poll-highlight'), 2000);
+    } else if (attempt < 12) {
+      setTimeout(() => tryScroll(attempt + 1), 100);
+    }
+  };
+  requestAnimationFrame(() => setTimeout(tryScroll, 50));
+}
+
 function renderPolls() {
   const grid = document.getElementById('pollsGrid');
   if (state.loading) {
@@ -14629,7 +14653,7 @@ function renderFeed() {
   });
   // Wire up feed poll cards — tap to go to polls view
   c.querySelectorAll('.feed-poll-card').forEach(card => {
-    card.addEventListener('click', () => switchView('polls'));
+    card.addEventListener('click', () => jumpToPoll(card.dataset.pid));
     // Wire inline vote buttons
     card.querySelectorAll('[data-feed-poll-vote]').forEach(btn => {
       btn.addEventListener('click', e => {
