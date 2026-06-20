@@ -6200,7 +6200,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v473 · notif-poll-throttle"
+const APP_VERSION = "v474 · idle-backoff"
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -6925,7 +6925,11 @@ async function loadAppData() {
 // =========================
 const LIVE_TICK_MS = 15000;
 const NOTIF_POLL_MS = 60000; // notifications poll slower than the feed tick; also refresh on bell-open
+const IDLE_AFTER_MS = 120000;   // treat tab as idle after 2 min without interaction
+const IDLE_NOTIF_MS = 300000;   // when idle, poll notifications at most every 5 min
 let _lastNotifPoll = 0;
+let _lastInteraction = Date.now();
+let _idleWired = false;
 let _liveTickHandle = null;
 let _liveTickRunning = false;
 let _realtimeChannel = null;
@@ -6936,7 +6940,15 @@ function startLiveUpdates() {
   if (_liveTickHandle) return;
   _liveTickHandle = setInterval(liveTick, LIVE_TICK_MS);
   document.addEventListener('visibilitychange', _liveVisHandler);
+  _wireIdleTracking();
   startRealtimeSubscriptions();
+}
+function _wireIdleTracking() {
+  if (_idleWired) return;
+  _idleWired = true;
+  const mark = () => { _lastInteraction = Date.now(); };
+  ['pointerdown', 'keydown', 'touchstart', 'scroll'].forEach(ev =>
+    window.addEventListener(ev, mark, { passive: true }));
 }
 function stopLiveUpdates() {
   if (_liveTickHandle) { clearInterval(_liveTickHandle); _liveTickHandle = null; }
@@ -6945,7 +6957,7 @@ function stopLiveUpdates() {
   if (_realtimeChannel) { try { db.removeChannel(_realtimeChannel); } catch(e) {} _realtimeChannel = null; }
 }
 function _liveVisHandler() {
-  if (!document.hidden && state.profile) liveTick();
+  if (!document.hidden && state.profile) { _lastInteraction = Date.now(); liveTick(); }
 }
 
 // ── Supabase Realtime — leaderboard updates instantly on any new vote ─────────
@@ -6986,34 +6998,42 @@ async function liveTick() {
   if (!state.profile) return;
   _liveTickRunning = true;
   try {
-    // 1) Notifications — slower cadence than the feed tick; the heavy load also
-    //    runs on bell-open, so idle tabs don't re-query every 15s.
-    if (Date.now() - _lastNotifPoll >= NOTIF_POLL_MS) {
+    const idle = Date.now() - _lastInteraction > IDLE_AFTER_MS;
+
+    // 1) Notifications — slower cadence than the feed tick (and slower still when
+    //    idle). The heavy load also runs on bell-open, so tabs left open don't
+    //    re-query every 15s.
+    const notifGate = idle ? IDLE_NOTIF_MS : NOTIF_POLL_MS;
+    if (Date.now() - _lastNotifPoll >= notifGate) {
       _lastNotifPoll = Date.now();
       try { await loadNotifications(); } catch (e) { /* silent */ }
     }
 
-    // 2) Per-view refresh — incremental fetches only
-    if (state.currentView === 'feed') {
-      try {
-        await Promise.all([
-          loadPosts({ incremental: true }),
-          loadFeedActivity({ incremental: true }),
-          loadChallenges({ incremental: true }),
-        ]);
-        checkForFeedNewItems();
-      } catch (e) { /* silent */ }
-    } else if (state.currentChallenge) {
-      try { await refreshChallengeVotes(state.currentChallenge.id); } catch (e) { /* silent */ }
-    }
+    // When idle (no interaction for 2 min), skip the per-view + heat-check
+    // refreshes entirely — they resume on the next tap/scroll.
+    if (!idle) {
+      // 2) Per-view refresh — incremental fetches only
+      if (state.currentView === 'feed') {
+        try {
+          await Promise.all([
+            loadPosts({ incremental: true }),
+            loadFeedActivity({ incremental: true }),
+            loadChallenges({ incremental: true }),
+          ]);
+          checkForFeedNewItems();
+        } catch (e) { /* silent */ }
+      } else if (state.currentChallenge) {
+        try { await refreshChallengeVotes(state.currentChallenge.id); } catch (e) { /* silent */ }
+      }
 
-    // 3) Heat Check record — refresh every other tick (30s) to save bandwidth
-    state._tickCount = (state._tickCount || 0) + 1;
-    if (state._tickCount % 2 === 0) {
-      try {
-        await loadMyRecord();
-        if (state.currentView === 'feed') renderHeatCheck();
-      } catch (e) { /* silent */ }
+      // 3) Heat Check record — refresh every other tick (30s) to save bandwidth
+      state._tickCount = (state._tickCount || 0) + 1;
+      if (state._tickCount % 2 === 0) {
+        try {
+          await loadMyRecord();
+          if (state.currentView === 'feed') renderHeatCheck();
+        } catch (e) { /* silent */ }
+      }
     }
   } finally {
     _liveTickRunning = false;
