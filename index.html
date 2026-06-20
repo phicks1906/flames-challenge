@@ -6200,7 +6200,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v474 · idle-backoff"
+const APP_VERSION = "v475 · notif-follow-event"
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -7522,14 +7522,8 @@ async function loadNotifications() {
     } catch (e) { console.warn('notif entry_likes', e); }
   }
 
-  // 3. New followers
-  try {
-    const rows = await sel('follows', 'follower_id, followee_id', q => q.eq('followee_id', me), 'follows');
-    rows.filter(r => r.follower_id !== me).forEach(r => notifs.push({
-      type: 'follow', actorId: r.follower_id, ts: r.created_at || null,
-      text: 'started following you', target: { kind: 'profile', id: r.follower_id }
-    }));
-  } catch (e) { console.warn('notif follows', e); }
+  // 3. New followers — now event-driven (server outbox → notifications table,
+  //    read in source #5 above). Old client-side derivation removed.
 
   // 4. Votes in my challenges
   if (myChallengeIds.length) {
@@ -7548,7 +7542,10 @@ async function loadNotifications() {
   //    here via the server-side outbox worker (actor_id = inviter, target via
   //    target_type/target_id). Display text is derived client-side by type so we
   //    control wording without a migration; falls back to the stored message.
-  const NOTIF_TEXT = { challenge_invite: 'invited you to a private challenge' };
+  const NOTIF_TEXT = {
+    challenge_invite: 'invited you to a private challenge',
+    follow: 'started following you',
+  };
   try {
     const { data: pushed } = await db.from('notifications')
       .select('id, type, message, actor_id, target_type, target_id, challenge_id, is_request, read_at, created_at')
@@ -7558,6 +7555,7 @@ async function loadNotifications() {
     (pushed || []).forEach(n => {
       const target =
         (n.target_type === 'challenge' && n.target_id) ? { kind: 'challenge', id: n.target_id } :
+        (n.target_type === 'profile' && n.target_id) ? { kind: 'profile', id: n.target_id } :
         (n.target_type === 'group') ? { kind: 'groups' } :
         n.challenge_id ? { kind: 'challenge', id: n.challenge_id } : null;
       notifs.push({
