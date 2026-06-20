@@ -6200,7 +6200,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v472 · invite-reach-setting"
+const APP_VERSION = "v473 · notif-poll-throttle"
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -6914,6 +6914,7 @@ async function loadAppData() {
   renderFeed();
   requestAnimationFrame(() => setTimeout(wireWinnerReveals, 400));
   loadNotifications();
+  _lastNotifPoll = Date.now();
   startLiveUpdates();
   // Build ticker after data is ready
   setTimeout(buildTicker, 500);
@@ -6923,6 +6924,8 @@ async function loadAppData() {
 // LIVE UPDATES — polling tick, paused when tab hidden
 // =========================
 const LIVE_TICK_MS = 15000;
+const NOTIF_POLL_MS = 60000; // notifications poll slower than the feed tick; also refresh on bell-open
+let _lastNotifPoll = 0;
 let _liveTickHandle = null;
 let _liveTickRunning = false;
 let _realtimeChannel = null;
@@ -6983,8 +6986,12 @@ async function liveTick() {
   if (!state.profile) return;
   _liveTickRunning = true;
   try {
-    // 1) Notifications (cheap, silent badge update)
-    try { await loadNotifications(); } catch (e) { /* silent */ }
+    // 1) Notifications — slower cadence than the feed tick; the heavy load also
+    //    runs on bell-open, so idle tabs don't re-query every 15s.
+    if (Date.now() - _lastNotifPoll >= NOTIF_POLL_MS) {
+      _lastNotifPoll = Date.now();
+      try { await loadNotifications(); } catch (e) { /* silent */ }
+    }
 
     // 2) Per-view refresh — incremental fetches only
     if (state.currentView === 'feed') {
@@ -7853,11 +7860,18 @@ async function setInviteReach(value, btn) {
 
 function openNotifs() {
   state.notifTab = 'all';
-  renderNotifs();
+  renderNotifs();                       // show cached immediately
   document.getElementById('notifSheet').classList.add('open');
   document.body.style.overflow = 'hidden';
   setNotifLastSeen(new Date().toISOString());
   renderNotifBadge();
+  // Refresh on open (user-initiated) and reset the idle poll gate, so the bell
+  // shows fresh data without the 15s loop re-querying in the background.
+  _lastNotifPoll = Date.now();
+  loadNotifications().then(() => {
+    if (document.getElementById('notifSheet')?.classList.contains('open')) renderNotifs();
+    renderNotifBadge();
+  }).catch(() => {});
 }
 function closeNotifs() {
   document.getElementById('notifSheet').classList.remove('open');
