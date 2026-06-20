@@ -6200,7 +6200,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v477 · entry-accept-reset"
+const APP_VERSION = "v478 · notif-aggregation"
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -7549,7 +7549,7 @@ async function loadNotifications() {
   };
   try {
     const { data: pushed } = await db.from('notifications')
-      .select('id, type, message, actor_id, target_type, target_id, challenge_id, is_request, read_at, created_at')
+      .select('id, type, message, actor_id, target_type, target_id, challenge_id, is_request, group_count, read_at, created_at')
       .eq('user_id', me)
       .order('created_at', { ascending: false })
       .limit(40);
@@ -7569,6 +7569,7 @@ async function loadNotifications() {
         read: !!n.read_at,
         notifId: n.id,
         isRequest: !!n.is_request,
+        groupCount: n.group_count || 1,
       });
     });
   } catch(e) { console.warn('pushed notifs', e); }
@@ -8183,7 +8184,12 @@ function renderNotifs() {
   list.innerHTML = shown.map((n, i) => {
     const unread = isNotifUnread(n);
     const av = n.actor ? avatarInner(n.actor.avatar) : '🏁';
-    const name = n.actor ? `<b>${escapeHtml(n.actor.name)}</b> ` : '';
+    const _others = (n.groupCount || 1) - 1;
+    const name = n.actor
+      ? (_others > 0
+          ? `<b>${escapeHtml(n.actor.name)}</b> and ${_others} other${_others > 1 ? 's' : ''} `
+          : `<b>${escapeHtml(n.actor.name)}</b> `)
+      : '';
     const time = n.ts ? timeAgo(n.ts) : '';
     return `<div class="notif-item ${unread ? 'unread' : ''}" data-notif="${i}">
       <div class="notif-icon-wrap">
