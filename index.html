@@ -6157,7 +6157,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v462 · close-x-contrast"
+const APP_VERSION = "v465 · vote-phase-copy"
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -12040,7 +12040,10 @@ function computeChallengeStatus(ch) {
   return 'closed';
 }
 
-// One shared, action-first label set so every screen reads the same way.
+// Single source of truth for "can votes be cast right now": the live voting
+// window OR a sudden-death runoff. NOT during submitting/closed/voided. Used by
+// every vote gate and guard so the rule can never drift between surfaces again.
+function isVotingPhase(stat) { return stat === 'voting' || stat === 'sudden_death'; }
 function challengePhase(stat) {
   return ({
     submitting:    { label: 'OPEN TO ENTER',    cls: 'submitting' },
@@ -12120,7 +12123,7 @@ function renderChallenges() {
     const canEnterCh = ch.computedStatus === 'submitting'
       && state.profile && !chEntries.some(e => e.user_id === state.profile.id)
       && chEntries.length < MAX_ENTRIES_PER_CHALLENGE;
-    const canVoteCh = ch.computedStatus === 'voting';
+    const canVoteCh = isVotingPhase(ch.computedStatus);
 
     const entryCardsHtml = chEntries.map(e => {
       const sub = e.submitter || {name:'Unknown',avatar:'🔥'};
@@ -12402,6 +12405,7 @@ function renderChallengeDetail() {
     <div class="cd-dates-strip">
       ${ch.created_at ? `<span class="cd-date-chip">Started ${fmtD(ch.created_at)}</span><span class="cd-date-sep">›</span>` : ''}<span class="cd-date-chip">⏱ Enter by ${fmtD(ch.submission_deadline)}</span><span class="cd-date-sep">›</span><span class="cd-date-chip">🗳 Vote by ${fmtD(ch.voting_end)}</span>
     </div>
+    ${status === 'submitting' ? `<div style="margin-top:10px;font-size:12.5px;color:var(--text-muted);display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:rgba(255,106,44,0.08);">🗳️ Voting opens when submissions close</div>` : ''}
     ${ch.rules ? `<div class="cd-rules"><strong>Rules:</strong> ${escapeHtml(ch.rules)}</div>` : ''}
   `;
   const shareBtn = document.getElementById('cdShareBtn');
@@ -12461,7 +12465,7 @@ function renderChallengeDetail() {
 
   const isClosed = status === 'closed';
   const iHaveVoted = !!state.myCurrentVote;
-  const canVote = status === 'voting' || status === 'submitting';
+  const canVote = isVotingPhase(status);
   // Standings are revealed once the challenge closes OR once you've cast your vote
   const revealStandings = isClosed || (canVote && iHaveVoted);
 
@@ -12524,7 +12528,7 @@ function renderChallengeDetail() {
     }
 
     let actionsHtml = '';
-    if (status === 'voting' || status === 'submitting') {
+    if (isVotingPhase(status)) {
       if (state.profile) {
         // Everyone — including the submitter — can cast their one vote
         actionsHtml = `${isMyEntry ? '<span class="cd-entry-tag">Your entry</span> ' : ''}<button class="btn-vote ${iVoted ? 'is-voted' : 'not-voted'}" data-vote-entry="${entry.id}">${iVoted ? '✓ Voted' : '🗳️ Vote'}</button>`;
@@ -12826,6 +12830,7 @@ function renderChallengeResults() {
 
 async function voteOnEntry(entryId) {
   if (!state.profile || !state.currentChallenge) return;
+  if (!isVotingPhase(computeChallengeStatus(state.currentChallenge))) { toast("🗳️ Voting isn't open right now"); return; }
   if (state.myCurrentVote === entryId) return;
   try { navigator.vibrate && navigator.vibrate(10); } catch(e) {}
 
@@ -14580,7 +14585,7 @@ function renderFeedChallengeCard(ch) {
   if (chEntries.length === 0) {
     entriesHtml = `<div class="fcc-no-entries">No entries yet${canEnter ? ' — be the first!' : ''}</div>`;
   } else {
-    const canVote = ch.computedStatus === 'submitting' || ch.computedStatus === 'voting';
+    const canVote = isVotingPhase(ch.computedStatus);
     entriesHtml = `<div class="fcc-entries-scroll" style="display:flex!important;flex-wrap:nowrap!important;overflow-x:auto!important;overflow-y:hidden!important;-webkit-overflow-scrolling:touch!important;width:100%;min-width:0;box-sizing:border-box;">` + chEntries.map(e => {
       const sub = e.submitter || { name: 'Unknown', avatar: '🔥' };
       const isMyEntry = state.profile && e.user_id === state.profile.id;
@@ -15624,7 +15629,7 @@ async function openFeedViewer(chId, startEntryId = null) {
       return;
     }
 
-    const canVote = status === 'voting' || status === 'submitting';
+    const canVote = isVotingPhase(status);
     list.innerHTML = visibleEntries.map(e => renderFvEntry(e, ch, canVote, myVoteEntryId, status)).join('');
     _checkFreshVideoEncoding(list);
 
@@ -16038,6 +16043,8 @@ function renderFvEntry(entry, ch, canVote, myVoteEntryId, status) {
 
 async function fvVote(btn, chId) {
   if (!state.profile) return;
+  const _fvCh = (state.challenges || []).find(c => c.id === chId);
+  if (_fvCh && !isVotingPhase(computeChallengeStatus(_fvCh))) { toast("🗳️ Voting isn't open right now"); return; }
   try { navigator.vibrate && navigator.vibrate(10); } catch(e) {}
   const entryId = btn.dataset.fvVote;
   btn.disabled = true;
