@@ -6166,7 +6166,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v467 · vote-guard"
+const APP_VERSION = "v468 · single-playback"
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -9717,6 +9717,24 @@ let _activePreview = null;
 let _userAudioActive = false; // set synchronously on user tap; blocks lazy previews
 let _lastFvTapTs = 0;         // tap de-dupe: timestamp of last fv-play activation
 let _lastFvTapSrc = null;     // tap de-dupe: src of last fv-play activation
+
+// ── Single-playback: only ONE audible media element plays at a time ─────────
+// When any UNMUTED audio/video starts, pause every other unmuted one. Muted
+// thumbnails/previews are ignored, so they never interrupt real playback and
+// never get paused by it. 'play' doesn't bubble — capture phase is required.
+(function wireSinglePlayback() {
+  if (window._singlePlayWired) return;
+  window._singlePlayWired = true;
+  document.addEventListener('play', function (e) {
+    const el = e.target;
+    if (!(el instanceof HTMLMediaElement) || el.muted) return;
+    document.querySelectorAll('audio, video').forEach(m => {
+      if (m !== el && !m.muted && !m.paused) {
+        try { m.pause(); } catch (_) {}
+      }
+    });
+  }, true);
+})();
 
 function _bunnyPreviewUrl(src) {
   // Bunny auto-generates an animated preview clip per video: /{guid}/preview.webp
