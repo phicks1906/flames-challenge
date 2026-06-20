@@ -6200,7 +6200,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v478 · notif-aggregation"
+const APP_VERSION = "v479 · audio-upload-tip"
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -13171,8 +13171,22 @@ function openSubmitEntry(entryToEdit = null) {
   if (seZoneText) {
     if (ch.media_type === 'photo') seZoneText.textContent = 'Tap to take or upload a photo';
     else if (ch.media_type === 'video') seZoneText.textContent = 'Tap to record or upload a video';
-    else if (ch.media_type === 'audio') seZoneText.textContent = 'Tap to upload audio';
+    else if (ch.media_type === 'audio') seZoneText.textContent = 'Tap → Choose File to upload audio';
     else seZoneText.textContent = 'Tap to upload';
+  }
+  // Audio challenges: iOS has no dedicated audio picker, so guide the user to the
+  // "Choose File" option (Files / iCloud / Drive), and how to get a Voice Memo there.
+  const seTipEl = document.getElementById('seTip');
+  if (seTipEl) {
+    if (ch.media_type === 'audio') {
+      seTipEl.innerHTML = '💡 <strong>Tip:</strong> Tap <strong>Choose File</strong> to pick your audio — from Files, iCloud Drive, or Google Drive. Recorded a Voice Memo? Open it, tap Share → <strong>Save to Files</strong> first, then it\'ll appear here.';
+      seTipEl.style.display = 'block';
+    } else {
+      // Restore the video-trim tip text (audio may have overwritten it); the
+      // file-change handler decides whether to actually show it.
+      seTipEl.innerHTML = '💡 <strong>Tip:</strong> Trim your video to under 2 minutes in your Photos app before uploading for the fastest experience.';
+      seTipEl.style.display = 'none';
+    }
   }
 
   // Pre-fill if editing
