@@ -586,6 +586,13 @@ body.theme-light .nav { background: rgba(255, 255, 255, 0.88); border-bottom-col
 .poll-tag.local { background: rgba(74, 222, 128, 0.12); color: var(--success); }
 .poll-tag.national { background: rgba(255, 200, 87, 0.15); color: var(--gold); }
 .poll-time { font-variant-numeric: tabular-nums; }
+.poll-voted-tag {
+  font-weight: 700; font-size: 11px; letter-spacing: 0.03em;
+  color: #ff7a3c;
+  background: rgba(255,106,44,0.14);
+  border: 1px solid rgba(255,106,44,0.40);
+  padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+}
 
 .poll-question {
   font-family: var(--font-bricolage);
@@ -6210,7 +6217,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v481 · poll-jump"
+const APP_VERSION = "v482 · poll-voted-badge"
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -9560,6 +9567,7 @@ function renderPolls() {
     card.innerHTML = `
       <div class="poll-meta">
         <span class="poll-time">⏱ ${poll.hours_remaining}h left</span>
+        ${voted ? '<span class="poll-voted-tag">✓ Voted</span>' : ''}
       </div>
       <h3 class="poll-question">${escapeHtml(poll.question)}</h3>
       <div class="poll-options"></div>
@@ -16488,7 +16496,10 @@ function renderFeedPollCard(poll) {
   return `<div class="feed-poll-card" data-pid="${poll.id}">
     <div class="feed-poll-header">
       <span class="feed-poll-tag">🗳️ POLL</span>
-      <span class="feed-poll-time">⏱ ${poll.hours_remaining}h left</span>
+      <span style="display:flex;align-items:center;gap:8px;">
+        ${voted ? '<span class="poll-voted-tag">✓ Voted</span>' : ''}
+        <span class="feed-poll-time">⏱ ${poll.hours_remaining}h left</span>
+      </span>
     </div>
     <div class="feed-poll-question">${escapeHtml(poll.question)}</div>
     <div class="feed-poll-options">${optionsHtml}</div>
