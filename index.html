@@ -5485,6 +5485,8 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 .dm-bubble.theirs { align-self:flex-start; background:var(--surface-2); color:var(--text); border-bottom-left-radius:5px; }
 .dm-bubble-time { font-size:10px; opacity:0.65; margin-top:3px; }
 .dm-bubble.dm-deleted { opacity:0.55; font-style:italic; }
+.dm-bubble.mine { -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+.dm-press-hint { text-align:center; font-size:11px; color:var(--text-dim); padding:2px 0 0; }
 .dm-send-bar { position:fixed; left:0; right:0; bottom:0; z-index:6; display:flex; gap:8px; align-items:center; padding:10px 12px calc(10px + env(safe-area-inset-bottom)); border-top:1px solid var(--border); background:var(--surface); }
 .dm-send-bar input { flex:1; min-width:0; border-radius:22px; border:1px solid var(--border); background:var(--overlay-2); color:var(--text); padding:10px 16px; font-size:15px; outline:none; }
 .dm-send-bar button { flex:0 0 auto; border:none; border-radius:50%; width:42px; height:42px; background:linear-gradient(135deg,var(--ember),var(--flame)); color:#fff; font-size:18px; cursor:pointer; }
@@ -6311,7 +6313,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v494 · dm-unsend-preview";
+const APP_VERSION = "v495 · dm-longpress-unsend";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -16953,6 +16955,7 @@ async function renderDmThreads(){
 async function openDmThread(threadId, otherId){
   dmState={ threadId, otherId, otherName:'', otherAvatar:'🔥', messages:[] };
   dmOpenSheet('dmThreadSheet');
+  _dmWireLongPress(document.getElementById('dmMessages'));
   document.getElementById('dmThreadName').textContent='…';
   document.getElementById('dmMessages').innerHTML='<div class="dm-empty">Loading…</div>';
   try{
@@ -16961,16 +16964,36 @@ async function openDmThread(threadId, otherId){
     document.getElementById('dmThreadName').textContent=dmState.otherName||'Chat';
     await loadDmMessages();
     await markDmRead();
+    if(!window._dmHintShown){ window._dmHintShown=true; setTimeout(()=>toast('Tip: press & hold your message to unsend'), 700); }
   }catch(e){ console.warn('open dm thread', e); }
 }
 
+let _dmLpTimer=null, _dmLpStartY=0;
+function _dmWireLongPress(box){
+  if(!box || box.dataset.lpWired) return;
+  box.dataset.lpWired='1';
+  const start=(e)=>{
+    const bub=e.target.closest && e.target.closest('.dm-bubble.mine[data-mid]:not(.dm-deleted)');
+    if(!bub) return;
+    const mid=bub.dataset.mid; if(!mid) return;
+    _dmLpStartY=(e.touches&&e.touches[0]?e.touches[0].clientY:e.clientY)||0;
+    clearTimeout(_dmLpTimer);
+    _dmLpTimer=setTimeout(()=>{ dmUnsend(mid); }, 500);
+  };
+  const cancel=()=>{ clearTimeout(_dmLpTimer); _dmLpTimer=null; };
+  const move=(e)=>{ const y=(e.touches&&e.touches[0]?e.touches[0].clientY:e.clientY)||0; if(Math.abs(y-_dmLpStartY)>10) cancel(); };
+  box.addEventListener('touchstart', start, { passive:true });
+  box.addEventListener('touchend', cancel, { passive:true });
+  box.addEventListener('touchmove', move, { passive:true });
+  box.addEventListener('touchcancel', cancel, { passive:true });
+  box.addEventListener('contextmenu', (e)=>{ const bub=e.target.closest('.dm-bubble.mine[data-mid]:not(.dm-deleted)'); if(bub){ e.preventDefault(); dmUnsend(bub.dataset.mid); } });
+}
 function dmBubbleHtml(m, me){
   const mine = m.sender_id===me;
   if(m.deleted_at){
     return `<div class="dm-bubble ${mine?'mine':'theirs'} dm-deleted" data-mid="${m.id}">🚫 Message deleted</div>`;
   }
-  const tap = mine ? ` onclick="dmUnsend('${m.id}')"` : '';
-  return `<div class="dm-bubble ${mine?'mine':'theirs'}" data-mid="${m.id}"${tap}>${escapeHtml(m.body)}<div class="dm-bubble-time">${timeAgo(m.created_at)}</div></div>`;
+  return `<div class="dm-bubble ${mine?'mine':'theirs'}" data-mid="${m.id}">${escapeHtml(m.body)}<div class="dm-bubble-time">${timeAgo(m.created_at)}</div></div>`;
 }
 async function dmUnsend(id){
   if(!id) return;
