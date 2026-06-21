@@ -6313,7 +6313,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v498 · champ-email-trigger";
+const APP_VERSION = "v499 · champ-crown-server";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -6956,10 +6956,10 @@ function switchView(view) {
     } else {
       renderLeaderboard();
     }
-    detectChampionshipWinners().then(() => {
-      if (state.currentView === 'leaderboard') renderLeaderboard();
-      buildTicker();
-    }).catch(e => console.warn('championship detect', e));
+    // Championship crowning is now handled server-side by the pg_cron job
+    // `championship-crown` (auto_detect_championship_winners, every minute),
+    // so champions are crowned + notified without an admin's app open. Client path retired (v499).
+    buildTicker();
     // Regular sudden-death is now handled server-side by the pg_cron job
     // `regular-sudden-death` (auto_detect_regular_sudden_death, every minute),
     // so it fires reliably without an admin's app open. Client path retired (v487).
@@ -7756,14 +7756,8 @@ async function loadNotifications() {
       });
     });
 
-    // You won a championship
-    (state.hofData || []).filter(r => r.userId === me).forEach(r => {
-      notifs.push({
-        type: 'champ_won', actorId: null, ts: null,
-        text: `👑 You won the ${r.category} Championship${r.month ? ' (' + formatStoredMonth(r.month) + ')' : ''}!`,
-        target: { kind: 'leaderboard' }
-      });
-    });
+    // 'champ_won' is now stored server-side by auto_detect_championship_winners
+    //   (read via source #5). Client derivation retired (v499) to avoid duplicates.
 
     // Someone you follow qualified
     if (followeeIds.length) {
@@ -7781,14 +7775,8 @@ async function loadNotifications() {
         });
       });
 
-      // Someone you follow won a championship
-      (state.hofData || []).filter(r => followeeIds.includes(r.userId)).forEach(r => {
-        notifs.push({
-          type: 'champ_friend_won', actorId: r.userId, ts: null,
-          text: `won the ${r.category} Championship${r.month ? ' (' + formatStoredMonth(r.month) + ')' : ''} 👑`,
-          target: { kind: 'leaderboard' }
-        });
-      });
+      // 'champ_friend_won' is now stored server-side by auto_detect_championship_winners
+      //   (read via source #5). Client derivation retired (v499) to avoid duplicates.
     }
   } catch(e) { console.warn('notif championship', e); }
 
