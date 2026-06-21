@@ -6313,7 +6313,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v496 · challenge-closed-server";
+const APP_VERSION = "v497 · poll-ended-server";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -7660,6 +7660,7 @@ async function loadNotifications() {
         (n.target_type === 'profile' && n.target_id) ? { kind: 'profile', id: n.target_id } :
         (n.target_type === 'post' && n.target_id) ? { kind: 'post', id: n.target_id } :
         (n.target_type === 'group') ? { kind: 'groups' } :
+        (n.target_type === 'poll') ? { kind: 'polls', id: n.target_id } :
         n.challenge_id ? { kind: 'challenge', id: n.challenge_id } : null;
       let ntext = NOTIF_TEXT[n.type] || n.message || '';
       if (n.type === 'comment') ntext = (n.target_type === 'post') ? 'commented on your post' : 'commented on your entry';
@@ -7732,24 +7733,9 @@ async function loadNotifications() {
     } catch(e) { console.warn('notif new polls', e); }
   }
 
-  // 12. Ended polls I voted in
-  try {
-    const vRows = await sel('votes', 'poll_id', q => q.eq('user_id', me), 'my poll votes');
-    const votedPollIds = [...new Set(vRows.map(r => r.poll_id).filter(Boolean))];
-    if (votedPollIds.length) {
-      const { data: endedPolls } = await T(db.from('polls').select('id, question, hours_remaining, created_at').in('id', votedPollIds), 10000, 'ended polls');
-      const now = Date.now();
-      (endedPolls || []).filter(p => p.created_at && p.hours_remaining).forEach(p => {
-        const endsAt = new Date(p.created_at).getTime() + p.hours_remaining * 3600000;
-        if (endsAt > now) return;
-        notifs.push({
-          type: 'poll_ended', actorId: null, ts: new Date(endsAt).toISOString(),
-          text: `Poll ended — see results: "${escapeHtml(p.question)}"`,
-          target: { kind: 'polls' }
-        });
-      });
-    }
-  } catch(e) { console.warn('notif poll ended', e); }
+  // 12. Ended polls — now event-driven: a pg_cron job (process_poll_ended)
+  //     notifies everyone who voted once a poll's clock runs out, read in source #5.
+  //     Client derivation removed (v497).
 
   // 13. Championship notifications — qualification invites and wins
   try {
@@ -8322,7 +8308,7 @@ function openNotifTarget(n) {
     const ch = (state.challenges || []).find(c => c.id === t.id);
     if (ch) openChallenge(ch); else switchView('challenges');
   } else if (t.kind === 'polls') {
-    switchView('polls');
+    if (t.id) jumpToPoll(t.id); else switchView('polls');
   } else if (t.kind === 'leaderboard') {
     switchView('leaderboard');
   } else if (t.kind === 'post' && t.id) {
