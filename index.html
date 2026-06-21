@@ -6217,7 +6217,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v486 · notif-comment-event";
+const APP_VERSION = "v487 · sd-server-only";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -6864,7 +6864,10 @@ function switchView(view) {
       if (state.currentView === 'leaderboard') renderLeaderboard();
       buildTicker();
     }).catch(e => console.warn('championship detect', e));
-    detectRegularSuddenDeath().catch(e => console.warn('regular sudden death detect', e));
+    // Regular sudden-death is now handled server-side by the pg_cron job
+    // `regular-sudden-death` (auto_detect_regular_sudden_death, every minute),
+    // so it fires reliably without an admin's app open. Client path retired (v487).
+    // detectRegularSuddenDeath().catch(e => console.warn('regular sudden death detect', e));
     if (isAdmin() && state.profile) {
       const now = new Date();
       const month = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
