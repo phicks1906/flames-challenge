@@ -6217,7 +6217,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v482 · poll-voted-badge"
+const APP_VERSION = "v483 · notif-like-event";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -7513,31 +7513,8 @@ async function loadNotifications() {
     return res.data || [];
   }
 
-  // 1. Likes on my posts
-  if (myPostIds.length) {
-    try {
-      const rows = await sel('post_likes', 'post_id, user_id', q => q.in('post_id', myPostIds), 'post likes');
-      rows.filter(r => r.user_id !== me).forEach(r => notifs.push({
-        type: 'post_like', actorId: r.user_id, ts: r.created_at || null,
-        text: 'liked your post', target: { kind: 'post', id: r.post_id }
-      }));
-    } catch (e) { console.warn('notif post_likes', e); }
-  }
-
-  // 2. Likes on my entries
-  if (myEntryIds.length) {
-    try {
-      const rows = await sel('entry_likes', 'entry_id, user_id', q => q.in('entry_id', myEntryIds), 'entry likes');
-      rows.filter(r => r.user_id !== me).forEach(r => {
-        const cid = entryChallenge[r.entry_id];
-        notifs.push({
-          type: 'entry_like', actorId: r.user_id, ts: r.created_at || null,
-          text: 'liked your entry' + (allChTitle[cid] ? ` in ${allChTitle[cid]}` : ''),
-          target: { kind: 'challenge', id: cid }
-        });
-      });
-    } catch (e) { console.warn('notif entry_likes', e); }
-  }
+  // 1+2. Likes on posts/entries — now event-driven (server outbox →
+  //      notifications table, read in source #5 below). Client derivation removed.
 
   // 3. New followers — now event-driven (server outbox → notifications table,
   //    read in source #5 above). Old client-side derivation removed.
@@ -7563,6 +7540,8 @@ async function loadNotifications() {
     challenge_invite: 'invited you to a private challenge',
     follow: 'started following you',
     mention: 'mentioned you',
+    post_like: 'liked your post',
+    entry_like: 'liked your entry',
   };
   try {
     const { data: pushed } = await db.from('notifications')
