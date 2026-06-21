@@ -5498,6 +5498,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     <button class="cd-close" onclick="closeDmList()" aria-label="Close">×</button>
     <h2>Messages</h2>
     <button class="notif-settings-btn" onclick="openDmCompose()" aria-label="New message">✏️</button>
+    <button class="notif-settings-btn" style="margin-left:0" onclick="openDmSettings()" aria-label="Message settings">⚙️</button>
   </div>
   <div class="cd-sheet-inner">
     <div class="dm-list" id="dmThreadList"></div>
@@ -5527,6 +5528,26 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
   <div class="cd-sheet-inner">
     <input id="dmComposeSearch" class="dm-compose-input" type="text" placeholder="Search people by name…" autocomplete="off" oninput="dmComposeSearch()">
     <div class="dm-list" id="dmComposeResults"><div class="dm-empty">Type a name to find people.</div></div>
+  </div>
+</div>
+
+<!-- DM SETTINGS SHEET (v492) -->
+<div class="cd-sheet" id="dmSettingsSheet" style="z-index:251">
+  <div class="cd-sheet-header">
+    <button class="cd-close" onclick="closeDmSettings()" aria-label="Close">×</button>
+    <h2>Message Settings</h2>
+  </div>
+  <div class="cd-sheet-inner">
+    <div class="np-reach">
+      <div class="np-reach-head">💬 Who can message you</div>
+      <div class="np-reach-opts" id="dmPrivacyOpts">
+        <button type="button" class="np-reach-opt" data-dmp="everyone" onclick="setDmPrivacy('everyone',this)">Everyone</button>
+        <button type="button" class="np-reach-opt" data-dmp="followers" onclick="setDmPrivacy('followers',this)">My followers</button>
+        <button type="button" class="np-reach-opt" data-dmp="mutuals" onclick="setDmPrivacy('mutuals',this)">Mutuals</button>
+        <button type="button" class="np-reach-opt" data-dmp="nobody" onclick="setDmPrivacy('nobody',this)">No one</button>
+      </div>
+      <div class="np-reach-help" id="dmPrivacyHelp"></div>
+    </div>
   </div>
 </div>
 
@@ -5682,6 +5703,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openFollowingSheet()">👥 Following & Followers</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openFindPeople()">🔍 Find People</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openInterestEditor()">🎯 My Interests</button>
+    <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="document.getElementById('profileModal').classList.remove('open'); openDmSettings()">💬 Message Settings</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="document.getElementById('profileModal').classList.remove('open'); startTour()">👋 Replay Tour</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" id="tickerToggleBtn" onclick="toggleTickerSetting()">📺 Ticker: On</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openGroupsModal()">👥 My Groups</button>
@@ -6288,7 +6310,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v490 · dm-compose";
+const APP_VERSION = "v492 · dm-settings-relocate";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -7902,6 +7924,49 @@ async function setInviteReach(value, btn) {
   } catch (e) {
     state.profile.invite_reach = prev;
     paintInviteReach(prev);
+    toast('Could not save — try again');
+  }
+}
+
+// DM privacy — writes profiles.dm_privacy, enforced server-side by can_dm().
+const DM_PRIVACY_HELP = {
+  everyone: 'Anyone can start a chat with you.',
+  followers: 'Only people who follow you can start a new chat.',
+  mutuals: 'Only people you follow who also follow you back can start a chat.',
+  nobody: 'No one new can message you. Existing chats still work.'
+};
+function paintDmPrivacy(v) {
+  document.querySelectorAll('#dmPrivacyOpts .np-reach-opt').forEach(b =>
+    b.classList.toggle('active', b.dataset.dmp === v));
+  const help = document.getElementById('dmPrivacyHelp');
+  if (help) help.textContent = DM_PRIVACY_HELP[v] || DM_PRIVACY_HELP.everyone;
+}
+async function renderDmPrivacy() {
+  if (!state.profile) return;
+  let v = state.profile.dm_privacy;
+  if (!v) {
+    paintDmPrivacy('everyone'); // optimistic default while we fetch
+    try {
+      const { data } = await db.from('profiles').select('dm_privacy').eq('id', state.profile.id).maybeSingle();
+      v = (data && data.dm_privacy) || 'everyone';
+      state.profile.dm_privacy = v;
+    } catch (e) { v = 'everyone'; }
+  }
+  paintDmPrivacy(v);
+}
+async function setDmPrivacy(value, btn) {
+  if (!state.profile) return;
+  const prev = state.profile.dm_privacy || 'everyone';
+  if (value === prev) return;
+  paintDmPrivacy(value);              // optimistic
+  state.profile.dm_privacy = value;
+  try {
+    const { error } = await db.from('profiles').update({ dm_privacy: value }).eq('id', state.profile.id);
+    if (error) throw error;
+    toast('Message setting saved');
+  } catch (e) {
+    state.profile.dm_privacy = prev;
+    paintDmPrivacy(prev);
     toast('Could not save — try again');
   }
 }
@@ -17038,6 +17103,13 @@ async function runDmComposeSearch(){
 function dmComposePick(userId){
   closeDmCompose();
   openDmWith(userId);
+}
+
+/* ===== DM settings sheet (v492) — reachable from inbox gear + profile menu ===== */
+function openDmSettings(){ dmOpenSheet('dmSettingsSheet'); renderDmPrivacy(); }
+function closeDmSettings(){
+  dmCloseSheet('dmSettingsSheet');
+  if(!document.getElementById('dmListSheet').classList.contains('open')) document.body.style.overflow='';
 }
 
 async function openUserProfile(userId) {
