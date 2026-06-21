@@ -6217,7 +6217,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v483 · notif-like-event";
+const APP_VERSION = "v484 · notif-vote-event";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -7519,17 +7519,8 @@ async function loadNotifications() {
   // 3. New followers — now event-driven (server outbox → notifications table,
   //    read in source #5 above). Old client-side derivation removed.
 
-  // 4. Votes in my challenges
-  if (myChallengeIds.length) {
-    try {
-      const rows = await sel('entry_votes', 'voter_id, challenge_id', q => q.in('challenge_id', myChallengeIds), 'votes');
-      rows.filter(r => r.voter_id !== me).forEach(r => notifs.push({
-        type: 'vote', actorId: r.voter_id, ts: r.created_at || null,
-        text: 'voted in your challenge' + (allChTitle[r.challenge_id] ? ` ${allChTitle[r.challenge_id]}` : ''),
-        target: { kind: 'challenge', id: r.challenge_id }
-      }));
-    } catch (e) { console.warn('notif votes', e); }
-  }
+  // 4. Votes — now event-driven (server outbox → notifications table,
+  //    read in source #5 below). Client derivation removed.
 
   // 5. Pushed / event-driven notifications (challenge invites, sudden death,
   //    championship won, qualified, etc.). Private-challenge invites now arrive
@@ -7542,6 +7533,7 @@ async function loadNotifications() {
     mention: 'mentioned you',
     post_like: 'liked your post',
     entry_like: 'liked your entry',
+    vote: 'voted in your challenge',
   };
   try {
     const { data: pushed } = await db.from('notifications')
