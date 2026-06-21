@@ -6217,7 +6217,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v485 · vote-ping-entry-author";
+const APP_VERSION = "v486 · notif-comment-event";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -7534,6 +7534,8 @@ async function loadNotifications() {
     post_like: 'liked your post',
     entry_like: 'liked your entry',
     vote: 'voted for your entry',
+    comment: 'commented',
+    reply: 'replied to your comment',
   };
   try {
     const { data: pushed } = await db.from('notifications')
@@ -7548,11 +7550,13 @@ async function loadNotifications() {
         (n.target_type === 'post' && n.target_id) ? { kind: 'post', id: n.target_id } :
         (n.target_type === 'group') ? { kind: 'groups' } :
         n.challenge_id ? { kind: 'challenge', id: n.challenge_id } : null;
+      let ntext = NOTIF_TEXT[n.type] || n.message || '';
+      if (n.type === 'comment') ntext = (n.target_type === 'post') ? 'commented on your post' : 'commented on your entry';
       notifs.push({
         type: n.type,
         actorId: n.actor_id || null,
         ts: n.created_at,
-        text: NOTIF_TEXT[n.type] || n.message || '',
+        text: ntext,
         target,
         read: !!n.read_at,
         notifId: n.id,
@@ -7574,31 +7578,8 @@ async function loadNotifications() {
     } catch (e) { console.warn('notif challenge entries', e); }
   }
 
-  // 6. Comments on my posts
-  if (myPostIds.length) {
-    try {
-      const rows = await sel('comments', 'target_id, user_id', q => q.eq('target_type', 'post').in('target_id', myPostIds), 'post comments');
-      rows.filter(r => r.user_id !== me).forEach(r => notifs.push({
-        type: 'comment', actorId: r.user_id, ts: r.created_at || null,
-        text: 'commented on your post', target: { kind: 'post', id: r.target_id }
-      }));
-    } catch (e) { console.warn('notif post comments', e); }
-  }
-
-  // 7. Comments on my entries
-  if (myEntryIds.length) {
-    try {
-      const rows = await sel('comments', 'target_id, user_id', q => q.eq('target_type', 'entry').in('target_id', myEntryIds), 'entry comments');
-      rows.filter(r => r.user_id !== me).forEach(r => {
-        const cid = entryChallenge[r.target_id];
-        notifs.push({
-          type: 'comment', actorId: r.user_id, ts: r.created_at || null,
-          text: 'commented on your entry' + (allChTitle[cid] ? ` in ${allChTitle[cid]}` : ''),
-          target: { kind: 'challenge', id: cid }
-        });
-      });
-    } catch (e) { console.warn('notif entry comments', e); }
-  }
+  // 6+7. Comments on posts/entries — now event-driven (server outbox →
+  //       notifications table, read in source #5). Client derivation removed.
 
   // 8. My challenges that have closed
   myChallenges.forEach(c => {
@@ -7613,21 +7594,8 @@ async function loadNotifications() {
   //    read in source #5). Entry mentions resolve to their challenge at write time;
   //    post mentions target the post. Old client-side derivation removed.
 
-  // 10. Replies to my comments
-  try {
-    const myComments = await sel('comments', 'id', q => q.eq('user_id', me), 'my comments');
-    const myCommentIds = myComments.map(c => c.id);
-    if (myCommentIds.length) {
-      const replies = await sel('comments', 'user_id, parent_id, target_type, target_id', q => q.in('parent_id', myCommentIds), 'replies');
-      replies.filter(r => r.user_id !== me).forEach(r => {
-        let target = { kind: 'feed' };
-        if (r.target_type === 'entry' && entryChallenge[r.target_id]) target = { kind: 'challenge', id: entryChallenge[r.target_id] };
-        else if (r.target_type === 'post') target = { kind: 'post', id: r.target_id };
-        notifs.push({ type: 'reply', actorId: r.user_id, ts: r.created_at || null,
-          text: 'replied to your comment', target });
-      });
-    }
-  } catch (e) { console.warn('notif replies', e); }
+  // 10. Replies to my comments — now event-driven (server outbox →
+  //     notifications table, read in source #5). Client derivation removed.
 
   // 11. New challenges & polls by people I follow
   let followeeIds = [];
