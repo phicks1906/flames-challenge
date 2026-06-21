@@ -5484,6 +5484,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 .dm-bubble.mine { align-self:flex-end; background:linear-gradient(135deg,var(--ember),var(--flame)); color:#fff; border-bottom-right-radius:5px; }
 .dm-bubble.theirs { align-self:flex-start; background:var(--surface-2); color:var(--text); border-bottom-left-radius:5px; }
 .dm-bubble-time { font-size:10px; opacity:0.65; margin-top:3px; }
+.dm-bubble.dm-deleted { opacity:0.55; font-style:italic; }
 .dm-send-bar { position:fixed; left:0; right:0; bottom:0; z-index:6; display:flex; gap:8px; align-items:center; padding:10px 12px calc(10px + env(safe-area-inset-bottom)); border-top:1px solid var(--border); background:var(--surface); }
 .dm-send-bar input { flex:1; min-width:0; border-radius:22px; border:1px solid var(--border); background:var(--overlay-2); color:var(--text); padding:10px 16px; font-size:15px; outline:none; }
 .dm-send-bar button { flex:0 0 auto; border:none; border-radius:50%; width:42px; height:42px; background:linear-gradient(135deg,var(--ember),var(--flame)); color:#fff; font-size:18px; cursor:pointer; }
@@ -6310,7 +6311,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v492 · dm-settings-relocate";
+const APP_VERSION = "v493 · dm-unsend";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -7101,10 +7102,13 @@ function startRealtimeSubscriptions() {
         }
       );
     if (_meDm) {
-      _ch = _ch.on('postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'dm_messages', filter: `recipient_id=eq.${_meDm}` },
-        payload => handleIncomingDm(payload.new)
-      );
+      _ch = _ch
+        .on('postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'dm_messages', filter: `recipient_id=eq.${_meDm}` },
+          payload => handleIncomingDm(payload.new))
+        .on('postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'dm_messages', filter: `recipient_id=eq.${_meDm}` },
+          payload => handleDmUpdate(payload.new));
     }
     _realtimeChannel = _ch
       .subscribe(status => {
@@ -16960,6 +16964,27 @@ async function openDmThread(threadId, otherId){
   }catch(e){ console.warn('open dm thread', e); }
 }
 
+function dmBubbleHtml(m, me){
+  const mine = m.sender_id===me;
+  if(m.deleted_at){
+    return `<div class="dm-bubble ${mine?'mine':'theirs'} dm-deleted" data-mid="${m.id}">🚫 Message deleted</div>`;
+  }
+  const tap = mine ? ` onclick="dmUnsend('${m.id}')"` : '';
+  return `<div class="dm-bubble ${mine?'mine':'theirs'}" data-mid="${m.id}"${tap}>${escapeHtml(m.body)}<div class="dm-bubble-time">${timeAgo(m.created_at)}</div></div>`;
+}
+async function dmUnsend(id){
+  if(!id) return;
+  if(!confirm('Unsend this message?')) return;
+  try{
+    const { error }=await db.rpc('delete_dm_message',{ p_id:id });
+    if(error) throw error;
+    const m=(dmState.messages||[]).find(x=>x.id===id); if(m) m.deleted_at=new Date().toISOString();
+    const me=state.profile&&state.profile.id;
+    document.getElementById('dmMessages').innerHTML=(dmState.messages||[]).map(x=>dmBubbleHtml(x, me)).join('');
+    loadDmBadge();
+  }catch(e){ console.warn('unsend', e); toast('Couldn\u2019t unsend'); }
+}
+
 async function loadDmMessages(){
   const box=document.getElementById('dmMessages');
   const me=state.profile&&state.profile.id;
@@ -16968,10 +16993,7 @@ async function loadDmMessages(){
     if(error) throw error;
     dmState.messages=msgs||[];
     if(!dmState.messages.length){ box.innerHTML='<div class="dm-empty">Say hi 👋</div>'; return; }
-    box.innerHTML=dmState.messages.map(m=>{
-      const mine=m.sender_id===me;
-      return `<div class="dm-bubble ${mine?'mine':'theirs'}">${escapeHtml(m.body)}<div class="dm-bubble-time">${timeAgo(m.created_at)}</div></div>`;
-    }).join('');
+    box.innerHTML=dmState.messages.map(m=>dmBubbleHtml(m, me)).join('');
     dmScrollBottom();
   }catch(e){ console.warn('load dm msgs', e); box.innerHTML='<div class="dm-empty">Couldn\u2019t load.</div>'; }
 }
@@ -16994,7 +17016,7 @@ async function sendDm(){
       dmState.messages.push(data);
       const box=document.getElementById('dmMessages');
       const empty=box.querySelector('.dm-empty'); if(empty) box.innerHTML='';
-      box.insertAdjacentHTML('beforeend',`<div class="dm-bubble mine">${escapeHtml(data.body)}<div class="dm-bubble-time">just now</div></div>`);
+      box.insertAdjacentHTML('beforeend', dmBubbleHtml(data, me));
       dmScrollBottom();
     }
   }catch(e){ console.warn('send dm', e); toast('Couldn\u2019t send'); input.value=body; }
@@ -17053,7 +17075,8 @@ function handleIncomingDm(m){
       dmState.messages.push(m);
       const box=document.getElementById('dmMessages');
       const empty=box.querySelector('.dm-empty'); if(empty) box.innerHTML='';
-      box.insertAdjacentHTML('beforeend',`<div class="dm-bubble theirs">${escapeHtml(m.body)}<div class="dm-bubble-time">just now</div></div>`);
+      const _me=state.profile&&state.profile.id;
+      box.insertAdjacentHTML('beforeend', dmBubbleHtml(m, _me));
       dmScrollBottom();
     }
     markDmRead();
@@ -17062,6 +17085,19 @@ function handleIncomingDm(m){
     if(document.getElementById('dmListSheet').classList.contains('open')) renderDmThreads();
     toast('💬 New message');
   }
+}
+
+// Realtime: a message I can see was updated (currently: unsent/deleted) (v493)
+function handleDmUpdate(m){
+  if(!m || !m.deleted_at) return;
+  const threadOpen=document.getElementById('dmThreadSheet').classList.contains('open');
+  if(threadOpen && dmState.threadId && m.thread_id===dmState.threadId){
+    const idx=(dmState.messages||[]).findIndex(x=>x.id===m.id);
+    if(idx>=0) dmState.messages[idx].deleted_at=m.deleted_at;
+    const me=state.profile&&state.profile.id;
+    document.getElementById('dmMessages').innerHTML=(dmState.messages||[]).map(x=>dmBubbleHtml(x, me)).join('');
+  }
+  loadDmBadge();
 }
 
 /* ===== DM compose / user search (v490) ===== */
