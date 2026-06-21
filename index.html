@@ -6313,7 +6313,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v497 · poll-ended-server";
+const APP_VERSION = "v498 · champ-email-trigger";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -10616,10 +10616,7 @@ async function detectChampionshipWinners() {
       if (!(state.hofData || []).some(r => r.category === meta.category && r.month === meta.month)) {
         state.hofData = state.hofData || [];
         state.hofData.unshift({ userId: winner.user_id, name: sub.name || 'Unknown', avatar: sub.avatar || '🔥', category: meta.category, month: meta.month, wins: max, challengeId, fromChampionship: true });
-        // Send winner email (fire and forget)
-        db.functions.invoke('send-championship-email', {
-          body: { type: 'won', userIds: [winner.user_id], category: meta.category, month: meta.month, challengeId }
-        }).catch(e => console.warn('winner email', e));
+        // Winner 'won' email now sent server-side via hall_of_fame insert trigger (trg_champ_email)
       }
       console.log(`[championship] ${meta.category} champion for ${meta.month}: ${sub.name}`);
     } catch(e) { console.warn('championship detect error', e); }
