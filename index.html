@@ -6313,7 +6313,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v495 · dm-longpress-unsend";
+const APP_VERSION = "v496 · challenge-closed-server";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -7692,14 +7692,9 @@ async function loadNotifications() {
   // 6+7. Comments on posts/entries — now event-driven (server outbox →
   //       notifications table, read in source #5). Client derivation removed.
 
-  // 8. My challenges that have closed
-  myChallenges.forEach(c => {
-    if (computeChallengeStatus(c) === 'closed') notifs.push({
-      type: 'challenge_closed', actorId: null, ts: c.voting_end || null,
-      text: `Your challenge ${c.title} has ended — see the results`,
-      target: { kind: 'challenge', id: c.id }
-    });
-  });
+  // 8. Closed challenges — now event-driven: a pg_cron job (process_challenge_closed)
+  //    notifies the creator once a challenge truly ends, read in source #5 below.
+  //    Client derivation removed (v496).
 
   // 9. Mentions of me — now event-driven (server outbox → notifications table,
   //    read in source #5). Entry mentions resolve to their challenge at write time;
