@@ -6313,7 +6313,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v499 · champ-crown-server";
+const APP_VERSION = "v500 · feature-flags-live";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -6544,6 +6544,10 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
   }
 });
 
+/* ---------- FEATURE FLAGS ---------- */
+// Load server-synced feature flags on boot (covers the logged-out signup screen too).
+loadFlags();
+
 /* ---------- SIGNUP ---------- */
 document.getElementById('signupForm').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -6572,6 +6576,12 @@ document.getElementById('signupForm').addEventListener('submit', async (e) => {
     } catch (e) { console.warn('pending avatar store failed', e); }
   } else {
     localStorage.removeItem('fc_pending_avatar');
+  }
+
+  if (!getFlag('fc_flag_signup')) {
+    showAuthError('New signups are currently paused. Please check back soon.');
+    btn.disabled = false; btn.textContent = orig;
+    return;
   }
 
   const { data, error } = await db.auth.signUp({
@@ -6926,6 +6936,7 @@ function showApp() {
 function switchView(view) {
   // Admin view gated to admin user only
   if (view === 'admin' && !isAdmin()) { toast('Not authorized'); return; }
+  if (view === 'polls' && !getFlag('fc_flag_polls')) { toast('Polls are currently disabled.'); return; }
   state.currentView = view;
   // Sync bottom nav active state
   document.querySelectorAll('.bnav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
@@ -11993,6 +12004,7 @@ function ccClearVotePills() {
 
 async function openCreateChallenge() {
   if (!state.profile) return;
+  if (!getFlag('fc_flag_challenges')) { toast('Challenge creation is currently disabled.'); return; }
   const now = new Date();
   const subClose = new Date(now.getTime() + 3*24*60*60*1000);
   const voteEnd = new Date(now.getTime() + 7*24*60*60*1000);
@@ -12050,6 +12062,7 @@ const pollState = { options: ['', ''], duration: 48 };
 
 function openCreatePoll() {
   if (!state.profile) return;
+  if (!getFlag('fc_flag_polls')) { toast('Polls are currently disabled.'); return; }
   pollState.options = ['', ''];
   pollState.duration = 48;
   document.getElementById('cpQuestion').value = '';
@@ -16569,6 +16582,7 @@ function renderFeedPollCard(poll) {
 /* ---------- CREATE POST SHEET ---------- */
 function openCreatePost() {
   if (!state.profile) return;
+  if (!getFlag('fc_flag_posts')) { toast('Posting is currently disabled.'); return; }
   cpState.file = null;
   cpState.fileType = null;
   cpState.audioFile = null;
@@ -17679,10 +17693,34 @@ function showAdminNav() {
 function getFlag(key) {
   const f = FEATURE_FLAGS.find(x => x.key === key);
   if (!f) return false;
+  // Server-synced value wins; fall back to localStorage cache, then default.
+  if (state.flags && Object.prototype.hasOwnProperty.call(state.flags, key)) return state.flags[key];
   const v = localStorage.getItem(key);
   return v === null ? f.def : v === 'true';
 }
-function setFlag(key, value) { localStorage.setItem(key, value ? 'true' : 'false'); }
+async function setFlag(key, value) {
+  state.flags = state.flags || {};
+  state.flags[key] = value;
+  localStorage.setItem(key, value ? 'true' : 'false');
+  try {
+    await db.from('app_flags').upsert(
+      { key, enabled: value, updated_at: new Date().toISOString(), updated_by: state.profile?.id || null },
+      { onConflict: 'key' }
+    );
+  } catch (e) { console.warn('setFlag', e); }
+}
+// Load all feature flags from the server into state.flags (public read; works for anon too).
+async function loadFlags() {
+  try {
+    const { data, error } = await db.from('app_flags').select('key, enabled');
+    if (error || !data) return;
+    state.flags = state.flags || {};
+    data.forEach(r => {
+      state.flags[r.key] = r.enabled;
+      localStorage.setItem(r.key, r.enabled ? 'true' : 'false');
+    });
+  } catch (e) { /* keep cache/defaults */ }
+}
 
 let _adminContentTab = 'posts';
 
@@ -17948,7 +17986,7 @@ function renderAdminFlags() {
   if (!panel) return;
   panel.innerHTML = `
     <div style="padding:0 0 12px;color:var(--text-dim);font-size:13px">
-      Feature toggles. Stored on this device only for now. (Server-synced flags coming later.)
+      Feature toggles. Server-synced — changes apply to all users within ~a refresh. Turning one off disables that feature app-wide.
     </div>
   ` + FEATURE_FLAGS.map(f => {
     const on = getFlag(f.key);
