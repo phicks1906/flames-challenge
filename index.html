@@ -5266,7 +5266,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       </div>
 
       <div class="cc-field">
-        <label>Time to enter <span class="hint">(or set custom dates below)</span></label>
+        <label>Time to enter <span class="hint">(how long people can submit)</span></label>
         <div class="cc-pills" id="ccEnterPills" style="display:flex;gap:8px;flex-wrap:wrap;">
           <button type="button" class="cc-pill" onclick="setCcEnter(24,this)">24 hrs</button>
           <button type="button" class="cc-pill" onclick="setCcEnter(48,this)">48 hrs</button>
@@ -5283,14 +5283,20 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
         </div>
       </div>
 
-      <div class="cc-dates-row">
-        <div class="cc-field">
-          <label for="ccSubDeadline">Submissions close</label>
-          <input id="ccSubDeadline" type="datetime-local" required oninput="ccClearEnterPills()" />
-        </div>
-        <div class="cc-field">
-          <label for="ccVotingEnd">Voting ends</label>
-          <input id="ccVotingEnd" type="datetime-local" required oninput="ccClearVotePills()" />
+      <div class="cc-field" id="ccScheduleSummary" style="font-size:13px;color:var(--text-dim);border:1px solid var(--border,rgba(127,127,127,.25));border-radius:10px;padding:10px 12px;line-height:1.45;"></div>
+
+      <button type="button" id="ccCustomDatesToggle" onclick="toggleCcCustomDates()" style="background:none;border:none;color:var(--ember,#ff6a2c);font-size:13px;font-weight:700;padding:2px 0 6px;cursor:pointer;text-align:left;">Set custom dates ▾</button>
+
+      <div id="ccCustomDates" style="display:none;">
+        <div class="cc-dates-row">
+          <div class="cc-field">
+            <label for="ccSubDeadline">Submissions close</label>
+            <input id="ccSubDeadline" type="datetime-local" oninput="ccOnDateInput()" />
+          </div>
+          <div class="cc-field">
+            <label for="ccVotingEnd">Voting ends</label>
+            <input id="ccVotingEnd" type="datetime-local" oninput="ccClearVotePills();updateCcSummary();" />
+          </div>
         </div>
       </div>
 
@@ -6313,7 +6319,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v502 · challenge-deeplink-fix";
+const APP_VERSION = "v503 · challenge-schedule-ux";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11990,6 +11996,7 @@ function setCcEnter(hours, btn) {
   if (ep) ep.dataset.hours = hours;
   document.querySelectorAll('#ccEnterPills .cc-pill').forEach(p => p.classList.remove('selected'));
   if (btn) btn.classList.add('selected');
+  updateCcSummary();
 }
 // "Voting window" pill: Voting Ends = Submissions Close + hours (anchored off the
 // current close date; falls back to now + entry window if close isn't set yet).
@@ -12004,12 +12011,47 @@ function setCcVote(hours, btn) {
   if (vp) vp.dataset.hours = hours;
   document.querySelectorAll('#ccVotePills .cc-pill').forEach(p => p.classList.remove('selected'));
   if (btn) btn.classList.add('selected');
+  updateCcSummary();
 }
 function ccClearEnterPills() {
   document.querySelectorAll('#ccEnterPills .cc-pill').forEach(p => p.classList.remove('selected'));
 }
 function ccClearVotePills() {
   document.querySelectorAll('#ccVotePills .cc-pill').forEach(p => p.classList.remove('selected'));
+}
+// Manual edit of the close date: deselect the "time to enter" preset (it no longer
+// matches), but preserve the chosen voting-window length by recomputing voting-ends
+// from the new close date — so the two can't silently drift apart.
+function ccOnDateInput() {
+  ccClearEnterPills();
+  const ep = document.getElementById('ccEnterPills'); if (ep) delete ep.dataset.hours;
+  const vp = document.getElementById('ccVotePills');
+  const voteHours = parseInt(vp && vp.dataset.hours, 10);
+  const close = _ccParseLocal('ccSubDeadline');
+  if (voteHours && close) {
+    const voteEl = document.getElementById('ccVotingEnd');
+    if (voteEl) voteEl.value = toDatetimeLocal(new Date(close.getTime() + voteHours * 3600000));
+  }
+  updateCcSummary();
+}
+// Plain-language schedule line so users don't have to read two datetime fields.
+function updateCcSummary() {
+  const el = document.getElementById('ccScheduleSummary');
+  if (!el) return;
+  const close = _ccParseLocal('ccSubDeadline');
+  const vote = _ccParseLocal('ccVotingEnd');
+  if (!close || !vote) { el.textContent = ''; return; }
+  const fmt = (d) => d.toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  el.innerHTML = `🔥 Open for entries until <strong>${escapeHtml(fmt(close))}</strong>, then voting through <strong>${escapeHtml(fmt(vote))}</strong>.`;
+}
+// Progressive disclosure: presets are the main path; exact dates live behind this toggle.
+function toggleCcCustomDates() {
+  const box = document.getElementById('ccCustomDates');
+  const btn = document.getElementById('ccCustomDatesToggle');
+  if (!box) return;
+  const isOpen = box.style.display !== 'none';
+  box.style.display = isOpen ? 'none' : 'block';
+  if (btn) btn.textContent = isOpen ? 'Set custom dates ▾' : 'Hide custom dates ▴';
 }
 
 async function openCreateChallenge() {
@@ -12024,6 +12066,10 @@ async function openCreateChallenge() {
   ccClearVotePills();
   const _ep = document.getElementById('ccEnterPills'); if (_ep) delete _ep.dataset.hours;
   const _vp = document.getElementById('ccVotePills'); if (_vp) delete _vp.dataset.hours;
+  // Collapse custom-dates disclosure and show the plain-language schedule summary.
+  const _cd = document.getElementById('ccCustomDates'); if (_cd) _cd.style.display = 'none';
+  const _cdt = document.getElementById('ccCustomDatesToggle'); if (_cdt) _cdt.textContent = 'Set custom dates ▾';
+  updateCcSummary();
   // Reset invite state and load groups for the picker
   ccInviteState.selectedGroupIds = new Set();
   ccInviteState.individuals = new Map();
