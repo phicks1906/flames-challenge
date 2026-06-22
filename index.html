@@ -6313,7 +6313,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v501 · domain-agnostic-link";
+const APP_VERSION = "v502 · challenge-deeplink-fix";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -9221,7 +9221,17 @@ function applyDeepLink() {
   const postId = params.get('post');
   if (cid) {
     const ch = (state.challenges || []).find(c => c.id === cid);
-    if (ch) openChallenge(ch);
+    if (ch) {
+      openChallenge(ch);
+    } else {
+      // Challenge not in the loaded feed (old or direct link) — fetch it by ID.
+      db.from('challenges').select('*').eq('id', cid).maybeSingle()
+        .then(({ data }) => {
+          if (data) openChallenge(data);
+          else toast('This challenge is no longer available');
+        })
+        .catch(() => {});
+    }
   } else if (pollId) {
     jumpToPoll(pollId);
   } else if (postId) {
@@ -16459,7 +16469,7 @@ function promoteFeedViewerChallenge() {
 async function shareFeedViewerChallenge() {
   const ch = _fvChallenge;
   if (!ch) return;
-  const shareUrl = `${location.origin}${location.pathname}#challenge=${ch.id}`;
+  const shareUrl = `${location.origin}${location.pathname}?c=${ch.id}`;
   const shareData = {
     title: ch.title,
     text: `Check out the "${ch.title}" challenge on FlamesChallenge 🔥`,
