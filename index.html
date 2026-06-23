@@ -6319,7 +6319,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v505 · post-video-poster";
+const APP_VERSION = "v506 · poll-vote-no-scroll-jump";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -14796,7 +14796,9 @@ function renderFeed() {
         e.stopPropagation();
         const [pollId, idx] = btn.dataset.feedPollVote.split(':');
         castVote(pollId, parseInt(idx));
-        setTimeout(() => renderFeed(), 300);
+        // Reveal results in this card only — re-rendering the whole feed snapped
+        // the user back to the top.
+        setTimeout(() => updateFeedPollCardInPlace(pollId), 300);
       });
     });
   });
@@ -16600,6 +16602,19 @@ function wireWinnerReveals() {
 }
 
 function triggerCurtainReveal() {}
+
+// Re-render a single feed poll card after voting (keeps scroll position; preserves the tap-to-polls handler).
+function updateFeedPollCardInPlace(pollId) {
+  const poll = (state.polls || []).find(p => p.id === pollId);
+  const oldCard = document.querySelector(`.feed-poll-card[data-pid="${pollId}"]`);
+  if (!poll || !oldCard) return;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = renderFeedPollCard(poll);
+  const newCard = tmp.firstElementChild;
+  if (!newCard) return;
+  newCard.addEventListener('click', () => jumpToPoll(newCard.dataset.pid));
+  oldCard.replaceWith(newCard);
+}
 
 function renderFeedPollCard(poll) {
   const counts = state.voteCountsByPoll[poll.id] || {};
