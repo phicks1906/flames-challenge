@@ -512,6 +512,24 @@ body.theme-light .nav { background: rgba(255, 255, 255, 0.88); border-bottom-col
   opacity: 0.6;
 }
 
+/* ============ RANK CHIPS (regular wins) ============ */
+.rank-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: inherit; font-weight: 800; font-size: 10px;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 100px; border: 1px solid currentColor;
+  background: transparent; vertical-align: middle; line-height: 1.5; white-space: nowrap;
+}
+.rank-chip .rank-pip { font-size: 8.5px; letter-spacing: 0.5px; }
+.rank-spark   { color: #f2a93b; }
+.rank-flame   { color: #ff6a2c; }
+.rank-blaze   { color: #ff3b2f; }
+.rank-inferno { color: #ffce5e; box-shadow: 0 0 12px -4px rgba(255,200,90,0.55); }
+html[data-theme="light"] .rank-spark   { color: #b3730a; }
+html[data-theme="light"] .rank-flame   { color: #d4501a; }
+html[data-theme="light"] .rank-blaze   { color: #cc2418; }
+html[data-theme="light"] .rank-inferno { color: #9c7400; box-shadow: none; }
+
 /* ============ HALL OF FAME BADGES ============ */
 .hof-badge-img {
   object-fit: contain;
@@ -6324,7 +6342,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v508 · auth-text-contrast";
+const APP_VERSION = "v509 · rank-chips";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -9287,11 +9305,22 @@ function renderHeatCheck() {
   const wEl = document.getElementById('heatWins');   if (wEl) wEl.textContent = wins;
   const lEl = document.getElementById('heatLosses'); if (lEl) lEl.textContent = losses;
   const sEl = document.getElementById('heatStreak'); if (sEl) sEl.textContent = streak;
-  // Update identity card
-  const tier = getTierInfo(state.profile.id);
-  const tsEl = document.getElementById('statTierSub'); if (tsEl) tsEl.style.display = 'none';
+  // Update identity card — medallion if they have an honor, else their rank chip
+  const myId = state.profile.id;
+  const honor = getHofBadge(myId, 44);
   const tiEl = document.getElementById('statTierIco');
-  if (tiEl) tiEl.innerHTML = '';
+  const tsEl = document.getElementById('statTierSub');
+  if (tiEl) tiEl.innerHTML = honor || '';
+  if (tsEl) {
+    tsEl.style.display = '';
+    if (honor) {
+      tsEl.textContent = getTierInfo(myId).name;
+    } else {
+      const r = getRank(myId);
+      tsEl.innerHTML = getRankBadge(myId, { showSpark: true }) +
+        `<span style="margin-left:6px;color:var(--text-muted);font-size:12px">${r.wins > 0 ? r.wins + ' win' + (r.wins === 1 ? '' : 's') : 'win to climb'}</span>`;
+    }
+  }
   // Pending line
   const pending = record ? record.filter(r => r.result === 'pending').length : 0;
   const plEl = document.getElementById('hcPendingLine');
@@ -9939,7 +9968,7 @@ function renderLeaderboard() {
           ${isChamp ? '<span class="lb-champ-dot">👑</span>' : isLeader ? '<span class="lb-champ-dot">🔥</span>' : ''}
         </div>
         <div style="min-width:0">
-          <div class="lb-name">${escapeHtml(u.name)}${isYou ? ' (you)' : ''}${getHofBadge(u.id)}${isChamp ? ' <span class="lb-champ-tag">👑 Champ</span>' : ''}${isLeader && !isChamp ? ' <span class="lb-leader-tag">🔥 Leader</span>' : ''}</div>
+          <div class="lb-name">${escapeHtml(u.name)}${isYou ? ' (you)' : ''}${getHofBadge(u.id)}${getRankBadge(u.id)}${isChamp ? ' <span class="lb-champ-tag">👑 Champ</span>' : ''}${isLeader && !isChamp ? ' <span class="lb-leader-tag">🔥 Leader</span>' : ''}</div>
           <div class="lb-streak" style="font-size:11px;color:var(--text-muted)">${u.catWins}W · ${u.catLosses}L this month · ${u.catAllTime} all-time</div>
         </div>
       </div>
@@ -11839,6 +11868,33 @@ function getHofBadge(userId, size = 24) {
   }
   if (!src) return '';
   return `<img src="${src}?v=2" class="hof-badge-img" style="width:${size}px;height:${size}px" title="${title}" alt="${title}" onerror="hofBadgeFallback(this,${size})">`;
+}
+
+// ── RANK CHIPS (regular challenge wins) ──────────────────────────────────────
+// Spark/Flame/Blaze/Inferno. A Hall of Fame medallion supersedes the chip, so a
+// person never shows both — getRankBadge returns '' for anyone who has an honor.
+const RANK_TIERS = [
+  { min: 10, key: 'inferno', name: 'Inferno', pip: '★' },
+  { min: 5,  key: 'blaze',   name: 'Blaze',   pip: '▲' },
+  { min: 1,  key: 'flame',   name: 'Flame',   pip: '◆' },
+  { min: 0,  key: 'spark',   name: 'Spark',   pip: '✦' },
+];
+function hasHonorBadge(userId) {
+  if (!userId) return false;
+  if (FOUNDERS.includes(userId)) return true;
+  return (state.hofData || []).filter(r => r.userId === userId).length >= 5;
+}
+function getRank(userId) {
+  const w = getRegularWins(userId);
+  const tier = RANK_TIERS.find(t => w >= t.min) || RANK_TIERS[RANK_TIERS.length - 1];
+  return { ...tier, wins: w };
+}
+function getRankBadge(userId, opts = {}) {
+  if (!userId) return '';
+  if (hasHonorBadge(userId)) return '';            // medallion shows instead
+  const r = getRank(userId);
+  if (r.wins < 1 && !opts.showSpark) return '';    // don't tag 0-win users inline
+  return `<span class="rank-chip rank-${r.key}" title="${r.name} · ${r.wins} win${r.wins === 1 ? '' : 's'}"><span class="rank-pip">${r.pip}</span>${r.name}</span>`;
 }
 
 let ccState = {
