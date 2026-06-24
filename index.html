@@ -3,17 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Welcome Tour — Spotlight Preview</title>
+<title>Welcome Tour — Coach-mark Preview</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Bricolage+Grotesque:wght@600;700&family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root{--bg:#0b0806;--surface:#16110d;--surface2:#1d1813;--border:rgba(255,255,255,0.10);
-    --text:#f4ece4;--text-dim:#b6a89c;--ember:#ff6a2c;--flame:#ff2d1f;--gold:#ffc857;--ice:#4fc3f7;--purple:#a98bff}
+    --text:#f4ece4;--text-dim:#b6a89c;--ember:#ff6a2c;--flame:#ff2d1f;--gold:#ffc857;--purple:#a98bff}
   *{box-sizing:border-box}html,body{height:100%}
   body{margin:0;font-family:'DM Sans',system-ui,sans-serif;color:var(--text);
     background:radial-gradient(900px 500px at 50% -10%,rgba(255,90,30,0.12),transparent 60%),var(--bg);overflow:hidden}
 
-  /* ---------- MOCK APP (the "real screens") ---------- */
+  /* ---------- MOCK APP ---------- */
   .app{position:fixed;inset:0;padding:48px 14px 76px;overflow:hidden}
   .app-head{font-family:'Anton';font-size:24px;letter-spacing:0.03em;margin:0 0 12px}
   .chips{display:flex;gap:8px;overflow:hidden;margin-bottom:14px}
@@ -24,90 +24,89 @@
   .card .tag.poll{color:var(--purple)}
   .card h3{font-size:16px;margin:6px 0 12px}
   .entries{display:flex;gap:10px}
-  .entry{flex:1;background:var(--surface2);border-radius:12px;height:96px;position:relative;display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px}
+  .entry{flex:1;background:var(--surface2);border-radius:12px;height:92px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px}
   .votebtn{background:linear-gradient(135deg,var(--ember),var(--flame));color:#fff;font-weight:800;font-size:12px;padding:6px 16px;border-radius:100px}
   .pollrow{display:flex;align-items:center;background:var(--surface2);border-radius:10px;padding:10px 12px;margin-bottom:8px;font-weight:700;font-size:14px;justify-content:space-between}
   .pollrow .pct{color:var(--purple);font-weight:800}
-
-  .nav{position:fixed;bottom:0;left:0;right:0;height:62px;background:var(--surface);border-top:1px solid var(--border);
-    display:flex;align-items:center;justify-content:space-around;padding:0 6px}
+  .nav{position:fixed;bottom:0;left:0;right:0;height:62px;background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-around;padding:0 6px}
   .navbtn{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:9px;font-weight:800;letter-spacing:0.04em;color:var(--text-dim);padding:6px 10px;border-radius:14px}
   .navbtn .ic{font-size:19px}
-  .navbtn.plus{width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--ember),var(--flame));color:#fff;justify-content:center;font-size:26px;margin-top:-14px;box-shadow:0 6px 18px -4px rgba(255,80,30,0.7)}
+  .navbtn.plus{width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,var(--ember),var(--flame));color:#fff;justify-content:center;font-size:25px;margin-top:-14px}
 
-  /* ---------- SPOTLIGHT ---------- */
-  .scrim{position:fixed;inset:0;background:rgba(0,0,0,0.80);z-index:6;transition:opacity .3s}
+  /* ---------- SPOTLIGHT (lighter dim so screens read) ---------- */
+  .scrim{position:fixed;inset:0;background:rgba(0,0,0,0.62);z-index:6;transition:opacity .3s}
   .scrim.hidden{opacity:0;pointer-events:none}
-  .spot{position:fixed;border-radius:16px;z-index:7;pointer-events:none;opacity:0;
-    box-shadow:0 0 0 9999px rgba(0,0,0,0.80), 0 0 22px 4px rgba(255,106,44,0.6);
+  .spot{position:fixed;border-radius:14px;z-index:7;pointer-events:none;opacity:0;
+    box-shadow:0 0 0 9999px rgba(0,0,0,0.60), 0 0 20px 4px rgba(255,106,44,0.7);
     border:2.5px solid var(--ember);
-    transition:top .45s cubic-bezier(.4,0,.2,1),left .45s cubic-bezier(.4,0,.2,1),width .45s,height .45s,opacity .3s}
+    transition:top .45s cubic-bezier(.4,0,.2,1),left .45s cubic-bezier(.4,0,.2,1),width .45s,height .45s,opacity .25s}
   .spot.on{opacity:1}
 
-  /* ---------- TOUR DOCK ---------- */
-  .tour{position:fixed;left:0;right:0;bottom:78px;z-index:10;padding:0 16px;display:flex;flex-direction:column;align-items:center;transition:transform .35s,opacity .35s}
-  .tour.hidden{transform:translateY(140%);opacity:0;pointer-events:none}
-  .mascot-wrap{height:96px;display:flex;align-items:flex-end;justify-content:center}
-  .mascot{position:relative;width:84px;height:96px;transform-origin:50% 100%;animation:bob 2.6s ease-in-out infinite}
-  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
-  .flame{position:absolute;left:50%;bottom:0;width:68px;height:68px;margin-left:-34px;
+  /* ---------- COACH-MARK (compact, repositions) ---------- */
+  .coach{position:fixed;left:50%;transform:translateX(-50%);width:min(360px,calc(100vw - 26px));z-index:10;
+    background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:14px 15px 12px;
+    box-shadow:0 18px 50px -14px rgba(0,0,0,.85),0 0 44px -22px rgba(255,90,30,.5);transition:opacity .3s}
+  .coach.hidden{opacity:0;pointer-events:none}
+  .coach::after{content:"";position:absolute;left:calc(var(--arrow,50%));margin-left:-8px;width:16px;height:16px;background:var(--surface);transform:rotate(45deg)}
+  .coach.arrow-up::after{top:-8px;border-left:1px solid var(--border);border-top:1px solid var(--border)}
+  .coach.arrow-down::after{bottom:-8px;border-right:1px solid var(--border);border-bottom:1px solid var(--border)}
+  .coach.center{top:50%;transform:translate(-50%,-50%)}
+  .coach.center::after{display:none}
+
+  .ch-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .ch-name{font-family:'Bricolage Grotesque';font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ember)}
+  .coach.center .ch-head{flex-direction:column;gap:4px}
+  .bub-text{font-size:15px;line-height:1.46}
+  .coach.center .bub-text{text-align:center}
+  .bub-text .accent{color:var(--gold);font-weight:700}
+  .dots{display:flex;gap:6px;margin-top:11px}
+  .coach.center .dots{justify-content:center}
+  .dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.22);transition:all .25s}
+  .dot.on{background:var(--ember);width:16px;border-radius:3px}
+  .controls{display:flex;gap:9px;margin-top:11px}
+  .btn{flex:1;padding:11px;border-radius:100px;font-family:inherit;font-weight:800;font-size:14px;border:1px solid var(--border);background:transparent;color:var(--text-dim)}
+  .btn.primary{flex:1.6;border-color:transparent;color:#fff;background:linear-gradient(135deg,var(--ember),var(--flame))}
+  .btn:active{transform:translateY(1px)}
+
+  /* ---------- mascot (fixed small size, repositions) ---------- */
+  .mascot{position:relative;width:46px;height:54px;flex-shrink:0;transform-origin:50% 100%;animation:bob 2.6s ease-in-out infinite}
+  .coach.center .mascot{width:78px;height:90px}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+  .flame{position:absolute;left:50%;bottom:0;width:100%;padding-bottom:100%;height:0;margin-left:-50%;
     background:linear-gradient(to top,var(--flame),var(--ember) 48%,var(--gold) 96%);
-    border-radius:0 52% 52% 52%;transform:rotate(45deg);
-    box-shadow:0 0 26px -2px rgba(255,90,30,0.6),inset -5px -5px 12px rgba(0,0,0,0.18);animation:flick 1.6s ease-in-out infinite}
+    border-radius:0 52% 52% 52%;transform:rotate(45deg);box-shadow:0 0 18px -2px rgba(255,90,30,.55),inset -4px -4px 9px rgba(0,0,0,.18);animation:flick 1.6s ease-in-out infinite}
   @keyframes flick{0%,100%{transform:rotate(45deg) scale(1)}50%{transform:rotate(45deg) scale(1.04,.98)}}
-  .flame-in{position:absolute;left:50%;bottom:8px;width:36px;height:36px;margin-left:-18px;
-    background:linear-gradient(to top,var(--ember),var(--gold));border-radius:0 52% 52% 52%;transform:rotate(45deg);opacity:.9}
-  .face{position:absolute;left:50%;bottom:20px;width:54px;height:40px;margin-left:-27px;z-index:2}
-  .eye{position:absolute;top:5px;width:13px;height:15px;background:#241405;border-radius:50%}
-  .eye.l{left:10px}.eye.r{right:10px}
-  .eye::after{content:"";position:absolute;top:2px;left:3px;width:4px;height:4px;background:#fff;border-radius:50%}
-  .mouth{position:absolute;bottom:3px;left:50%;width:18px;height:9px;margin-left:-9px;border-bottom:3.5px solid #241405;border-radius:0 0 18px 18px}
-  .cheek{position:absolute;top:18px;width:8px;height:5px;background:rgba(255,90,40,.5);border-radius:50%}
-  .cheek.l{left:5px}.cheek.r{right:5px}
-  .hand{position:absolute;right:-4px;bottom:44px;width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,var(--ember),var(--gold));z-index:3;opacity:0;transform-origin:bottom center}
+  .face{position:absolute;left:50%;bottom:14%;width:64%;height:42%;margin-left:-32%;z-index:2}
+  .coach:not(.center) .face{bottom:16%}
+  .eye{position:absolute;top:6%;width:26%;height:34%;background:#241405;border-radius:50%}
+  .eye.l{left:14%}.eye.r{right:14%}
+  .eye::after{content:"";position:absolute;top:14%;left:22%;width:30%;height:26%;background:#fff;border-radius:50%}
+  .mouth{position:absolute;bottom:8%;left:50%;width:38%;height:22%;margin-left:-19%;border-bottom:3px solid #241405;border-radius:0 0 40px 40px}
+  .cheek{position:absolute;top:46%;width:16%;height:10%;background:rgba(255,90,40,.5);border-radius:50%}
+  .cheek.l{left:8%}.cheek.r{right:8%}
+  .hand{position:absolute;right:-8%;bottom:42%;width:34%;padding-bottom:34%;height:0;border-radius:50%;background:linear-gradient(135deg,var(--ember),var(--gold));z-index:3;opacity:0;transform-origin:bottom center}
   .mascot.wave .hand{opacity:1;animation:wave .7s ease-in-out infinite}
   @keyframes wave{0%,100%{transform:rotate(-12deg)}50%{transform:rotate(22deg)}}
   .mascot.celebrate{animation:party .6s ease-in-out infinite}
-  @keyframes party{0%,100%{transform:translateY(0) scale(1)}40%{transform:translateY(-12px) scale(1.06)}}
-  .spark{position:absolute;width:7px;height:7px;border-radius:50%;background:var(--gold);opacity:0}
-  .mascot.celebrate .spark{animation:pop .8s ease-out infinite}
-  .spark.s1{top:4px;left:4px}.spark.s2{top:-2px;right:12px;animation-delay:.2s}.spark.s3{top:22px;right:-4px;animation-delay:.4s}
-  @keyframes pop{0%{opacity:0;transform:scale(0)}40%{opacity:1;transform:scale(1.3)}100%{opacity:0;transform:scale(.6) translateY(-8px)}}
+  @keyframes party{0%,100%{transform:translateY(0) scale(1)}40%{transform:translateY(-10px) scale(1.06)}}
 
-  .bubble{position:relative;width:100%;max-width:440px;background:var(--surface);border:1px solid var(--border);border-radius:20px;
-    padding:16px 18px 14px;box-shadow:0 20px 60px -15px rgba(0,0,0,.8),0 0 50px -22px rgba(255,90,30,.4);margin-top:6px}
-  .bubble::before{content:"";position:absolute;top:-9px;left:50%;margin-left:-9px;width:18px;height:18px;background:var(--surface);border-left:1px solid var(--border);border-top:1px solid var(--border);transform:rotate(45deg)}
-  .bub-name{font-family:'Bricolage Grotesque';font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ember);margin-bottom:5px}
-  .bub-text{font-size:15.5px;line-height:1.5;min-height:66px}
-  .bub-text .accent{color:var(--gold);font-weight:700}
-  .dots{display:flex;gap:6px;margin-top:12px}
-  .dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.22);transition:all .25s}
-  .dot.on{background:var(--ember);width:18px;border-radius:4px}
-  .controls{display:flex;gap:10px;width:100%;max-width:440px;margin-top:12px}
-  .btn{flex:1;padding:13px;border-radius:100px;font-family:inherit;font-weight:800;font-size:15px;border:1px solid var(--border);background:rgba(22,17,13,0.9);color:var(--text-dim)}
-  .btn.primary{flex:2;border-color:transparent;color:#fff;background:linear-gradient(135deg,var(--ember),var(--flame));box-shadow:0 8px 22px -8px rgba(255,80,30,.7)}
-  .btn:active{transform:translateY(1px)}
   .skip{position:fixed;top:14px;right:16px;z-index:12;background:none;border:none;color:var(--text-dim);font-family:inherit;font-weight:700;font-size:14px}
-  .note{position:fixed;top:14px;left:16px;z-index:12;font-size:11px;color:var(--text-dim);max-width:58%}
-  .replay{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);z-index:11;padding:13px 24px;border-radius:100px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit;font-weight:800;font-size:15px;transition:opacity .3s}
+  .note{position:fixed;top:14px;left:16px;z-index:12;font-size:11px;color:var(--text-dim);max-width:56%}
+  .replay{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);z-index:11;padding:12px 22px;border-radius:100px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit;font-weight:800;font-size:15px;transition:opacity .3s}
   .replay.hidden{opacity:0;pointer-events:none}
   button{cursor:pointer;font-family:inherit}
 </style>
 </head>
 <body>
-  <div class="note">Preview — placeholder mascot + mock screens. Spotlight points at real UI.</div>
+  <div class="note">Preview — coach-mark stays small so the screens show through.</div>
 
-  <!-- MOCK APP -->
   <div class="app">
     <div class="app-head" id="appHead">CHALLENGES</div>
     <div class="chips"><span class="chip on">All</span><span class="chip">Art</span><span class="chip">Music</span><span class="chip">Dunk</span><span class="chip">Rap</span></div>
     <div class="card">
       <div class="tag">🏆 Challenge · Vote now</div>
       <h3>Best Sunset Photo This Week</h3>
-      <div class="entries" id="voteArea">
-        <div class="entry"><span class="votebtn">Vote</span></div>
-        <div class="entry"><span class="votebtn">Vote</span></div>
-      </div>
+      <div class="entries" id="voteArea"><div class="entry"><span class="votebtn">Vote</span></div><div class="entry"><span class="votebtn">Vote</span></div></div>
     </div>
     <div class="card">
       <div class="tag poll">🗳️ Poll · 24h left</div>
@@ -118,7 +117,7 @@
     <div class="nav">
       <div class="navbtn" id="navFeed"><span class="ic">🏠</span>Feed</div>
       <div class="navbtn" id="navChallenges"><span class="ic">🏆</span>Challenges</div>
-      <div class="navbtn plus" id="navPlus">+</div>
+      <div class="navbtn plus">+</div>
       <div class="navbtn" id="navPolls"><span class="ic">🗳️</span>Polls</div>
       <div class="navbtn" id="navPrestige"><span class="ic">👑</span>Prestige</div>
     </div>
@@ -128,19 +127,17 @@
   <div class="spot" id="spot"></div>
   <button class="skip" id="skip">Skip ✕</button>
 
-  <div class="tour" id="tour">
-    <div class="mascot-wrap">
+  <div class="coach" id="coach">
+    <div class="ch-head">
       <div class="mascot wave" id="mascot">
-        <div class="flame"></div><div class="flame-in"></div>
+        <div class="flame"></div>
         <div class="face"><div class="eye l"></div><div class="eye r"></div><div class="cheek l"></div><div class="cheek r"></div><div class="mouth"></div></div>
-        <div class="hand"></div><div class="spark s1"></div><div class="spark s2"></div><div class="spark s3"></div>
+        <div class="hand"></div>
       </div>
+      <div class="ch-name">Cinder</div>
     </div>
-    <div class="bubble">
-      <div class="bub-name">Cinder</div>
-      <div class="bub-text" id="bubText"></div>
-      <div class="dots" id="dots"></div>
-    </div>
+    <div class="bub-text" id="bubText"></div>
+    <div class="dots" id="dots"></div>
     <div class="controls">
       <button class="btn" id="back">Back</button>
       <button class="btn primary" id="next">Next</button>
@@ -151,44 +148,56 @@
 
 <script>
   const steps = [
-    { pose:'wave',      target:null,            head:'FEED',       text:`Hey, welcome to <span class="accent">FlamesChallenge</span>! I'm Cinder. Ten seconds and I'll show you how it works.` },
-    { pose:'point',     target:'navChallenges', head:'CHALLENGES', text:`This is <span class="accent">Challenges</span> — the main event. Pick a category, drop your entry, go head-to-head.` },
-    { pose:'point',     target:'voteArea',      head:'CHALLENGES', text:`The <span class="accent">community votes</span> on every entry. Most votes wins — no judges, just the people.` },
-    { pose:'point',     target:'navPolls',      head:'CHALLENGES', text:`Got a hot take? <span class="accent">Polls</span> let you settle debates and see where everyone stands.` },
-    { pose:'point',     target:'navPrestige',   head:'CHALLENGES', text:`Win to climb the ranks, and chase the <span class="accent">Hall of Fame</span> in Prestige. That's the dream.` },
-    { pose:'celebrate', target:null,            head:'FEED',       text:`That's the tour! Now get in there and show 'em what you've got. <span class="accent">Let's go!</span>` },
+    { pose:'wave',      target:null,            head:'FEED',       text:`Hey, welcome to <span class="accent">FlamesChallenge</span>! I'm Cinder. Ten seconds and I'll show you around.` },
+    { pose:'idle',      target:'navChallenges', head:'CHALLENGES', text:`This is <span class="accent">Challenges</span> — the main event. Pick a category, drop your entry, go head-to-head.` },
+    { pose:'idle',      target:'voteArea',      head:'CHALLENGES', text:`The <span class="accent">community votes</span> on every entry. Most votes wins — no judges, just the people.` },
+    { pose:'idle',      target:'navPolls',      head:'CHALLENGES', text:`Got a hot take? <span class="accent">Polls</span> let you settle debates and see where everyone stands.` },
+    { pose:'idle',      target:'navPrestige',   head:'CHALLENGES', text:`Win to climb the ranks, and chase the <span class="accent">Hall of Fame</span> in Prestige.` },
+    { pose:'celebrate', target:null,            head:'FEED',       text:`That's it! Now get in there and show 'em what you've got. <span class="accent">Let's go!</span>` },
   ];
 
   let i = 0;
   const $ = id => document.getElementById(id);
-  const mascot=$('mascot'),bubText=$('bubText'),dots=$('dots'),tour=$('tour'),scrim=$('scrim'),spot=$('spot'),replay=$('replay'),appHead=$('appHead');
-  steps.forEach((_,n)=>{const d=document.createElement('div');d.className='dot';dots.appendChild(d)});
+  const mascot=$('mascot'),bubText=$('bubText'),dots=$('dots'),coach=$('coach'),scrim=$('scrim'),spot=$('spot'),replay=$('replay');
+  steps.forEach(()=>{const d=document.createElement('div');d.className='dot';dots.appendChild(d)});
 
-  function placeSpot(targetId){
-    if(!targetId){ spot.classList.remove('on'); scrim.classList.remove('hidden'); return; }
-    const el=$(targetId); if(!el){spot.classList.remove('on');return;}
-    const r=el.getBoundingClientRect(), pad=8;
+  function position(s){
+    coach.classList.remove('center','arrow-up','arrow-down');
+    if(!s.target){
+      spot.classList.remove('on'); scrim.classList.remove('hidden');
+      coach.classList.add('center'); coach.style.top=''; coach.style.bottom='';
+      return;
+    }
+    const el=$(s.target), r=el.getBoundingClientRect(), pad=8, gap=14, vh=window.innerHeight, vw=window.innerWidth;
     spot.style.top=(r.top-pad)+'px'; spot.style.left=(r.left-pad)+'px';
     spot.style.width=(r.width+pad*2)+'px'; spot.style.height=(r.height+pad*2)+'px';
-    spot.classList.add('on'); scrim.classList.add('hidden'); // the spot's box-shadow IS the dimmer now
+    spot.classList.add('on'); scrim.classList.add('hidden');
+    // arrow x = target center, relative to the centered coach
+    const cw=Math.min(360,vw-26), cl=(vw-cw)/2, ax=Math.max(20,Math.min(cw-20,(r.left+r.width/2)-cl));
+    coach.style.setProperty('--arrow',ax+'px');
+    if(r.top > vh*0.52){ // target low → coach above it
+      coach.style.top=''; coach.style.bottom=(vh - r.top + gap)+'px'; coach.classList.add('arrow-down');
+    } else { // target high → coach below it
+      coach.style.bottom=''; coach.style.top=(r.bottom + gap)+'px'; coach.classList.add('arrow-up');
+    }
   }
   function render(){
     const s=steps[i];
     mascot.className='mascot '+s.pose;
-    appHead.textContent=s.head;
+    $('appHead').textContent=s.head;
     bubText.style.opacity=0;
-    setTimeout(()=>{bubText.innerHTML=s.text;bubText.style.transition='opacity .25s';bubText.style.opacity=1;},120);
+    setTimeout(()=>{bubText.innerHTML=s.text;bubText.style.transition='opacity .25s';bubText.style.opacity=1;},110);
     [...dots.children].forEach((d,n)=>d.classList.toggle('on',n===i));
-    $('back').style.visibility=i===0?'hidden':'visible';
+    $('back').style.display=i===0?'none':'block';
     $('next').textContent=i===steps.length-1?"Let's go! →":'Next';
-    placeSpot(s.target);
+    position(s);
   }
-  function finish(){tour.classList.add('hidden');spot.classList.remove('on');scrim.classList.add('hidden');replay.classList.remove('hidden');}
-  function start(){i=0;tour.classList.remove('hidden');replay.classList.add('hidden');render();}
+  function finish(){coach.classList.add('hidden');spot.classList.remove('on');scrim.classList.add('hidden');replay.classList.remove('hidden');}
+  function start(){i=0;coach.classList.remove('hidden');replay.classList.add('hidden');render();}
   $('next').onclick=()=>{i<steps.length-1?(i++,render()):finish();};
   $('back').onclick=()=>{if(i>0){i--;render();}};
   $('skip').onclick=finish; replay.onclick=start;
-  window.addEventListener('resize',()=>placeSpot(steps[i].target));
+  window.addEventListener('resize',()=>position(steps[i]));
   render();
 </script>
 </body>
