@@ -24,8 +24,13 @@
   .card .tag.poll{color:var(--purple)}
   .card h3{font-size:16px;margin:6px 0 12px}
   .entries{display:flex;gap:10px}
-  .entry{flex:1;background:var(--surface2);border-radius:12px;height:92px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px}
-  .votebtn{background:linear-gradient(135deg,var(--ember),var(--flame));color:#fff;font-weight:800;font-size:12px;padding:6px 16px;border-radius:100px}
+  .entry{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:8px;display:flex;flex-direction:column;gap:7px}
+  .emedia{height:80px;border-radius:9px;background:linear-gradient(135deg,#3a2a6a,#7a4a3a 70%,#caa24a)}
+  .emedia.alt{background:linear-gradient(135deg,#2a4a5a,#3a6a5a 60%,#caa24a)}
+  .erow{display:flex;align-items:center;gap:6px}
+  .eav{width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,var(--ember),var(--flame));color:#fff;font-size:11px;font-weight:800;display:grid;place-items:center}
+  .ename{font-size:13px;font-weight:700}
+  .votebtn{background:linear-gradient(135deg,var(--ember),var(--flame));color:#fff;font-weight:800;font-size:13px;padding:8px;border-radius:100px;text-align:center}
   .pollrow{display:flex;align-items:center;background:var(--surface2);border-radius:10px;padding:10px 12px;margin-bottom:8px;font-weight:700;font-size:14px;justify-content:space-between}
   .pollrow .pct{color:var(--purple);font-weight:800}
   .nav{position:fixed;bottom:0;left:0;right:0;height:62px;background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-around;padding:0 6px}
@@ -92,7 +97,7 @@
 
   .skip{position:fixed;top:14px;right:16px;z-index:12;background:none;border:none;color:var(--text-dim);font-family:inherit;font-weight:700;font-size:14px}
   .note{position:fixed;top:14px;left:16px;z-index:12;font-size:11px;color:var(--text-dim);max-width:56%}
-  .replay{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);z-index:11;padding:12px 22px;border-radius:100px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit;font-weight:800;font-size:15px;transition:opacity .3s}
+  .replay{position:fixed;right:14px;bottom:86px;z-index:11;padding:9px 16px;border-radius:100px;border:1px solid var(--border);background:var(--surface);color:var(--text-dim);font-family:inherit;font-weight:700;font-size:12px;transition:opacity .3s}
   .replay.hidden{opacity:0;pointer-events:none}
   button{cursor:pointer;font-family:inherit}
 </style>
@@ -106,7 +111,18 @@
     <div class="card">
       <div class="tag">🏆 Challenge · Vote now</div>
       <h3>Best Sunset Photo This Week</h3>
-      <div class="entries" id="voteArea"><div class="entry"><span class="votebtn">Vote</span></div><div class="entry"><span class="votebtn">Vote</span></div></div>
+      <div class="entries" id="voteArea">
+        <div class="entry">
+          <div class="emedia"></div>
+          <div class="erow"><span class="eav">M</span><span class="ename">maya</span></div>
+          <span class="votebtn">♥ Vote</span>
+        </div>
+        <div class="entry">
+          <div class="emedia alt"></div>
+          <div class="erow"><span class="eav">D</span><span class="ename">deon</span></div>
+          <span class="votebtn">♥ Vote</span>
+        </div>
+      </div>
     </div>
     <div class="card">
       <div class="tag poll">🗳️ Poll · 24h left</div>
@@ -144,7 +160,7 @@
     </div>
   </div>
 
-  <button class="replay hidden" id="replay">↺ Replay tour</button>
+  <button class="replay hidden" id="replay">↺ Replay tour (demo)</button>
 
 <script>
   const steps = [
@@ -192,11 +208,11 @@
     $('next').textContent=i===steps.length-1?"Let's go! →":'Next';
     position(s);
   }
-  function finish(){coach.classList.add('hidden');spot.classList.remove('on');scrim.classList.add('hidden');replay.classList.remove('hidden');}
-  function start(){i=0;coach.classList.remove('hidden');replay.classList.add('hidden');render();}
-  $('next').onclick=()=>{i<steps.length-1?(i++,render()):finish();};
+  function dismiss(){coach.classList.add('hidden');spot.classList.remove('on');scrim.classList.add('hidden');$('skip').style.display='none';replay.classList.remove('hidden');}
+  function start(){i=0;coach.classList.remove('hidden');replay.classList.add('hidden');$('skip').style.display='block';render();}
+  $('next').onclick=()=>{i<steps.length-1?(i++,render()):dismiss();};
   $('back').onclick=()=>{if(i>0){i--;render();}};
-  $('skip').onclick=finish; replay.onclick=start;
+  $('skip').onclick=dismiss; replay.onclick=start;
   window.addEventListener('resize',()=>position(steps[i]));
   render();
 </script>
