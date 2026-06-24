@@ -1225,7 +1225,8 @@ body.theme-light .auth-form input { background: #ffffff; }
 .auth-form .field-row { display: flex; align-items: center; justify-content: space-between; margin-top: -6px; }
 .auth-form .forgot-link {
   font-size: 13px;
-  color: var(--text-dim);
+  color: #ff8a5c;
+  text-decoration: underline;
   background: none;
   border: none;
   cursor: pointer;
@@ -1253,7 +1254,7 @@ body.theme-light .auth-form input { background: #ffffff; }
   background: var(--overlay-2);
   border: 1px solid var(--border);
   border-radius: 12px;
-  color: var(--text);
+  color: #f0ece6;
   font-family: inherit;
   font-size: 15px;
   font-weight: 500;
@@ -5083,6 +5084,10 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
         <p class="section-sub">Pick a side. Make it count.</p>
       </div>
     </div>
+    <div class="ch-tabs" id="pollTabs">
+      <button class="ch-tab active" data-pfilter="open">🔥 Open</button>
+      <button class="ch-tab" data-pfilter="decided">🏁 Decided</button>
+    </div>
     <div class="polls-grid" id="pollsGrid"></div>
   </div>
 </section>
@@ -6319,7 +6324,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v506 · poll-vote-no-scroll-jump";
+const APP_VERSION = "v507 · poll-tabs-login-polish";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -9630,6 +9635,11 @@ function jumpToPoll(pollId) {
   requestAnimationFrame(() => setTimeout(tryScroll, 50));
 }
 
+function pollEnded(p) {
+  if (!p || !p.created_at || !p.hours_remaining) return false;
+  return Date.parse(p.created_at) + p.hours_remaining * 3600000 <= Date.now();
+}
+
 function renderPolls() {
   const grid = document.getElementById('pollsGrid');
   if (state.loading) {
@@ -9639,7 +9649,10 @@ function renderPolls() {
   grid.innerHTML = '';
   // Single column layout for expanded cards
 
-  const filtered = state.polls;
+  const pollFilter = state.pollFilter || 'open';
+  const filtered = (state.polls || []).filter(p =>
+    pollFilter === 'decided' ? pollEnded(p) : !pollEnded(p)
+  );
   filtered.forEach(poll => {
     const realCounts = state.voteCountsByPoll[poll.id] || {};
     const optionsWithCounts = poll.options.map((opt, i) => ({
@@ -9649,13 +9662,15 @@ function renderPolls() {
     const totalVotes = optionsWithCounts.reduce((s, o) => s + o.votes, 0);
     const userVote = state.myVotes[poll.id];
     const voted = userVote !== undefined;
+    const ended = pollEnded(poll);
+    const reveal = voted || ended;
 
     const card = document.createElement('article');
     card.className = 'poll-card' + (voted ? ' voted' : '');
     card.dataset.pid = poll.id;
     card.innerHTML = `
       <div class="poll-meta">
-        <span class="poll-time">⏱ ${poll.hours_remaining}h left</span>
+        <span class="poll-time">${ended ? '🏁 Ended' : '⏱ ' + poll.hours_remaining + 'h left'}</span>
         ${voted ? '<span class="poll-voted-tag">✓ Voted</span>' : ''}
       </div>
       <h3 class="poll-question">${escapeHtml(poll.question)}</h3>
@@ -9674,10 +9689,10 @@ function renderPolls() {
     optionsWithCounts.forEach((opt, idx) => {
       const btn = document.createElement('button');
       btn.className = 'poll-option' + (userVote === idx ? ' voted' : '');
-      btn.disabled = voted;
+      btn.disabled = reveal;
       const pct = totalVotes ? Math.round((opt.votes / totalVotes) * 100) : 0;
-      btn.innerHTML = `<span class="fill" style="width:${voted ? pct : 0}%"></span><span class="text">${escapeHtml(opt.label)}</span><span class="pct">${pct}%</span>`;
-      btn.onclick = () => castVote(poll.id, idx);
+      btn.innerHTML = `<span class="fill" style="width:${reveal ? pct : 0}%"></span><span class="text">${escapeHtml(opt.label)}</span><span class="pct">${pct}%</span>`;
+      if (!ended) btn.onclick = () => castVote(poll.id, idx);
       optsBox.appendChild(btn);
     });
     card.querySelector('.share-btn').onclick = (e) => { e.stopPropagation(); sharePoll(poll); };
@@ -11866,6 +11881,15 @@ document.querySelectorAll('#chTabs .ch-tab').forEach(t => {
     t.classList.add('active');
     state.cFilter = t.dataset.cfilter;
     renderChallenges();
+  });
+});
+
+document.querySelectorAll('#pollTabs .ch-tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('#pollTabs .ch-tab').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    state.pollFilter = t.dataset.pfilter;
+    renderPolls();
   });
 });
 
