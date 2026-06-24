@@ -6342,7 +6342,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v510 · rank-chips-in-feed";
+const APP_VERSION = "v512 · legend-medallions";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -15991,16 +15991,17 @@ function getPrimaryBadge(userId) {
 function openBadgeLegend() {
   const list = document.getElementById('badgeLegendList');
   if (!list) return;
+  const medal = k => `<img src="${HOF_BADGES[k]}?v=2" class="hof-badge-img" style="width:40px;height:40px" onerror="hofBadgeFallback(this,40)">`;
   const rows = [
-    { badge: '<span class="fc-badge fc-badge-rookie">🔰 Rookie</span>',                          name: 'Rookie',      desc: 'The default. Everyone starts here.' },
-    { badge: '<span class="fc-badge fc-badge-rising">🌅 Rising</span>',                           name: 'Rising',      desc: '1–4 wins. You\'re on the board.' },
-    { badge: '<span class="fc-badge fc-badge-established">🏛️ Established</span>',                 name: 'Established', desc: '5–9 wins. You\'re a consistent competitor.' },
-    { badge: '<span class="fc-badge fc-badge-veteran">🎖️ Veteran</span>',                         name: 'Veteran',     desc: '10+ wins. The peak regular badge — held until HOF.' },
-    { badge: '<span class="fc-badge fc-badge-legend fc-badge-hof">🌟 Legend</span>',              name: 'Legend',      desc: '5 championships. HOF entry. Your legacy begins.' },
-    { badge: '<span class="fc-badge fc-badge-icon fc-badge-hof">⚡ Icon</span>',                  name: 'Icon',        desc: '10 championships. A cultural force on this platform.' },
-    { badge: '<span class="fc-badge fc-badge-immortal fc-badge-hof">🔱 Immortal</span>',     name: 'Immortal',   desc: '15+ wins. Beyond human.' },
-    { badge: '<span class="fc-badge fc-badge-goat fc-badge-hof">🐐 G.O.A.T.</span>',        name: 'G.O.A.T.',   desc: '20+ wins. The apex of achievement.' },
-    { badge: '<span class="fc-badge fc-badge-founder">👑 Founder</span>',       name: 'Founder',    desc: 'Built this platform before anyone else was here. Permanent.' },
+    { badge: '<span class="rank-chip rank-spark"><span class="rank-pip">✦</span>Spark</span>',     name: 'Spark',   desc: 'The default. Everyone starts here.' },
+    { badge: '<span class="rank-chip rank-flame"><span class="rank-pip">◆</span>Flame</span>',     name: 'Flame',   desc: '1–4 challenge wins. You\'re on the board.' },
+    { badge: '<span class="rank-chip rank-blaze"><span class="rank-pip">▲</span>Blaze</span>',     name: 'Blaze',   desc: '5–9 challenge wins. Heating up.' },
+    { badge: '<span class="rank-chip rank-inferno"><span class="rank-pip">★</span>Inferno</span>', name: 'Inferno', desc: '10+ challenge wins. The top rank.' },
+    { badge: `<img src="${HOF_BADGES.legend}?v=2" class="hof-badge-img" style="width:42px;height:42px" alt="Legend" onerror="hofBadgeFallback(this,42)">`,     name: 'Legend',     desc: '5 championships. Hall of Fame entry — your legacy begins.' },
+    { badge: `<img src="${HOF_BADGES.icon}?v=2" class="hof-badge-img" style="width:42px;height:42px" alt="Icon" onerror="hofBadgeFallback(this,42)">`,         name: 'Icon',       desc: '10 championships. A cultural force on this platform.' },
+    { badge: `<img src="${HOF_BADGES.immortal}?v=2" class="hof-badge-img" style="width:42px;height:42px" alt="Immortal" onerror="hofBadgeFallback(this,42)">`, name: 'Immortal',   desc: '15 championships. Beyond human.' },
+    { badge: `<img src="${HOF_BADGES.goat}?v=2" class="hof-badge-img" style="width:42px;height:42px" alt="G.O.A.T." onerror="hofBadgeFallback(this,42)">`,     name: 'G.O.A.T.',   desc: '20 championships. The apex of achievement.' },
+    { badge: `<img src="${HOF_BADGES.founder}?v=2" class="hof-badge-img" style="width:42px;height:42px" alt="Founder" onerror="hofBadgeFallback(this,42)">`,   name: 'Founder',    desc: 'Built this platform before anyone else was here. Permanent.' },
   ];
   list.innerHTML = rows.map(r => `
     <div style="display:flex;align-items:center;gap:12px;padding:8px 4px;border-bottom:1px solid var(--border);">
@@ -16018,7 +16019,7 @@ function closeBadgeLegend() {
 
 // Delegated tap handler — any .fc-badge or .hof-badge-img anywhere opens the legend
 document.addEventListener('click', e => {
-  const badge = e.target.closest('.fc-badge, .hof-badge-img');
+  const badge = e.target.closest('.fc-badge, .hof-badge-img, .rank-chip');
   if (!badge) return;
   e.stopPropagation();
   e.preventDefault();
