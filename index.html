@@ -6383,7 +6383,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v522 · tour-all-users";
+const APP_VERSION = "v523 · champ-decline-reserve";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -10858,6 +10858,8 @@ function getUserChampionTitle(userId) {
 function renderChampionshipTab() {
   const el = document.getElementById('lbChampContent');
   if (!el) return;
+  // Admin-only: auto-promote reserves for any no-show qualifiers (fire and forget)
+  if (isAdmin()) checkChampionshipNoShows().catch(e => console.warn('no-show check', e));
   const data = state.leaderboardData;
   if (!data) { el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted)">Loading...</div>'; return; }
 
@@ -11033,6 +11035,85 @@ function renderChampionshipTab() {
 
 let _championshipLaunching = false;
 
+/* ---------- CHAMPIONSHIP ACCEPT / DECLINE / RESERVE PROMOTION ---------- */
+async function respondToChampInvite(response) {
+  const ch = state.currentChallenge;
+  if (!ch || !state.myChampInvite || !state.profile) return;
+  const acceptBtn = document.getElementById('champAcceptBtn');
+  const declineBtn = document.getElementById('champDeclineBtn');
+  if (acceptBtn) acceptBtn.disabled = true;
+  if (declineBtn) declineBtn.disabled = true;
+  try {
+    await db.from('challenge_invites')
+      .update({ invite_status: response, responded_at: new Date().toISOString() })
+      .eq('id', state.myChampInvite.id);
+    state.myChampInvite.invite_status = response;
+    if (response === 'accepted') {
+      toast('✅ You\'re in! Submit your entry to compete.');
+    } else {
+      toast('You passed your spot to the next qualifier.');
+      await promoteNextReserve(ch.id);
+    }
+    renderChallengeDetail();
+  } catch (e) {
+    toast('Something went wrong. Try again.');
+    if (acceptBtn) acceptBtn.disabled = false;
+    if (declineBtn) declineBtn.disabled = false;
+  }
+}
+
+async function promoteNextReserve(challengeId) {
+  // Pull the challenge fresh to get the current reserve_list
+  const { data: ch, error } = await db.from('challenges').select('id, category, reserve_list, submission_deadline').eq('id', challengeId).single();
+  if (error || !ch) return;
+  const reserves = Array.isArray(ch.reserve_list) ? ch.reserve_list : [];
+  if (reserves.length === 0) {
+    console.warn('No reserves left to promote for challenge', challengeId);
+    return;
+  }
+  const next = reserves[0];
+  const remaining = reserves.slice(1);
+  // Invite the next reserve + shrink the reserve list
+  await db.from('challenge_invites').insert({ challenge_id: challengeId, invited_user_id: next.id, invite_status: 'pending' });
+  await db.from('challenges').update({ reserve_list: remaining }).eq('id', challengeId);
+  // Notify + email the promoted player (fire and forget)
+  const deadlineLabel = ch.submission_deadline ? new Date(ch.submission_deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+  db.functions.invoke('send-championship-email', {
+    body: { type: 'qualified', userIds: [next.id], category: ch.category, deadline: deadlineLabel, challengeId }
+  }).catch(e => console.warn('reserve promotion email', e));
+}
+
+/* ---------- NO-SHOW AUTO-PROMOTION (admin-triggered on Ranks view) ---------- */
+async function checkChampionshipNoShows() {
+  if (!isAdmin() || !state.profile) return;
+  const liveChamps = (state.challenges || []).filter(c =>
+    c.is_championship && computeChallengeStatus(c) === 'submitting'
+  );
+  const now = Date.now();
+  for (const ch of liveChamps) {
+    const start = ch.created_at ? new Date(ch.created_at).getTime() : null;
+    const end = ch.submission_deadline ? new Date(ch.submission_deadline).getTime() : null;
+    if (!start || !end) continue;
+    // Only act past the halfway point of the submission window
+    if (now < start + (end - start) / 2) continue;
+    const reserves = Array.isArray(ch.reserve_list) ? ch.reserve_list : [];
+    if (reserves.length === 0) continue;
+    // Find pending invitees who haven't submitted an entry
+    const { data: invites } = await db.from('challenge_invites').select('id, invited_user_id, invite_status').eq('challenge_id', ch.id);
+    const { data: entries } = await db.from('entries').select('user_id').eq('challenge_id', ch.id);
+    const submitters = new Set((entries || []).map(e => e.user_id));
+    const noShows = (invites || []).filter(i => i.invite_status === 'pending' && !submitters.has(i.invited_user_id));
+    for (const ns of noShows) {
+      if (((Array.isArray(ch.reserve_list) ? ch.reserve_list : []).length) === 0) break;
+      await db.from('challenge_invites').update({ invite_status: 'no_show', responded_at: new Date().toISOString() }).eq('id', ns.id);
+      await promoteNextReserve(ch.id);
+      // Refresh local reserve_list so we don't over-promote in this loop
+      const { data: fresh } = await db.from('challenges').select('reserve_list').eq('id', ch.id).single();
+      ch.reserve_list = fresh?.reserve_list || [];
+    }
+  }
+}
+
 async function launchChampionshipChallenge(category) {
   if (!isAdmin() || !state.profile) return;
   if (_championshipLaunching) { toast('Launch already in progress…'); return; }
@@ -11050,14 +11131,16 @@ async function launchChampionshipChallenge(category) {
   });
   if (alreadyLaunched) { toast(`${category} Championship already launched this month`); return; }
 
-  const contenders = [...(data.users || [])]
+  const ranked = [...(data.users || [])]
     .filter(u => (u.rolling30ByCategory[category] || 0) > 0)
-    .sort((a, b) => (b.rolling30ByCategory[category] || 0) - (a.rolling30ByCategory[category] || 0))
-    .slice(0, 5);
+    .sort((a, b) => (b.rolling30ByCategory[category] || 0) - (a.rolling30ByCategory[category] || 0));
+
+  const contenders = ranked.slice(0, 3);
+  const reserves = ranked.slice(3, 8); // players 4–8 wait in the wings
 
   if (contenders.length < 2) { toast('Need at least 2 qualifiers'); return; }
 
-  if (!confirm(`Launch ${category} Championship Challenge and invite ${contenders.length} qualifiers?`)) return;
+  if (!confirm(`Launch ${category} Championship Challenge and invite top ${contenders.length}? (${reserves.length} reserves on standby)`)) return;
 
   const monthLabel = now.toLocaleString('default', { month: 'long', year: 'numeric' });
   const subDeadline = new Date(now.getTime() + 7 * 86400000).toISOString();
@@ -11080,12 +11163,13 @@ async function launchChampionshipChallenge(category) {
       is_public: false,
       is_championship: true,
       status: 'submitting',
+      reserve_list: reserves.map(u => ({ id: u.id, name: u.name })),
     }).select().single();
 
     if (chErr) throw chErr;
 
-    // Invite all contenders
-    const inviteRows = contenders.map(u => ({ challenge_id: ch.id, invited_user_id: u.id }));
+    // Invite top 3 contenders (status pending until they accept/decline)
+    const inviteRows = contenders.map(u => ({ challenge_id: ch.id, invited_user_id: u.id, invite_status: 'pending' }));
     const { error: invErr } = await db.from('challenge_invites').insert(inviteRows);
     if (invErr) throw invErr;
 
@@ -12886,6 +12970,18 @@ async function loadChallengeDetail(challengeId) {
       console.error('entry comment counts timed out, continuing', cErr);
     }
   }
+  // For championships: load this user's invite status (for accept/decline banner)
+  state.myChampInvite = null;
+  try {
+    const chObj = state.currentChallenge;
+    if (chObj?.is_championship && state.profile) {
+      const invRes = await withTimeout(
+        db.from('challenge_invites').select('id, invite_status').eq('challenge_id', challengeId).eq('invited_user_id', state.profile.id).maybeSingle(),
+        8000, 'Invite status'
+      );
+      if (!invRes.error && invRes.data) state.myChampInvite = invRes.data;
+    }
+  } catch (e) { /* non-critical */ }
 }
 
 function renderChallengeDetail() {
@@ -12922,6 +13018,24 @@ function renderChallengeDetail() {
   `;
   const shareBtn = document.getElementById('cdShareBtn');
   if (shareBtn) shareBtn.addEventListener('click', e => { e.stopPropagation(); openPromote('challenge', ch); });
+
+  // Championship accept/decline banner — only for pending invitees during submitting phase
+  if (ch.is_championship && state.myChampInvite?.invite_status === 'pending' && status === 'submitting') {
+    const heroEl = document.getElementById('cdHero');
+    const banner = document.createElement('div');
+    banner.style.cssText = 'margin-top:14px;padding:14px;background:rgba(255,200,87,0.1);border:1px solid rgba(255,200,87,0.35);border-radius:12px;';
+    banner.innerHTML = `
+      <div style="font-weight:700;font-size:14px;margin-bottom:4px;">⚡ You qualified for this Championship!</div>
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:12px;">Accept to compete for the title, or decline to pass your spot to the next qualifier.</div>
+      <div style="display:flex;gap:8px;">
+        <button id="champAcceptBtn" class="btn btn-primary" style="flex:1;">✅ Accept</button>
+        <button id="champDeclineBtn" class="btn" style="flex:1;border:1px solid var(--border);">Decline</button>
+      </div>
+    `;
+    heroEl.appendChild(banner);
+    document.getElementById('champAcceptBtn')?.addEventListener('click', () => respondToChampInvite('accepted'));
+    document.getElementById('champDeclineBtn')?.addEventListener('click', () => respondToChampInvite('declined'));
+  }
 
   const deleteBtn = document.getElementById('cdDeleteBtn');
   if (deleteBtn) deleteBtn.addEventListener('click', async e => {
