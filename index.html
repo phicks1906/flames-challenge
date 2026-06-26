@@ -530,7 +530,7 @@ html[data-theme="light"] .rank-flame   { color: #d4501a; }
 html[data-theme="light"] .rank-blaze   { color: #cc2418; }
 html[data-theme="light"] .rank-inferno { color: #9c7400; box-shadow: none; }
 
-/* ============ WELCOME TOUR MASCOT (Cinder, placeholder art) ============ */
+/* ============ WELCOME TOUR MASCOT (Ember, placeholder art) ============ */
 #tourBubble { overflow: visible; }
 .tcin{position:absolute;top:-46px;left:18px;width:50px;height:58px;transform-origin:50% 100%;animation:tcin-bob 2.6s ease-in-out infinite;z-index:2}
 @keyframes tcin-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
@@ -5906,6 +5906,14 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     </div>
     <div id="tourTitle" style="font-family:var(--font-display);font-size:18px;text-transform:uppercase;letter-spacing:0.04em;color:var(--text);margin-bottom:6px;"></div>
     <div id="tourBody" style="font-size:14px;color:var(--text-dim);line-height:1.5;"></div>
+    <div id="tourAskWrap" style="display:none;margin-top:14px;border-top:1px solid var(--border,rgba(255,255,255,0.12));padding-top:12px;">
+      <div style="font-size:12px;font-weight:700;color:var(--ember);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em;">Still got questions? Ask Ember 🔥</div>
+      <div id="tourAskAnswer" style="display:none;font-size:13px;color:var(--text-dim);line-height:1.5;background:var(--bg,rgba(255,255,255,0.04));border-radius:10px;padding:10px 12px;margin-bottom:8px;max-height:160px;overflow-y:auto;"></div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input id="tourAskInput" type="text" maxlength="200" placeholder="How do challenges work?" onkeydown="if(event.key==='Enter'){event.preventDefault();askEmber();}" style="flex:1;min-width:0;background:var(--surface-2,rgba(255,255,255,0.06));border:1px solid var(--border,rgba(255,255,255,0.15));border-radius:10px;padding:9px 11px;font-size:13px;color:var(--text);outline:none;" />
+        <button id="tourAskBtn" onclick="askEmber()" class="btn btn-primary" style="padding:9px 16px;font-size:13px;white-space:nowrap;">Ask</button>
+      </div>
+    </div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;">
       <button onclick="endTour()" style="background:none;border:none;color:var(--text-muted);font-size:13px;cursor:pointer;text-decoration:underline;padding:0;">Skip tour</button>
       <button id="tourNext" onclick="tourNext()" class="btn btn-primary" style="padding:9px 22px;font-size:14px;">Next →</button>
@@ -6364,7 +6372,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v515 · tour-expanded";
+const APP_VERSION = "v517 · ask-ember";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -15706,62 +15714,62 @@ const TOUR_STEPS = [
   {
     target: () => null,
     title: 'Welcome!',
-    body: "Hey — I'm Cinder, your guide. Give me ten seconds and I'll show you around.",
+    body: "Hey, I'm Ember 🔥 Ten seconds and you'll be ready to light it up. Let's go.",
     position: 'center',
     pose: 'wave',
   },
   {
     target: () => document.querySelector('.bnav-btn[data-view="feed"]'),
     title: 'Your Feed',
-    body: 'Home base — challenges, polls, and posts from people you follow. Tap any challenge to watch the entries and vote: most votes wins.',
+    body: 'Home base — challenges, polls, and posts from people you follow. Tap a challenge, watch the entries, cast your vote — most votes takes the heat.',
     position: 'above',
   },
   {
     target: () => document.querySelector('.bnav-btn[data-view="challenges"]'),
     title: 'Challenges',
-    body: 'The main event. Pick a category, drop your entry, go head-to-head. The community votes — most votes wins.',
+    body: 'Where it all ignites. Pick your lane, drop an entry, go head-to-head. The crowd decides who burns brightest. 🏆',
     position: 'above',
   },
   {
     target: () => document.querySelector('.bnav-create'),
     title: 'Start Something',
-    body: "Tap + to create a challenge or submit an entry. Challenges run on a timer, so don't miss the window.",
+    body: "Hit + to spark a challenge or throw your entry in the fire. Heads up — every challenge runs on a timer, so strike while it's hot.",
     position: 'above',
   },
   {
     target: () => document.querySelector('.bnav-btn[data-view="polls"]'),
     title: 'Polls',
-    body: 'Got a hot take? Settle debates and see exactly where everyone stands.',
+    body: 'Got a hot take? Drop a poll, fan the flames, see where everyone really lands.',
     position: 'above',
   },
   {
     target: () => document.querySelector('.bnav-btn[data-view="leaderboard"]'),
     title: 'Prestige',
-    body: 'Win challenges to earn rank badges and climb toward the Hall of Fame. That\'s the dream.',
+    body: 'Win challenges to go from Spark to Inferno and climb to the Hall of Fame. A new champ is crowned every round — could be you.',
     position: 'above',
   },
   {
     target: () => document.getElementById('notifBell'),
     title: 'Notifications',
-    body: 'Your bell — @mentions, replies, and the moment you get crowned all land here.',
+    body: 'Your bell. @mentions, replies, and the second you get crowned all land here. Keep an eye on it — things move fast.',
     position: 'below',
   },
   {
     target: () => document.getElementById('navDM'),
     title: 'Messages',
-    body: 'Message anyone directly — challenge a friend or keep the conversation going.',
+    body: 'DM anyone. Call out a rival, talk a little trash, keep the fire going.',
     position: 'below',
   },
   {
     target: () => document.getElementById('userChip'),
     title: 'Your Profile',
-    body: 'Tap your avatar for your stats, your interests, dark mode, and to find people to follow.',
+    body: 'Tap your avatar for stats, interests, dark mode, and people to follow.',
     position: 'below',
   },
   {
     target: () => null,
     title: "You're set!",
-    body: "That's the tour. Now get in there and show 'em what you've got.",
+    body: "That's the tour. Now get out there and bring the heat. 🔥 Fresh challenges drop all the time — come back before they cool off.",
     position: 'center',
     pose: 'celebrate',
   },
@@ -15791,11 +15799,22 @@ function renderTourStep() {
   const ring    = document.getElementById('tourHoleRing');
   const mascot  = document.getElementById('tourMascot');
 
-  stepEl.textContent  = `Cinder · ${_tourStep + 1} of ${steps.length}`;
+  stepEl.textContent  = `Ember · ${_tourStep + 1} of ${steps.length}`;
   titleEl.textContent = step.title;
   bodyEl.textContent  = step.body;
   nextBtn.textContent = _tourStep === steps.length - 1 ? 'Done ✓' : 'Next →';
   if (mascot) mascot.className = 'tcin ' + (step.pose || '');
+
+  // Ask-Ember box appears only on the final step
+  const askWrap = document.getElementById('tourAskWrap');
+  if (askWrap) {
+    const onLast = _tourStep === steps.length - 1;
+    askWrap.style.display = onLast ? 'block' : 'none';
+    if (!onLast) {
+      const ans = document.getElementById('tourAskAnswer');
+      if (ans) { ans.style.display = 'none'; ans.textContent = ''; }
+    }
+  }
 
   // Find target element
   const targetFn = step.targetOverride || step.target;
@@ -15838,6 +15857,33 @@ function renderTourStep() {
   }
 }
 
+async function askEmber() {
+  const input = document.getElementById('tourAskInput');
+  const ans   = document.getElementById('tourAskAnswer');
+  const btn   = document.getElementById('tourAskBtn');
+  if (!input || !ans || !btn) return;
+  const q = (input.value || '').trim();
+  if (!q) return;
+  ans.style.display = 'block';
+  ans.textContent = "Ember's thinking… 🔥";
+  btn.disabled = true;
+  try {
+    const resp = await fetch('https://sioalvawzayfphwzqctq.supabase.co/functions/v1/ask-ember', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: q })
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data.error || 'Request failed');
+    ans.textContent = (data.answer || '').trim() || "Hmm, I didn't catch that — try asking another way.";
+  } catch (e) {
+    ans.textContent = "I'm having trouble reaching the fire right now — try again in a sec. 🔥";
+  } finally {
+    btn.disabled = false;
+    input.value = '';
+  }
+}
+
 function tourNext() {
   _tourStep++;
   if (_tourStep >= TOUR_STEPS.length) { endTour(); return; }
@@ -15850,7 +15896,7 @@ function endTour() {
 }
 
 function maybeStartTour() {
-  // Auto-start gated to the owner while Cinder's art + copy are placeholder.
+  // Auto-start gated to the owner while Ember's art + copy are placeholder.
   const OWNER = '24c26d06-52c9-4134-8589-a2889d7ddfc0';
   if (state.profile && state.profile.id === OWNER && !localStorage.getItem(TOUR_KEY)) {
     setTimeout(startTour, 1200);
