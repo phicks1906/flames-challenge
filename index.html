@@ -6383,7 +6383,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v523 · champ-decline-reserve";
+const APP_VERSION = "v524 · champ-decline-cron";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -10858,8 +10858,6 @@ function getUserChampionTitle(userId) {
 function renderChampionshipTab() {
   const el = document.getElementById('lbChampContent');
   if (!el) return;
-  // Admin-only: auto-promote reserves for any no-show qualifiers (fire and forget)
-  if (isAdmin()) checkChampionshipNoShows().catch(e => console.warn('no-show check', e));
   const data = state.leaderboardData;
   if (!data) { el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted)">Loading...</div>'; return; }
 
@@ -11083,36 +11081,9 @@ async function promoteNextReserve(challengeId) {
   }).catch(e => console.warn('reserve promotion email', e));
 }
 
-/* ---------- NO-SHOW AUTO-PROMOTION (admin-triggered on Ranks view) ---------- */
-async function checkChampionshipNoShows() {
-  if (!isAdmin() || !state.profile) return;
-  const liveChamps = (state.challenges || []).filter(c =>
-    c.is_championship && computeChallengeStatus(c) === 'submitting'
-  );
-  const now = Date.now();
-  for (const ch of liveChamps) {
-    const start = ch.created_at ? new Date(ch.created_at).getTime() : null;
-    const end = ch.submission_deadline ? new Date(ch.submission_deadline).getTime() : null;
-    if (!start || !end) continue;
-    // Only act past the halfway point of the submission window
-    if (now < start + (end - start) / 2) continue;
-    const reserves = Array.isArray(ch.reserve_list) ? ch.reserve_list : [];
-    if (reserves.length === 0) continue;
-    // Find pending invitees who haven't submitted an entry
-    const { data: invites } = await db.from('challenge_invites').select('id, invited_user_id, invite_status').eq('challenge_id', ch.id);
-    const { data: entries } = await db.from('entries').select('user_id').eq('challenge_id', ch.id);
-    const submitters = new Set((entries || []).map(e => e.user_id));
-    const noShows = (invites || []).filter(i => i.invite_status === 'pending' && !submitters.has(i.invited_user_id));
-    for (const ns of noShows) {
-      if (((Array.isArray(ch.reserve_list) ? ch.reserve_list : []).length) === 0) break;
-      await db.from('challenge_invites').update({ invite_status: 'no_show', responded_at: new Date().toISOString() }).eq('id', ns.id);
-      await promoteNextReserve(ch.id);
-      // Refresh local reserve_list so we don't over-promote in this loop
-      const { data: fresh } = await db.from('challenges').select('reserve_list').eq('id', ch.id).single();
-      ch.reserve_list = fresh?.reserve_list || [];
-    }
-  }
-}
+/* ---------- NO-SHOW AUTO-PROMOTION ----------
+   Handled server-side by the process-championship-noshows Edge Function on an
+   hourly pg_cron schedule. No client-side check needed. */
 
 async function launchChampionshipChallenge(category) {
   if (!isAdmin() || !state.profile) return;
