@@ -5990,6 +5990,17 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
   </div>
 </div>
 
+<!-- REPORT SHEET -->
+<div class="modal-backdrop" id="reportSheet" onclick="if(event.target===this)closeReportSheet()">
+  <div class="modal" style="max-width:360px">
+    <button class="modal-close-x" onclick="closeReportSheet()">×</button>
+    <h2 style="margin-bottom:4px">🚩 Report Content</h2>
+    <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px">Why are you reporting this?</p>
+    <div id="reportReasons" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px"></div>
+    <button id="reportSubmitBtn" onclick="submitReport()" class="btn btn-primary" style="width:100%">Submit Report</button>
+  </div>
+</div>
+
 <!-- BADGE LEGEND SHEET -->
 <div class="modal-backdrop" id="badgeLegendSheet" onclick="if(event.target===this)closeBadgeLegend()">
   <div class="modal" style="max-width:380px">
@@ -6372,7 +6383,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v520 · text-moderation";
+const APP_VERSION = "v521 · user-reporting";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -8463,7 +8474,7 @@ function renderComments() {
         <div class="comment-body">${formatBody(c.body)}</div>
         <div class="comment-row-actions">
           <button class="comment-reply-btn" data-reply-id="${c.id}" data-reply-name="${escapeHtml(a.name)}">Reply</button>
-          ${mine ? `<button class="comment-del" data-del-comment="${c.id}">Delete</button>` : ''}
+          ${mine ? `<button class="comment-del" data-del-comment="${c.id}">Delete</button>` : `<button class="comment-del" data-report-comment="${c.id}" data-report-text="${escapeHtml((c.body||'').slice(0,200))}">Report</button>`}
         </div>
       </div>
     </div>`;
@@ -8479,6 +8490,9 @@ function renderComments() {
   });
   list.querySelectorAll('[data-del-comment]').forEach(btn => {
     btn.addEventListener('click', () => deleteComment(btn.dataset.delComment));
+  });
+  list.querySelectorAll('[data-report-comment]').forEach(btn => {
+    btn.addEventListener('click', () => openReportSheet('comment', btn.dataset.reportComment, btn.dataset.reportText || ''));
   });
   list.querySelectorAll('[data-reply-id]').forEach(btn => {
     btn.addEventListener('click', () => startReply(btn.dataset.replyId, btn.dataset.replyName));
@@ -14752,12 +14766,15 @@ function renderFeed() {
     });
   });
 
-  // Wire up post menus
+  // Wire up post menus (delete own / report others)
   c.querySelectorAll('.post-card-menu').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
-      const postId = btn.dataset.pid;
-      if (confirm('Delete this post?')) deletePost(postId);
+      if (btn.dataset.pid) {
+        if (confirm('Delete this post?')) deletePost(btn.dataset.pid);
+      } else if (btn.dataset.reportType) {
+        openReportSheet(btn.dataset.reportType, btn.dataset.reportId, btn.dataset.reportText || '');
+      }
     });
   });
   // Wire up post likes
@@ -14967,7 +14984,7 @@ function renderPostCard(p) {
         <div class="post-card-meta">
           <div class="post-card-name" ${userClickAttr}>${escapeHtml(author.name)}${plusBadge}${getHofBadge(author.id)}${getRankBadge(author.id)}</div>
         </div>
-        ${isMine ? `<button class="post-card-menu" data-pid="${p.id}" aria-label="Delete post">⋯</button>` : ''}
+        ${isMine ? `<button class="post-card-menu" data-pid="${p.id}" aria-label="Delete post">⋯</button>` : `<button class="post-card-menu" data-report-type="post" data-report-id="${p.id}" data-report-text="${escapeHtml((p.content||'').slice(0,200))}" aria-label="Report post">⋯</button>`}
       </div>
       <div class="post-card-content">${formatBody(p.content)}</div>
       ${mediaHtml}
@@ -15015,7 +15032,7 @@ function renderFlyerCard(p) {
       <div style="display:flex;align-items:center;gap:10px;padding:0 14px 10px;">
         <div style="width:32px;height:32px;border-radius:50%;overflow:hidden;flex-shrink:0;background:linear-gradient(135deg,var(--ember),var(--coral));display:grid;place-items:center;font-size:14px;" ${userClickAttr}>${avatarInner(author.avatar)}</div>
         <span style="font-size:13px;font-weight:600;color:var(--text);" ${userClickAttr}>${escapeHtml(author.name)}${plusBadge}</span>
-        ${isMine ? `<button class="post-card-menu" data-pid="${p.id}" style="margin-left:auto;" aria-label="Delete post">⋯</button>` : ''}
+        ${isMine ? `<button class="post-card-menu" data-pid="${p.id}" style="margin-left:auto;" aria-label="Delete post">⋯</button>` : `<button class="post-card-menu" data-report-type="post" data-report-id="${p.id}" data-report-text="${escapeHtml((p.content||'flyer').slice(0,200))}" style="margin-left:auto;" aria-label="Report post">⋯</button>`}
       </div>
 
       <!-- Flyer media — image or video, full width -->
@@ -15856,6 +15873,56 @@ function renderTourStep() {
     bubble.style.left   = '50%';
     bubble.style.transform = 'translate(-50%, -50%)';
     bubble.style.bottom = 'auto';
+  }
+}
+
+// ---- User Reporting ----
+const REPORT_REASONS = [
+  { value: 'inappropriate', label: '🔞 Inappropriate or explicit content' },
+  { value: 'harassment',    label: '😤 Harassment or bullying' },
+  { value: 'hate',          label: '🚫 Hate speech or discrimination' },
+  { value: 'spam',          label: '📢 Spam or misleading' },
+  { value: 'violence',      label: '⚠️ Violence or dangerous content' },
+  { value: 'other',         label: '🚩 Other' },
+];
+const _reportState = { type: null, id: null, text: '', reason: null };
+
+function openReportSheet(type, id, text) {
+  _reportState.type = type; _reportState.id = id; _reportState.text = text; _reportState.reason = null;
+  const reasons = document.getElementById('reportReasons');
+  if (reasons) reasons.innerHTML = REPORT_REASONS.map(r => `
+    <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;cursor:pointer;font-size:14px;">
+      <input type="radio" name="reportReason" value="${r.value}" style="accent-color:var(--ember)"> ${r.label}
+    </label>
+  `).join('');
+  document.getElementById('reportSheet')?.classList.add('open');
+}
+
+function closeReportSheet() {
+  document.getElementById('reportSheet')?.classList.remove('open');
+}
+
+async function submitReport() {
+  const selected = document.querySelector('input[name="reportReason"]:checked');
+  if (!selected) { toast('Please select a reason.'); return; }
+  const btn = document.getElementById('reportSubmitBtn');
+  btn.disabled = true; btn.textContent = 'Submitting…';
+  try {
+    await db.from('moderation_queue').insert({
+      content_type: _reportState.type,
+      content_id: _reportState.id,
+      user_id: state.profile?.id,
+      text_snippet: _reportState.text,
+      categories: [selected.value],
+      confidence: 'medium',
+      status: 'pending',
+    });
+    closeReportSheet();
+    toast('Report submitted. We\'ll review it.');
+  } catch (e) {
+    toast('Something went wrong. Try again.');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Submit Report';
   }
 }
 
