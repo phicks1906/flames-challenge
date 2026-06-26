@@ -6372,7 +6372,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v517 · ask-ember";
+const APP_VERSION = "v518 · ask-ember-ratelimit";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -15874,6 +15874,10 @@ async function askEmber() {
       body: JSON.stringify({ question: q })
     });
     const data = await resp.json().catch(() => ({}));
+    if (resp.status === 429) {
+      ans.textContent = "Whoa, slow down a sec 🔥 Too many questions at once — try again in a minute.";
+      return;
+    }
     if (!resp.ok) throw new Error(data.error || 'Request failed');
     ans.textContent = (data.answer || '').trim() || "Hmm, I didn't catch that — try asking another way.";
   } catch (e) {
