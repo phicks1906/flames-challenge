@@ -6372,7 +6372,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v519 · ember-fixes";
+const APP_VERSION = "v520 · text-moderation";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -8517,6 +8517,7 @@ async function postComment() {
   btn.disabled = true;
   const parentId = state.replyTo?.id || null;
   try {
+    if (!await moderateText(body, 'comment')) { btn.disabled = false; return; }
     const insertObj = { target_type: t.type, target_id: t.id, user_id: state.profile.id, body };
     if (parentId) insertObj.parent_id = parentId;
     const { data, error } = await db.from('comments').insert(insertObj)
@@ -12379,6 +12380,7 @@ document.getElementById('createChallengeForm').addEventListener('submit', async 
   try {
     let mediaUrl = null;
     let posterUrl = null;
+    if (!await moderateText(`${title} ${rules || ''}`.trim(), 'challenge')) { btn.disabled = false; btn.textContent = orig; return; }
     if (ccState.mediaType !== 'text') {
       // Compress if user opted in
       let fileToUpload = ccState.file;
@@ -15857,6 +15859,29 @@ function renderTourStep() {
   }
 }
 
+// ---- Content moderation ----
+// Calls the moderate-content Edge Function before any user-generated text is saved.
+// Fails OPEN — if the API is down, content goes through. Never block legit users on outage.
+async function moderateText(text, contentType, contentId = null) {
+  if (!text || !text.trim()) return true;
+  try {
+    const resp = await fetch('https://sioalvawzayfphwzqctq.supabase.co/functions/v1/moderate-content', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: text.trim().slice(0, 1000), contentType, userId: state.profile?.id, contentId })
+    });
+    if (!resp.ok) return true; // fail open
+    const data = await resp.json().catch(() => ({}));
+    if (data.blocked) {
+      toast('Your content was flagged and could not be posted. Please review our community guidelines.');
+      return false;
+    }
+    return true;
+  } catch (e) {
+    return true; // fail open
+  }
+}
+
 async function askEmber() {
   const input = document.getElementById('tourAskInput');
   const ans   = document.getElementById('tourAskAnswer');
@@ -17040,6 +17065,7 @@ document.getElementById('createPostForm').addEventListener('submit', async e => 
     ]);
 
   try {
+    if (content && !await moderateText(content, 'post')) { btn.disabled = false; btn.textContent = orig; return; }
     let mediaUrl = null;
     let mediaType = null;
     let audioUrl = null;
@@ -18237,13 +18263,14 @@ async function adminDelete(table, id, label) {
   renderAdminContent();
 }
 
-function renderAdminFlags() {
+async function renderAdminFlags() {
   if (!isAdmin()) return;
   const panel = document.getElementById('adminFlags');
   if (!panel) return;
-  panel.innerHTML = `
+  const togglesHtml = `
+    <div style="font-size:15px;font-weight:700;margin:16px 0 8px">⚙️ Feature Toggles</div>
     <div style="padding:0 0 12px;color:var(--text-dim);font-size:13px">
-      Feature toggles. Server-synced — changes apply to all users within ~a refresh. Turning one off disables that feature app-wide.
+      Server-synced — changes apply to all users within ~a refresh. Turning one off disables that feature app-wide.
     </div>
   ` + FEATURE_FLAGS.map(f => {
     const on = getFlag(f.key);
@@ -18257,6 +18284,45 @@ function renderAdminFlags() {
       </div>
     `;
   }).join('');
+  panel.innerHTML = `<div id="modQueueSection" style="margin-bottom:8px"><div style="color:var(--text-dim);font-size:13px;padding:12px 0">Loading moderation queue…</div></div>` + togglesHtml;
+  const { data: queue } = await db.from('moderation_queue').select('*').eq('status','pending').order('created_at',{ascending:false}).limit(50);
+  const qs = document.getElementById('modQueueSection');
+  if (!qs) return;
+  if (!queue || queue.length === 0) {
+    qs.innerHTML = `<div style="font-size:15px;font-weight:700;margin-bottom:8px">🚩 Moderation Queue</div><div style="color:var(--text-dim);font-size:13px;padding:8px 0 16px">No items pending review ✅</div><hr style="border:none;border-top:1px solid var(--border);margin-bottom:16px">`;
+    return;
+  }
+  qs.innerHTML = `<div style="font-size:15px;font-weight:700;margin-bottom:10px">🚩 Moderation Queue (${queue.length})</div>` +
+    queue.map(item => `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <span style="font-size:11px;font-weight:700;color:var(--ember);text-transform:uppercase">${escapeHtml(item.content_type||'')}</span>
+          <span style="font-size:11px;color:var(--text-dim)">${timeAgo(item.created_at)}</span>
+        </div>
+        <div style="font-size:13px;color:var(--text);margin-bottom:4px">"${escapeHtml((item.text_snippet||'').slice(0,120))}"</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">Flags: ${(item.categories||[]).join(', ')}</div>
+        <div style="display:flex;gap:8px">
+          <button onclick="approveModerationItem('${item.id}')" style="flex:1;padding:7px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;cursor:pointer">✅ Approve</button>
+          <button onclick="removeModerationItem('${item.id}','${item.content_type}','${item.content_id||''}')" style="flex:1;padding:7px;background:rgba(255,45,31,0.12);border:1px solid rgba(255,45,31,0.3);border-radius:8px;color:#ff2d1f;font-size:12px;cursor:pointer">🗑️ Remove</button>
+        </div>
+      </div>
+    `).join('') + `<hr style="border:none;border-top:1px solid var(--border);margin:8px 0 16px">`;
+}
+
+async function approveModerationItem(queueId) {
+  await db.from('moderation_queue').update({ status:'approved', reviewed_by: state.profile.id, reviewed_at: new Date().toISOString() }).eq('id', queueId);
+  renderAdminFlags();
+}
+
+async function removeModerationItem(queueId, contentType, contentId) {
+  if (!confirm('Remove this content permanently?')) return;
+  if (contentId) {
+    const tableMap = { post:'posts', comment:'comments', challenge:'challenges', entry:'entries' };
+    const table = tableMap[contentType];
+    if (table) await db.from(table).delete().eq('id', contentId);
+  }
+  await db.from('moderation_queue').update({ status:'removed', reviewed_by: state.profile.id, reviewed_at: new Date().toISOString() }).eq('id', queueId);
+  renderAdminFlags();
 }
 
 // Delegated click handler for admin tabs and row actions
