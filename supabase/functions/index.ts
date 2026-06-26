@@ -1,4 +1,4 @@
-// supabase/functions/ask-ember/ask-ember/index.ts
+// supabase/functions/ask-ember/index.ts
 // Public Edge Function. Powers the "Ask Ember" box in the welcome tour.
 // Anthropic key stays server-side. Locked to FlamesChallenge help only.
 // Includes a simple in-memory per-IP rate limit.
