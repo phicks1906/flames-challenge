@@ -1,5 +1,4 @@
 // supabase/functions/ask-ember/index.ts
-
 // Public Edge Function. Powers the "Ask Ember" box in the welcome tour.
 // Anthropic key stays server-side. Locked to FlamesChallenge help only.
 // Includes a simple in-memory per-IP rate limit.
@@ -7,18 +6,14 @@
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 
 const CORS = {
-  "Access-Control-Allow-Origin": "*", // tighten to your domain later if you want
+  "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-// ---- Rate limit config (tune these) ----
-const PER_MINUTE = 6;     // max questions per IP per minute
-const PER_HOUR   = 40;    // max questions per IP per hour
-// -----------------------------------------
+const PER_MINUTE = 6;
+const PER_HOUR   = 40;
 
-// In-memory store. Resets when the function instance recycles (that's fine —
-// the spend cap is the hard backstop; this just stops casual hammering).
 const hits = new Map<string, number[]>();
 
 function clientIp(req: Request): string {
@@ -28,7 +23,7 @@ function clientIp(req: Request): string {
 
 function rateLimited(ip: string): boolean {
   const now = Date.now();
-  const arr = (hits.get(ip) || []).filter((t) => now - t < 3600_000); // keep last hour
+  const arr = (hits.get(ip) || []).filter((t) => now - t < 3600_000);
   const lastMin = arr.filter((t) => now - t < 60_000).length;
   if (lastMin >= PER_MINUTE || arr.length >= PER_HOUR) {
     hits.set(ip, arr);
@@ -36,7 +31,6 @@ function rateLimited(ip: string): boolean {
   }
   arr.push(now);
   hits.set(ip, arr);
-  // light cleanup so the map can't grow forever
   if (hits.size > 5000) {
     for (const [k, v] of hits) {
       if (v.every((t) => now - t > 3600_000)) hits.delete(k);
