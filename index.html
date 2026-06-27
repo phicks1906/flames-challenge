@@ -6383,7 +6383,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v525 · image-moderation";
+const APP_VERSION = "v526 · avatar-moderation";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -6975,8 +6975,13 @@ async function loadProfile() {
       if (!up.error) {
         const { data: pub } = db.storage.from('challenge-media').getPublicUrl(filename);
         const avatarUrl = pub.publicUrl;
-        await db.from("profiles").update({ avatar: avatarUrl }).eq("id", state.profile.id);
-        state.profile.avatar = avatarUrl;
+        // Moderate the signup avatar before applying it; skip if flagged.
+        if (await moderateImage(avatarUrl, 'avatar')) {
+          await db.from("profiles").update({ avatar: avatarUrl }).eq("id", state.profile.id);
+          state.profile.avatar = avatarUrl;
+        } else {
+          await removeUploadedMedia(filename);
+        }
       }
     }
   } catch(e) { console.warn("avatar apply", e); }
@@ -9668,6 +9673,13 @@ async function saveProfileEdits() {
       if (up.error) throw new Error('Upload failed: ' + up.error.message);
       const { data: pub } = db.storage.from('challenge-media').getPublicUrl(filename);
       newAvatar = pub.publicUrl;
+      // Moderate the new avatar before it's saved to the profile.
+      btn.textContent = 'Checking...';
+      if (!await moderateImage(newAvatar, 'avatar')) {
+        await removeUploadedMedia(filename);
+        btn.disabled = false; btn.textContent = orig;
+        return;
+      }
     }
 
     btn.textContent = 'Saving...';
