@@ -2201,6 +2201,34 @@ body.theme-light .hc-view-stats { border-color: var(--ember); color: var(--ember
   color: var(--text-muted);
   font-weight: 600;
 }
+/* Profile menu compact layout */
+.pm-featured {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 15px; margin-bottom: 14px;
+  background: linear-gradient(135deg, var(--ember), var(--flame));
+  color: #fff; font-weight: 700; font-size: 15px;
+  border: none; border-radius: 16px; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.1s, filter 0.15s;
+}
+.pm-featured:hover { filter: brightness(1.05); }
+.pm-featured:active { transform: scale(0.99); }
+.pm-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  margin-bottom: 14px;
+}
+.pm-tile {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 7px; padding: 16px 8px; min-height: 78px;
+  background: transparent; border: 1px solid var(--border); border-radius: 16px;
+  color: var(--text); font-size: 13px; font-weight: 600; line-height: 1.2;
+  text-align: center; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color 0.15s, transform 0.1s;
+}
+.pm-tile:hover { border-color: var(--ember); }
+.pm-tile:active { transform: scale(0.97); }
+.pm-ic { font-size: 23px; line-height: 1; }
 .heat-ring-wrap {
   display: flex;
   align-items: center;
@@ -5752,21 +5780,21 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 </div>
 
 <!-- PROFILE MODAL -->
-<div class="modal-backdrop" id="profileModal">
+<div class="modal-backdrop" id="profileModal" onclick="if(event.target===this)closeModals()">
   <div class="modal">
     <h2 id="profileName">You</h2>
     <p id="profileStats" style="margin-bottom:24px"></p>
-    <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="closeModals()">Keep voting</button>
-    <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openEmber()">🔥 Ask Ember</button>
-    <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openEditProfile()">✏️ Edit Profile</button>
-    <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openFollowingSheet()">👥 Following & Followers</button>
-    <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openFindPeople()">🔍 Find People</button>
-    <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openInterestEditor()">🎯 My Interests</button>
-    <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="document.getElementById('profileModal').classList.remove('open'); openDmSettings()">💬 Message Settings</button>
-    <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="document.getElementById('profileModal').classList.remove('open'); startTour()">👋 Replay Tour</button>
-    <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="document.getElementById('profileModal').classList.remove('open'); openGuidelines()">📜 Community Guidelines</button>
-    <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" id="tickerToggleBtn" onclick="toggleTickerSetting()">📺 Ticker: On</button>
-    <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openGroupsModal()">👥 My Groups</button>
+    <button class="pm-featured" onclick="openEmber()"><span style="font-size:19px">🔥</span> Ask Ember</button>
+    <div class="pm-grid">
+      <button class="pm-tile" onclick="openEditProfile()"><span class="pm-ic">✏️</span>Edit Profile</button>
+      <button class="pm-tile" onclick="openFollowingSheet()"><span class="pm-ic">👥</span>Following</button>
+      <button class="pm-tile" onclick="openFindPeople()"><span class="pm-ic">🔍</span>Find People</button>
+      <button class="pm-tile" onclick="openInterestEditor()"><span class="pm-ic">🎯</span>Interests</button>
+      <button class="pm-tile" onclick="document.getElementById('profileModal').classList.remove('open'); openGroupsModal()"><span class="pm-ic">👥</span>My Groups</button>
+      <button class="pm-tile" onclick="document.getElementById('profileModal').classList.remove('open'); openDmSettings()"><span class="pm-ic">💬</span>Messages</button>
+      <button class="pm-tile" onclick="document.getElementById('profileModal').classList.remove('open'); openGuidelines()"><span class="pm-ic">📜</span>Guidelines</button>
+      <button class="pm-tile" onclick="document.getElementById('profileModal').classList.remove('open'); startTour()"><span class="pm-ic">👋</span>Replay Tour</button>
+    </div>
     <div class="theme-toggle-row" id="themeToggleRow" onclick="toggleTheme()" role="button" tabindex="0">
       <div class="theme-toggle-label">
         <span class="theme-toggle-icon" id="themeIcon">🌙</span>
@@ -5774,6 +5802,14 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       </div>
       <div class="theme-toggle-state" id="themeState">Dark</div>
     </div>
+    <div class="theme-toggle-row" id="tickerToggleBtn" onclick="toggleTickerSetting()" role="button" tabindex="0">
+      <div class="theme-toggle-label">
+        <span class="theme-toggle-icon">📺</span>
+        <span>Ticker</span>
+      </div>
+      <div class="theme-toggle-state" id="tickerState">On</div>
+    </div>
+    <button class="btn btn-ghost" style="width:100%;margin-top:14px;margin-bottom:10px" onclick="closeModals()">Keep voting</button>
     <button class="btn btn-ghost" style="width:100%;color:#ff6a6a;border-color:#3a1f1a" onclick="signOut()">Sign out</button>
     <div id="appVersion" style="text-align:center;margin-top:14px;font-size:11px;color:var(--text-muted);letter-spacing:0.05em"></div>
   </div>
@@ -6439,7 +6475,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v530 · ember-anytime";
+const APP_VERSION = "v531 · profile-menu-grid";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -9666,8 +9702,8 @@ function buildHeatCheckTicks(g) {
 /* ---------- PROFILE MODAL ---------- */
 function openProfile() {
   if (!state.profile) return;
-  const tickerBtn = document.getElementById('tickerToggleBtn');
-  if (tickerBtn) tickerBtn.textContent = tickerDismissed() ? '📺 Ticker: Off' : '📺 Ticker: On';
+  const tickerState = document.getElementById('tickerState');
+  if (tickerState) tickerState.textContent = tickerDismissed() ? 'Off' : 'On';
   const avatarPrefix = isAvatarUrl(state.profile.avatar) ? '🔥' : (state.profile.avatar || '🔥');
   document.getElementById('profileName').textContent = avatarPrefix + ' ' + state.profile.name;
   const voteCount = Object.keys(state.myVotes).length;
@@ -10529,13 +10565,13 @@ function showTickerNudge() {
 function toggleTickerSetting() {
   if (tickerDismissed()) {
     enableTicker();
-    const btn = document.getElementById('tickerToggleBtn');
-    if (btn) btn.textContent = '📺 Ticker: On';
+    const st = document.getElementById('tickerState');
+    if (st) st.textContent = 'On';
     toast('Ticker enabled');
   } else {
     dismissTicker();
-    const btn = document.getElementById('tickerToggleBtn');
-    if (btn) btn.textContent = '📺 Ticker: Off';
+    const st = document.getElementById('tickerState');
+    if (st) st.textContent = 'Off';
     toast('Ticker hidden');
   }
 }
