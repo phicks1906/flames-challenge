@@ -6383,7 +6383,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v524 · champ-decline-cron";
+const APP_VERSION = "v525 · image-moderation";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -13779,6 +13779,13 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
   }
 
   try {
+    // Moderate any text the user wrote (caption or text-entry body) before upload.
+    const seModText = (ch.media_type === 'text' ? textEntry : (caption || '')).trim();
+    if (seModText && !await moderateText(seModText, 'entry')) {
+      btn.disabled = false; btn.textContent = orig;
+      if (_slowTipTimer) clearTimeout(_slowTipTimer);
+      return;
+    }
     let mediaUrl = null;
     let posterUrl = null;
     if (ch.media_type !== 'text' && seState.file) {
@@ -13830,6 +13837,16 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
         }
         mediaUrl = seMediaResult.publicUrl;
         // No poster needed: photos ARE the image; Bunny generates video thumbnails
+        // Moderate the photo before the entry is created.
+        if (ch.media_type === 'photo') {
+          btn.textContent = 'Checking...';
+          if (!await moderateImage(mediaUrl, 'entry')) {
+            await removeUploadedMedia(filename);
+            if (_slowTipTimer) { clearTimeout(_slowTipTimer); _slowTipTimer = null; }
+            btn.disabled = false; btn.textContent = orig;
+            return;
+          }
+        }
       }
     }
     // Upload done — stop and hide the slow-upload tip before DB writes/refreshes.
@@ -16034,6 +16051,33 @@ async function moderateText(text, contentType, contentId = null) {
   }
 }
 
+// Moderate an already-uploaded image by its public URL. Returns false if blocked.
+async function moderateImage(imageUrl, contentType, contentId = null) {
+  if (!imageUrl) return true;
+  try {
+    const resp = await fetch('https://sioalvawzayfphwzqctq.supabase.co/functions/v1/moderate-content', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageUrl, contentType, userId: state.profile?.id, contentId })
+    });
+    if (!resp.ok) return true; // fail open
+    const data = await resp.json().catch(() => ({}));
+    if (data.blocked) {
+      toast('Your image was flagged and could not be posted. Please review our community guidelines.');
+      return false;
+    }
+    return true;
+  } catch (e) {
+    return true; // fail open
+  }
+}
+
+// Remove a just-uploaded file from challenge-media (used when moderation rejects it).
+async function removeUploadedMedia(path) {
+  if (!path) return;
+  try { await db.storage.from('challenge-media').remove([path]); } catch (e) { /* best effort */ }
+}
+
 async function askEmber() {
   const input = document.getElementById('tourAskInput');
   const ans   = document.getElementById('tourAskAnswer');
@@ -17231,6 +17275,15 @@ document.getElementById('createPostForm').addEventListener('submit', async e => 
       const { data: pub } = db.storage.from('challenge-media').getPublicUrl(filename);
       mediaUrl = pub.publicUrl;
       mediaType = cpState.fileType;
+      // Moderate photos before the post is created. Video isn't scanned yet.
+      if (mediaType === 'photo') {
+        btn.textContent = 'Checking...';
+        if (!await moderateImage(mediaUrl, 'post')) {
+          await removeUploadedMedia(filename);
+          btn.disabled = false; btn.textContent = orig;
+          return;
+        }
+      }
     }
     if (cpState.audioFile) {
       btn.textContent = 'Uploading... 0%';
