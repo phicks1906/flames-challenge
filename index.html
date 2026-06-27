@@ -5757,6 +5757,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     <h2 id="profileName">You</h2>
     <p id="profileStats" style="margin-bottom:24px"></p>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="closeModals()">Keep voting</button>
+    <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openEmber()">🔥 Ask Ember</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openEditProfile()">✏️ Edit Profile</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openFollowingSheet()">👥 Following & Followers</button>
     <button class="btn btn-ghost" style="width:100%;margin-bottom:10px" onclick="openFindPeople()">🔍 Find People</button>
@@ -5809,6 +5810,20 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     <p style="text-align:left;font-size:14px;margin-bottom:18px">See something that crosses the line? Tap the <strong>⋯</strong> on any post and hit <strong>Report</strong> — we review fast. Breaking these rules can get your content removed and your account suspended.</p>
 
     <button class="btn btn-primary" style="width:100%" onclick="acknowledgeGuidelines()">✅ I Agree</button>
+  </div>
+</div>
+
+<!-- ASK EMBER MODAL -->
+<div class="modal-backdrop" id="emberModal" onclick="if(event.target===this)closeEmber()">
+  <div class="modal" style="max-width:440px">
+    <h2 style="display:flex;align-items:center;gap:8px">🔥 Ask Ember</h2>
+    <p style="margin-bottom:16px">Your guide to FlamesChallenge. Ask me anything — how challenges work, voting, ranks, championships…</p>
+    <div id="emberAnswer" style="display:none;font-size:14px;color:var(--text-dim);line-height:1.55;background:var(--surface-2,rgba(255,255,255,0.04));border-radius:12px;padding:12px 14px;margin-bottom:12px;max-height:240px;overflow-y:auto;"></div>
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <input id="emberInput" type="text" maxlength="200" placeholder="How do championships work?" onkeydown="if(event.key==='Enter'){event.preventDefault();askEmberModal();}" style="flex:1;min-width:0;background:var(--surface-2,rgba(255,255,255,0.06));border:1px solid var(--border,rgba(255,255,255,0.15));border-radius:12px;padding:11px 13px;font-size:14px;color:var(--text);outline:none;" />
+      <button id="emberBtn" onclick="askEmberModal()" class="btn btn-primary" style="padding:11px 18px;white-space:nowrap">Ask</button>
+    </div>
+    <button class="btn btn-ghost" style="width:100%" onclick="closeEmber()">Close</button>
   </div>
 </div>
 
@@ -6424,7 +6439,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v529 · guidelines-gate";
+const APP_VERSION = "v530 · ember-anytime";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -16189,10 +16204,7 @@ async function removeUploadedMedia(path) {
   try { await db.storage.from('challenge-media').remove([path]); } catch (e) { /* best effort */ }
 }
 
-async function askEmber() {
-  const input = document.getElementById('tourAskInput');
-  const ans   = document.getElementById('tourAskAnswer');
-  const btn   = document.getElementById('tourAskBtn');
+async function runEmber(input, ans, btn) {
   if (!input || !ans || !btn) return;
   const q = (input.value || '').trim();
   if (!q) return;
@@ -16218,6 +16230,34 @@ async function askEmber() {
     btn.disabled = false;
     input.value = '';
   }
+}
+
+// Tour bubble version
+async function askEmber() {
+  return runEmber(
+    document.getElementById('tourAskInput'),
+    document.getElementById('tourAskAnswer'),
+    document.getElementById('tourAskBtn')
+  );
+}
+
+// Standalone Ember chat (reachable any time from the profile menu)
+async function askEmberModal() {
+  return runEmber(
+    document.getElementById('emberInput'),
+    document.getElementById('emberAnswer'),
+    document.getElementById('emberBtn')
+  );
+}
+function openEmber() {
+  document.getElementById('profileModal')?.classList.remove('open');
+  const ans = document.getElementById('emberAnswer');
+  if (ans) { ans.style.display = 'none'; ans.textContent = ''; }
+  document.getElementById('emberModal').classList.add('open');
+  setTimeout(() => document.getElementById('emberInput')?.focus(), 100);
+}
+function closeEmber() {
+  document.getElementById('emberModal').classList.remove('open');
 }
 
 function tourNext() {
