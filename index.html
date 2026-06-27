@@ -6383,7 +6383,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v526 · avatar-moderation";
+const APP_VERSION = "v527 · ban-enforcement";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -6884,6 +6884,19 @@ async function signOut() {
   toast("Signed out");
 }
 
+// If the loaded profile is banned, force them out and show a notice.
+// Returns true if the user was banned (caller should stop hydrating).
+async function enforceBanIfBanned() {
+  if (!state.profile || !state.profile.banned_at) return false;
+  state.session = null;
+  state.profile = null;
+  _appLoadInFlight = false;
+  try { await db.auth.signOut(); } catch (e) { /* ignore */ }
+  showAuth();
+  alert("Your account has been suspended for violating the FlamesChallenge community guidelines.\n\nIf you believe this is a mistake, contact support.");
+  return true;
+}
+
 /* ---------- AUTH STATE LISTENER ---------- */
 // IMPORTANT: this callback must NOT be async and must NOT await Supabase calls
 // directly — doing so deadlocks the auth client (login hangs). We defer any DB
@@ -6895,6 +6908,7 @@ function hydrateApp() {
   (async () => {
     try {
       await loadProfile();
+      if (!state.profile) return; // banned or signed out — loadProfile handled redirect
       showApp();
       showAdminNav();
       await loadAppData();
@@ -6934,6 +6948,8 @@ async function loadProfile() {
     }).select().single();
     state.profile = newProf;
   }
+  // Banned users are signed out before any app data loads.
+  if (await enforceBanIfBanned()) return;
   // Apply pending interests from signup if this is a fresh login
   try {
     const pending = localStorage.getItem("fc_pending_interests");
