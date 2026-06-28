@@ -2522,6 +2522,18 @@ body.theme-light .skeleton {
   animation: flamePop 0.35s ease;
 }
 
+/* Floating flames on like — Zoom/FB-live reaction style. Pure client-side, zero egress. */
+.flame-float {
+  position: fixed;
+  z-index: 99999;
+  pointer-events: none;
+  font-size: 22px;
+  line-height: 1;
+  will-change: transform, opacity;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 /* ============ FEED TABS ============ */
 .feed-tabs {
   display: flex;
@@ -2727,7 +2739,10 @@ body.theme-light .skeleton {
   font-size: 44px;
   margin: 0 auto 14px;
   box-shadow: 0 10px 30px -8px rgba(255, 80, 30, 0.5);
+  position: relative;
 }
+.ps-avatar.has-wreath { margin-top: 20px; overflow: visible; }
+.ps-avatar .hof-wreath-ring { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; }
 .ps-name {
   font-family: var(--font-display);
   font-size: clamp(28px, 8vw, 38px);
@@ -6475,7 +6490,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v534 · lb-record-stacked";
+const APP_VERSION = "v538 · floating-likes";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -9508,7 +9523,8 @@ function renderHeatCheck() {
   const honor = getHofBadge(myId, 44);
   const tiEl = document.getElementById('statTierIco');
   const tsEl = document.getElementById('statTierSub');
-  if (tiEl) tiEl.innerHTML = honor || '';
+  const _isFounder = (typeof FOUNDERS !== 'undefined' && FOUNDERS.includes(myId));
+  if (tiEl) tiEl.innerHTML = _isFounder ? '' : (honor || '');
   if (tsEl) {
     tsEl.style.display = '';
     if (honor) {
@@ -11622,6 +11638,7 @@ function _renderEvEntry() {
     const newLiked = state.myEntryLikes?.has(entry.id);
     document.getElementById('evLikeCount').textContent = state.entryLikeCounts[entry.id] || 0;
     likeBtn.className = `flame-btn${newLiked ? ' liked' : ''}`;
+    if (newLiked) spawnFlameFloat(likeBtn);
   };
 
   // Follow button
@@ -12094,6 +12111,32 @@ const HOF_BADGES = {
   goat:     _HOF_BASE + 'C5155086-C2A9-4326-A4A0-EB01C7A51CCF.png',
 };
 
+// ── Placeholder HOF medallions (inline SVG) ──────────────────────────────────
+// Temporary engraved-coin set until a purchased medallion pack lands. One shared
+// shape across all tiers (cohesive set), tier identity via metal tint + glyph.
+// Inline SVG = scales to any size, themeable, and loads zero images (saves egress).
+let _hofUid = 0;
+const _HOF_STYLE = {
+  founder:  { g1:'#fff0c2', g2:'#e0962a', rim:'#ffe49a', glyph:'crown', ink:'#7a4410' },
+  goat:     { g1:'#fff1b2', g2:'#f2b200', rim:'#fff6d2', glyph:'star',  ink:'#8a5a00' },
+  immortal: { g1:'#ece1ff', g2:'#9162f0', rim:'#e8ddff', glyph:'star',  ink:'#43258f' },
+  icon:     { g1:'#dcf3ff', g2:'#33a6df', rim:'#d8f1ff', glyph:'star',  ink:'#0d5a86' },
+  legend:   { g1:'#ffdcae', g2:'#d67f27', rim:'#ffe6c2', glyph:'star',  ink:'#8a4a12' },
+};
+const _HOF_GLYPHS = {
+  star:  'M12 7.1 l1.42 2.88 3.18.46 -2.3 2.24 .54 3.17 -2.84 -1.5 -2.84 1.5 .54 -3.17 -2.3 -2.24 3.18 -.46 z',
+  crown: 'M6 16.2 L7 9.9 L9.6 12.7 L12 8.5 L14.4 12.7 L17 9.9 L18 16.2 Z',
+};
+function hofBadgeSVG(tier, size = 24, title = '') {
+  const s = _HOF_STYLE[tier];
+  if (!s) return '';
+  const id = 'hofg' + (_hofUid++);
+  return `<svg class="hof-badge-img" width="${size}" height="${size}" viewBox="0 0 24 24" role="img" aria-label="${title}"><title>${title}</title>`
+    + `<defs><radialGradient id="${id}" cx="38%" cy="30%" r="78%"><stop offset="0%" stop-color="${s.g1}"/><stop offset="100%" stop-color="${s.g2}"/></radialGradient></defs>`
+    + `<circle cx="12" cy="12" r="10.4" fill="url(#${id})" stroke="${s.rim}" stroke-width="1.3"/>`
+    + `<path d="${_HOF_GLYPHS[s.glyph]}" fill="${s.ink}" stroke="rgba(255,255,255,.4)" stroke-width="0.4" stroke-linejoin="round"/></svg>`;
+}
+
 function getTierInfo(userId) {
   if (typeof FOUNDERS !== 'undefined' && FOUNDERS.includes(userId)) {
     return { name: 'Founder', sub: 'Founding Member' };
@@ -12116,19 +12159,108 @@ function hofBadgeFallback(el, size) {
 
 function getHofBadge(userId, size = 24) {
   if (!userId) return '';
-  let src = '', title = '';
+  let tier = '', title = '';
   if (FOUNDERS.includes(userId)) {
-    src = HOF_BADGES.founder; title = 'Founder';
+    tier = 'founder'; title = 'Founder';
   } else {
     const wins = (state.hofData || []).filter(r => r.userId === userId).length;
-    if (wins >= 20)      { src = HOF_BADGES.goat;     title = 'G.O.A.T.'; }
-    else if (wins >= 15) { src = HOF_BADGES.immortal;  title = 'Immortal'; }
-    else if (wins >= 10) { src = HOF_BADGES.icon;      title = 'Icon'; }
-    else if (wins >= 5)  { src = HOF_BADGES.legend;    title = 'Legend'; }
+    if (wins >= 20)      { tier = 'goat';     title = 'G.O.A.T.'; }
+    else if (wins >= 15) { tier = 'immortal'; title = 'Immortal'; }
+    else if (wins >= 10) { tier = 'icon';     title = 'Icon'; }
+    else if (wins >= 5)  { tier = 'legend';   title = 'Legend'; }
   }
-  if (!src) return '';
-  return `<img src="${src}?v=2" class="hof-badge-img" style="width:${size}px;height:${size}px" title="${title}" alt="${title}" onerror="hofBadgeFallback(this,${size})">`;
+  if (!tier) return '';
+  return hofBadgeSVG(tier, size, title);
 }
+
+// ===== HOF CREST + WREATH RING (generated SVG — no image assets, scales, low egress) =====
+const HOF_METAL = { gold: { mid:"#f0c44e", deep:"#b5831c", leaf:"#dcab3c", leafEdge:"#a9781d", ring:"#cda23f", num1:"#f6d779", num2:"#bd861d" } };
+function _hofLeaf(x,y,rot,L,W,fill,edge){
+  const d=`M ${(L*0.5).toFixed(2)} 0 C ${(L*0.05).toFixed(2)} ${(-W*0.52).toFixed(2)} ${(-L*0.5).toFixed(2)} ${(-W*0.34).toFixed(2)} ${(-L*0.5).toFixed(2)} 0 C ${(-L*0.5).toFixed(2)} ${(W*0.34).toFixed(2)} ${(L*0.05).toFixed(2)} ${(W*0.52).toFixed(2)} ${(L*0.5).toFixed(2)} 0 Z`;
+  return `<path d="${d}" fill="${fill}" stroke="${edge}" stroke-width="0.4" transform="translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${rot.toFixed(1)})"/>`;
+}
+function _hofBranch(cx,cy,R,m,a0,a1,N,lean){
+  let pts=[], lv="";
+  for(let i=0;i<=N;i++){
+    const t=i/N, a=a0+(a1-a0)*t, rad=a*Math.PI/180, size=0.82+0.30*Math.sin(Math.PI*t);
+    pts.push([cx+R*Math.cos(rad), cy+R*Math.sin(rad)]);
+    if(i===0) continue;
+    const L=20*size, W=9*size, bx=cx+(R+L*0.22)*Math.cos(rad), by=cy+(R+L*0.22)*Math.sin(rad);
+    lv+=_hofLeaf(bx,by,a-lean,L,W,m.leaf,m.leafEdge);
+  }
+  const stem="M "+pts.map(p=>`${p[0].toFixed(2)} ${p[1].toFixed(2)}`).join(" L ");
+  return `<path d="${stem}" fill="none" stroke="${m.deep}" stroke-width="1.8" stroke-linecap="round"/>`+lv;
+}
+function _hofCrown(cx,cy,w,fill,edge){
+  const h=w*0.6, d=`M${cx-w/2} ${cy+h/2} L${cx-w/2+1.5} ${cy-h/2} L${cx-w/4} ${cy+1} L${cx} ${cy-h/2-2} L${cx+w/4} ${cy+1} L${cx+w/2-1.5} ${cy-h/2} L${cx+w/2} ${cy+h/2} Z`;
+  return `<path d="${d}" fill="${fill}" stroke="${edge}" stroke-width=".6" stroke-linejoin="round"/>`;
+}
+function _hofDiamond(cx,cy,s,fill){ return `<path d="M${cx} ${cy-s} L${cx+s} ${cy} L${cx} ${cy+s} L${cx-s} ${cy} Z" fill="${fill}"/>`; }
+function _hofStar(cx,cy,r,fill){
+  let p=""; for(let i=0;i<5;i++){ const o=(i*72-90)*Math.PI/180, inn=(i*72-90+36)*Math.PI/180;
+    p+=(i?"L":"M")+`${(cx+r*Math.cos(o)).toFixed(2)} ${(cy+r*Math.sin(o)).toFixed(2)} L${(cx+r*0.42*Math.cos(inn)).toFixed(2)} ${(cy+r*0.42*Math.sin(inn)).toFixed(2)} `; }
+  return `<path d="${p}Z" fill="${fill}"/>`;
+}
+function _hofCurvedText(cx,cy,r,text,fill,fs,deg,top){
+  const n=text.length; let out="";
+  for(let i=0;i<n;i++){
+    const off=(i-(n-1)/2)*deg, a=top?(270+off):(90-off), rad=a*Math.PI/180;
+    const x=cx+r*Math.cos(rad), y=cy+r*Math.sin(rad), rot=top?a+90:a-90;
+    out+=`<text x="${x.toFixed(2)}" y="${y.toFixed(2)}" font-family="Arial,Helvetica,sans-serif" font-weight="700" font-size="${fs}" fill="${fill}" text-anchor="middle" dominant-baseline="central" transform="rotate(${rot.toFixed(1)} ${x.toFixed(2)} ${y.toFixed(2)})">${text[i]}</text>`;
+  }
+  return out;
+}
+function _hofCrossed(cx,cy,m){
+  return `<g stroke="${m.deep}" stroke-width="2.2" stroke-linecap="round" fill="none"><path d="M${cx-6} ${cy-2} L${cx+9} ${cy+12}"/><path d="M${cx+6} ${cy-2} L${cx-9} ${cy+12}"/></g>`;
+}
+// Tier from championship count (or founder). Returns {tier,label,center,isFounder} or null.
+function hofTierOf(userId){
+  if(!userId) return null;
+  if(typeof FOUNDERS!=='undefined' && FOUNDERS.includes(userId)) return {tier:'founder',label:'FOUNDER',center:'',isFounder:true};
+  const w=(state.hofData||[]).filter(r=>r.userId===userId).length;
+  if(w>=20) return {tier:'goat',label:'G.O.A.T.',center:'20'};
+  if(w>=15) return {tier:'immortal',label:'IMMORTAL',center:'15'};
+  if(w>=10) return {tier:'icon',label:'ICON',center:'10'};
+  if(w>=5)  return {tier:'legend',label:'LEGEND',center:'5'};
+  return null;
+}
+// Big crest medallion. opts: {center, tier(label), top, bottom, isFounder, size}
+function hofCrest(opts){
+  const m=HOF_METAL.gold, cx=100, cy=100, S=opts.size||120;
+  const top=opts.top||"HALL OF FAME", bottom=opts.bottom||"FLAMESCHALLENGE", tier=opts.tier||"", center=opts.center||"";
+  let o=`<svg class="hof-crest" xmlns="http://www.w3.org/2000/svg" width="${S}" height="${S}" viewBox="0 0 200 200">`;
+  o+=`<defs><linearGradient id="hng" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${m.num1}"/><stop offset="1" stop-color="${m.num2}"/></linearGradient></defs>`;
+  o+=`<circle cx="${cx}" cy="${cy}" r="95" fill="#171a1f"/>`;
+  o+=`<circle cx="${cx}" cy="${cy}" r="95" fill="none" stroke="${m.ring}" stroke-width="2.5"/>`;
+  o+=`<circle cx="${cx}" cy="${cy}" r="92" fill="none" stroke="${m.deep}" stroke-width="0.7" opacity=".5"/>`;
+  o+=`<circle cx="${cx}" cy="${cy}" r="73" fill="none" stroke="${m.ring}" stroke-width="1.5"/>`;
+  o+=_hofCurvedText(cx,cy,83.5,top,m.mid,11.5,6.0,true);
+  o+=_hofCurvedText(cx,cy,83.5,bottom,m.mid,10.5,5.4,false);
+  o+=_hofDiamond(cx-84,cy,3.4,m.mid)+_hofDiamond(cx+84,cy,3.4,m.mid);
+  o+=`<g>${_hofBranch(cx,cy,51,m,92,-50,11,18)}</g>`;
+  o+=`<g transform="translate(${cx*2},0) scale(-1,1)">${_hofBranch(cx,cy,51,m,92,-50,11,18)}</g>`;
+  o+=_hofCrown(cx,57,13,m.mid,m.leafEdge);
+  if(opts.isFounder){ o+=_hofStar(cx,99,17,"url(#hng)"); }
+  else { o+=`<text x="${cx}" y="107" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-weight="800" font-size="39" fill="url(#hng)" stroke="${m.deep}" stroke-width="0.5">${center}</text>`; }
+  o+=`<text x="${cx}" y="125" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-weight="700" font-size="9" letter-spacing="1.5" fill="${m.mid}">${tier}</text>`;
+  return o+`</svg>`;
+}
+// Wreath ring (transparent center) to encircle an avatar. opts: {count, size}
+function hofWreathRing(opts){
+  const m=HOF_METAL.gold, cx=110, cy=110, S=opts.size||150;
+  let o=`<svg class="hof-wreath-ring" xmlns="http://www.w3.org/2000/svg" width="${S}" height="${S}" viewBox="0 0 220 220">`;
+  o+=`<g>${_hofBranch(cx,cy,76,m,86,-56,14,18)}</g>`;
+  o+=`<g transform="translate(${cx*2},0) scale(-1,1)">${_hofBranch(cx,cy,76,m,86,-56,14,18)}</g>`;
+  o+=_hofCrossed(cx,190,m);
+  o+=_hofCrown(cx,26,20,m.mid,m.leafEdge);
+  if(opts.count!==undefined && opts.count!==null && opts.count!==''){
+    o+=`<circle cx="${cx}" cy="${cy+66}" r="15" fill="${m.deep}" stroke="#13161b" stroke-width="2.5"/>`;
+    o+=`<circle cx="${cx}" cy="${cy+66}" r="15" fill="none" stroke="${m.mid}" stroke-width="1"/>`;
+    o+=`<text x="${cx}" y="${cy+71}" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-weight="800" font-size="16" fill="#fff6e0">${opts.count}</text>`;
+  }
+  return o+`</svg>`;
+}
+
 
 // ── RANK CHIPS (regular challenge wins) ──────────────────────────────────────
 // Spark/Flame/Blaze/Inferno. A Hall of Fame medallion supersedes the chip, so a
@@ -14597,6 +14729,37 @@ async function loadPostLikes() {
   state.myPostLikes = mine;
 }
 
+// Floating flames on like — rise + drift + fade, like Zoom/FB-live reactions. Pure client-side.
+function spawnFlameFloat(anchorEl) {
+  try {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (!document.body) return;
+    const rect = (anchorEl && anchorEl.getBoundingClientRect) ? anchorEl.getBoundingClientRect() : null;
+    const ox = rect ? rect.left + rect.width / 2 : window.innerWidth / 2;
+    const oy = rect ? rect.top + rect.height / 2 : window.innerHeight - 80;
+    const N = 6;
+    for (let i = 0; i < N; i++) {
+      const el = document.createElement('div');
+      el.className = 'flame-float';
+      el.textContent = '🔥';
+      el.style.left = ox + 'px';
+      el.style.top = oy + 'px';
+      document.body.appendChild(el);
+      const dx = (Math.random() * 2 - 1) * 46;
+      const rise = 120 + Math.random() * 90;
+      const rot = (Math.random() * 2 - 1) * 40;
+      const sc = 0.7 + Math.random() * 0.85;
+      const dur = 1000 + Math.random() * 750;
+      const anim = el.animate([
+        { transform: 'translate(-50%,-50%) translateY(0) scale(0.4) rotate(0deg)', opacity: 0 },
+        { transform: `translate(-50%,-50%) translate(${dx * 0.4}px,${-rise * 0.28}px) scale(${sc}) rotate(${rot * 0.3}deg)`, opacity: 1, offset: 0.22 },
+        { transform: `translate(-50%,-50%) translate(${dx}px,${-rise}px) scale(${sc * 0.85}) rotate(${rot}deg)`, opacity: 0 }
+      ], { duration: dur, delay: i * 55, easing: 'cubic-bezier(.34,.1,.2,1)', fill: 'forwards' });
+      anim.onfinish = () => { try { el.remove(); } catch (_) {} };
+    }
+  } catch (_) {}
+}
+
 async function togglePostLike(postId, btnEl) {
   if (!state.profile) return;
   const wasLiked = state.myPostLikes.has(postId);
@@ -14615,6 +14778,7 @@ async function togglePostLike(postId, btnEl) {
     if (!wasLiked) {
       btnEl.classList.add('just-liked');
       setTimeout(() => btnEl.classList.remove('just-liked'), 400);
+      spawnFlameFloat(btnEl);
     }
     const cnt = btnEl.querySelector('.flame-count');
     if (cnt) cnt.textContent = state.postLikeCounts[postId];
@@ -14669,6 +14833,7 @@ async function toggleEntryLike(entryId, btnEl) {
     if (!wasLiked) {
       btnEl.classList.add('just-liked');
       setTimeout(() => btnEl.classList.remove('just-liked'), 400);
+      spawnFlameFloat(btnEl);
     }
     const cnt = btnEl.querySelector('.flame-count');
     if (cnt) cnt.textContent = state.entryLikeCounts[entryId];
@@ -16501,17 +16666,17 @@ function getPrimaryBadge(userId) {
 function openBadgeLegend() {
   const list = document.getElementById('badgeLegendList');
   if (!list) return;
-  const medal = k => `<img src="${HOF_BADGES[k]}?v=2" class="hof-badge-img" style="width:40px;height:40px" onerror="hofBadgeFallback(this,40)">`;
+  const medal = k => hofBadgeSVG(k, 40, k);
   const rows = [
     { badge: '<span class="rank-chip rank-spark"><span class="rank-pip">✦</span>Spark</span>',     name: 'Spark',   desc: 'The default. Everyone starts here.' },
     { badge: '<span class="rank-chip rank-flame"><span class="rank-pip">◆</span>Flame</span>',     name: 'Flame',   desc: '1–4 challenge wins. You\'re on the board.' },
     { badge: '<span class="rank-chip rank-blaze"><span class="rank-pip">▲</span>Blaze</span>',     name: 'Blaze',   desc: '5–9 challenge wins. Heating up.' },
     { badge: '<span class="rank-chip rank-inferno"><span class="rank-pip">★</span>Inferno</span>', name: 'Inferno', desc: '10+ challenge wins. The top rank.' },
-    { badge: `<img src="${HOF_BADGES.legend}?v=2" class="hof-badge-img" style="width:42px;height:42px" alt="Legend" onerror="hofBadgeFallback(this,42)">`,     name: 'Legend',     desc: '5 championships. Hall of Fame entry — your legacy begins.' },
-    { badge: `<img src="${HOF_BADGES.icon}?v=2" class="hof-badge-img" style="width:42px;height:42px" alt="Icon" onerror="hofBadgeFallback(this,42)">`,         name: 'Icon',       desc: '10 championships. A cultural force on this platform.' },
-    { badge: `<img src="${HOF_BADGES.immortal}?v=2" class="hof-badge-img" style="width:42px;height:42px" alt="Immortal" onerror="hofBadgeFallback(this,42)">`, name: 'Immortal',   desc: '15 championships. Beyond human.' },
-    { badge: `<img src="${HOF_BADGES.goat}?v=2" class="hof-badge-img" style="width:42px;height:42px" alt="G.O.A.T." onerror="hofBadgeFallback(this,42)">`,     name: 'G.O.A.T.',   desc: '20 championships. The apex of achievement.' },
-    { badge: `<img src="${HOF_BADGES.founder}?v=2" class="hof-badge-img" style="width:42px;height:42px" alt="Founder" onerror="hofBadgeFallback(this,42)">`,   name: 'Founder',    desc: 'Built this platform before anyone else was here. Permanent.' },
+    { badge: hofBadgeSVG('legend', 42, 'Legend'),     name: 'Legend',     desc: '5 championships. Hall of Fame entry — your legacy begins.' },
+    { badge: hofBadgeSVG('icon', 42, 'Icon'),         name: 'Icon',       desc: '10 championships. A cultural force on this platform.' },
+    { badge: hofBadgeSVG('immortal', 42, 'Immortal'), name: 'Immortal',   desc: '15 championships. Beyond human.' },
+    { badge: hofBadgeSVG('goat', 42, 'G.O.A.T.'),     name: 'G.O.A.T.',   desc: '20 championships. The apex of achievement.' },
+    { badge: hofBadgeSVG('founder', 42, 'Founder'),   name: 'Founder',    desc: 'Built this platform before anyone else was here. Permanent.' },
   ];
   list.innerHTML = rows.map(r => `
     <div style="display:flex;align-items:center;gap:12px;padding:8px 4px;border-bottom:1px solid var(--border);">
@@ -17091,6 +17256,7 @@ async function fvLike(btn) {
   }
   btn.classList.toggle('liked', !wasLiked);
   btn.querySelector('span:last-child').textContent = state.entryLikeCounts[entryId];
+  if (!wasLiked) spawnFlameFloat(btn);
 }
 
 function openFeedViewerChallenge() {
