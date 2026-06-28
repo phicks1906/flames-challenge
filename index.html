@@ -2760,6 +2760,13 @@ body.theme-light .skeleton {
 .hof-laurel-photo { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; overflow: hidden; display: grid; place-items: center; background: var(--overlay-2); }
 .hof-laurel-photo img, .hof-laurel-photo .avatar-img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
 .lb-avatar-laurel { position: relative; display: grid; place-items: center; flex-shrink: 0; margin: -10px 0; }
+/* When any avatar slot holds a status laurel, let it overflow its circle-clip */
+.post-card-avatar:has(.hof-laurel), .comment-avatar:has(.hof-laurel), .liker-avatar:has(.hof-laurel),
+.fcc-entry-avatar:has(.hof-laurel), .lb-hof-avatar:has(.hof-laurel), .hof-card-avatar:has(.hof-laurel),
+.cd-results-avatar:has(.hof-laurel), .avatar:has(.hof-laurel), .lb-champ-avatar:has(.hof-laurel),
+.fa-avatar:has(.hof-laurel), .sf-avatar:has(.hof-laurel), .fv-av-host:has(.hof-laurel), #evAvatar:has(.hof-laurel) {
+  overflow: visible !important; background: none !important; width: auto !important; height: auto !important; border-radius: 0 !important;
+}
 .ps-name {
   font-family: var(--font-display);
   font-size: clamp(28px, 8vw, 38px);
@@ -5215,7 +5222,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
         </div>
         <div class="lb-how-item">
           <div class="lb-how-icon">🔄</div>
-          <div><strong>30-day rolling window</strong> — Rankings reset every month. New users have just as much chance to reach #1 as veterans.</div>
+          <div><strong>Monthly rankings</strong> — The board resets on the 1st of each month, so every championship starts fresh. New users have just as much chance to reach #1 as veterans.</div>
         </div>
         <div class="lb-how-item">
           <div class="lb-how-icon">🔥</div>
@@ -6510,7 +6517,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v547 · avatar-laurel-tiers";
+const APP_VERSION = "v549 · laurel-everywhere";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -8653,7 +8660,7 @@ function renderComments() {
     const mine = c.user_id === me;
     const clickable = a.id && a.id !== me;
     return `<div class="comment-row${isReply ? ' is-reply' : ''}">
-      <div class="comment-avatar" ${clickable ? `data-open-uid="${a.id}"` : ''}>${avatarInner(a.avatar)}</div>
+      <div class="comment-avatar" ${clickable ? `data-open-uid="${a.id}"` : ''}>${honoredAvatarHTML(a.id, avatarInner(a.avatar), 36)}</div>
       <div class="comment-main">
         <div class="comment-head">
           <span class="comment-name" ${clickable ? `data-open-uid="${a.id}"` : ''}>${escapeHtml(a.name)}</span>
@@ -10142,7 +10149,7 @@ function renderLeaderboard() {
       const isYouChamp = state.profile && champion.id === state.profile.id;
       parts.push(`<div class="lb-champion-banner lb-banner-champ">
         <div class="lb-champ-crown">👑</div>
-        <div class="lb-champ-avatar">${avatarInner(champion.avatar)}</div>
+        <div class="lb-champ-avatar">${honoredAvatarHTML(champion.id, avatarInner(champion.avatar), 48)}</div>
         <div class="lb-champ-info">
           <div class="lb-champ-title">${cat === 'All' ? 'Overall Champion' : cat + ' Champion'}</div>
           <div class="lb-champ-name">${escapeHtml(champion.name)}${isYouChamp ? ' (you)' : ''}</div>
@@ -10156,7 +10163,7 @@ function renderLeaderboard() {
       const isYouLeader = state.profile && leader.id === state.profile.id;
       parts.push(`<div class="lb-champion-banner lb-banner-leader">
         <div class="lb-champ-crown">🔥</div>
-        <div class="lb-champ-avatar">${avatarInner(leader.avatar)}</div>
+        <div class="lb-champ-avatar">${honoredAvatarHTML(leader.id, avatarInner(leader.avatar), 48)}</div>
         <div class="lb-champ-info">
           <div class="lb-champ-title" style="color:var(--ember)">${cat === 'All' ? 'Overall Leader' : cat + ' Leader'}</div>
           <div class="lb-champ-name">${escapeHtml(leader.name)}${isYouLeader ? ' (you)' : ''}</div>
@@ -10973,7 +10980,7 @@ function renderHallOfFame() {
       <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--gold);margin-bottom:10px">👑 FOUNDERS</div>
       ${founderProfiles.map(p => `
         <div class="lb-hof-row" style="margin-bottom:8px;align-items:center">
-          <div class="lb-hof-avatar">${avatarInner(p.avatar)}</div>
+          <div class="lb-hof-avatar">${honoredAvatarHTML(p.id, avatarInner(p.avatar), 32)}</div>
           <div class="lb-hof-name">${escapeHtml(p.name)}${p.id === myId ? ' <span style="color:var(--ember);font-size:11px">(you)</span>' : ''}</div>
           ${getPrimaryBadge(p.id)}
         </div>`).join('')}
@@ -11000,7 +11007,7 @@ function renderHallOfFame() {
     legendsHtml += `<div style="margin-bottom:16px">
       <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:8px">${tier.label}</div>
       ${members.map(u => `<div class="lb-hof-row">
-        <div class="lb-hof-avatar">${avatarInner(u.avatar)}</div>
+        <div class="lb-hof-avatar">${honoredAvatarHTML(u.userId, avatarInner(u.avatar), 32)}</div>
         <div class="lb-hof-name">${escapeHtml(u.name)}${u.userId === myId ? ' <span style="color:var(--ember);font-size:11px">(you)</span>' : ''} <span style="font-size:11px;color:var(--text-muted)">${u.count} titles</span></div>
         ${getPrimaryBadge(u.userId)}
       </div>`).join('')}
@@ -11032,7 +11039,7 @@ function renderHallOfFame() {
         const nxLabel = titleCount > 1 ? ` <span class="lb-hof-nx">${titleCount}x</span>` : '';
         return `<div class="lb-hof-row">
           <div class="lb-hof-cat">${r.category}</div>
-          <div class="lb-hof-avatar">${avatarInner(r.avatar)}</div>
+          <div class="lb-hof-avatar">${honoredAvatarHTML(r.userId, avatarInner(r.avatar), 32)}</div>
           <div class="lb-hof-name">${escapeHtml(r.name)}${isYou ? ' <span style="color:var(--ember);font-size:11px">(you)</span>' : ''}${nxLabel}</div>
         </div>`;
       }).join('');
@@ -11616,7 +11623,7 @@ function _renderEvEntry() {
   nextBtn.style.display = _evIndex < _evEntries.length - 1 ? 'flex' : 'none';
 
   // Avatar + name
-  document.getElementById('evAvatar').innerHTML = avatarInner(sub.avatar);
+  document.getElementById('evAvatar').innerHTML = honoredAvatarHTML(sub.id, avatarInner(sub.avatar), 44);
   document.getElementById('evName').textContent = sub.name;
   const evBadge = getHofBadge(sub.id) + getRankBadge(sub.id);
   const evNameEl = document.getElementById('evName');
@@ -11799,7 +11806,7 @@ async function openLikersSheet(type, id) {
       const isMe = state.profile && u.id === state.profile.id;
       const isFollowing = state.myFollowing.has(u.id);
       return `<div class="liker-row">
-        <div class="liker-avatar${!isMe ? ' user-clickable' : ''}" ${!isMe ? `data-user-id="${u.id}"` : ''}>${avatarInner(u.avatar)}</div>
+        <div class="liker-avatar${!isMe ? ' user-clickable' : ''}" ${!isMe ? `data-user-id="${u.id}"` : ''}>${honoredAvatarHTML(u.id, avatarInner(u.avatar), 40)}</div>
         <div class="liker-name${!isMe ? ' user-clickable' : ''}" ${!isMe ? `data-user-id="${u.id}"` : ''}>${escapeHtml(u.name)}${isMe ? ' (you)' : ''}${getHofBadge(u.id)}</div>
         ${!isMe ? `<button class="lb-follow-btn${isFollowing ? ' following' : ''}" data-liker-follow="${u.id}">${isFollowing ? '✓' : '+ Follow'}</button>` : ''}
       </div>`;
@@ -12825,10 +12832,14 @@ function hofLaurelAvatar(avatarHTML, W, metal){
     + svg + `</span>`;
 }
 // Central helper: wrap any avatar with the user's HOF-status laurel, or return plain if not honored.
-// `size` = the base avatar diameter it replaces.
+// `size` = the base avatar diameter it replaces. Big avatars get the tier-word ribbon; small ones stay clean.
 function honoredAvatarHTML(userId, avatarHTML, size){
-  const metal = hofMetalForTier(hofTierOf(userId));
+  const t = hofTierOf(userId);
+  const metal = hofMetalForTier(t);
   if(!metal) return avatarHTML;
+  if(size >= 120){
+    return hofFrameHTML(avatarHTML, size, { metal, crown:true, ribbon: t.label, photoRatio: 0.38 });
+  }
   return hofLaurelAvatar(avatarHTML, Math.round(size*1.85), metal);
 }
 
@@ -13591,7 +13602,7 @@ function renderChallenges() {
       const voteBtn = canVoteCh && state.profile
         ? `<button class="fcc-vote-btn${iVoted?' voted':''}" data-fcc-vote="${e.id}" data-fcc-chid="${ch.id}">${iVoted?'✓ Voted':'🗳️ Vote'}</button>`
         : isMyEntry ? `<span class="fcc-your-entry">Your entry</span>` : '';
-      return `<div class="fcc-entry-card" style="cursor:pointer;" data-entry-open="${ch.id}" data-entry-id="${e.id}">${mHtml}<div class="fcc-entry-footer"><div class="fcc-entry-avatar">${avatarInner(sub.avatar)}</div><div class="fcc-entry-name">${escapeHtml(sub.name)}</div>${(state.entryLikeCounts[e.id] || state.entryCommentCounts[e.id]) ? `<div class="fcc-entry-counts">${state.entryLikeCounts[e.id] ? '🔥 ' + state.entryLikeCounts[e.id] : ''}${state.entryLikeCounts[e.id] && state.entryCommentCounts[e.id] ? ' · ' : ''}${state.entryCommentCounts[e.id] ? '💬 ' + state.entryCommentCounts[e.id] : ''}</div>` : ''}${voteBtn}</div></div>`;
+      return `<div class="fcc-entry-card" style="cursor:pointer;" data-entry-open="${ch.id}" data-entry-id="${e.id}">${mHtml}<div class="fcc-entry-footer"><div class="fcc-entry-avatar">${honoredAvatarHTML(sub.id, avatarInner(sub.avatar), 36)}</div><div class="fcc-entry-name">${escapeHtml(sub.name)}</div>${(state.entryLikeCounts[e.id] || state.entryCommentCounts[e.id]) ? `<div class="fcc-entry-counts">${state.entryLikeCounts[e.id] ? '🔥 ' + state.entryLikeCounts[e.id] : ''}${state.entryLikeCounts[e.id] && state.entryCommentCounts[e.id] ? ' · ' : ''}${state.entryCommentCounts[e.id] ? '💬 ' + state.entryCommentCounts[e.id] : ''}</div>` : ''}${voteBtn}</div></div>`;
     }).join('');
 
     const userEntry = chEntries.find(e => e.user_id === state.profile?.id);
@@ -14038,7 +14049,7 @@ function renderChallengeDetail() {
         <div class="cd-entry-media">${mediaHtml}</div>
         <div class="cd-entry-body">
           <div class="cd-entry-submitter ${entry.user_id && entry.user_id !== state.profile?.id ? 'user-clickable' : ''}" ${entry.user_id && entry.user_id !== state.profile?.id ? `data-user-id="${entry.user_id}"` : ''}>
-            <div class="avatar">${avatarInner(entry.submitter?.avatar)}</div>
+            <div class="avatar">${honoredAvatarHTML(entry.user_id, avatarInner(entry.submitter?.avatar), 44)}</div>
             <span>${escapeHtml(entry.submitter?.name || 'Unknown')}${isMyEntry ? ' (you)' : (needsFollowPlus(entry.user_id) ? ' <span class="user-plus">+</span>' : '')}${getHofBadge(entry.user_id)}${getRankBadge(entry.user_id)}</span>
           </div>
           ${champEntryCredentials(entry.user_id)}
@@ -14260,7 +14271,7 @@ function renderChallengeResults() {
     const canFollow = e.user_id && e.user_id !== state.profile?.id;
     return `<div class="cd-results-row${isLeading ? ' leading' : ''}${isMyPick ? ' my-pick' : ''}${isTied ? ' tied' : ''}">
       <div class="cd-results-rank">${rankIcon}</div>
-      <div class="cd-results-avatar${canFollow ? ' user-clickable' : ''}" ${canFollow ? `data-open-uid="${e.user_id}"` : ''}>${avatarInner(sub.avatar)}</div>
+      <div class="cd-results-avatar${canFollow ? ' user-clickable' : ''}" ${canFollow ? `data-open-uid="${e.user_id}"` : ''}>${honoredAvatarHTML(e.user_id, avatarInner(sub.avatar), 40)}</div>
       <div class="cd-results-info">
         <div class="cd-results-name${canFollow ? ' user-clickable' : ''}" ${canFollow ? `data-open-uid="${e.user_id}"` : ''}>${escapeHtml(sub.name)}${isMyPick ? ' <span style="color:var(--ember);font-size:11px;font-weight:400">· your pick</span>' : ''}${needsFollowPlus(e.user_id) ? ' <span class="user-plus">+</span>' : ''}</div>
         <div class="cd-results-rank-label${isLeading ? ' leading' : ''}">${rankLabel}</div>
@@ -15982,7 +15993,7 @@ function renderPostCard(p) {
     <div class="post-card" data-pid="${p.id}">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px 0"><span class="feed-poll-tag" style="color:#4fc3f7">✍️ POST</span><span style="font-size:12px;color:var(--text-muted)">${timeAgo(p.created_at)}</span></div>
       <div class="post-card-header" style="padding-top:8px">
-        <div class="post-card-avatar" ${userClickAttr}>${avatarInner(author.avatar)}</div>
+        <div class="post-card-avatar" ${userClickAttr}>${honoredAvatarHTML(author.id, avatarInner(author.avatar), 44)}</div>
         <div class="post-card-meta">
           <div class="post-card-name" ${userClickAttr}>${escapeHtml(author.name)}${plusBadge}${getHofBadge(author.id)}${getRankBadge(author.id)}</div>
         </div>
@@ -16160,7 +16171,7 @@ function renderFeedChallengeCard(ch) {
       return `<div class="fcc-entry-card" style="flex:0 0 72vw!important;min-width:72vw!important;max-width:280px!important;cursor:pointer;" data-entry-open="${ch.id}" data-entry-id="${e.id}">
         ${mediaHtml}
         <div class="fcc-entry-footer">
-          <div class="fcc-entry-avatar">${avatarInner(sub.avatar)}</div>
+          <div class="fcc-entry-avatar">${honoredAvatarHTML(sub.id, avatarInner(sub.avatar), 36)}</div>
           <div class="fcc-entry-name">${escapeHtml(sub.name)}</div>
           ${(state.entryLikeCounts[e.id] || state.entryCommentCounts[e.id]) ? `<div class="fcc-entry-counts">${state.entryLikeCounts[e.id] ? '🔥 ' + state.entryLikeCounts[e.id] : ''}${state.entryLikeCounts[e.id] && state.entryCommentCounts[e.id] ? ' · ' : ''}${state.entryCommentCounts[e.id] ? '💬 ' + state.entryCommentCounts[e.id] : ''}</div>` : ''}
           ${voteBtn}
@@ -16229,7 +16240,7 @@ function renderHofCard(d) {
       <span class="feed-poll-tag" style="color:#d946ef;">${tag}</span>
     </div>
     <div style="display:flex;align-items:center;gap:12px;padding:12px 14px 14px">
-      <div class="hof-card-avatar" ${userAttr}>${avatarInner(d.avatar)}</div>
+      <div class="hof-card-avatar" ${userAttr}>${honoredAvatarHTML(d.userId, avatarInner(d.avatar), 44)}</div>
       <div style="flex:1;min-width:0">
         <div class="hof-card-headline" ${userAttr}>${headline}${plus} ${badge}</div>
         <div class="hof-card-sub">${sub}</div>
@@ -17751,7 +17762,7 @@ function renderFvEntry(entry, ch, canVote, myVoteEntryId, status) {
     ${mediaHtml}
     <div style="padding:12px 14px 16px;">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-        <div style="width:38px;height:38px;border-radius:50%;overflow:hidden;flex-shrink:0;background:linear-gradient(135deg,var(--ember),var(--coral));display:grid;place-items:center;font-size:18px;cursor:pointer;" data-fv-user="${sub.id||''}">${avatarInner(sub.avatar)}</div>
+        <div style="width:38px;height:38px;border-radius:50%;overflow:hidden;flex-shrink:0;background:linear-gradient(135deg,var(--ember),var(--coral));display:grid;place-items:center;font-size:18px;cursor:pointer;" class="fv-av-host" data-fv-user="${sub.id||''}">${honoredAvatarHTML(sub.id, avatarInner(sub.avatar), 38)}</div>
         <div style="flex:1;min-width:0;">
           <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
             <span style="font-weight:700;font-size:15px;cursor:pointer;" data-fv-user="${sub.id||''}">${escapeHtml(sub.name)}${isMine?' (you)':''}</span>
@@ -18632,14 +18643,11 @@ function renderProfileSheet() {
 
   document.getElementById('psHeaderName').textContent = prof.name || 'Profile';
   const psAvEl = document.getElementById('psAvatar');
-  psAvEl.classList.remove('hof-framed');
   const psMetal = hofMetalForTier(hofTierOf(prof.id));
-  if (psMetal) {
-    psAvEl.classList.add('hof-framed');
-    psAvEl.innerHTML = hofLaurelAvatar(avatarInner(prof.avatar || '🔥'), 210, psMetal);
-  } else {
-    psAvEl.innerHTML = avatarInner(prof.avatar || '🔥');
-  }
+  psAvEl.classList.toggle('hof-framed', !!psMetal);
+  psAvEl.innerHTML = psMetal
+    ? honoredAvatarHTML(prof.id, avatarInner(prof.avatar || '🔥'), 200)
+    : avatarInner(prof.avatar || '🔥');
   // Current champion badge — only from Championship Challenge wins
   const champTitlesPS = getChampTitles();
   const nowPS = new Date();
