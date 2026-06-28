@@ -6503,7 +6503,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v544 · ember-mascot";
+const APP_VERSION = "v545 · hof-crest-board";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -10193,7 +10193,8 @@ function renderLeaderboard() {
     const row = document.createElement('div');
     row.className = 'lb-row' + (isYou ? ' you' : '');
     const lbRank = lbRankByIndex[i];
-    const lbRankIcon = lbRank === 1 ? '🥇' : lbRank === 2 ? '🥈' : lbRank === 3 ? '🥉' : '#' + lbRank;
+    const lbMetal = lbRank === 1 ? 'gold' : lbRank === 2 ? 'silver' : lbRank === 3 ? 'bronze' : null;
+    const lbRankIcon = lbMetal ? hofWreath({ metal: lbMetal, center: String(lbRank), crown: false, size: 46 }) : '#' + lbRank;
     row.innerHTML = `
       <div class="lb-rank">${lbRankIcon}</div>
       <div class="lb-user" style="cursor:pointer" data-lb-uid="${u.id}">
@@ -11032,7 +11033,20 @@ function renderHallOfFame() {
       </div>`;
     }).join('')}` : '';
 
-  el.innerHTML = foundersHtml + legendsSection + historyHtml;
+  const myTier = hofTierOf(myId);
+  let crestHero;
+  if (myTier) {
+    const myChamps = myTier.isFounder ? '' : String(log.filter(r => r.userId === myId).length);
+    crestHero = `<div style="text-align:center;margin:2px 0 22px">
+      ${hofWreath({ metal: 'gold', crown: true, center: myChamps, ribbon: myTier.label, size: 176 })}
+      <div style="font-family:var(--font-display);text-transform:uppercase;letter-spacing:.04em;color:var(--text);font-size:14px;margin-top:2px">Your Standing</div>
+    </div>`;
+  } else {
+    crestHero = `<div style="text-align:center;margin:2px 0 18px">
+      ${hofWreath({ metal: 'gold', crown: true, center: '', ribbon: 'HALL OF FAME', size: 150 })}
+    </div>`;
+  }
+  el.innerHTML = crestHero + foundersHtml + legendsSection + historyHtml;
 }
 
 // Returns the Nx Champion label for a given user to show on their profile
