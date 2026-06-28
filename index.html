@@ -2760,6 +2760,11 @@ body.theme-light .skeleton {
 .hof-laurel-photo { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; overflow: hidden; display: grid; place-items: center; background: var(--overlay-2); }
 .hof-laurel-photo img, .hof-laurel-photo .avatar-img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
 .lb-avatar-laurel { position: relative; display: grid; place-items: center; flex-shrink: 0; margin: -10px 0; }
+/* Fire ring behind the "Your Standing" crest */
+.hof-crest-ring-wrap { position: relative; display: inline-block; line-height: 0; }
+.hof-crest-ring { position: absolute; left: 50%; top: 49%; transform: translate(-50%, -50%); width: 158%; height: 158%; object-fit: contain; mix-blend-mode: screen; pointer-events: none; z-index: 0; }
+.hof-crest-ring-wrap > svg { position: relative; z-index: 1; }
+@media (prefers-reduced-motion: reduce) { .hof-crest-ring { display: none; } }
 /* When any avatar slot holds a status laurel, let it overflow its circle-clip */
 .post-card-avatar:has(.hof-laurel), .comment-avatar:has(.hof-laurel), .liker-avatar:has(.hof-laurel),
 .fcc-entry-avatar:has(.hof-laurel), .lb-hof-avatar:has(.hof-laurel), .hof-card-avatar:has(.hof-laurel),
@@ -6517,7 +6522,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v550 · badge-consolidate";
+const APP_VERSION = "v551 · hof-fire-ring";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11054,7 +11059,10 @@ function renderHallOfFame() {
   if (myTier) {
     const myChamps = myTier.isFounder ? '' : String(log.filter(r => r.userId === myId).length);
     crestHero = `<div style="text-align:center;margin:2px 0 22px">
-      ${hofWreath({ metal: hofMetalForTier(myTier), crown: true, center: myChamps, ribbon: myTier.label, size: 176 })}
+      <span class="hof-crest-ring-wrap">
+        <video class="hof-crest-ring" autoplay muted loop playsinline preload="metadata" poster="media/ring%20hof%20poster.jpeg"><source src="media/ring%20hof.mp4" type="video/mp4"></video>
+        ${hofWreath({ metal: hofMetalForTier(myTier), crown: true, center: myChamps, ribbon: myTier.label, size: 176 })}
+      </span>
       <div style="font-family:var(--font-display);text-transform:uppercase;letter-spacing:.04em;color:var(--text);font-size:14px;margin-top:2px">Your Standing</div>
     </div>`;
   } else {
