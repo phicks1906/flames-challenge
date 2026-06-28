@@ -6517,7 +6517,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v549 · laurel-everywhere";
+const APP_VERSION = "v550 · badge-consolidate";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11625,7 +11625,7 @@ function _renderEvEntry() {
   // Avatar + name
   document.getElementById('evAvatar').innerHTML = honoredAvatarHTML(sub.id, avatarInner(sub.avatar), 44);
   document.getElementById('evName').textContent = sub.name;
-  const evBadge = getHofBadge(sub.id) + getRankBadge(sub.id);
+  const evBadge = getRankBadge(sub.id);
   const evNameEl = document.getElementById('evName');
   if (evBadge) { evNameEl.innerHTML = escapeHtml(sub.name) + evBadge; } else { evNameEl.textContent = sub.name; }
   document.getElementById('evChallenge').textContent = ch.title;
@@ -11807,7 +11807,7 @@ async function openLikersSheet(type, id) {
       const isFollowing = state.myFollowing.has(u.id);
       return `<div class="liker-row">
         <div class="liker-avatar${!isMe ? ' user-clickable' : ''}" ${!isMe ? `data-user-id="${u.id}"` : ''}>${honoredAvatarHTML(u.id, avatarInner(u.avatar), 40)}</div>
-        <div class="liker-name${!isMe ? ' user-clickable' : ''}" ${!isMe ? `data-user-id="${u.id}"` : ''}>${escapeHtml(u.name)}${isMe ? ' (you)' : ''}${getHofBadge(u.id)}</div>
+        <div class="liker-name${!isMe ? ' user-clickable' : ''}" ${!isMe ? `data-user-id="${u.id}"` : ''}>${escapeHtml(u.name)}${isMe ? ' (you)' : ''}</div>
         ${!isMe ? `<button class="lb-follow-btn${isFollowing ? ' following' : ''}" data-liker-follow="${u.id}">${isFollowing ? '✓' : '+ Follow'}</button>` : ''}
       </div>`;
     }).join('');
@@ -14050,7 +14050,7 @@ function renderChallengeDetail() {
         <div class="cd-entry-body">
           <div class="cd-entry-submitter ${entry.user_id && entry.user_id !== state.profile?.id ? 'user-clickable' : ''}" ${entry.user_id && entry.user_id !== state.profile?.id ? `data-user-id="${entry.user_id}"` : ''}>
             <div class="avatar">${honoredAvatarHTML(entry.user_id, avatarInner(entry.submitter?.avatar), 44)}</div>
-            <span>${escapeHtml(entry.submitter?.name || 'Unknown')}${isMyEntry ? ' (you)' : (needsFollowPlus(entry.user_id) ? ' <span class="user-plus">+</span>' : '')}${getHofBadge(entry.user_id)}${getRankBadge(entry.user_id)}</span>
+            <span>${escapeHtml(entry.submitter?.name || 'Unknown')}${isMyEntry ? ' (you)' : (needsFollowPlus(entry.user_id) ? ' <span class="user-plus">+</span>' : '')}${getRankBadge(entry.user_id)}</span>
           </div>
           ${champEntryCredentials(entry.user_id)}
           ${entry.media_type !== 'text' && entry.caption ? `<div class="cd-entry-caption">${formatBody(entry.caption)}</div>` : ''}
@@ -15995,7 +15995,7 @@ function renderPostCard(p) {
       <div class="post-card-header" style="padding-top:8px">
         <div class="post-card-avatar" ${userClickAttr}>${honoredAvatarHTML(author.id, avatarInner(author.avatar), 44)}</div>
         <div class="post-card-meta">
-          <div class="post-card-name" ${userClickAttr}>${escapeHtml(author.name)}${plusBadge}${getHofBadge(author.id)}${getRankBadge(author.id)}</div>
+          <div class="post-card-name" ${userClickAttr}>${escapeHtml(author.name)}${plusBadge}${getRankBadge(author.id)}</div>
         </div>
         ${isMine ? `<button class="post-card-menu" data-pid="${p.id}" aria-label="Delete post">⋯</button>` : `<button class="post-card-menu" data-report-type="post" data-report-id="${p.id}" data-report-text="${escapeHtml((p.content||'').slice(0,200))}" aria-label="Report post">⋯</button>`}
       </div>
@@ -17766,7 +17766,7 @@ function renderFvEntry(entry, ch, canVote, myVoteEntryId, status) {
         <div style="flex:1;min-width:0;">
           <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
             <span style="font-weight:700;font-size:15px;cursor:pointer;" data-fv-user="${sub.id||''}">${escapeHtml(sub.name)}${isMine?' (you)':''}</span>
-            <span>${getUserBadges(sub.id, ch.category)}</span>
+            <span>${getRankBadge(sub.id)}</span>
           </div>
           <div style="font-size:12px;color:var(--text-muted);margin-top:1px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
             ${recordLine ? `<span>${escapeHtml(recordLine)}</span>` : ''}
@@ -18663,9 +18663,8 @@ function renderProfileSheet() {
   const nxTitle = getUserChampionTitle(prof.id);
 
   const psNameEl = document.getElementById('psName');
-  const hofBadgeHtml = getHofBadge(prof.id);
-  if (hofBadgeHtml) { psNameEl.innerHTML = escapeHtml((prof.name || 'User') + (isMe ? ' (you)' : '')) + hofBadgeHtml; }
-  else { psNameEl.textContent = (prof.name || 'User') + (isMe ? ' (you)' : ''); }
+  // HOF status is carried by the laurel on the avatar — no inline crown needed here.
+  psNameEl.textContent = (prof.name || 'User') + (isMe ? ' (you)' : '');
   // Remove any existing badge row
   const existingBadge = psNameEl.nextElementSibling;
   if (existingBadge && existingBadge.classList.contains('ps-champ-badge-row')) existingBadge.remove();
