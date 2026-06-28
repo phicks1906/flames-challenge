@@ -5874,8 +5874,22 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 <!-- ASK EMBER MODAL -->
 <div class="modal-backdrop" id="emberModal" onclick="if(event.target===this)closeEmber()">
   <div class="modal" style="max-width:440px">
-    <h2 style="display:flex;align-items:center;gap:8px">🔥 Ask Ember</h2>
-    <p style="margin-bottom:16px">Your guide to FlamesChallenge. Ask me anything — how challenges work, voting, ranks, championships…</p>
+    <div style="text-align:center;margin-bottom:10px">
+      <svg width="68" height="68" viewBox="0 0 100 100" style="filter:drop-shadow(0 4px 14px rgba(255,90,30,0.45))" aria-hidden="true">
+        <defs>
+          <radialGradient id="eglow" cx="50%" cy="62%" r="55%"><stop offset="0%" stop-color="#ff7a2c" stop-opacity="0.55"/><stop offset="100%" stop-color="#ff2d1f" stop-opacity="0"/></radialGradient>
+          <linearGradient id="eflame" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffd86b"/><stop offset="38%" stop-color="#ff8a2c"/><stop offset="100%" stop-color="#ff2d1f"/></linearGradient>
+          <linearGradient id="einner" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fff3c0"/><stop offset="60%" stop-color="#ffd24a"/><stop offset="100%" stop-color="#ff8a1f"/></linearGradient>
+        </defs>
+        <circle cx="50" cy="52" r="46" fill="#1a1410"/>
+        <circle cx="50" cy="52" r="46" fill="url(#eglow)"/>
+        <circle cx="50" cy="52" r="45.5" fill="none" stroke="#ff6a2c" stroke-width="1.6" opacity="0.8"/>
+        <path d="M50 14 C 60 30, 73 40, 70 58 C 68 74, 56 84, 46 83 C 33 82, 25 71, 28 58 C 30 49, 36 45, 38 38 C 41 47, 47 49, 46 41 C 45 32, 48 22, 50 14 Z" fill="url(#eflame)"/>
+        <path d="M51 34 C 57 44, 62 50, 59 60 C 57 69, 50 74, 45 71 C 39 68, 38 60, 42 54 C 44 58, 48 58, 47 53 C 46 46, 49 40, 51 34 Z" fill="url(#einner)"/>
+      </svg>
+      <h2 style="margin:8px 0 0">Ask Ember</h2>
+    </div>
+    <p style="text-align:center;margin-bottom:16px">Your guide to FlamesChallenge. Ask me anything — how challenges work, voting, ranks, championships…</p>
     <div id="emberAnswer" style="display:none;font-size:14px;color:var(--text-dim);line-height:1.55;background:var(--surface-2,rgba(255,255,255,0.04));border-radius:12px;padding:12px 14px;margin-bottom:12px;max-height:240px;overflow-y:auto;"></div>
     <div style="display:flex;gap:8px;margin-bottom:14px">
       <input id="emberInput" type="text" maxlength="200" placeholder="How do championships work?" onkeydown="if(event.key==='Enter'){event.preventDefault();askEmberModal();}" style="flex:1;min-width:0;background:var(--surface-2,rgba(255,255,255,0.06));border:1px solid var(--border,rgba(255,255,255,0.15));border-radius:12px;padding:11px 13px;font-size:14px;color:var(--text);outline:none;" />
@@ -6497,7 +6511,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v541 · ribbon-center";
+const APP_VERSION = "v543 · ember-icon";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -16744,19 +16758,22 @@ async function runEmber(input, ans, btn) {
   ans.textContent = "Ember's thinking… 🔥";
   btn.disabled = true;
   try {
+    dlog('ember', 'POST ask-ember', { q });
     const resp = await fetch('https://sioalvawzayfphwzqctq.supabase.co/functions/v1/ask-ember', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question: q })
     });
+    dlog('ember', 'response', { status: resp.status, ok: resp.ok });
     const data = await resp.json().catch(() => ({}));
     if (resp.status === 429) {
       ans.textContent = "Whoa, slow down a sec 🔥 Too many questions at once — try again in a minute.";
       return;
     }
-    if (!resp.ok) throw new Error(data.error || 'Request failed');
+    if (!resp.ok) throw new Error((data.error || 'Request failed') + ' [' + resp.status + ']');
     ans.textContent = (data.answer || '').replace(/\*\*/g, '').trim() || "Hmm, I didn't catch that — try asking another way.";
   } catch (e) {
+    dlog('ember', 'error', { msg: e.message });
     ans.textContent = "I'm having trouble reaching the fire right now — try again in a sec. 🔥";
   } finally {
     btn.disabled = false;
