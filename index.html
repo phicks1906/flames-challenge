@@ -740,6 +740,7 @@ html[data-theme="light"] .rank-inferno { color: #9c7400; box-shadow: none; }
   background: linear-gradient(135deg, var(--ember), var(--coral));
   font-size: 18px; flex-shrink: 0;
 }
+.lb-avatar-wreath { width: 84px; height: 84px; display: grid; place-items: center; flex-shrink: 0; line-height: 0; margin: -8px 0; }
 .lb-name {
   font-weight: 600; font-size: 15px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -2753,6 +2754,12 @@ body.theme-light .skeleton {
 .hof-frame-photo { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; overflow: hidden; display: grid; place-items: center; background: var(--overlay-2); font-size: 26px; }
 .hof-frame-photo img, .hof-frame-photo .avatar-img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
 .ps-avatar.hof-framed { background: none; box-shadow: none; width: auto; height: auto; overflow: visible; border-radius: 0; margin: 6px auto 14px; }
+/* Laurel-framed avatar (status frame, used everywhere a profile pic shows) */
+.hof-laurel { position: relative; display: inline-block; line-height: 0; vertical-align: middle; }
+.hof-laurel > svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.hof-laurel-photo { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; overflow: hidden; display: grid; place-items: center; background: var(--overlay-2); }
+.hof-laurel-photo img, .hof-laurel-photo .avatar-img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
+.lb-avatar-laurel { position: relative; display: grid; place-items: center; flex-shrink: 0; margin: -10px 0; }
 .ps-name {
   font-family: var(--font-display);
   font-size: clamp(28px, 8vw, 38px);
@@ -6503,7 +6510,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v545 · hof-crest-board";
+const APP_VERSION = "v547 · avatar-laurel-tiers";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -10193,17 +10200,19 @@ function renderLeaderboard() {
     const row = document.createElement('div');
     row.className = 'lb-row' + (isYou ? ' you' : '');
     const lbRank = lbRankByIndex[i];
-    const lbMetal = lbRank === 1 ? 'gold' : lbRank === 2 ? 'silver' : lbRank === 3 ? 'bronze' : null;
-    const lbRankIcon = lbMetal ? hofWreath({ metal: lbMetal, center: String(lbRank), crown: false, size: 46 }) : '#' + lbRank;
+    const lbMedalColor = lbRank === 1 ? 'var(--gold)' : lbRank === 2 ? '#aab3bd' : lbRank === 3 ? '#cd7f32' : '';
+    const lbRankIcon = '#' + lbRank;
+    const uMetal = hofMetalForTier(hofTierOf(u.id));
+    const lbDot = isChamp ? '<span class="lb-champ-dot">👑</span>' : isLeader ? '<span class="lb-champ-dot">🔥</span>' : '';
+    const lbAvatar = uMetal
+      ? `<div class="lb-avatar-laurel">${hofLaurelAvatar(avatarInner(u.avatar), 74, uMetal)}</div>`
+      : `<div class="lb-avatar" style="position:relative">${avatarInner(u.avatar)}${lbDot}</div>`;
     row.innerHTML = `
-      <div class="lb-rank">${lbRankIcon}</div>
+      <div class="lb-rank"${lbMedalColor ? ` style="color:${lbMedalColor}"` : ''}>${lbRankIcon}</div>
       <div class="lb-user" style="cursor:pointer" data-lb-uid="${u.id}">
-        <div class="lb-avatar" style="position:relative">
-          ${avatarInner(u.avatar)}
-          ${isChamp ? '<span class="lb-champ-dot">👑</span>' : isLeader ? '<span class="lb-champ-dot">🔥</span>' : ''}
-        </div>
+        ${lbAvatar}
         <div style="min-width:0">
-          <div class="lb-name">${escapeHtml(u.name)}${isYou ? ' (you)' : ''}${getHofBadge(u.id)}${isChamp ? ' <span class="lb-champ-tag">👑 Champ</span>' : ''}${isLeader && !isChamp ? ' <span class="lb-leader-tag">🔥 Leader</span>' : ''}</div>
+          <div class="lb-name">${escapeHtml(u.name)}${isYou ? ' (you)' : ''}${isChamp ? ' <span class="lb-champ-tag">👑 Champ</span>' : ''}${isLeader && !isChamp ? ' <span class="lb-leader-tag">🔥 Leader</span>' : ''}</div>
           <div class="lb-streak" style="font-size:11px;color:var(--text-muted);line-height:1.35"><div>${u.catWins}–${u.catLosses} this month</div><div style="opacity:.7">${u.catAllTime} all-time</div></div>
         </div>
       </div>
@@ -11038,7 +11047,7 @@ function renderHallOfFame() {
   if (myTier) {
     const myChamps = myTier.isFounder ? '' : String(log.filter(r => r.userId === myId).length);
     crestHero = `<div style="text-align:center;margin:2px 0 22px">
-      ${hofWreath({ metal: 'gold', crown: true, center: myChamps, ribbon: myTier.label, size: 176 })}
+      ${hofWreath({ metal: hofMetalForTier(myTier), crown: true, center: myChamps, ribbon: myTier.label, size: 176 })}
       <div style="font-family:var(--font-display);text-transform:uppercase;letter-spacing:.04em;color:var(--text);font-size:14px;margin-top:2px">Your Standing</div>
     </div>`;
   } else {
@@ -12544,7 +12553,9 @@ function _hofLerp(a,b,t){ return [Math.round(a[0]+(b[0]-a[0])*t),Math.round(a[1]
 const _HOF_RAMP = {
   gold: null,
   silver: [[120,130,142],[176,186,196],[238,243,248]],
-  bronze: [[120,64,28],[176,104,52],[232,170,108]]
+  bronze: [[120,64,28],[176,104,52],[232,170,108]],
+  obsidian: [[20,20,26],[78,66,40],[236,196,118]],
+  ember: [[150,30,12],[235,96,32],[255,206,110]]
 };
 function hofRecolor(svg, metal){
   const ramp=_HOF_RAMP[metal]; if(!ramp) return svg;
@@ -12589,8 +12600,8 @@ function _hofRibbon(txt){
 function hofWreath(opts){
   opts=opts||{};
   const metal=opts.metal||'gold', size=opts.size||150;
-  const GOLDMID = metal==='silver' ? '#cfd6de' : metal==='bronze' ? '#d08a4e' : '#f0c44e';
-  const GOLDNUM = metal==='silver' ? 'rgb(205,212,222)' : metal==='bronze' ? 'rgb(208,150,90)' : 'rgb(231,188,79)';
+  const GOLDMID = metal==='silver' ? '#cfd6de' : metal==='bronze' ? '#d08a4e' : metal==='obsidian' ? '#e8c060' : metal==='ember' ? '#ffcf5c' : '#f0c44e';
+  const GOLDNUM = metal==='silver' ? 'rgb(205,212,222)' : metal==='bronze' ? 'rgb(208,150,90)' : metal==='obsidian' ? 'rgb(232,196,120)' : metal==='ember' ? 'rgb(255,206,110)' : 'rgb(231,188,79)';
   let body = hofRecolor(HOF_WREATH_INNER, metal);
   let extra='';
   if(opts.crown) extra+=_hofCrownPath(512,160,120,GOLDMID);
@@ -12604,12 +12615,223 @@ function hofWreath(opts){
 function hofFrameHTML(avatarHTML, size, opts){
   opts=opts||{};
   size=size||188;
-  const d=Math.round(size*0.33), cx=Math.round(size*0.50), cy=Math.round(size*0.42);
+  const ratio=opts.photoRatio||0.33;
+  const d=Math.round(size*ratio), cx=Math.round(size*0.50), cy=Math.round(size*0.42);
   const wreath=hofWreath({ metal:opts.metal||'gold', crown:opts.crown!==false, ribbon:opts.ribbon, size:size });
   return `<div class="hof-frame" style="width:${size}px;height:${size}px">`
     + `<div class="hof-frame-photo" style="width:${d}px;height:${d}px;left:${cx}px;top:${cy}px">${avatarHTML}</div>`
     + wreath + `</div>`;
 }
+
+// ===== HONORED AVATAR (laurel-only frame, tier-colored) =====
+// Ribbon-stripped laurel for wrapping avatars as a permanent status frame.
+const HOF_LAUREL_INNER = `<defs
+   id="defs4" />
+
+<path
+   d="M360.5,176 C365.684,197.47 357.534,223.803 336,232.5 C336,232.5 349.5,203 349.5,203 C349.5,203 329.5,236 329.5,236 C320.018,207.562 342.483,192.564 360.5,176 Z "
+   fill="rgb(230,188,78)"
+   id="path5" />
+<path
+   d="M660.5,176 C679.352,191.028 702.612,208.827 691.5,236 C691.5,236 671.5,202 671.5,202 C675.12,212.222 683.663,220.395 685,231.5 C662.77,222.387 658.307,197.759 660.5,176 Z "
+   fill="rgb(231,188,79)"
+   id="path6" />
+<path
+   d="M401.5,190 C411.571,189.044 423.972,192.502 434.5,191 C419.934,205.077 395.738,229.442 374,217.5 C374,217.5 399.5,204 399.5,204 C399.5,204 371,215.5 371,215.5 C374.9,203.036 388.133,191.269 401.5,190 Z "
+   fill="rgb(230,188,78)"
+   id="path7" />
+<path
+   d="M610.5,190 C631.049,190.422 641.62,195.619 651,214.5 C649.852,216.438 646.13,214.57 644.5,214 C638.095,211.76 630.341,206.171 623.5,204 C620.179,204.356 625.159,206.811 625.5,207 C627.773,208.256 649.242,216.018 648,218.5 C623.547,227.927 604.189,205.188 587,191.5 C594.662,192.633 603.113,189.848 610.5,190 Z "
+   fill="rgb(230,187,78)"
+   id="path8" />
+<path
+   d="M315.5,197 C319.763,220.722 318.606,247.991 297.5,263 C297.5,263 303,232.5 303,232.5 C303,232.5 290.5,268 290.5,268 C275.741,240.059 291.707,213.038 315.5,197 Z "
+   fill="rgb(231,188,79)"
+   id="path9" />
+<path
+   d="M706.5,197 C729.656,212.373 746.003,239.787 731.5,267 C731.5,267 718.5,233 718.5,233 C718.5,233 726,262.5 726,262.5 C702.566,250.055 701.533,219.845 706.5,197 Z "
+   fill="rgb(230,188,79)"
+   id="path10" />
+<path
+   d="M271.5,228 C278.897,253.062 283.438,277.607 263.5,298 C263.5,298 265,268.5 265,268.5 C265,268.5 257.5,304 257.5,304 C236.435,277.337 254.7,250.445 271.5,228 Z "
+   fill="rgb(230,188,79)"
+   id="path11" />
+<path
+   d="M750.5,228 C767.074,250.701 785.439,277.174 764.5,304 C764.5,304 756,262.5 756,262.5 C756,262.5 758.5,298 758.5,298 C738.43,278.27 743.013,252.49 750.5,228 Z "
+   fill="rgb(230,188,79)"
+   id="path12" />
+<path
+   d="M352.5,232 C366.102,230.11 383.948,238.837 395,246.5 C375.596,260.563 349.798,263.245 331,246.5 C331,246.5 362.5,245 362.5,245 C364.099,242.179 360.99,243.184 359.5,243 C351.274,241.987 342.271,244.155 334,242.5 C332.73,240.839 350.294,232.306 352.5,232 Z "
+   fill="rgb(230,188,80)"
+   id="path13" />
+<path
+   d="M659.5,232 C671.326,230.812 679.975,235.553 689,242.5 C689,242.5 659.5,243 659.5,243 C657.998,245.537 660.067,244.74 661.5,245 C669.384,246.431 681.141,243.943 689.5,245 C675.708,265.167 644.213,259.385 627,246.5 C626.965,244.285 655.702,232.382 659.5,232 Z "
+   fill="rgb(230,187,80)"
+   id="path14" />
+<path
+   d="M304,261 C312.406,253.735 320.072,244.451 331,240.5 C322.9,247.755 312.01,253.829 304,261 Z "
+   fill="rgb(228,183,72)"
+   id="path15" />
+<path
+   d="M711,255 C709.493,253.859 705.929,253.613 705,250.5 C707.37,249.783 709.76,253.794 711,255 Z "
+   fill="rgb(226,181,74)"
+   id="path16" />
+<path
+   d="M719,262 C715.752,259.324 714.1,258.015 711,255 C714.743,257.835 715.737,258.892 719,262 Z "
+   fill="rgb(226,181,74)"
+   id="path17" />
+<path
+   d="M319.5,260 C334.069,258.361 349.06,268.702 364,268.5 C344.923,285.038 316.954,291.967 295,276.5 C295,276.5 329.5,272 329.5,272 C329.5,272 299,270.5 299,270.5 C305.11,266.539 311.92,260.853 319.5,260 Z "
+   fill="rgb(230,187,80)"
+   id="path18" />
+<path
+   d="M694.5,260 C705.595,259.355 715.352,263.684 723,271.5 C723,271.5 690.5,272 690.5,272 C690.5,272 726,275.5 726,275.5 C706.234,292.908 676.073,284.474 658,268.5 C670.588,269.489 682.464,260.699 694.5,260 Z "
+   fill="rgb(230,188,81)"
+   id="path19" />
+<path
+   d="M301,264 C302.013,263.064 302.883,262 304,261 C303.67,261.285 302.346,262.79 301,264 Z "
+   fill="rgb(228,183,72)"
+   id="path20" />
+
+
+<path
+   d="M230.5,273 C245.484,291.548 249.224,319.24 236.5,340 C236.5,340 232,312.5 232,312.5 C232,312.5 231.5,348 231.5,348 C205.326,325.225 217.836,298.958 230.5,273 Z "
+   fill="rgb(230,188,80)"
+   id="path23" />
+<path
+   d="M790.5,273 C804.67,297.698 816.195,324.869 790.5,347 C790.5,347 790,307.5 790,307.5 C790,307.5 786,339.5 786,339.5 C771.273,319.726 777.827,291.991 790.5,273 Z "
+   fill="rgb(231,188,79)"
+   id="path24" />
+<path
+   d="M294.5,291 C294.5,291 335,295.5 335,295.5 C321.821,311.967 303.13,321.632 281.5,319 C280.507,318.879 264.573,315.01 267.5,312 C267.5,312 298,304.5 298,304.5 C298,304.5 269,306.5 269,306.5 C275.011,297.559 284.01,292.761 294.5,291 Z "
+   fill="rgb(230,188,80)"
+   id="path25" />
+<path
+   d="M721.5,291 C735.475,290.565 745.251,297.303 754,307.5 C754,307.5 724.5,303 724.5,303 C723.65,303.631 723.628,304.388 724.5,305 C726.065,306.097 756.574,311.064 756,313.5 C729.607,326.799 703.579,316.254 686,294.5 C698.098,298.018 710.73,291.336 721.5,291 Z "
+   fill="rgb(230,188,80)"
+   id="path26" />
+<path
+   d="M198.5,319 C214.192,337.716 228.782,360.984 218.5,386 C218.5,386 208,357.5 208,357.5 C208,357.5 215.5,395 215.5,395 C182.077,379.458 190.781,347.704 198.5,319 Z "
+   fill="rgb(230,188,79)"
+   id="path27" />
+<path
+   d="M823.5,319 C831.429,347.65 839.377,379.509 806.5,395 C806.5,395 814,353.5 814,353.5 C814,353.5 803.5,387 803.5,387 C793.1,361.561 807.089,337.864 823.5,319 Z "
+   fill="rgb(231,188,80)"
+   id="path28" />
+<path
+   d="M313.5,323 C314.39,322.95 315.603,322.723 316,323.5 C299.39,347.122 272.942,366.38 243,354.5 C243,354.5 278,339.5 278,339.5 C267.278,340.528 256.166,343.34 246.5,348 C245.176,341.105 257.848,331.158 263.5,329 C269.525,326.699 305.248,323.467 313.5,323 Z "
+   fill="rgb(230,188,80)"
+   id="path29" />
+<path
+   d="M707.5,323 C731.617,332.116 762.392,316.224 776,346.5 C776,346.5 747,340.5 747,340.5 C747,340.5 779,354.5 779,354.5 C750.637,365.622 720.318,348.129 707.5,323 Z "
+   fill="rgb(230,188,80)"
+   id="path30" />
+<path
+   d="M295.5,355 C287.861,383.119 258.16,409.785 228,398.5 C228,398.5 263,378.5 263,378.5 C263,378.5 229.5,391 229.5,391 C237.025,358.648 274.337,369.909 295.5,355 Z "
+   fill="rgb(231,188,79)"
+   id="path31" />
+<path
+   d="M727.5,356 C747.941,369.395 786.451,358.997 791.5,391 C791.5,391 763,380.5 763,380.5 C763,380.5 794,398.5 794,398.5 C764.234,409.825 733.603,383.643 727.5,356 Z "
+   fill="rgb(231,188,79)"
+   id="path32" />
+<path
+   d="M177.5,370 C194.043,391.676 217.466,407.839 209.5,439 C209.5,439 193,410.5 193,410.5 C193,410.5 207.5,448 207.5,448 C171.771,439.087 171.254,399.935 177.5,370 Z "
+   fill="rgb(230,188,79)"
+   id="path33" />
+<path
+   d="M844.5,370 C850.69,400.54 849.685,440.496 813.5,450 C814.719,446.129 831.586,410.03 828.5,409 C828.5,409 812.5,440 812.5,440 C804.399,408.9 827.301,391.455 844.5,370 Z "
+   fill="rgb(231,188,79)"
+   id="path34" />
+<path
+   d="M738.5,392 C759.045,407.884 800.157,404.172 799.5,439 C799.5,439 768,419.5 768,419.5 C768,419.5 801,446.5 801,446.5 C769.352,454.796 741.343,420.43 738.5,392 Z "
+   fill="rgb(231,187,79)"
+   id="path35" />
+<path
+   d="M282.5,393 C286.433,393.654 275.857,416.442 274,419.5 C263.096,437.456 242.736,451.263 221,446.5 C221,446.5 255,418.5 255,418.5 C255,418.5 222.5,437 222.5,437 C222.942,405.58 262.331,406.686 282.5,393 Z "
+   fill="rgb(231,188,79)"
+   id="path36" />
+<path
+   d="M276.5,429 C280.379,459.693 259.571,496.722 225.5,498 C224.686,497.191 223.911,496.859 224,495.5 C224.173,492.858 249.412,467.689 253,463.5 C253,463.5 224.5,488 224.5,488 C218.619,454.564 261.49,450.864 276.5,429 Z "
+   fill="rgb(231,188,79)"
+   id="path37" />
+<path
+   d="M744.5,430 C762.082,450.405 800.607,454.443 798.5,488 C798.5,488 769,463.5 769,463.5 C776.214,472.977 787.103,480.958 794,490.5 C794.896,491.74 799.436,497.242 796.5,498 C761.565,496.364 743.755,461.706 744.5,430 Z "
+   fill="rgb(230,188,79)"
+   id="path38" />
+<path
+   d="M164.5,434 C186.96,451.958 210.636,469.011 210.5,501 C210.5,501 185,471.5 185,471.5 C185,471.5 210.5,511 210.5,511 C171.613,507.589 162.031,466.631 164.5,434 Z "
+   fill="rgb(231,188,79)"
+   id="path39" />
+<path
+   d="M857.5,434 C857.5,434 856,466.5 856,466.5 C850.044,490.083 837.098,508.59 811.5,512 C811.5,512 837,471.5 837,471.5 C837,471.5 812.5,500 812.5,500 C810.491,468.609 836.189,451.57 857.5,434 Z "
+   fill="rgb(231,188,79)"
+   id="path40" />
+<path
+   d="M279.5,468 C286.542,500.709 272.797,539.879 237.5,548 C234.628,547.428 240.152,537.102 241,535.5 C246.047,525.964 255.619,516.179 261,506.5 C261,506.5 234.5,538 234.5,538 C222.63,505.571 266.803,492.678 279.5,468 Z "
+   fill="rgb(231,188,79)"
+   id="path41" />
+<path
+   d="M742.5,468 C755.642,493.685 797.736,503.889 788.5,539 C788.5,539 762,509.5 762,509.5 C766.001,515.548 786.256,541.157 786,546.5 C785.934,547.878 785.43,548.171 784.5,549 C748.531,540.056 735.56,501.651 742.5,468 Z "
+   fill="rgb(231,188,79)"
+   id="path42" />
+<path
+   d="M162.5,505 C191.577,518.768 221.312,534.609 228.5,569 C228.5,569 192,540.5 192,540.5 C192,540.5 233.5,581 233.5,581 C213.958,583.689 195.437,577.007 183,561.5 C173.909,550.165 164.577,523.776 162,509.5 C161.672,507.682 160.66,506.14 162.5,505 Z "
+   fill="rgb(231,188,79)"
+   id="path43" />
+<path
+   d="M860.5,505 C854.143,542.522 834.821,586.196 789.5,582 C789.5,582 830,539.5 830,539.5 C830,539.5 793.5,570 793.5,570 C799.982,536.125 831.164,517.439 860.5,505 Z "
+   fill="rgb(231,188,79)"
+   id="path44" />
+<path
+   d="M289.5,506 C302.057,538.66 295.174,582.965 259.5,597 C259.5,597 276,551.5 276,551.5 C276,551.5 254.5,587 254.5,587 C238.8,553.951 280.007,533.966 289.5,506 Z "
+   fill="rgb(231,188,80)"
+   id="path45" />
+<path
+   d="M732.5,506 C741.843,534.609 783.509,554.128 767.5,588 C767.5,588 747,553.5 747,553.5 C747,553.5 762.5,598 762.5,598 C727.146,581.752 719.9,540.139 732.5,506 Z "
+   fill="rgb(231,188,79)"
+   id="path46" />
+<path
+   d="M305.5,538 C326.637,570.4 329.808,619.239 293.5,642 C293.5,642 303,588.5 303,588.5 C303,588.5 286.5,633 286.5,633 C265.678,599.588 303.632,571.219 305.5,538 Z "
+   fill="rgb(230,188,79)"
+   id="path47" />
+<path
+   d="M715.5,539 C719.457,571.121 757.175,601.178 734.5,633 C734.5,633 719,588.5 719,588.5 C719,588.5 728.5,642 728.5,642 C692.059,619.803 696.14,571.166 715.5,539 Z "
+   fill="rgb(231,188,79)"
+   id="path48" />
+
+
+
+
+
+
+
+/&gt;`;
+function hofMetalForTier(t){
+  if(!t) return null;
+  return t.tier==='founder' ? 'ember' : t.tier==='goat' ? 'obsidian' : t.tier==='immortal' ? 'gold' : t.tier==='icon' ? 'silver' : t.tier==='legend' ? 'bronze' : 'gold';
+}
+function _hofCrownColor(metal){
+  return metal==='silver'?'#cfd6de':metal==='bronze'?'#d08a4e':metal==='obsidian'?'#e8c060':metal==='ember'?'#ffcf5c':'#f0c44e';
+}
+// Laurel-framed avatar. W = laurel width in px. Photo sits in the laurel opening.
+function hofLaurelAvatar(avatarHTML, W, metal){
+  const body=hofRecolor(HOF_LAUREL_INNER, metal);
+  const crown=_hofCrownPath(512,160,120,_hofCrownColor(metal));
+  const H=Math.round(W*0.773);
+  const photoD=Math.round(W*0.541), px=Math.round(W*0.50), py=Math.round(H*0.582);
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="150 104 724 560">${body}${crown}</svg>`;
+  return `<span class="hof-laurel" style="width:${W}px;height:${H}px">`
+    + `<span class="hof-laurel-photo" style="width:${photoD}px;height:${photoD}px;left:${px}px;top:${py}px;font-size:${Math.round(photoD*0.55)}px">${avatarHTML}</span>`
+    + svg + `</span>`;
+}
+// Central helper: wrap any avatar with the user's HOF-status laurel, or return plain if not honored.
+// `size` = the base avatar diameter it replaces.
+function honoredAvatarHTML(userId, avatarHTML, size){
+  const metal = hofMetalForTier(hofTierOf(userId));
+  if(!metal) return avatarHTML;
+  return hofLaurelAvatar(avatarHTML, Math.round(size*1.85), metal);
+}
+
 
 
 
@@ -18411,11 +18633,10 @@ function renderProfileSheet() {
   document.getElementById('psHeaderName').textContent = prof.name || 'Profile';
   const psAvEl = document.getElementById('psAvatar');
   psAvEl.classList.remove('hof-framed');
-  const psHonor = hofTierOf(prof.id);
-  if (psHonor) {
-    const psChamps = psHonor.isFounder ? '' : (state.hofData || []).filter(r => r.userId === prof.id).length;
+  const psMetal = hofMetalForTier(hofTierOf(prof.id));
+  if (psMetal) {
     psAvEl.classList.add('hof-framed');
-    psAvEl.innerHTML = hofFrameHTML(avatarInner(prof.avatar || '🔥'), 188, { metal: 'gold', crown: true, ribbon: psChamps });
+    psAvEl.innerHTML = hofLaurelAvatar(avatarInner(prof.avatar || '🔥'), 210, psMetal);
   } else {
     psAvEl.innerHTML = avatarInner(prof.avatar || '🔥');
   }
