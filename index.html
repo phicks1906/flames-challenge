@@ -6554,7 +6554,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v558 · phoenix-chips";
+const APP_VERSION = "v559 · lifetime-wins";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -7633,24 +7633,22 @@ async function loadLeaderboard() {
   const now = new Date();
   const MONTH_START = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
-  // ── Step 1: Only challenges whose voting closed THIS calendar month ───────────
-  // Resets cleanly on the 1st of each month — aligns with monthly championships.
-  const { data: recentChallenges, error: chErr } = await db.from('challenges')
-    .select('id, category, voting_end')
-    .gte('voting_end', MONTH_START)
-    .lte('voting_end', now.toISOString())
-    .limit(500);
+  // ── Step 1a: ALL closed challenges (lifetime wins / rank chips) ───────────────
+  // ── Step 1b: This month only (monthly leaderboard ranking) ───────────────────
+  const [allChRes, monthChRes] = await Promise.all([
+    db.from('challenges').select('id, category, voting_end').lte('voting_end', now.toISOString()).limit(2000),
+    db.from('challenges').select('id').gte('voting_end', MONTH_START).lte('voting_end', now.toISOString()).limit(500),
+  ]);
 
-  if (chErr) { console.error('leaderboard challenges', chErr); }
-  const recentChs = recentChallenges || [];
-  const chIds = recentChs.map(c => c.id);
+  const allChs = allChRes.data || [];
+  const chIds = allChs.map(c => c.id);
   const chInfo = {};
-  recentChs.forEach(c => { chInfo[c.id] = { category: c.category, votingEnd: c.voting_end }; });
+  allChs.forEach(c => { chInfo[c.id] = { category: c.category, votingEnd: c.voting_end }; });
 
-  // All challenges this month qualify for the monthly tally
-  const thisMonthChIds = new Set(chIds);
+  // Monthly subset — rolling30 / leaderboard ranking only
+  const thisMonthChIds = new Set((monthChRes.data || []).map(c => c.id));
 
-  // No recent challenges → empty leaderboard, skip remaining queries
+  // No challenges at all → empty leaderboard
   if (!chIds.length) {
     state.leaderboardData = { users: [], leaders: {}, champions: {} };
     state.lbCategory = state.lbCategory || 'All';
