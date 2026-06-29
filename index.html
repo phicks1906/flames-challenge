@@ -6587,7 +6587,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v561 · challenge-search";
+const APP_VERSION = "v563 · score-consistency";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -7702,10 +7702,11 @@ async function loadLeaderboard() {
   const allVotesByEntry = {};
   if (entryIds.length) {
     const { data: votes } = await db.from('entry_votes')
-      .select('entry_id')
+      .select('entry_id, voter_id')
       .in('entry_id', entryIds);
     (votes || []).forEach(v => {
-      allVotesByEntry[v.entry_id] = (allVotesByEntry[v.entry_id] || 0) + 1;
+      if (!allVotesByEntry[v.entry_id]) allVotesByEntry[v.entry_id] = [];
+      allVotesByEntry[v.entry_id].push(v.voter_id);
     });
   }
 
@@ -7728,29 +7729,44 @@ async function loadLeaderboard() {
 
   const winsByUser = {};
   const lossesByUser = {};
+  const scoreByUser = {};   // weighted competitive score
   const ensureUser = id => {
     if (!winsByUser[id]) winsByUser[id] = { allTime: 0, rolling30: 0, byCategory: {}, rolling30ByCategory: {} };
     if (!lossesByUser[id]) lossesByUser[id] = { allTime: 0, rolling30: 0 };
+    if (!scoreByUser[id]) scoreByUser[id] = 0;
   };
 
   Object.entries(entriesByCh).forEach(([chId, entries]) => {
     const cat = chInfo[chId]?.category || 'Other';
 
-    // All-time winner within this 30-day window
+    // Vote counts and voter lists per entry
     let max = 0, topEntries = [];
     entries.forEach(e => {
-      const v = allVotesByEntry[e.id] || 0;
+      const v = (allVotesByEntry[e.id] || []).length;
       if (v > max) { max = v; topEntries = [e]; }
       else if (v === max && v > 0) topEntries.push(e);
     });
+
     if (max > 0 && topEntries.length === 1) {
-      const uid = topEntries[0].user_id;
+      const winner = topEntries[0];
+      const uid = winner.user_id;
       ensureUser(uid);
       winsByUser[uid].allTime++;
       winsByUser[uid].byCategory[cat] = (winsByUser[uid].byCategory[cat] || 0) + 1;
       entries.filter(e => e.user_id !== uid).forEach(e => {
         ensureUser(e.user_id); lossesByUser[e.user_id].allTime++;
       });
+
+      // ── Weighted score: log2(entrants) × log2(voters)² × √(MOV) ──────────
+      // Gate: ≥2 entrants AND at least 1 voter who isn't the winner themselves
+      const entrants = entries.length;
+      const winnerVoters = (allVotesByEntry[winner.id] || []).filter(v => v !== uid);
+      if (entrants >= 2 && winnerVoters.length >= 1) {
+        const totalVotes = entries.reduce((s, e) => s + (allVotesByEntry[e.id] || []).length, 0);
+        const margin = max / totalVotes;
+        const wscore = Math.log2(entrants) * Math.pow(Math.log2(Math.max(totalVotes, 2)), 2) * Math.sqrt(margin);
+        scoreByUser[uid] = (scoreByUser[uid] || 0) + wscore;
+      }
     }
 
     // Monthly wins (this calendar month only)
@@ -7774,6 +7790,7 @@ async function loadLeaderboard() {
     rolling30Losses: lossesByUser[p.id]?.rolling30 || 0,
     byCategory: winsByUser[p.id]?.byCategory || {},
     rolling30ByCategory: winsByUser[p.id]?.rolling30ByCategory || {},
+    weightedScore: scoreByUser[p.id] || 0,
   }));
 
   const leaders = {};
@@ -9608,7 +9625,9 @@ function renderHeatCheck() {
     }
   }
   // Stash for profile sheet to display W-L-T
-  state.myWLT = { wins, losses, ties, entries, streak };
+  // weightedScore pulled from leaderboardData so own-chip tier matches everyone else's view
+  const myScore = (state.leaderboardData?.users || []).find(u => u.id === state.profile?.id)?.weightedScore || 0;
+  state.myWLT = { wins, losses, ties, entries, streak, weightedScore: myScore };
 
   const decided = wins + losses;
   // Empty state only when user has zero entries. If entries exist but none decided yet, show 0%.
@@ -12958,13 +12977,20 @@ function _buildRankSprite() {
 }
 
 // ── RANK CHIPS (regular challenge wins) ──────────────────────────────────────
+function getWeightedScore(userId) {
+  if (!userId) return 0;
+  if (userId === state.profile?.id && state.myWLT) return state.myWLT.weightedScore || 0;
+  return state.leaderboardData?.users?.find(u => u.id === userId)?.weightedScore || 0;
+}
 // Spark/Flame/Blaze/Inferno. A Hall of Fame medallion supersedes the chip, so a
 // person never shows both — getRankBadge returns '' for anyone who has an honor.
+// Score thresholds (calibrated from formula: log2(e)×log2(v)²×√margin)
+// Spark >0 · Flame ≥10 · Blaze ≥60 · Inferno ≥200 — revisit at real user scale
 const RANK_TIERS = [
-  { min: 10, key: 'inferno', name: 'Inferno', pip: '★' },
-  { min: 5,  key: 'blaze',   name: 'Blaze',   pip: '▲' },
-  { min: 1,  key: 'flame',   name: 'Flame',   pip: '◆' },
-  { min: 0,  key: 'spark',   name: 'Spark',   pip: '✦' },
+  { min: 200, key: 'inferno', name: 'Inferno', pip: '★' },
+  { min: 60,  key: 'blaze',   name: 'Blaze',   pip: '▲' },
+  { min: 10,  key: 'flame',   name: 'Flame',   pip: '◆' },
+  { min: 0.1, key: 'spark',   name: 'Spark',   pip: '✦' },
 ];
 function hasHonorBadge(userId) {
   if (!userId) return false;
@@ -12973,8 +12999,9 @@ function hasHonorBadge(userId) {
 }
 function getRank(userId) {
   const w = getRegularWins(userId);
-  const tier = RANK_TIERS.find(t => w >= t.min) || RANK_TIERS[RANK_TIERS.length - 1];
-  return { ...tier, wins: w };
+  const s = getWeightedScore(userId);
+  const tier = RANK_TIERS.find(t => s >= t.min) || RANK_TIERS[RANK_TIERS.length - 1];
+  return { ...tier, wins: w, score: Math.round(s) };
 }
 function getRankBadge(userId, opts = {}) {
   if (!userId) return '';
@@ -12983,7 +13010,7 @@ function getRankBadge(userId, opts = {}) {
   if (r.wins < 1 && !opts.showSpark) return '';    // don't tag 0-win users inline
   _buildRankSprite();
   const glow = RANK_ICON_GLOW[r.key] || '#ff6a2c';
-  return `<span class="rank-chip rank-${r.key}" title="${r.name} · ${r.wins} win${r.wins === 1 ? '' : 's'}"><svg width="14" height="14" style="filter:drop-shadow(0 0 3px ${glow}cc);flex-shrink:0"><use href="#ri-${r.key}"/></svg><span class="rc-label">${r.name}</span></span>`;
+  return `<span class="rank-chip rank-${r.key}" title="${r.name} · ${r.wins} win${r.wins === 1 ? '' : 's'} · score ${r.score}"><svg width="14" height="14" style="filter:drop-shadow(0 0 3px ${glow}cc);flex-shrink:0"><use href="#ri-${r.key}"/></svg><span class="rc-label">${r.name}</span></span>`;
 }
 
 let ccState = {
