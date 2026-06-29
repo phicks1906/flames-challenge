@@ -5533,7 +5533,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
         <div style="padding:10px 12px;background:var(--surface-2);border-radius:8px;display:flex;align-items:center;justify-content:space-between;">
           <div>
             <div style="font-size:13px;font-weight:600;color:var(--text);">⚡ Sudden death on tie</div>
-            <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">If voting ends tied, a 48-hour runoff decides the winner.</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">If voting ends tied, the tied players get 48 hours to submit a NEW entry (hidden until reveal), then 24 hours of voting decides it.</div>
           </div>
           <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;margin-left:12px;">
             <input type="checkbox" id="ccSuddenDeathCheck" style="opacity:0;width:0;height:0;">
@@ -6691,7 +6691,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v564 · profile-heat-check";
+const APP_VERSION = "v565 · sudden-death";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -13757,6 +13757,19 @@ async function loadChallenges(opts = {}) {
 
 function computeChallengeStatus(ch) {
   const now = new Date();
+
+  // ── Sudden Death takes precedence over the normal window ──────────────────
+  // sd_phase 'submitting' = tied players submitting fresh hidden entries
+  // sd_phase 'voting'     = new entries revealed, everyone votes
+  if (ch.sd_phase === 'submitting') {
+    if (ch.sd_submit_end && now < new Date(ch.sd_submit_end)) return 'sd_submitting';
+    return 'sd_submitting'; // cron will flip it; until then keep showing submit state
+  }
+  if (ch.sd_phase === 'voting') {
+    if (now < new Date(ch.voting_end)) return 'sudden_death';
+    return 'closed';
+  }
+
   const subDeadline = new Date(ch.submission_deadline);
   const voteEnd = new Date(ch.voting_end);
   const entryCount = state.entryCounts[ch.id] || 0;
@@ -13772,13 +13785,16 @@ function computeChallengeStatus(ch) {
 // window OR a sudden-death runoff. NOT during submitting/closed/voided. Used by
 // every vote gate and guard so the rule can never drift between surfaces again.
 function isVotingPhase(stat) { return stat === 'voting' || stat === 'sudden_death'; }
+// True while tied players are submitting their fresh sudden-death entries.
+function isSdSubmitting(stat) { return stat === 'sd_submitting'; }
 function challengePhase(stat) {
   return ({
-    submitting:    { label: 'OPEN TO ENTER',    cls: 'submitting' },
-    voting:        { label: 'VOTE NOW',          cls: 'voting' },
-    sudden_death:  { label: '⚡ SUDDEN DEATH',   cls: 'voting' },
-    closed:        { label: 'DECIDED',           cls: 'closed' },
-    voided:        { label: 'NO CONTEST',        cls: 'voided' },
+    submitting:    { label: 'OPEN TO ENTER',         cls: 'submitting' },
+    sd_submitting: { label: '⚡ SUDDEN DEATH — SUBMIT', cls: 'voting' },
+    voting:        { label: 'VOTE NOW',               cls: 'voting' },
+    sudden_death:  { label: '⚡ SUDDEN DEATH — VOTE',  cls: 'voting' },
+    closed:        { label: 'DECIDED',                cls: 'closed' },
+    voided:        { label: 'NO CONTEST',             cls: 'voided' },
   })[stat] || { label: 'CHALLENGE', cls: '' };
 }
 
@@ -13855,7 +13871,8 @@ function renderChallenges() {
     const statusLabel = challengePhase(ch.computedStatus).label;
     const isChampionship = ch.title && ch.title.startsWith('⚡');
     const countdownTarget = ch.computedStatus === 'submitting' ? ch.submission_deadline :
-                            ch.computedStatus === 'voting' ? ch.voting_end : null;
+                            ch.computedStatus === 'sd_submitting' ? ch.sd_submit_end :
+                            (ch.computedStatus === 'voting' || ch.computedStatus === 'sudden_death') ? ch.voting_end : null;
     const countdownText = countdownTarget ? `⏱ ${formatCountdown(countdownTarget)}` : '';
     const entryCount = state.entryCounts[ch.id] || 0;
     const entryWord = entryCount === 1 ? 'entry' : 'entries';
@@ -14143,7 +14160,7 @@ function renderChallengeDetail() {
 
   const status = computeChallengeStatus(ch);
   const statusLabel = challengePhase(status).label;
-  const countdownTarget = status === 'submitting' ? ch.submission_deadline : status === 'voting' ? ch.voting_end : null;
+  const countdownTarget = status === 'submitting' ? ch.submission_deadline : status === 'sd_submitting' ? ch.sd_submit_end : (status === 'voting' || status === 'sudden_death') ? ch.voting_end : null;
 
   // Hero
   const creatorClickable = ch.creator?.id && ch.creator.id !== state.profile?.id;
@@ -14219,9 +14236,21 @@ function renderChallengeDetail() {
   }
 
   // Submit button visibility
-  const userHasEntered = state.profile && state.currentEntries.some(e => e.user_id === state.profile.id);
+  // During Sudden Death submitting, only the tied users may submit, and only a
+  // fresh (this-round) entry. The normal "already entered" check looks at the
+  // current round's entries, not the original ones.
+  const myId = state.profile?.id;
+  const isSdSub = status === 'sd_submitting';
+  const sdRound = ch.sd_round || 0;
+  const enteredThisRound = state.profile && state.currentEntries.some(e =>
+    e.user_id === myId && (isSdSub ? (e.sd_round || 0) === sdRound : true));
+  const userHasEntered = enteredThisRound;
   const challengeFull = state.currentEntries.length >= MAX_ENTRIES_PER_CHALLENGE;
-  const canEnter = status === 'submitting' && !userHasEntered && !challengeFull && state.profile;
+  const amTiedPlayer = isSdSub && Array.isArray(ch.sd_user_ids) && ch.sd_user_ids.includes(myId);
+  const canEnter = state.profile && !userHasEntered && (
+    (status === 'submitting' && !challengeFull) ||
+    (isSdSub && amTiedPlayer)
+  );
   document.getElementById('cdAddEntryBtn').style.display = canEnter ? 'block' : 'none';
   const cdWrap = document.getElementById('cdSubmitBtnWrap');
   if (cdWrap) cdWrap.style.display = canEnter ? 'block' : 'none';
@@ -14233,8 +14262,23 @@ function renderChallengeDetail() {
     if (showFull) cdFullNote.textContent = `🚫 Challenge full — ${MAX_ENTRIES_PER_CHALLENGE} entries max`;
   }
 
+  // ── Sudden Death entry visibility ────────────────────────────────────────────
+  //  submitting → hide ALL entries (blind round); voting → only this round's entries
+  let sdVisibleEntries;
+  if (ch.sd_phase === 'submitting') {
+    sdVisibleEntries = [];
+  } else if (ch.sd_phase === 'voting') {
+    const _r = ch.sd_round || 0;
+    sdVisibleEntries = state.currentEntries.filter(e => (e.sd_round || 0) === _r);
+  } else {
+    sdVisibleEntries = state.currentEntries;
+  }
+
   // Entry count + grid
-  document.getElementById('cdEntriesCount').textContent = `${state.currentEntries.length} ${state.currentEntries.length === 1 ? 'entry' : 'entries'}`;
+  const _sdSubmittingNow = ch.sd_phase === 'submitting';
+  document.getElementById('cdEntriesCount').textContent = _sdSubmittingNow
+    ? '🔒 Entries hidden until voting'
+    : `${sdVisibleEntries.length} ${sdVisibleEntries.length === 1 ? 'entry' : 'entries'}`;
 
   const voteCountByEntry = {};
   state.currentVotes.forEach(v => { voteCountByEntry[v.entry_id] = (voteCountByEntry[v.entry_id] || 0) + 1; });
@@ -14246,7 +14290,7 @@ function renderChallengeDetail() {
   // Standings are revealed once the challenge closes OR once you've cast your vote
   const revealStandings = isClosed || (canVote && iHaveVoted);
 
-  const sortedEntries = [...state.currentEntries].sort((a, b) => {
+  const sortedEntries = [...sdVisibleEntries].sort((a, b) => {
     if (revealStandings) {
       const diff = (voteCountByEntry[b.id] || 0) - (voteCountByEntry[a.id] || 0);
       if (diff !== 0) return diff;
@@ -14259,7 +14303,10 @@ function renderChallengeDetail() {
   const counterEl = document.getElementById('cdEntriesCounter');
   const dotsEl = document.getElementById('cdEntriesDots');
   if (sortedEntries.length === 0) {
-    grid.innerHTML = '<div class="cd-entries-pager-empty">No entries yet. Be the first!</div>';
+    const _emptyMsg = ch.sd_phase === 'submitting'
+      ? '🔒 Sudden Death in progress — entries are hidden until voting opens.'
+      : 'No entries yet. Be the first!';
+    grid.innerHTML = `<div class="cd-entries-pager-empty">${_emptyMsg}</div>`;
     if (counterEl) counterEl.style.display = 'none';
     if (dotsEl) dotsEl.style.display = 'none';
     return;
@@ -14272,7 +14319,7 @@ function renderChallengeDetail() {
 
     let medalBadge = '';
     let winnerClass = '';
-    if (isClosed && voteCount > 0 && state.currentEntries.length > 1) {
+    if (isClosed && voteCount > 0 && sortedEntries.length > 1) {
       if (idx === 0) { medalBadge = '<div class="cd-medal gold">🥇 1st</div>'; winnerClass = ' winner'; }
       else if (idx === 1) { medalBadge = '<div class="cd-medal silver">🥈 2nd</div>'; }
       else if (idx === 2) { medalBadge = '<div class="cd-medal bronze">🥉 3rd</div>'; }
@@ -14650,10 +14697,16 @@ async function voteOnEntry(entryId) {
   }, 50);
 
   try {
-    const { error: upErr } = await db.from('entry_votes').upsert(
-      { challenge_id: challengeId, entry_id: entryId, voter_id: me },
+    const _sdR = state.currentChallenge?.sd_phase === 'voting' ? (state.currentChallenge.sd_round || 0) : 0;
+    let { error: upErr } = await db.from('entry_votes').upsert(
+      { challenge_id: challengeId, entry_id: entryId, voter_id: me, sd_round: _sdR },
       { onConflict: 'challenge_id,voter_id' }
     );
+    if (upErr && /sd_round/.test(upErr.message || '')) {
+      ({ error: upErr } = await db.from('entry_votes').upsert(
+        { challenge_id: challengeId, entry_id: entryId, voter_id: me },
+        { onConflict: 'challenge_id,voter_id' }));
+    }
     if (upErr) throw upErr;
 
     toast(previousVote ? '🗳️ Vote changed' : '🗳️ Vote cast');
@@ -14900,8 +14953,14 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
   if (ch.media_type !== 'text' && !seState.file && !seState.editingEntry?.media_url) {
     errBox.textContent = 'Upload your ' + ch.media_type + '.'; errBox.classList.add('show'); return;
   }
-  if (new Date(ch.submission_deadline) <= new Date()) {
+  // Normal deadline gate — but Sudden Death submission happens AFTER the original
+  // deadline, so bypass it when this user is a tied player in the submitting phase.
+  const _sdSubmitting = ch.sd_phase === 'submitting' && Array.isArray(ch.sd_user_ids) && ch.sd_user_ids.includes(state.profile.id);
+  if (!_sdSubmitting && new Date(ch.submission_deadline) <= new Date()) {
     errBox.textContent = 'Submission deadline has passed.'; errBox.classList.add('show'); return;
+  }
+  if (_sdSubmitting && ch.sd_submit_end && new Date(ch.sd_submit_end) <= new Date()) {
+    errBox.textContent = 'Sudden Death submission window has closed.'; errBox.classList.add('show'); return;
   }
 
   const btn = e.target.querySelector('button[type="submit"]');
@@ -14915,10 +14974,17 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
   // waste a Bunny upload on a rejected entry. DB unique constraint is the backstop.
   if (!seState.editingEntry) {
     try {
-      const { data: existing } = await db.from('entries')
-        .select('id').eq('challenge_id', ch.id).eq('user_id', state.profile.id).limit(1);
-      if (existing && existing.length) {
-        errBox.textContent = 'You already have an entry in this challenge. Tap ✏️ Edit on your entry to change it.';
+      const _curRound = _sdSubmitting ? (ch.sd_round || 0) : 0;
+      let dupQ = db.from('entries')
+        .select('id, sd_round').eq('challenge_id', ch.id).eq('user_id', state.profile.id);
+      const { data: existing } = await dupQ.limit(20);
+      // In SD, a player who entered the ORIGINAL round may still submit a fresh
+      // entry for the current SD round — only block a dup within the same round.
+      const dupHit = (existing || []).some(e => (e.sd_round || 0) === _curRound);
+      if (dupHit) {
+        errBox.textContent = _sdSubmitting
+          ? 'You already submitted your Sudden Death entry.'
+          : 'You already have an entry in this challenge. Tap ✏️ Edit on your entry to change it.';
         errBox.classList.add('show');
         btn.disabled = false;
         return;
@@ -14928,7 +14994,7 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
     try {
       const { count: entryCount } = await db.from('entries')
         .select('id', { count: 'exact', head: true }).eq('challenge_id', ch.id);
-      if (typeof entryCount === 'number' && entryCount >= MAX_ENTRIES_PER_CHALLENGE) {
+      if (!_sdSubmitting && typeof entryCount === 'number' && entryCount >= MAX_ENTRIES_PER_CHALLENGE) {
         errBox.textContent = `This challenge is full (${MAX_ENTRIES_PER_CHALLENGE} entries max). No more entries can be added.`;
         errBox.classList.add('show');
         btn.disabled = false;
@@ -15062,8 +15128,13 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
         caption: captionText,
         poster_url: posterUrl,
         media_hash: seState._mediaHash || null,
+        sd_round: _sdSubmitting ? (ch.sd_round || 0) : 0,
       };
       ({ data: entryData, error: entryError } = await db.from('entries').insert(newEntry).select('id').single());
+      if (entryError && /sd_round/.test(entryError.message || '')) {
+        delete newEntry.sd_round;
+        ({ data: entryData, error: entryError } = await db.from('entries').insert(newEntry).select('id').single());
+      }
       if (entryError && /media_hash/.test(entryError.message || '')) {
         delete newEntry.media_hash;
         ({ data: entryData, error: entryError } = await db.from('entries').insert(newEntry).select('id').single());
@@ -17663,10 +17734,21 @@ async function openFeedViewer(chId, startEntryId = null) {
     const entries = entriesRes.data || [];
     const votes   = votesRes.data  || [];
 
-    // During sudden death only show the tied entries
-    const visibleEntries = ch.sudden_death && ch.sudden_death_entry_ids?.length
-      ? entries.filter(e => ch.sudden_death_entry_ids.includes(e.id))
-      : entries;
+    // Sudden Death visibility:
+    //  - submitting phase → entries are HIDDEN from everyone (blind round)
+    //  - voting phase     → show ONLY this round's fresh entries
+    let visibleEntries;
+    if (ch.sd_phase === 'submitting') {
+      visibleEntries = [];
+    } else if (ch.sd_phase === 'voting') {
+      const r = ch.sd_round || 0;
+      visibleEntries = entries.filter(e => (e.sd_round || 0) === r);
+    } else if (ch.sudden_death && ch.sudden_death_entry_ids?.length) {
+      // legacy single-phase rows (pre-v565) — keep working
+      visibleEntries = entries.filter(e => ch.sudden_death_entry_ids.includes(e.id));
+    } else {
+      visibleEntries = entries;
+    }
 
     _fvEntries = entries; // keep full list for standings
     _fvVoteCounts = {};
@@ -18100,10 +18182,16 @@ async function fvVote(btn, chId) {
   btn.disabled = true;
   btn.textContent = '⏳ Counting...';
   try {
-    const { error: upErr } = await db.from('entry_votes').upsert(
-      { challenge_id: chId, entry_id: entryId, voter_id: state.profile.id },
+    const _sdR2 = _fvCh?.sd_phase === 'voting' ? (_fvCh.sd_round || 0) : 0;
+    let { error: upErr } = await db.from('entry_votes').upsert(
+      { challenge_id: chId, entry_id: entryId, voter_id: state.profile.id, sd_round: _sdR2 },
       { onConflict: 'challenge_id,voter_id' }
     );
+    if (upErr && /sd_round/.test(upErr.message || '')) {
+      ({ error: upErr } = await db.from('entry_votes').upsert(
+        { challenge_id: chId, entry_id: entryId, voter_id: state.profile.id },
+        { onConflict: 'challenge_id,voter_id' }));
+    }
     if (upErr) throw upErr;
     toast('🗳️ Vote cast');
     btn.textContent = '✓ Voted';
