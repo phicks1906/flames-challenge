@@ -585,6 +585,49 @@ body.theme-light .nav { background: rgba(255, 255, 255, 0.88); border-bottom-col
 .ember-hero{display:flex;justify-content:center;align-items:flex-end;height:96px;overflow:visible;margin-bottom:2px}
 .ember-hero .tcin{position:relative;top:0;left:0;width:74px;height:86px;margin:0}
 
+
+/* ============ EMBER PROFILE SPEECH (v565) ============ */
+.ps-ember {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: linear-gradient(135deg, rgba(255,106,44,0.10), rgba(255,45,31,0.05));
+  border: 1px solid rgba(255,106,44,0.22);
+  border-radius: 16px;
+  padding: 12px 14px;
+  margin: 10px 0 4px;
+}
+.ps-ember-mascot {
+  position: relative;
+  width: 34px; height: 40px;
+  flex-shrink: 0;
+}
+.ps-ember-mascot .tcf {
+  position: absolute; left: 50%; bottom: 0;
+  width: 100%; padding-bottom: 100%; height: 0; margin-left: -50%;
+  background: linear-gradient(to top, var(--flame), var(--ember) 48%, var(--gold) 96%);
+  border-radius: 0 52% 52% 52%; transform: rotate(45deg);
+  box-shadow: 0 0 12px -2px rgba(255,90,30,.5), inset -3px -3px 7px rgba(0,0,0,.18);
+  animation: tcin-flick 1.6s ease-in-out infinite;
+}
+.ps-ember-mascot .tcface { position:absolute; left:50%; bottom:16%; width:64%; height:42%; margin-left:-32%; z-index:2; }
+.ps-ember-mascot .tce { position:absolute; top:6%; width:26%; height:34%; background:#241405; border-radius:50%; }
+.ps-ember-mascot .tce.l { left:14%; } .ps-ember-mascot .tce.r { right:14%; }
+.ps-ember-mascot .tcm { position:absolute; bottom:8%; left:50%; width:38%; height:22%; margin-left:-19%; border-bottom:3px solid #241405; border-radius:0 0 40px 40px; }
+.ps-ember-body { flex: 1; min-width: 0; }
+.ps-ember-name {
+  font-family: var(--font-display);
+  font-size: 10px; letter-spacing: 2px;
+  color: var(--ember); text-transform: uppercase; margin-bottom: 2px;
+}
+.ps-ember-text { font-size: 13px; color: var(--text); line-height: 1.4; }
+.ps-ember-cta {
+  display: inline-block; margin-top: 8px;
+  background: linear-gradient(135deg, var(--ember), var(--flame));
+  color: #fff; border: none; border-radius: 20px;
+  padding: 7px 14px; font-size: 12px; font-weight: 700; cursor: pointer;
+}
+
 /* ============ HALL OF FAME BADGES ============ */
 .hof-badge-img {
   object-fit: contain;
@@ -5744,6 +5787,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       <div class="ps-avatar" id="psAvatar">🔥</div>
       <div class="ps-name" id="psName">User</div>
       <div class="ps-heat-card" id="psHeatCard" style="display:none"></div>
+      <div class="ps-ember" id="psEmber" style="display:none"></div>
       <div class="ps-social-line" id="psSocialLine"></div>
       <div class="ps-stats" id="psStats" style="display:none"></div>
       <button class="btn btn-primary ps-follow-btn" id="psFollowBtn" style="display:none"></button>
@@ -6691,7 +6735,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v565 · sudden-death";
+const APP_VERSION = "v566 · ember-rivalry";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -7774,14 +7818,17 @@ async function loadLeaderboard() {
   // ── Step 1a: ALL closed challenges (lifetime wins / rank chips) ───────────────
   // ── Step 1b: This month only (monthly leaderboard ranking) ───────────────────
   const [allChRes, monthChRes] = await Promise.all([
-    db.from('challenges').select('id, category, voting_end').lte('voting_end', now.toISOString()).limit(2000),
+    db.from('challenges').select('id, category, voting_end, sd_round, sd_phase').lte('voting_end', now.toISOString()).limit(2000),
     db.from('challenges').select('id').gte('voting_end', MONTH_START).lte('voting_end', now.toISOString()).limit(500),
   ]);
 
   const allChs = allChRes.data || [];
-  const chIds = allChs.map(c => c.id);
+  // A challenge still mid-Sudden-Death (sd_phase set) is NOT decided yet — exclude
+  // it from win/score tallies until its final round closes.
+  const decidedChs = allChs.filter(c => !c.sd_phase);
+  const chIds = decidedChs.map(c => c.id);
   const chInfo = {};
-  allChs.forEach(c => { chInfo[c.id] = { category: c.category, votingEnd: c.voting_end }; });
+  decidedChs.forEach(c => { chInfo[c.id] = { category: c.category, votingEnd: c.voting_end, sdRound: c.sd_round || 0 }; });
 
   // Monthly subset — rolling30 / leaderboard ranking only
   const thisMonthChIds = new Set((monthChRes.data || []).map(c => c.id));
@@ -7796,19 +7843,29 @@ async function loadLeaderboard() {
 
   // ── Step 2: Entries only for those challenges ─────────────────────────────────
   const { data: entries } = await db.from('entries')
-    .select('id, challenge_id, user_id')
+    .select('id, challenge_id, user_id, sd_round')
     .in('challenge_id', chIds);
 
-  const allEntries = entries || [];
+  // For challenges that went through Sudden Death, only the FINAL round's entries
+  // count. For normal challenges sd_round is 0 on both challenge and entries.
+  const allEntries = (entries || []).filter(e => {
+    const finalRound = chInfo[e.challenge_id]?.sdRound || 0;
+    return (e.sd_round || 0) === finalRound;
+  });
   const entryIds = allEntries.map(e => e.id);
 
   // ── Step 3: Votes only for those entries ──────────────────────────────────────
   const allVotesByEntry = {};
   if (entryIds.length) {
     const { data: votes } = await db.from('entry_votes')
-      .select('entry_id, voter_id')
+      .select('entry_id, voter_id, sd_round')
       .in('entry_id', entryIds);
+    // entryIds already only contains final-round entries, so any vote on them is
+    // valid — but guard on sd_round too in case an entry id was reused across rounds.
+    const _entryRound = {};
+    allEntries.forEach(e => { _entryRound[e.id] = e.sd_round || 0; });
     (votes || []).forEach(v => {
+      if ((v.sd_round || 0) !== (_entryRound[v.entry_id] || 0)) return;
       if (!allVotesByEntry[v.entry_id]) allVotesByEntry[v.entry_id] = [];
       allVotesByEntry[v.entry_id].push(v.voter_id);
     });
@@ -7851,7 +7908,10 @@ async function loadLeaderboard() {
       else if (v === max && v > 0) topEntries.push(e);
     });
 
+    const wentThroughSD = (chInfo[chId]?.sdRound || 0) > 0;
+
     if (max > 0 && topEntries.length === 1) {
+      // ── Clean single winner ───────────────────────────────────────────────
       const winner = topEntries[0];
       const uid = winner.user_id;
       ensureUser(uid);
@@ -7862,7 +7922,6 @@ async function loadLeaderboard() {
       });
 
       // ── Weighted score: log2(entrants) × log2(voters)² × √(MOV) ──────────
-      // Gate: ≥2 entrants AND at least 1 voter who isn't the winner themselves
       const entrants = entries.length;
       const winnerVoters = (allVotesByEntry[winner.id] || []).filter(v => v !== uid);
       if (entrants >= 2 && winnerVoters.length >= 1) {
@@ -7871,17 +7930,42 @@ async function loadLeaderboard() {
         const wscore = Math.log2(entrants) * Math.pow(Math.log2(Math.max(totalVotes, 2)), 2) * Math.sqrt(margin);
         scoreByUser[uid] = (scoreByUser[uid] || 0) + wscore;
       }
-    }
 
-    // Monthly wins (this calendar month only)
-    if (thisMonthChIds.has(chId) && max > 0 && topEntries.length === 1) {
-      const uid = topEntries[0].user_id;
-      ensureUser(uid);
-      winsByUser[uid].rolling30++;
-      winsByUser[uid].rolling30ByCategory[cat] = (winsByUser[uid].rolling30ByCategory[cat] || 0) + 1;
-      entries.filter(e => e.user_id !== uid).forEach(e => {
-        ensureUser(e.user_id); lossesByUser[e.user_id].rolling30++;
+      if (thisMonthChIds.has(chId)) {
+        winsByUser[uid].rolling30++;
+        winsByUser[uid].rolling30ByCategory[cat] = (winsByUser[uid].rolling30ByCategory[cat] || 0) + 1;
+        entries.filter(e => e.user_id !== uid).forEach(e => {
+          ensureUser(e.user_id); lossesByUser[e.user_id].rolling30++;
+        });
+      }
+    } else if (max > 0 && topEntries.length > 1 && wentThroughSD) {
+      // ── Re-tie after Sudden Death → SPLIT the win (both/all credited) ─────
+      // No infinite loop: a challenge already through SD doesn't re-trigger it,
+      // so a still-tied result simply credits every tied user with the win.
+      const tiedUids = [...new Set(topEntries.map(e => e.user_id))];
+      tiedUids.forEach(uid => {
+        ensureUser(uid);
+        winsByUser[uid].allTime++;
+        winsByUser[uid].byCategory[cat] = (winsByUser[uid].byCategory[cat] || 0) + 1;
+        if (thisMonthChIds.has(chId)) {
+          winsByUser[uid].rolling30++;
+          winsByUser[uid].rolling30ByCategory[cat] = (winsByUser[uid].rolling30ByCategory[cat] || 0) + 1;
+        }
       });
+      // Non-tied entrants take a loss
+      entries.filter(e => !tiedUids.includes(e.user_id)).forEach(e => {
+        ensureUser(e.user_id); lossesByUser[e.user_id].allTime++;
+        if (thisMonthChIds.has(chId)) lossesByUser[e.user_id].rolling30++;
+      });
+      // Weighted score for a split: each tied user gets the score as if they won,
+      // since they proved equal at the top of a real field.
+      const entrants = entries.length;
+      const totalVotes = entries.reduce((s, e) => s + (allVotesByEntry[e.id] || []).length, 0);
+      if (entrants >= 2 && totalVotes >= 2) {
+        const margin = max / totalVotes;
+        const wscore = Math.log2(entrants) * Math.pow(Math.log2(Math.max(totalVotes, 2)), 2) * Math.sqrt(margin);
+        tiedUids.forEach(uid => { scoreByUser[uid] = (scoreByUser[uid] || 0) + wscore; });
+      }
     }
   });
 
@@ -18982,6 +19066,7 @@ async function openUserProfile(userId) {
   document.getElementById('psName').textContent = 'Loading...';
   document.getElementById('psStats').innerHTML = '';
   { const _hc = document.getElementById('psHeatCard'); if (_hc) _hc.style.display = 'none'; }
+  { const _em = document.getElementById('psEmber'); if (_em) _em.style.display = 'none'; }
   document.getElementById('psFollowBtn').style.display = 'none';
   { const _mb = document.getElementById('psMessageBtn'); if (_mb) _mb.style.display = 'none'; }
   document.getElementById('psContent').innerHTML = '<div class="ps-empty">Loading…</div>';
@@ -19152,6 +19237,9 @@ function renderProfileSheet() {
     socialEl.innerHTML = `<strong>${followers}</strong> followers · <strong>${following}</strong> following`;
   }
 
+  // ── Ember commentary (only on OTHER people's profiles) ───────────────────────
+  renderProfileEmber(prof, isMe, { wins: hcWins, losses: hcLosses, pct: hcPct });
+
   const btn = document.getElementById('psFollowBtn');
   if (isMe) {
     btn.style.display = 'none';
@@ -19164,6 +19252,67 @@ function renderProfileSheet() {
   }
 
   renderProfileTab();
+}
+
+function renderProfileEmber(prof, isMe, theirStats) {
+  const el = document.getElementById('psEmber');
+  if (!el) return;
+  // Never on your own profile, and only when you're signed in
+  if (isMe || !state.profile) { el.style.display = 'none'; return; }
+
+  // My stats vs theirs (use weighted score as the truest competitive measure,
+  // fall back to win count when scores are still zero/young)
+  const myScore    = getWeightedScore(state.profile.id);
+  const theirScore = getWeightedScore(prof.id);
+  const myWins     = getRegularWins(state.profile.id);
+  const theirWins  = theirStats.wins || 0;
+  const name = (prof.name || 'they').split(' ')[0];
+
+  // Decide the relationship: ahead / behind / tied / no-data
+  let line, showChallenge = false;
+  const bothHaveScore = myScore > 0 && theirScore > 0;
+  const closeScore = bothHaveScore && Math.abs(myScore - theirScore) / Math.max(myScore, theirScore) <= 0.15;
+  const closeWins  = !bothHaveScore && myWins > 0 && theirWins > 0 && Math.abs(myWins - theirWins) <= 1;
+
+  if (theirWins === 0 && theirScore === 0) {
+    line = `${name} hasn't won a challenge yet. Be the one who welcomes them to the fire. 🔥`;
+  } else if (closeScore || closeWins) {
+    line = `You and ${name} are neck and neck. This is exactly the kind of rivalry that needs settling. 👀`;
+    showChallenge = true;
+  } else if ((bothHaveScore && myScore > theirScore) || (!bothHaveScore && myWins > theirWins)) {
+    line = `You're ahead of ${name} right now — but a lead means nothing until they stop coming for it. 🔥`;
+  } else {
+    line = `${name} is ahead of you. Time to do something about that. 🔥`;
+    showChallenge = true;
+  }
+
+  const ctaHtml = showChallenge
+    ? `<button class="ps-ember-cta" onclick="emberChallengeFromProfile('${prof.id}')">⚡ Challenge ${escapeHtml(name)}</button>`
+    : '';
+
+  el.style.display = 'flex';
+  el.innerHTML = `
+    <div class="ps-ember-mascot">
+      <div class="tcf"></div>
+      <div class="tcface">
+        <div class="tce l"></div><div class="tce r"></div>
+        <div class="tcm"></div>
+      </div>
+    </div>
+    <div class="ps-ember-body">
+      <div class="ps-ember-name">Ember</div>
+      <div class="ps-ember-text">${line}</div>
+      ${ctaHtml}
+    </div>`;
+}
+
+// Tapping "Challenge them" from Ember → opens Create Challenge. (Sudden Death is
+// the formal tiebreaker; a direct rivalry challenge is just a normal public
+// challenge the rival can enter. We pre-open the create flow.)
+function emberChallengeFromProfile(userId) {
+  closeProfileSheet();
+  if (typeof openCreateChallenge === 'function') openCreateChallenge();
+  toast('Create a challenge — they can enter and settle it 🔥');
 }
 
 function renderProfileTab() {
