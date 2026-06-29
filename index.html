@@ -512,6 +512,32 @@ body.theme-light .nav { background: rgba(255, 255, 255, 0.88); border-bottom-col
   opacity: 0.6;
 }
 
+
+/* ============ CHALLENGE SEARCH ============ */
+.ch-search-wrap {
+  position: relative; margin: 0 0 14px;
+}
+.ch-search-input {
+  width: 100%; padding: 10px 40px 10px 38px;
+  background: var(--overlay-2); border: 1px solid var(--border);
+  border-radius: 12px; color: var(--text); font-size: 14px;
+  font-family: var(--font-body); outline: none; transition: border-color 0.15s;
+}
+.ch-search-input::placeholder { color: var(--text-dim); }
+.ch-search-input:focus { border-color: var(--ember); }
+.ch-search-icon {
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  font-size: 15px; pointer-events: none; opacity: 0.45;
+}
+.ch-search-clear {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; color: var(--text-dim); font-size: 18px;
+  cursor: pointer; padding: 4px; line-height: 1; display: none;
+}
+.ch-search-clear.visible { display: block; }
+.ch-search-count {
+  font-size: 11px; color: var(--text-dim); margin-bottom: 10px; padding: 0 2px;
+}
 /* ============ RANK CHIPS (regular wins) ============ */
 .rank-chip {
   position: relative; overflow: hidden;
@@ -5212,6 +5238,12 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
         <p class="section-sub">Compete. Vote. Win.</p>
       </div>
     </div>
+    <div class="ch-search-wrap">
+      <span class="ch-search-icon">🔍</span>
+      <input id="chSearchInput" class="ch-search-input" type="text" placeholder="Search challenges…" oninput="onChallengeSearch(this.value)" autocomplete="off" autocorrect="off" spellcheck="false"/>
+      <button class="ch-search-clear" id="chSearchClear" onclick="clearChallengeSearch()" aria-label="Clear search">×</button>
+    </div>
+    <div id="chSearchCount" class="ch-search-count" style="display:none"></div>
     <div class="ch-tabs" id="chTabs">
       <button class="ch-tab active" data-cfilter="active">🔥 Open</button>
       <button class="ch-tab" data-cfilter="voting">🗳️ Voting</button>
@@ -6555,7 +6587,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v560 · avatar-surfaces";
+const APP_VERSION = "v561 · challenge-search";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -7265,6 +7297,7 @@ function switchView(view) {
   if (view === 'challenges') {
     // feedEntries powers the entry drawers — ensure loaded
     if (!state.feedEntries || state.feedEntries.length === 0) {
+      clearChallengeSearch();
       loadFeedActivity().then(() => renderChallenges()).catch(() => renderChallenges());
     } else {
       renderChallenges();
@@ -12965,6 +12998,7 @@ state.challenges = [];
 state.entryCounts = {};
 state.creatorEntries = {};
 state.cFilter = 'active';
+state.cSearch = '';
 
 let countdownTimer = null;
 
@@ -12995,6 +13029,21 @@ document.querySelectorAll('#chTabs .ch-tab').forEach(t => {
     renderChallenges();
   });
 });
+
+function onChallengeSearch(val) {
+  state.cSearch = val || '';
+  const clear = document.getElementById('chSearchClear');
+  if (clear) clear.classList.toggle('visible', state.cSearch.length > 0);
+  renderChallenges();
+}
+function clearChallengeSearch() {
+  state.cSearch = '';
+  const inp = document.getElementById('chSearchInput');
+  if (inp) inp.value = '';
+  const clear = document.getElementById('chSearchClear');
+  if (clear) clear.classList.remove('visible');
+  renderChallenges();
+}
 
 document.querySelectorAll('#pollTabs .ch-tab').forEach(t => {
   t.addEventListener('click', () => {
@@ -13600,25 +13649,44 @@ function renderChallenges() {
   // Filter out private challenges from users that aren't the creator
   list = list.filter(c => c.is_public || c.creator_id === state.profile?.id);
 
-  if (state.cFilter === 'active') list = list.filter(c => c.computedStatus === 'submitting');
-  else if (state.cFilter === 'voting') list = list.filter(c => c.computedStatus === 'voting');
-  else if (state.cFilter === 'closed') list = list.filter(c => c.computedStatus === 'closed' || c.computedStatus === 'voided');
-  else if (state.cFilter === 'mine') list = list.filter(c => c.creator_id === state.profile?.id);
+  const q = (state.cSearch || '').trim().toLowerCase();
+  if (q) {
+    // Search mode — ignore tab filter, search across all challenges
+    list = list.filter(c =>
+      (c.title || '').toLowerCase().includes(q) ||
+      (c.category || '').toLowerCase().includes(q)
+    );
+    const countEl = document.getElementById('chSearchCount');
+    if (countEl) {
+      countEl.style.display = 'block';
+      countEl.textContent = list.length === 0 ? 'No results' : `${list.length} result${list.length === 1 ? '' : 's'}`;
+    }
+    document.getElementById('chTabs')?.style.setProperty('opacity', '0.4');
+  } else {
+    document.getElementById('chSearchCount')?.style.setProperty('display','none');
+    document.getElementById('chTabs')?.style.setProperty('opacity', '1');
+    if (state.cFilter === 'active') list = list.filter(c => c.computedStatus === 'submitting');
+    else if (state.cFilter === 'voting') list = list.filter(c => c.computedStatus === 'voting');
+    else if (state.cFilter === 'closed') list = list.filter(c => c.computedStatus === 'closed' || c.computedStatus === 'voided');
+    else if (state.cFilter === 'mine') list = list.filter(c => c.creator_id === state.profile?.id);
+  }
 
   grid.innerHTML = '';
 
   if (list.length === 0) {
-    const emptyMsg = {
-      'active': 'Nothing open to enter right now. Start one!',
-      'voting': 'Nothing being voted on yet.',
-      'closed': 'No decided challenges yet.',
-      'mine': "You haven't created any challenges yet.",
-    }[state.cFilter];
+    const emptyMsg = q
+      ? `No challenges matching "${escapeHtml(q)}".`
+      : {
+          'active': 'Nothing open to enter right now. Start one!',
+          'voting': 'Nothing being voted on yet.',
+          'closed': 'No decided challenges yet.',
+          'mine': "You haven't created any challenges yet.",
+        }[state.cFilter];
     grid.innerHTML = `
       <div class="ch-empty" style="grid-column:1/-1">
         <div class="ch-empty-icon">🔥</div>
         ${emptyMsg}
-        ${state.cFilter !== 'closed' ? '<div style="margin-top:18px"><button class="btn btn-primary" onclick="openCreateChallenge()">+ Create challenge</button></div>' : ''}
+        ${!q && state.cFilter !== 'closed' ? '<div style="margin-top:18px"><button class="btn btn-primary" onclick="openCreateChallenge()">+ Create challenge</button></div>' : ''}
       </div>
     `;
     return;
