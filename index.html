@@ -2796,7 +2796,8 @@ body.theme-light .skeleton {
 .post-card-avatar:has(.hof-laurel), .comment-avatar:has(.hof-laurel), .liker-avatar:has(.hof-laurel),
 .fcc-entry-avatar:has(.hof-laurel), .lb-hof-avatar:has(.hof-laurel), .hof-card-avatar:has(.hof-laurel),
 .cd-results-avatar:has(.hof-laurel), .avatar:has(.hof-laurel), .lb-champ-avatar:has(.hof-laurel),
-.fa-avatar:has(.hof-laurel), .sf-avatar:has(.hof-laurel), .fv-av-host:has(.hof-laurel), #evAvatar:has(.hof-laurel) {
+.fa-avatar:has(.hof-laurel), .sf-avatar:has(.hof-laurel), .fv-av-host:has(.hof-laurel), #evAvatar:has(.hof-laurel),
+.notif-avatar:has(.hof-laurel), .mention-opt-av:has(.hof-laurel), .search-result-avatar:has(.hof-laurel), .dm-av:has(.hof-laurel) {
   overflow: visible !important; background: none !important; width: auto !important; height: auto !important; border-radius: 0 !important;
 }
 .ps-name {
@@ -6554,7 +6555,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v559 · lifetime-wins";
+const APP_VERSION = "v560 · avatar-surfaces";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -8584,7 +8585,7 @@ function renderNotifs() {
   const kindIcon = { post_like: '🔥', entry_like: '🔥', follow: '👤', vote: '🗳️', entry: '🎬', comment: '💬', reply: '↩️', mention: '@', challenge_closed: '🏁', new_challenge: '🏆', new_poll: '🗳️', poll_ended: '📊', champ_qualified: '⚡', champ_won: '👑', champ_friend_qualified: '⚡', champ_friend_won: '👑', challenge_invite: '🔒', group_invite: '👥' };
   list.innerHTML = shown.map((n, i) => {
     const unread = isNotifUnread(n);
-    const av = n.actor ? avatarInner(n.actor.avatar) : '🏁';
+    const av = n.actor ? honoredAvatarHTML(n.actor.id, avatarInner(n.actor.avatar), 42) : '🏁';
     const _others = (n.groupCount || 1) - 1;
     const name = n.actor
       ? (_others > 0
@@ -8896,7 +8897,7 @@ function setupMentionAutocomplete(input, box) {
     if (!matches.length) { box.style.display = 'none'; return; }
     box.innerHTML = matches.map(p =>
       `<button type="button" class="mention-opt" data-mname="${escapeHtml(p.name)}">
-        <span class="mention-opt-av">${avatarInner(p.avatar)}</span>${escapeHtml(p.name)}
+        <span class="mention-opt-av">${honoredAvatarHTML(p.id, avatarInner(p.avatar), 28)}</span>${escapeHtml(p.name)}
       </button>`).join('');
     box.querySelectorAll('.mention-opt').forEach(b => {
       b.addEventListener('mousedown', e => e.preventDefault());
@@ -15036,7 +15037,7 @@ document.getElementById('geSearch').addEventListener('input', (e) => {
       }
       wrap.innerHTML = results.map(p => `
         <div class="search-result" data-uid="${escapeHtml(p.id)}" data-uname="${escapeHtml(p.name)}" data-uavatar="${escapeHtml(p.avatar || '🔥')}">
-          <span class="search-result-avatar">${avatarInner(p.avatar)}</span>
+          <span class="search-result-avatar">${honoredAvatarHTML(p.id, avatarInner(p.avatar), 28)}</span>
           <span class="search-result-name">${escapeHtml(p.name)}</span>
         </div>
       `).join('');
@@ -15295,7 +15296,7 @@ document.getElementById('ccInviteSearch').addEventListener('input', (e) => {
       }
       wrap.innerHTML = results.map(p => `
         <div class="search-result" data-uid="${escapeHtml(p.id)}" data-uname="${escapeHtml(p.name)}" data-uavatar="${escapeHtml(p.avatar || '🔥')}">
-          <span class="search-result-avatar">${avatarInner(p.avatar)}</span>
+          <span class="search-result-avatar">${honoredAvatarHTML(p.id, avatarInner(p.avatar), 28)}</span>
           <span class="search-result-name">${escapeHtml(p.name)}</span>
         </div>
       `).join('');
@@ -18426,7 +18427,7 @@ async function renderDmThreads(){
       const last= lastRaw ? escapeHtml(lastRaw.length>48? lastRaw.slice(0,48)+'…' : lastRaw) : 'No messages yet';
       const tm=t.last_message_at? timeAgo(t.last_message_at):'';
       return `<div class="dm-row" onclick="openDmThread('${t.id}','${oid}')">
-        <div class="dm-av">${avatarInner(p.avatar||'🔥')}</div>
+        <div class="dm-av">${honoredAvatarHTML(oid, avatarInner(p.avatar||'🔥'), 46)}</div>
         <div class="dm-main">
           <div class="dm-name">${escapeHtml(p.name||'User')}</div>
           <div class="dm-last ${u?'unread':''}">${last}</div>
@@ -18641,7 +18642,7 @@ async function runDmComposeSearch(){
     const rows=data||[];
     if(!rows.length){ box.innerHTML='<div class="dm-empty">No one found.</div>'; return; }
     box.innerHTML=rows.map(p=>`<div class="dm-row" onclick="dmComposePick('${p.id}')">
-      <div class="dm-av">${avatarInner(p.avatar||'🔥')}</div>
+      <div class="dm-av">${honoredAvatarHTML(p.id, avatarInner(p.avatar||'🔥'), 46)}</div>
       <div class="dm-main"><div class="dm-name">${escapeHtml(p.name||'User')}</div></div>
     </div>`).join('');
   }catch(e){ console.warn('dm compose search', e); box.innerHTML='<div class="dm-empty">Couldn\u2019t search.</div>'; }
