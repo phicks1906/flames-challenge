@@ -2834,6 +2834,109 @@ body.theme-light .skeleton {
   line-height: 1;
   margin-bottom: 4px;
 }
+
+/* ============ PROFILE HEAT CHECK CARD (v564) ============ */
+.ps-heat-card {
+  background: #0f0b08;
+  border-radius: 18px;
+  padding: 14px 16px;
+  margin: 12px 0 8px;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255,106,44,0.15);
+}
+.ps-heat-card::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse 80% 55% at 50% 0%, rgba(255,106,44,0.16) 0%, transparent 70%);
+  pointer-events: none;
+}
+.ps-heat-label {
+  font-family: var(--font-display);
+  font-size: 9px;
+  letter-spacing: 3px;
+  color: #ff6a2c;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  position: relative;
+}
+.ps-heat-main {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  position: relative;
+}
+.ps-mini-gauge-wrap {
+  flex-shrink: 0;
+  width: 60px; height: 60px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  position: relative;
+}
+.ps-mini-gauge-ring {
+  position: absolute; inset: 0;
+  border-radius: 50%;
+}
+.ps-mini-gauge-inner {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: #0f0b08;
+  display: grid; place-items: center;
+  z-index: 1;
+}
+.ps-mini-gauge-pct {
+  font-family: var(--font-display);
+  font-size: 12px;
+  color: #fff;
+  line-height: 1;
+}
+.ps-mini-gauge-sub {
+  font-size: 7px;
+  color: #6a5a4e;
+  letter-spacing: 1px;
+  text-align: center;
+  margin-top: 1px;
+}
+.ps-heat-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  flex: 1;
+}
+.ps-heat-tile { text-align: center; }
+.ps-heat-tile-val {
+  font-family: var(--font-display);
+  font-size: 20px;
+  color: #fff;
+  line-height: 1;
+}
+.ps-heat-tile-lbl {
+  font-size: 8px;
+  color: #6a5a4e;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+.ps-heat-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  position: relative;
+}
+.ps-heat-wlt {
+  font-size: 12px;
+  color: #6a5a4e;
+}
+.ps-heat-wlt span { color: #a09080; font-weight: 700; }
+.ps-social-line {
+  font-size: 12px;
+  color: var(--text-dim);
+  text-align: center;
+  margin: 4px 0 10px;
+}
+.ps-social-line strong { color: var(--text); }
+html[data-theme="light"] .ps-heat-card { background: #1a1008; }
 .ps-stats {
   display: flex;
   justify-content: center;
@@ -5640,8 +5743,9 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     <div class="ps-hero">
       <div class="ps-avatar" id="psAvatar">🔥</div>
       <div class="ps-name" id="psName">User</div>
-      <div class="ps-record-line" id="psRecordLine" style="display:none"></div>
-      <div class="ps-stats" id="psStats"></div>
+      <div class="ps-heat-card" id="psHeatCard" style="display:none"></div>
+      <div class="ps-social-line" id="psSocialLine"></div>
+      <div class="ps-stats" id="psStats" style="display:none"></div>
       <button class="btn btn-primary ps-follow-btn" id="psFollowBtn" style="display:none"></button>
       <button class="btn ps-msg-btn" id="psMessageBtn" style="display:none" onclick="if(psState&&psState.profile)openDmWith(psState.profile.id)">💬 Message</button>
     </div>
@@ -6587,7 +6691,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v563 · score-consistency";
+const APP_VERSION = "v564 · profile-heat-check";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -7781,6 +7885,30 @@ async function loadLeaderboard() {
     }
   });
 
+  // ── Compute streak per user (consecutive wins newest→oldest) ────────────────
+  const streakByUser = {};
+  const chIdsByDate = Object.entries(chInfo)
+    .filter(([, info]) => info.votingEnd)
+    .sort(([, a], [, b]) => new Date(b.votingEnd) - new Date(a.votingEnd))
+    .map(([id]) => id);
+  for (const uid of participantIds) {
+    let st = 0;
+    for (const chId of chIdsByDate) {
+      const chEntries = entriesByCh[chId] || [];
+      if (!chEntries.find(e => e.user_id === uid)) continue;
+      let mx = 0, winner = null;
+      chEntries.forEach(e => {
+        const v = (allVotesByEntry[e.id] || []).length;
+        if (v > mx) { mx = v; winner = e.user_id; }
+        else if (v === mx && v > 0) winner = null;
+      });
+      if (mx === 0 || winner === null) continue; // pending/tie — skip
+      if (winner === uid) st++;
+      else break;
+    }
+    streakByUser[uid] = st;
+  }
+
   const users = allProfiles.map(p => ({
     ...p,
     isReal: true,
@@ -7791,6 +7919,7 @@ async function loadLeaderboard() {
     byCategory: winsByUser[p.id]?.byCategory || {},
     rolling30ByCategory: winsByUser[p.id]?.rolling30ByCategory || {},
     weightedScore: scoreByUser[p.id] || 0,
+    streak: streakByUser[p.id] || 0,
   }));
 
   const leaders = {};
@@ -18764,6 +18893,7 @@ async function openUserProfile(userId) {
   document.getElementById('psAvatar').textContent = '⏳';
   document.getElementById('psName').textContent = 'Loading...';
   document.getElementById('psStats').innerHTML = '';
+  { const _hc = document.getElementById('psHeatCard'); if (_hc) _hc.style.display = 'none'; }
   document.getElementById('psFollowBtn').style.display = 'none';
   { const _mb = document.getElementById('psMessageBtn'); if (_mb) _mb.style.display = 'none'; }
   document.getElementById('psContent').innerHTML = '<div class="ps-empty">Loading…</div>';
@@ -18861,24 +18991,78 @@ function renderProfileSheet() {
   const followers = state.followerCounts[prof.id] || 0;
   const following = state.followingCounts[prof.id] || 0;
   // Record line (W-L-T) — only on your own profile
-  const recordHostEl = document.getElementById('psRecordLine');
-  if (recordHostEl) {
-    if (isMe && state.myWLT) {
-      const w = state.myWLT.wins, l = state.myWLT.losses, t = state.myWLT.ties;
-      const decided = w + l;
-      const pct = decided ? Math.round((w / decided) * 100) : null;
-      recordHostEl.innerHTML = `<span class="ps-record-num gold">${w}</span> <span class="ps-record-lbl">W</span> · <span class="ps-record-num">${l}</span> <span class="ps-record-lbl">L</span> · <span class="ps-record-num" style="color:#b3e5fc">${t}</span> <span class="ps-record-lbl">T</span>${pct != null ? ` <span class="ps-record-pct">· ${pct}% win rate</span>` : ''}`;
-      recordHostEl.style.display = 'block';
-    } else {
-      recordHostEl.style.display = 'none';
-    }
+  // ── Heat Check card (all users) ──────────────────────────────────────────────
+  const hcEl = document.getElementById('psHeatCard');
+  const socialEl = document.getElementById('psSocialLine');
+  const oldStats = document.getElementById('psStats');
+  if (oldStats) oldStats.style.display = 'none';
+
+  // Get stats: self from myWLT, others from leaderboardData
+  let hcWins, hcLosses, hcTies, hcStreak, hcEntries;
+  if (isMe && state.myWLT) {
+    hcWins    = state.myWLT.wins;
+    hcLosses  = state.myWLT.losses;
+    hcTies    = state.myWLT.ties;
+    hcStreak  = state.myWLT.streak;
+    hcEntries = state.myRecord?.length || psState.entries.length;
+  } else {
+    const lu = (state.leaderboardData?.users || []).find(u => u.id === prof.id);
+    hcWins    = lu?.wins    || 0;
+    hcLosses  = lu?.losses  || 0;
+    hcTies    = 0; // not tracked in leaderboard
+    hcStreak  = lu?.streak  || 0;
+    hcEntries = psState.entries.length;
   }
-  document.getElementById('psStats').innerHTML = `
-    <div class="ps-stat"><div class="ps-stat-val">${psState.entries.length}</div><div class="ps-stat-label">Entries</div></div>
-    <div class="ps-stat"><div class="ps-stat-val">${psState.challenges.length}</div><div class="ps-stat-label">Challenges</div></div>
-    <div class="ps-stat"><div class="ps-stat-val">${followers}</div><div class="ps-stat-label">Followers</div></div>
-    <div class="ps-stat"><div class="ps-stat-val">${following}</div><div class="ps-stat-label">Following</div></div>
-  `;
+
+  const hcDecided = hcWins + hcLosses;
+  const hcPct     = hcDecided > 0 ? Math.round((hcWins / hcDecided) * 100) : null;
+
+  if (hcEl) {
+    // Build mini gauge using conic-gradient
+    const fillDeg   = hcPct != null ? Math.round(hcPct * 3.6) : 0;
+    const gaugeStyle = `background: conic-gradient(#ff6a2c 0deg, #ff6a2c ${fillDeg}deg, #1a3050 ${fillDeg}deg, #1a3050 360deg)`;
+    const wltLine = isMe
+      ? `<span>${hcWins}</span>W · <span>${hcLosses}</span>L · <span style="color:#b3e5fc">${hcTies}</span>T`
+      : `<span>${hcWins}</span>W · <span>${hcLosses}</span>L`;
+    const rankChipHtml = getRankBadge(prof.id, { showSpark: true }) || '';
+    hcEl.style.display = 'block';
+    hcEl.innerHTML = `
+      <div class="ps-heat-label">Heat Check</div>
+      <div class="ps-heat-main">
+        <div class="ps-mini-gauge-wrap">
+          <div class="ps-mini-gauge-ring" style="${gaugeStyle}"></div>
+          <div class="ps-mini-gauge-inner">
+            <div>
+              <div class="ps-mini-gauge-pct">${hcPct != null ? hcPct + '%' : '—'}</div>
+              <div class="ps-mini-gauge-sub">WIN %</div>
+            </div>
+          </div>
+        </div>
+        <div class="ps-heat-tiles">
+          <div class="ps-heat-tile">
+            <div class="ps-heat-tile-val">${hcWins}</div>
+            <div class="ps-heat-tile-lbl">Wins</div>
+          </div>
+          <div class="ps-heat-tile">
+            <div class="ps-heat-tile-val">${hcEntries}</div>
+            <div class="ps-heat-tile-lbl">Entries</div>
+          </div>
+          <div class="ps-heat-tile">
+            <div class="ps-heat-tile-val">${hcStreak > 0 ? hcStreak + '🔥' : hcStreak}</div>
+            <div class="ps-heat-tile-lbl">Streak</div>
+          </div>
+        </div>
+      </div>
+      <div class="ps-heat-bottom">
+        <div class="ps-heat-wlt">${wltLine}</div>
+        ${rankChipHtml}
+      </div>`;
+  }
+
+  // Social line
+  if (socialEl) {
+    socialEl.innerHTML = `<strong>${followers}</strong> followers · <strong>${following}</strong> following`;
+  }
 
   const btn = document.getElementById('psFollowBtn');
   if (isMe) {
