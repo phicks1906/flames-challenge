@@ -6735,7 +6735,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v566 · ember-rivalry";
+const APP_VERSION = "v567 · rivalry-preinvite";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -13479,7 +13479,7 @@ function toggleCcCustomDates() {
   if (btn) btn.textContent = isOpen ? 'Set custom dates ▾' : 'Hide custom dates ▴';
 }
 
-async function openCreateChallenge() {
+async function openCreateChallenge(preInviteRival = null) {
   if (!state.profile) return;
   if (!getFlag('fc_flag_challenges')) { toast('Challenge creation is currently disabled.'); return; }
   const now = new Date();
@@ -13500,6 +13500,23 @@ async function openCreateChallenge() {
   ccInviteState.individuals = new Map();
   document.getElementById('ccInviteSearch').value = '';
   document.getElementById('ccInviteResults').innerHTML = '';
+
+  // ── Ember rivalry pre-invite: private challenge with this rival pre-loaded ──
+  if (preInviteRival && preInviteRival.id) {
+    ccState.visibility = 'private';
+    document.querySelectorAll('#ccVisPills .cc-pill').forEach(p => {
+      p.classList.toggle('selected', p.dataset.vis === 'private');
+    });
+    ccInviteState.individuals.set(preInviteRival.id, {
+      id: preInviteRival.id,
+      name: preInviteRival.name || 'Rival',
+      avatar: preInviteRival.avatar || '🔥',
+    });
+    // Default the toggle on — a rivalry challenge should never end in a tie
+    const sd = document.getElementById('ccSuddenDeathCheck');
+    if (sd) sd.checked = true;
+  }
+
   document.getElementById('ccInviteField').style.display = ccState.visibility === 'private' ? 'block' : 'none';
   await loadGroups();
   renderInviteGroups();
@@ -19306,13 +19323,19 @@ function renderProfileEmber(prof, isMe, theirStats) {
     </div>`;
 }
 
-// Tapping "Challenge them" from Ember → opens Create Challenge. (Sudden Death is
-// the formal tiebreaker; a direct rivalry challenge is just a normal public
-// challenge the rival can enter. We pre-open the create flow.)
+// Tapping "Challenge them" from Ember → opens Create Challenge as a PRIVATE
+// head-to-head with this rival pre-invited and Sudden Death pre-enabled.
 function emberChallengeFromProfile(userId) {
+  // Pull the rival's display info from whatever we have loaded
+  const lu = (state.leaderboardData?.users || []).find(u => u.id === userId);
+  const rival = {
+    id: userId,
+    name: lu?.name || psState?.profile?.name || 'Rival',
+    avatar: lu?.avatar || psState?.profile?.avatar || '🔥',
+  };
   closeProfileSheet();
-  if (typeof openCreateChallenge === 'function') openCreateChallenge();
-  toast('Create a challenge — they can enter and settle it 🔥');
+  if (typeof openCreateChallenge === 'function') openCreateChallenge(rival);
+  toast(`Challenge sent to the arena — ${escapeHtml(rival.name.split(' ')[0])} will be invited 🔥`);
 }
 
 function renderProfileTab() {
