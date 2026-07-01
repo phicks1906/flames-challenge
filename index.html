@@ -2075,6 +2075,18 @@ body.theme-light .auth-form input { background: #ffffff; }
 }
 
 /* Three-tile row below the gauge */
+
+/* ── Dashboard rank progress (v569) ── */
+.hc-rank-prog { margin-top: 14px; padding: 0 4px; }
+.hc-rank-prog-labels { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.hc-rank-prog-cur { font-family: var(--font-display); font-size: 10px; letter-spacing: 2px; color: var(--text-muted); text-transform: uppercase; }
+.hc-rank-prog-next { font-family: var(--font-display); font-size: 10px; letter-spacing: 2px; text-transform: uppercase; }
+.hc-rank-prog-track { height: 8px; border-radius: 4px; background: rgba(120,120,120,0.15); overflow: hidden; }
+.hc-rank-prog-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--flame), var(--ember) 60%, var(--gold)); transition: width .5s ease; }
+.hc-rank-prog-hint { font-size: 12px; color: var(--text-muted); margin-top: 7px; text-align: center; }
+.hc-rank-prog-hint strong { color: var(--text); }
+.hc-rank-prog-max { font-family: var(--font-display); font-size: 11px; letter-spacing: 2px; color: var(--gold); text-transform: uppercase; text-align: center; margin-top: 4px; }
+
 .hc-tiles {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -5356,6 +5368,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
         </div>
       </div>
       <div class="hc-pending-line" id="hcPendingLine"></div>
+      <div class="hc-rank-prog" id="hcRankProg" style="display:none"></div>
     </div>
 
     <div class="feed-tabs" role="tablist">
@@ -6747,7 +6760,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v568 · rank-progress";
+const APP_VERSION = "v569 · dash-rank-progress";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -9894,6 +9907,30 @@ function renderHeatCheck() {
       plEl.innerHTML = `<span onclick="openRecordSheet('pending')">${pending} result${pending > 1 ? 's' : ''} pending ⏳</span>`;
     } else {
       plEl.innerHTML = '';
+    }
+  }
+  // ── Rank progress toward next tier (dashboard) ───────────────────────────────
+  const rpEl = document.getElementById('hcRankProg');
+  if (rpEl) {
+    if (wins < 1) {
+      rpEl.style.display = 'none';
+    } else {
+      const rp = getRankProgress(myId);
+      const nextGlow = { spark:'#4fc3f7', flame:'#ff6a2c', blaze:'#ffc857', inferno:'#ff2d1f' };
+      if (rp.atMax) {
+        rpEl.style.display = 'block';
+        rpEl.innerHTML = `<div class="hc-rank-prog-max">★ Top Rank — Inferno ★</div>`;
+      } else {
+        const nextCol = nextGlow[rp.next.key] || 'var(--ember)';
+        rpEl.style.display = 'block';
+        rpEl.innerHTML = `
+          <div class="hc-rank-prog-labels">
+            <span class="hc-rank-prog-cur">${rp.current.name}</span>
+            <span class="hc-rank-prog-next" style="color:${nextCol}">${rp.next.name}</span>
+          </div>
+          <div class="hc-rank-prog-track"><div class="hc-rank-prog-fill" style="width:${rp.pct}%"></div></div>
+          <div class="hc-rank-prog-hint">You're <strong>${rp.pct}%</strong> of the way to ${rp.next.name}</div>`;
+      }
     }
   }
   // Update big % text + needle + halos
