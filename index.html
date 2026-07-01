@@ -586,6 +586,18 @@ body.theme-light .nav { background: rgba(255, 255, 255, 0.88); border-bottom-col
 .ember-hero .tcin{position:relative;top:0;left:0;width:74px;height:86px;margin:0}
 
 
+
+/* ── Rank progress toward next tier (v568) ── */
+.ps-rank-prog { margin-top: 12px; position: relative; }
+.ps-rank-prog-labels { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
+.ps-rank-prog-cur { font-family: var(--font-display); font-size: 9px; letter-spacing: 2px; color: #6a5a4e; text-transform: uppercase; }
+.ps-rank-prog-next { font-family: var(--font-display); font-size: 9px; letter-spacing: 2px; text-transform: uppercase; }
+.ps-rank-prog-track { height: 6px; border-radius: 3px; background: rgba(255,255,255,0.08); overflow: hidden; }
+.ps-rank-prog-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--flame), var(--ember) 60%, var(--gold)); transition: width .4s ease; }
+.ps-rank-prog-hint { font-size: 11px; color: #8a7a6a; margin-top: 6px; text-align: center; }
+.ps-rank-prog-hint strong { color: #c8b8a8; }
+.ps-rank-prog-max { font-family: var(--font-display); font-size: 10px; letter-spacing: 2px; color: var(--gold); text-transform: uppercase; text-align: center; margin-top: 10px; }
+
 /* ============ EMBER PROFILE SPEECH (v565) ============ */
 .ps-ember {
   display: flex;
@@ -6735,7 +6747,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v567 · rivalry-preinvite";
+const APP_VERSION = "v568 · rank-progress";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -13216,6 +13228,20 @@ function getRank(userId) {
   const tier = RANK_TIERS.find(t => s >= t.min) || RANK_TIERS[RANK_TIERS.length - 1];
   return { ...tier, wins: w, score: Math.round(s) };
 }
+// Progress toward the NEXT rank tier — returns visual % only, never the raw score.
+// RANK_TIERS is ordered high→low, so the "next" tier is the one just above current.
+function getRankProgress(userId) {
+  const s = getWeightedScore(userId);
+  // Find current tier index (first tier whose min <= score)
+  let idx = RANK_TIERS.findIndex(t => s >= t.min);
+  if (idx === -1) idx = RANK_TIERS.length - 1;
+  const current = RANK_TIERS[idx];
+  const next = idx > 0 ? RANK_TIERS[idx - 1] : null;  // tier above (higher min)
+  if (!next) return { current, next: null, pct: 100, atMax: true };
+  const span = next.min - current.min;
+  const pct = span > 0 ? Math.max(0, Math.min(100, Math.round(((s - current.min) / span) * 100))) : 0;
+  return { current, next, pct, atMax: false };
+}
 function getRankBadge(userId, opts = {}) {
   if (!userId) return '';
   if (hasHonorBadge(userId)) return '';            // medallion shows instead
@@ -19215,6 +19241,31 @@ function renderProfileSheet() {
       ? `<span>${hcWins}</span>W · <span>${hcLosses}</span>L · <span style="color:#b3e5fc">${hcTies}</span>T`
       : `<span>${hcWins}</span>W · <span>${hcLosses}</span>L`;
     const rankChipHtml = getRankBadge(prof.id, { showSpark: true }) || '';
+
+    // Progress toward next rank (visual only — no raw score shown)
+    let rankProgHtml = '';
+    if (hcWins >= 1) {  // only show for users who've actually won something
+      const rp = getRankProgress(prof.id);
+      const nextGlow = { spark:'#7ab0d8', flame:'#ff8040', blaze:'#ffd700', inferno:'#ff5030' };
+      if (rp.atMax) {
+        rankProgHtml = `<div class="ps-rank-prog"><div class="ps-rank-prog-max">★ Top Rank — Inferno ★</div></div>`;
+      } else {
+        const nextName = rp.next.name;
+        const nextCol = nextGlow[rp.next.key] || '#ff8040';
+        const hint = isMe
+          ? `You're <strong>${rp.pct}%</strong> of the way to ${nextName}`
+          : `<strong>${rp.pct}%</strong> to ${nextName}`;
+        rankProgHtml = `
+          <div class="ps-rank-prog">
+            <div class="ps-rank-prog-labels">
+              <span class="ps-rank-prog-cur">${rp.current.name}</span>
+              <span class="ps-rank-prog-next" style="color:${nextCol}">${nextName}</span>
+            </div>
+            <div class="ps-rank-prog-track"><div class="ps-rank-prog-fill" style="width:${rp.pct}%"></div></div>
+            <div class="ps-rank-prog-hint">${hint}</div>
+          </div>`;
+      }
+    }
     hcEl.style.display = 'block';
     hcEl.innerHTML = `
       <div class="ps-heat-label">Heat Check</div>
@@ -19246,7 +19297,8 @@ function renderProfileSheet() {
       <div class="ps-heat-bottom">
         <div class="ps-heat-wlt">${wltLine}</div>
         ${rankChipHtml}
-      </div>`;
+      </div>
+      ${rankProgHtml}`;
   }
 
   // Social line
