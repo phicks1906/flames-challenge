@@ -1861,13 +1861,16 @@ body.theme-light .auth-form input { background: #ffffff; }
 .np-reach-opt.active { background: var(--ember); border-color: var(--ember); color: #fff; }
 .np-reach-help { margin-top: 10px; font-size: 0.82rem; color: var(--text-dim); line-height: 1.4; }
 .np-list { display: flex; flex-direction: column; gap: 2px; }
-.np-row {
+.np-row { padding-top: 4px; padding-bottom: 4px;
   display: flex; align-items: center; justify-content: space-between;
   padding: 13px 2px; border-bottom: 1px solid var(--border, #1f1a16);
   cursor: pointer;
 }
-.np-label { display: flex; align-items: center; gap: 11px; font-size: 15px; color: var(--text); }
-.np-icon { width: 22px; text-align: center; font-size: 16px; }
+.np-label { display: flex; align-items: center; gap: 11px; font-size: 15px; color: var(--text); flex: 1; min-width: 0; }
+.np-icon { width: 22px; text-align: center; font-size: 16px; flex-shrink: 0; }
+.np-label-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.np-title { font-size: 15px; color: var(--text); font-weight: 600; }
+.np-sub { font-size: 12px; color: var(--text-dim); line-height: 1.3; }
 .np-toggle {
   width: 48px; height: 28px; border-radius: 100px;
   background: var(--overlay-4);
@@ -6760,7 +6763,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v573 · admin-queue-bulk";
+const APP_VERSION = "v574 · notif-groups";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -8413,25 +8416,25 @@ async function loadNotifications() {
 }
 
 /* ---------- NOTIFICATION PREFERENCES ---------- */
+// Grouped notification categories — 4 clean toggles instead of 11.
+// Each group maps to several underlying notification types (see notifTypeCategory).
 const NOTIF_PREF_DEFS = [
-  { key: 'likes',           label: 'Likes',                                         icon: '🔥' },
-  { key: 'comments',        label: 'Comments',                                      icon: '💬' },
-  { key: 'replies',         label: 'Replies',                                       icon: '↩️' },
-  { key: 'mentions',        label: 'Mentions',                                      icon: '@' },
-  { key: 'follows',         label: 'New followers',                                 icon: '👤' },
-  { key: 'votes',           label: 'Votes on your challenges',                      icon: '🗳️' },
-  { key: 'entries',         label: 'Entries to your challenges',                    icon: '🎬' },
-  { key: 'results',         label: 'Challenge results',                             icon: '🏁' },
-  { key: 'new_content',     label: 'New challenges & polls from people you follow', icon: '✨' },
-  { key: 'poll_results',    label: 'Poll results',                                  icon: '📊' },
-  { key: 'championship',    label: 'Championship notifications',                    icon: '⚡' },
+  { key: 'competitions', label: 'My competitions',   sub: 'Votes, entries & results on your challenges', icon: '🏆' },
+  { key: 'social',       label: 'Social',            sub: 'Likes, comments, replies, @mentions & new followers', icon: '💬' },
+  { key: 'following',    label: 'From people you follow', sub: 'Their new challenges & polls', icon: '✨' },
+  { key: 'championship', label: 'Championships',      sub: 'Qualification & championship results', icon: '⚡' },
 ];
 function notifTypeCategory(type) {
+  // Maps each raw notification type to one of the 4 grouped toggle keys.
   return ({
-    post_like: 'likes', entry_like: 'likes',
-    comment: 'comments', reply: 'replies', mention: 'mentions',
-    follow: 'follows', vote: 'votes', entry: 'entries', challenge_closed: 'results',
-    new_challenge: 'new_content', new_poll: 'new_content', poll_ended: 'poll_results',
+    // My competitions
+    vote: 'competitions', entry: 'competitions', challenge_closed: 'competitions', poll_ended: 'competitions',
+    // Social
+    post_like: 'social', entry_like: 'social', comment: 'social', reply: 'social',
+    mention: 'social', follow: 'social',
+    // From people you follow
+    new_challenge: 'following', new_poll: 'following',
+    // Championships
     champ_qualified: 'championship', champ_won: 'championship',
     champ_friend_qualified: 'championship', champ_friend_won: 'championship',
   })[type];
@@ -8464,7 +8467,10 @@ function openNotifSettings() {
   list.innerHTML = NOTIF_PREF_DEFS.map(d => {
     const on = prefs[d.key] !== false;
     return `<label class="np-row">
-      <span class="np-label"><span class="np-icon">${d.icon}</span>${d.label}</span>
+      <span class="np-label">
+        <span class="np-icon">${d.icon}</span>
+        <span class="np-label-text"><span class="np-title">${d.label}</span>${d.sub ? `<span class="np-sub">${d.sub}</span>` : ''}</span>
+      </span>
       <span class="np-toggle ${on ? 'on' : ''}" data-pref="${d.key}"><span class="np-knob"></span></span>
     </label>`;
   }).join('');
