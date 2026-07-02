@@ -6763,7 +6763,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v577 · mod-debug-toast";
+const APP_VERSION = "v578 · ticker-fallback";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -10910,7 +10910,31 @@ function buildTicker() {
     }
   });
 
-  if (!items.length) return; // nothing to show yet
+  // ── Fallback content: if no current-month activity, don't vanish — show
+  // all-time leaders so an enabled ticker always has something. ─────────────
+  if (!items.length) {
+    const selCats = getTickerCats();
+    // All-time top players per selected category (by lifetime wins)
+    Object.entries(data.leaders || {})
+      .filter(([cat]) => cat !== 'All')
+      .forEach(([cat]) => {
+        if (!selCats.has(cat)) return;
+        const catUsers = (data.users || [])
+          .filter(u => (u.byCategory?.[cat] || 0) >= 1)
+          .sort((a, b) => (b.byCategory?.[cat] || 0) - (a.byCategory?.[cat] || 0))
+          .slice(0, 3);
+        if (!catUsers.length) return;
+        const medals = ['🥇', '🥈', '🥉'];
+        const podium = catUsers.map((u, i) => `${medals[i]} ${u.name}`).join('  ');
+        items.push({ icon: '', name: '', badge: 'leader', category: `${cat} ALL-TIME`, text: podium, grouped: true });
+      });
+
+    // Still nothing? (brand-new platform, no wins anywhere) — show an
+    // encouraging placeholder rather than disappearing.
+    if (!items.length) {
+      items.push({ icon: '🔥', name: '', badge: 'default', category: 'FLAMESCHALLENGE', text: 'No champions yet — enter a challenge and be the first 🔥', grouped: true });
+    }
+  }
 
   // Build ticker HTML — duplicate items for seamless loop
   const itemHtml = items.map(item => item.grouped
