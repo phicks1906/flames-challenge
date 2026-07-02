@@ -6763,7 +6763,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v576 · flyer-on-demand";
+const APP_VERSION = "v577 · mod-debug-toast";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -12362,11 +12362,13 @@ const MODERATE_VIDEO_ENDPOINT = 'https://sioalvawzayfphwzqctq.supabase.co/functi
 // 'clear'/unmoderated and an admin can catch it manually; we don't want a
 // moderation outage to block people from posting.
 async function triggerVideoModeration(entryId, videoUrl) {
+  // TEMP DEBUG (v577): surface each step as an on-screen toast so we can diagnose
+  // from a phone with no console. Remove once video moderation is confirmed working.
   try {
-    // Bunny serves HLS by default; moderation needs a direct MP4. Bunny's MP4
-    // fallback (when enabled on the library) is served at this path per guid.
     const mp4Url = videoUrl.replace('/playlist.m3u8', '/play_720p.mp4');
-    console.log('[mod] triggering video moderation', { entryId, mp4Url });
+    const rewrote = mp4Url !== videoUrl;
+    toast('mod: calling… ' + (rewrote ? 'mp4 ok' : '⚠️ url NOT rewritten'));
+    console.log('[mod] triggering video moderation', { entryId, videoUrl, mp4Url, rewrote });
     const resp = await fetch(MODERATE_VIDEO_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -12374,7 +12376,13 @@ async function triggerVideoModeration(entryId, videoUrl) {
     });
     const body = await resp.json().catch(() => ({}));
     console.log('[mod] moderation response', { status: resp.status, body });
+    if (resp.ok) {
+      toast('mod: ✅ submitted (status ' + resp.status + ')');
+    } else {
+      toast('mod: ❌ ' + resp.status + ' — ' + (body.error || 'see logs').toString().slice(0, 60));
+    }
   } catch (e) {
+    toast('mod: ❌ fetch failed — ' + String(e).slice(0, 50));
     console.warn('[mod] Video moderation trigger failed (non-fatal):', e);
   }
 }
