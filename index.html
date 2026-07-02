@@ -6760,7 +6760,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v569 · dash-rank-progress";
+const APP_VERSION = "v570 · video-moderation";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -7773,7 +7773,7 @@ async function loadFeedActivity(opts = {}) {
     ]);
     const [entriesRes, votesRes] = await Promise.all([
       withTimeout(db.from('entries')
-        .select('id, challenge_id, user_id, created_at, media_url, media_type, poster_url, caption, submitter:profiles!entries_user_id_fkey(id, name, avatar)')
+        .select('id, challenge_id, user_id, created_at, media_url, media_type, poster_url, caption, moderation_status, submitter:profiles!entries_user_id_fkey(id, name, avatar)')
         .gte('created_at', entryCutoff)
         .order('created_at', { ascending: false })
         .limit(opts.incremental ? 50 : 200), 12000, 'Feed entries'),
@@ -7783,7 +7783,17 @@ async function loadFeedActivity(opts = {}) {
         .limit(opts.incremental ? 200 : 5000), 12000, 'Feed votes'),
     ]);
 
-    const newEntries = entriesRes.data || [];
+    // Feed visibility: hide videos still pending/rejected/escalated/flagged
+    // from everyone except the submitter themself. Feed is a public surface,
+    // so unlike your own challenge-detail view, admins don't get a bypass
+    // here — they review via the Admin queue, not by browsing the feed.
+    const myFeedId = state.profile?.id;
+    const rawEntries = entriesRes.data || [];
+    const newEntries = rawEntries.filter(e => {
+      const st = e.moderation_status;
+      if (!st || st === 'clear' || st === 'approved') return true;
+      return e.user_id === myFeedId;
+    });
     const newVotes   = votesRes.data  || [];
 
     if (opts.incremental) {
@@ -12323,6 +12333,27 @@ const BUNNY_LIBRARY_ID = '681006';
 const BUNNY_API_KEY    = 'dd470d39-fa4b-49b5-8349baec5af4-993d-42ca';
 const BUNNY_CDN_HOST   = 'vz-9735d175-590.b-cdn.net';
 
+// ── Video moderation (v570) ──────────────────────────────────────────────────
+const MODERATE_VIDEO_ENDPOINT = 'https://sioalvawzayfphwzqctq.supabase.co/functions/v1/moderate-video';
+// Fire-and-forget: submit a just-created video entry for async moderation.
+// Never blocks or throws into the submit flow — if this fails, the entry stays
+// 'clear'/unmoderated and an admin can catch it manually; we don't want a
+// moderation outage to block people from posting.
+async function triggerVideoModeration(entryId, videoUrl) {
+  try {
+    // Bunny serves HLS by default; moderation needs a direct MP4. Bunny's MP4
+    // fallback (when enabled on the library) is served at this path per guid.
+    const mp4Url = videoUrl.replace('/playlist.m3u8', '/play_720p.mp4');
+    await fetch(MODERATE_VIDEO_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ entryId, videoUrl: mp4Url }),
+    });
+  } catch (e) {
+    console.warn('Video moderation trigger failed (non-fatal):', e);
+  }
+}
+
 async function uploadToBunnyStream(file, titleHint, onProgress) {
   // 1. Create a video slot in the library
   onProgress && onProgress(5);
@@ -14249,7 +14280,21 @@ async function loadChallengeDetail(challengeId) {
     console.error('entries load error', entriesRes.error);
     state.currentEntries = [];
   } else {
-    state.currentEntries = entriesRes.data || [];
+    const allFetched = entriesRes.data || [];
+    // Video moderation visibility: pending/rejected/escalated/flagged entries
+    // are hidden from everyone EXCEPT the submitter (sees their own status)
+    // and admins (need to see everything to review). Entries with no
+    // moderation_status column yet (pre-migration) or 'clear'/'approved'
+    // always show normally.
+    const myId = state.profile?.id;
+    const amAdmin = typeof isAdmin === 'function' ? isAdmin() : false;
+    state.currentEntries = allFetched.filter(e => {
+      const st = e.moderation_status;
+      if (!st || st === 'clear' || st === 'approved') return true;
+      if (e.user_id === myId) return true;   // you always see your own
+      if (amAdmin) return true;               // admins see everything
+      return false;                            // hidden from everyone else
+    });
   }
 
   const votesRes = await withTimeout(
@@ -14489,6 +14534,19 @@ function renderChallengeDetail() {
       else if (idx === 2) { medalBadge = '<div class="cd-medal bronze">🥉 3rd</div>'; }
     }
 
+    // Moderation status badge — only ever shown to the entry's own submitter
+    // (or admin), since anyone else with visibility already had it pass review.
+    let modBadge = '';
+    if (isMyEntry && entry.moderation_status) {
+      if (entry.moderation_status === 'pending') {
+        modBadge = '<div class="cd-medal" style="background:rgba(79,195,247,0.15);color:#4fc3f7;border:1px solid rgba(79,195,247,0.3)">🔍 Under review</div>';
+      } else if (entry.moderation_status === 'rejected') {
+        modBadge = '<div class="cd-medal" style="background:rgba(255,45,31,0.15);color:#ff2d1f;border:1px solid rgba(255,45,31,0.3)">🚫 Not approved</div>';
+      } else if (entry.moderation_status === 'escalated' || entry.moderation_status === 'flagged') {
+        modBadge = '<div class="cd-medal" style="background:rgba(255,200,87,0.15);color:#ffc857;border:1px solid rgba(255,200,87,0.3)">🔍 Under review</div>';
+      }
+    }
+
     let mediaHtml = '';
     if (entry.media_type === 'photo' && entry.media_url) {
       mediaHtml = `<img src="${entry.media_url}" alt="" loading="lazy">`;
@@ -14560,7 +14618,7 @@ function renderChallengeDetail() {
 
     return `
       <div class="cd-entry${iVoted ? ' voted' : ''}${winnerClass}" data-entry-id="${entry.id}">
-        ${medalBadge}
+        ${medalBadge}${modBadge}
         <div class="cd-entry-media">${mediaHtml}</div>
         <div class="cd-entry-body">
           <div class="cd-entry-submitter ${entry.user_id && entry.user_id !== state.profile?.id ? 'user-clickable' : ''}" ${entry.user_id && entry.user_id !== state.profile?.id ? `data-user-id="${entry.user_id}"` : ''}>
@@ -15293,6 +15351,7 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
         poster_url: posterUrl,
         media_hash: seState._mediaHash || null,
         sd_round: _sdSubmitting ? (ch.sd_round || 0) : 0,
+        moderation_status: ch.media_type === 'video' ? 'pending' : 'clear',
       };
       ({ data: entryData, error: entryError } = await db.from('entries').insert(newEntry).select('id').single());
       if (entryError && /sd_round/.test(entryError.message || '')) {
@@ -15303,6 +15362,11 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
         delete newEntry.media_hash;
         ({ data: entryData, error: entryError } = await db.from('entries').insert(newEntry).select('id').single());
       }
+      if (entryError && /moderation_status/.test(entryError.message || '')) {
+        // moderation columns not migrated yet — retry without them so submit still works
+        delete newEntry.moderation_status;
+        ({ data: entryData, error: entryError } = await db.from('entries').insert(newEntry).select('id').single());
+      }
       if (entryError) {
         if (entryError.code === '23505' || /duplicate|unique/i.test(entryError.message || '')) {
           throw new Error('You already have an entry in this challenge.');
@@ -15310,7 +15374,13 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
         throw new Error('Submit failed: ' + entryError.message);
       }
       if (entryData && captionText) insertMentions('entry', entryData.id, captionText);
-      toast('🔥 Entry submitted!');
+      // Kick off async video moderation — non-blocking, entry already saved.
+      if (entryData && ch.media_type === 'video' && mediaUrl) {
+        triggerVideoModeration(entryData.id, mediaUrl);
+        toast('🔥 Entry submitted — under review, live shortly!');
+      } else {
+        toast('🔥 Entry submitted!');
+      }
     }
     closeSubmitEntry();
     await loadChallengeDetail(ch.id);
@@ -20139,7 +20209,53 @@ async function renderAdminFlags() {
       </div>
     `;
   }).join('');
-  panel.innerHTML = `<div id="modQueueSection" style="margin-bottom:8px"><div style="color:var(--text-dim);font-size:13px;padding:12px 0">Loading moderation queue…</div></div>` + togglesHtml;
+  panel.innerHTML =
+    `<div id="videoModQueueSection" style="margin-bottom:8px"><div style="color:var(--text-dim);font-size:13px;padding:12px 0">Loading video review queue…</div></div>` +
+    `<div id="modQueueSection" style="margin-bottom:8px"><div style="color:var(--text-dim);font-size:13px;padding:12px 0">Loading moderation queue…</div></div>` +
+    togglesHtml;
+
+  // ── Video moderation queue (escalated + flagged entries) ────────────────────
+  const vqs = document.getElementById('videoModQueueSection');
+  try {
+    const { data: videoQueue } = await db.from('entries')
+      .select('id, challenge_id, media_url, poster_url, caption, moderation_status, moderation_reason, moderation_checked_at, submitter:profiles!entries_user_id_fkey(id, name, avatar)')
+      .in('moderation_status', ['escalated', 'flagged'])
+      .order('moderation_status', { ascending: true }) // 'escalated' sorts before 'flagged' alphabetically
+      .order('moderation_checked_at', { ascending: false })
+      .limit(50);
+
+    if (vqs) {
+      const vq = videoQueue || [];
+      if (vq.length === 0) {
+        vqs.innerHTML = `<div style="font-size:15px;font-weight:700;margin-bottom:8px">🎬 Video Review Queue</div><div style="color:var(--text-dim);font-size:13px;padding:8px 0 16px">No videos pending review ✅</div><hr style="border:none;border-top:1px solid var(--border);margin-bottom:16px">`;
+      } else {
+        vqs.innerHTML = `<div style="font-size:15px;font-weight:700;margin-bottom:10px">🎬 Video Review Queue (${vq.length})</div>` +
+          vq.map(item => {
+            const urgent = item.moderation_status === 'escalated';
+            return `
+            <div style="background:${urgent ? 'rgba(255,45,31,0.06)' : 'var(--surface)'};border:1px solid ${urgent ? 'rgba(255,45,31,0.4)' : 'var(--border)'};border-radius:10px;padding:12px;margin-bottom:10px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                <span style="font-size:11px;font-weight:700;color:${urgent ? '#ff2d1f' : '#ffc857'};text-transform:uppercase">${urgent ? '🚨 URGENT' : '🔍 FLAGGED'}</span>
+                <span style="font-size:11px;color:var(--text-dim)">${timeAgo(item.moderation_checked_at)}</span>
+              </div>
+              <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px">By ${escapeHtml(item.submitter?.name || 'Unknown')}</div>
+              ${item.media_url ? `<video src="${escapeHtml(item.media_url)}" ${item.poster_url ? `poster="${escapeHtml(item.poster_url)}"` : ''} controls muted playsinline style="width:100%;border-radius:8px;margin-bottom:8px;max-height:280px;object-fit:contain;background:#000"></video>` : ''}
+              <div style="font-size:12px;color:var(--text);margin-bottom:4px"><strong>Reason:</strong> ${escapeHtml(item.moderation_reason || 'unspecified')}</div>
+              <div style="display:flex;gap:8px;margin-top:10px">
+                <button onclick="approveVideoEntry('${item.id}')" style="flex:1;padding:7px;background:rgba(76,217,100,0.12);border:1px solid rgba(76,217,100,0.3);border-radius:8px;color:#4cd964;font-size:12px;cursor:pointer">✅ Approve</button>
+                <button onclick="rejectVideoEntry('${item.id}')" style="flex:1;padding:7px;background:rgba(255,45,31,0.12);border:1px solid rgba(255,45,31,0.3);border-radius:8px;color:#ff2d1f;font-size:12px;cursor:pointer">🚫 Reject</button>
+                <button onclick="removeVideoEntry('${item.id}')" style="flex:1;padding:7px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;cursor:pointer">🗑️ Delete</button>
+              </div>
+            </div>`;
+          }).join('') + `<hr style="border:none;border-top:1px solid var(--border);margin:8px 0 16px">`;
+      }
+    }
+  } catch (e) {
+    // moderation columns likely not migrated yet — fail quietly, don't block the rest of Admin
+    console.warn('video mod queue load failed (migration may be pending):', e);
+    if (vqs) vqs.innerHTML = '';
+  }
+
   const { data: queue } = await db.from('moderation_queue').select('*').eq('status','pending').order('created_at',{ascending:false}).limit(50);
   const qs = document.getElementById('modQueueSection');
   if (!qs) return;
@@ -20162,6 +20278,23 @@ async function renderAdminFlags() {
         </div>
       </div>
     `).join('') + `<hr style="border:none;border-top:1px solid var(--border);margin:8px 0 16px">`;
+}
+
+async function approveVideoEntry(entryId) {
+  await db.from('entries').update({ moderation_status: 'approved', moderation_checked_at: new Date().toISOString() }).eq('id', entryId);
+  toast('✅ Entry approved — now live');
+  renderAdminFlags();
+}
+async function rejectVideoEntry(entryId) {
+  await db.from('entries').update({ moderation_status: 'rejected', moderation_checked_at: new Date().toISOString() }).eq('id', entryId);
+  toast('🚫 Entry rejected — stays hidden');
+  renderAdminFlags();
+}
+async function removeVideoEntry(entryId) {
+  if (!confirm('Permanently delete this entry?')) return;
+  await db.from('entries').delete().eq('id', entryId);
+  toast('🗑️ Entry deleted');
+  renderAdminFlags();
 }
 
 async function approveModerationItem(queueId) {
