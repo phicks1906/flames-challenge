@@ -6763,7 +6763,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v574 · notif-groups";
+const APP_VERSION = "v576 · flyer-on-demand";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -9430,14 +9430,19 @@ async function openPromote(type, item) {
 
   promoteState = { type, id: item.id, link, shareText, blob: null, opts, heroUserUrl: null, heroAutoUrl: null };
   document.getElementById('promoteTitle').textContent = modalTitle;
-  document.getElementById('promotePreview').innerHTML = '<div class="promote-loading">Designing your flyer…</div>';
+  // Do NOT auto-generate a flyer — that wastes work and surprises users. Show a
+  // prompt with a button; the flyer only renders when the user explicitly asks.
+  document.getElementById('promotePreview').innerHTML = `
+    <div class="promote-flyer-empty" style="padding:40px 24px;text-align:center;color:var(--text-muted)">
+      <div style="font-size:34px;margin-bottom:10px">🖼️</div>
+      <div style="font-size:14px;margin-bottom:16px;line-height:1.5">Want a shareable flyer for this?<br>Generate one to post anywhere.</div>
+      <button onclick="userGeneratePromoteFlyer()" style="background:linear-gradient(135deg,var(--ember),var(--flame));color:#fff;border:none;border-radius:24px;padding:11px 22px;font-weight:700;font-size:14px;cursor:pointer">🎨 Generate flyer</button>
+    </div>`;
   document.getElementById('promoteModal').classList.add('open');
   updatePromoteMediaButtons();
 
-  // Render text-only first so user sees something fast
-  await renderPromoteFlyer();
-
-  // For challenges, try to auto-detect a hero from entries (in background)
+  // Flyer is NOT auto-rendered. Hero auto-detect below only PRELOADS a hero image
+  // into state so that IF the user generates a flyer, it already has the best image.
   if (type === 'challenge') {
     try {
       const { data } = await db.from('entries')
@@ -9461,7 +9466,9 @@ async function openPromote(type, item) {
         } catch (e) {}
         if (chosen && chosen.media_url && promoteState && !promoteState.heroUserUrl) {
           promoteState.heroAutoUrl = chosen.media_url;
-          await renderPromoteFlyer();
+          // Only re-render if the user has ALREADY generated a flyer (so we swap the
+          // hero in). If they haven't generated yet, just stash it for later.
+          if (promoteState.flyerGenerated) { await renderPromoteFlyer(); }
           updatePromoteMediaButtons();
         }
       }
@@ -9470,6 +9477,14 @@ async function openPromote(type, item) {
 }
 
 async function generatePromoteFlyer() { return renderPromoteFlyer(); }
+// Explicit user action: generate the flyer on demand from the promote modal.
+async function userGeneratePromoteFlyer() {
+  if (!promoteState) return;
+  promoteState.flyerGenerated = true;
+  document.getElementById('promotePreview').innerHTML = '<div class="promote-loading">Designing your flyer…</div>';
+  await renderPromoteFlyer();
+  updatePromoteMediaButtons();
+}
 
 async function renderPromoteFlyer() {
   if (!promoteState) return;
@@ -9515,6 +9530,7 @@ function onPromoteFileSelected(input) {
   reader.onload = async () => {
     if (!promoteState) return;
     promoteState.heroUserUrl = reader.result;
+    promoteState.flyerGenerated = true;
     document.getElementById('promotePreview').innerHTML = '<div class="promote-loading">Updating flyer…</div>';
     await renderPromoteFlyer();
     updatePromoteMediaButtons();
@@ -13921,8 +13937,8 @@ document.getElementById('createChallengeForm').addEventListener('submit', async 
     if (ccState.visibility === 'public') {
       const fullCh = { ...chData, creator: { name: state.profile?.name, avatar: state.profile?.avatar } };
       await openPromote('challenge', fullCh);
-      // Auto-generate flyer immediately
-      setTimeout(() => generatePromoteFlyer(), 300);
+      // No auto-generation. The promote modal shows a "Generate flyer" button;
+      // the user decides whether they want one.
     }
   } catch (err) {
     console.error(err);
@@ -18115,6 +18131,29 @@ async function openFeedViewer(chId, startEntryId = null) {
       newVid.addEventListener('pause', () => { dlog('audio', 'pause', { t: newVid.currentTime, ended: newVid.ended }); if (newVid.ended || newVid.currentTime === 0) _userAudioActive = false; });
       newVid.addEventListener('playing', () => dlog('audio', 'playing', { muted: newVid.muted, t: newVid.currentTime }));
       newVid.addEventListener('stalled', () => dlog('audio', 'stalled', { t: newVid.currentTime }));
+      // If the video fails to load (still encoding on Bunny, or a transient HLS
+      // hiccup), don't leave a dead 'no-signal' player. Show a processing state
+      // with a tap-to-retry, and kick off an encoding poll if it's a Bunny video.
+      const _fvEncGuid = target.dataset.fvEncguid || _bunnyGuidFromUrl(src);
+      newVid.addEventListener('error', () => {
+        dlog('video', 'play-error', { src: src.slice(-40) });
+        const wrap = document.createElement('div');
+        wrap.className = 'fv-media-host';
+        wrap.style.cssText = 'position:relative;background:#000;min-height:220px;display:flex;align-items:center;justify-content:center;';
+        wrap.dataset.fvPlay = src;
+        if (_fvEncGuid) { wrap.dataset.fvEncguid = _fvEncGuid; }
+        wrap.innerHTML = `<div style="text-align:center;color:#c8b8a8;font-size:13px;padding:20px">
+            <div style="font-size:30px;margin-bottom:8px">⏳</div>
+            Still processing — tap to retry
+          </div>`;
+        try { newVid.replaceWith(wrap); } catch(_) {}
+        // If it's a Bunny video that isn't finished yet, poll and auto-restore.
+        if (_fvEncGuid) {
+          _mountProcessingPlaceholder(wrap, _fvEncGuid, () => {
+            wrap.innerHTML = `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;"><div style="width:56px;height:56px;border-radius:50%;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff">▶</div></div>`;
+          });
+        }
+      }, { once: true });
       target.replaceWith(newVid);
       newVid.play().catch(() => {});      // synchronous within the gesture
       attachHlsIfNeeded(newVid);          // no-op on iOS, non-blocking
