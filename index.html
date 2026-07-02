@@ -6763,7 +6763,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v578 · ticker-fallback";
+const APP_VERSION = "v579 · mod-fire-forget";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -12385,30 +12385,20 @@ const MODERATE_VIDEO_ENDPOINT = 'https://sioalvawzayfphwzqctq.supabase.co/functi
 // Never blocks or throws into the submit flow — if this fails, the entry stays
 // 'clear'/unmoderated and an admin can catch it manually; we don't want a
 // moderation outage to block people from posting.
-async function triggerVideoModeration(entryId, videoUrl) {
-  // TEMP DEBUG (v577): surface each step as an on-screen toast so we can diagnose
-  // from a phone with no console. Remove once video moderation is confirmed working.
-  try {
-    const mp4Url = videoUrl.replace('/playlist.m3u8', '/play_720p.mp4');
-    const rewrote = mp4Url !== videoUrl;
-    toast('mod: calling… ' + (rewrote ? 'mp4 ok' : '⚠️ url NOT rewritten'));
-    console.log('[mod] triggering video moderation', { entryId, videoUrl, mp4Url, rewrote });
-    const resp = await fetch(MODERATE_VIDEO_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ entryId, videoUrl: mp4Url }),
-    });
-    const body = await resp.json().catch(() => ({}));
-    console.log('[mod] moderation response', { status: resp.status, body });
-    if (resp.ok) {
-      toast('mod: ✅ submitted (status ' + resp.status + ')');
-    } else {
-      toast('mod: ❌ ' + resp.status + ' — ' + (body.error || 'see logs').toString().slice(0, 60));
-    }
-  } catch (e) {
-    toast('mod: ❌ fetch failed — ' + String(e).slice(0, 50));
-    console.warn('[mod] Video moderation trigger failed (non-fatal):', e);
-  }
+function triggerVideoModeration(entryId, videoUrl) {
+  // FIRE-AND-FORGET. The moderate-video function now retries the MP4 fetch for up
+  // to ~2.5 min (Bunny encodes the MP4 after HLS), which is far longer than the
+  // client should ever wait on a request. If we await it, iOS Safari kills the
+  // connection with "TypeError: Load failed". So we kick it off and DON'T await —
+  // the entry is already 'pending', and the callback resolves it in the background.
+  const mp4Url = videoUrl.replace('/playlist.m3u8', '/play_720p.mp4');
+  fetch(MODERATE_VIDEO_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ entryId, videoUrl: mp4Url }),
+    keepalive: true,   // let the request outlive the page/interaction
+  }).catch(e => console.warn('[mod] trigger dispatch failed (non-fatal):', e));
+  // Return immediately — no await, no blocking toast.
 }
 
 async function uploadToBunnyStream(file, titleHint, onProgress) {
