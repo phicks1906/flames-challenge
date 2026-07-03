@@ -5013,6 +5013,25 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 .cd-dates-strip { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin: 10px 0; font-size: 12px; }
 .cd-date-chip { background: var(--overlay-2); border: 1px solid var(--border); border-radius: 100px; padding: 4px 10px; color: var(--text-dim); font-weight: 600; white-space: nowrap; }
 .cd-date-sep { color: var(--text-muted); font-size: 11px; flex-shrink: 0; }
+/* Phase strip — the 3-step challenge lifecycle tracker */
+.cd-phase-strip { display: flex; align-items: flex-start; margin: 12px 0 4px; }
+.cd-phase-step { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+.cd-phase-dot {
+  width: 26px; height: 26px; border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 12px; font-weight: 800;
+  background: var(--overlay-2); border: 1.5px solid var(--border);
+  color: var(--text-muted);
+}
+.cd-phase-step.done .cd-phase-dot { background: var(--overlay-2); border-color: var(--ember); color: var(--ember); }
+.cd-phase-step.active .cd-phase-dot { background: linear-gradient(135deg, var(--ember), var(--flame)); border-color: transparent; color: #fff; box-shadow: 0 0 12px rgba(255,106,44,0.45); }
+.cd-phase-name { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+.cd-phase-step.active .cd-phase-name { color: var(--ember); }
+.cd-phase-step.done .cd-phase-name { color: var(--text-dim); }
+.cd-phase-sub { font-size: 10.5px; color: var(--text-muted); text-align: center; line-height: 1.25; }
+.cd-phase-step.active .cd-phase-sub { color: var(--text); font-weight: 600; }
+.cd-phase-line { flex: 1; max-width: 44px; height: 1.5px; background: var(--border); margin-top: 12.5px; }
+.cd-phase-line.done { background: var(--ember); }
 .cd-count-btn {
   background: none; border: none; cursor: pointer;
   color: inherit; font-family: var(--font-display);
@@ -6772,7 +6791,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v581 · voting-countdown-tag";
+const APP_VERSION = "v582 · phase-strip";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -14141,9 +14160,9 @@ function renderChallenges() {
     const entryCount = state.entryCounts[ch.id] || 0;
     const entryWord = entryCount === 1 ? 'entry' : 'entries';
     const meta = ch.computedStatus === 'submitting'
-      ? `${entryCount} ${entryWord} · enter by ${formatCountdown(ch.submission_deadline)}`
+      ? `${entryCount} ${entryWord} · enter by ${formatCountdown(ch.submission_deadline)} → then voting`
       : ch.computedStatus === 'voting'
-      ? `${entryCount} ${entryWord} · voting ends ${formatCountdown(ch.voting_end)}`
+      ? `${entryCount} ${entryWord} · voting ends ${formatCountdown(ch.voting_end)} → then winner`
       : `${entryCount} ${entryWord}`;
     const phase = challengePhase(ch.computedStatus);
 
@@ -14430,6 +14449,46 @@ async function loadChallengeDetail(challengeId) {
   } catch (e) { /* non-critical */ }
 }
 
+// 3-step lifecycle strip: ① Enter → ② Vote → ③ Winner. Teaches new users that a
+// challenge is a sequence, not just a current state. Countdown lives under the
+// active step. Sudden Death phases light the Vote step with a ⚡ label.
+function cdPhaseStripHTML(ch, status) {
+  const fmtD = (d) => d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+  const isSD = status === 'sd_submitting' || status === 'sudden_death';
+  // step state: 'done' | 'active' | '' (pending)
+  let s1 = '', s2 = '', s3 = '';
+  let sub1 = '', sub2 = '', sub3 = '';
+  if (status === 'submitting') {
+    s1 = 'active';
+    sub1 = ch.submission_deadline ? formatCountdown(ch.submission_deadline) + ' left' : '';
+    sub2 = ch.submission_deadline ? 'opens ' + fmtD(ch.submission_deadline) : 'up next';
+    sub3 = ch.voting_end ? fmtD(ch.voting_end) : '';
+  } else if (status === 'voting' || isSD) {
+    s1 = 'done'; s2 = 'active';
+    sub1 = '✓';
+    sub2 = isSD
+      ? ('⚡ Sudden Death' + (status === 'sd_submitting' && ch.sd_submit_end ? ' · ' + formatCountdown(ch.sd_submit_end) : (ch.voting_end ? ' · ' + formatCountdown(ch.voting_end) : '')))
+      : (ch.voting_end ? formatCountdown(ch.voting_end) + ' left' : '');
+    sub3 = 'after voting';
+  } else if (status === 'closed') {
+    s1 = 'done'; s2 = 'done'; s3 = 'active';
+    sub1 = '✓'; sub2 = '✓'; sub3 = '🏆 Decided';
+  } else {
+    // voided or unknown — show the sequence, everything muted
+    sub1 = ch.submission_deadline ? fmtD(ch.submission_deadline) : '';
+    sub2 = ch.voting_end ? fmtD(ch.voting_end) : '';
+  }
+  const step = (state2, num, name, sub) =>
+    `<div class="cd-phase-step ${state2}"><div class="cd-phase-dot">${state2 === 'done' ? '✓' : num}</div><div class="cd-phase-name">${name}</div>${sub ? `<div class="cd-phase-sub">${sub}</div>` : ''}</div>`;
+  return `<div class="cd-phase-strip">
+    ${step(s1, '1', 'Enter', sub1)}
+    <div class="cd-phase-line ${s1 === 'done' ? 'done' : ''}"></div>
+    ${step(s2, '2', 'Vote', sub2)}
+    <div class="cd-phase-line ${s2 === 'done' ? 'done' : ''}"></div>
+    ${step(s3, '3', 'Winner', sub3)}
+  </div>`;
+}
+
 function renderChallengeDetail() {
   // Wire lazy preview videos after render completes
   requestAnimationFrame(() => wireLazyVideoThumbnails(document.getElementById('challengeDetailSheet')));
@@ -14456,10 +14515,7 @@ function renderChallengeDetail() {
       <div class="avatar">${avatarInner(ch.creator?.avatar)}</div>
       <span>by ${escapeHtml(ch.creator?.name || 'Unknown')}${needsFollowPlus(ch.creator?.id) ? ' <span class="user-plus">+</span>' : ''}</span>
     </div>
-    <div class="cd-dates-strip">
-      ${ch.created_at ? `<span class="cd-date-chip">Started ${fmtD(ch.created_at)}</span><span class="cd-date-sep">›</span>` : ''}<span class="cd-date-chip">⏱ Enter by ${fmtD(ch.submission_deadline)}</span><span class="cd-date-sep">›</span><span class="cd-date-chip">🗳 Vote by ${fmtD(ch.voting_end)}</span>
-    </div>
-    ${status === 'submitting' ? `<div style="margin-top:10px;font-size:12.5px;color:var(--text-muted);display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:rgba(255,106,44,0.08);">🗳️ Voting opens when submissions close</div>` : ''}
+    ${cdPhaseStripHTML(ch, status)}
     ${ch.rules ? `<div class="cd-rules"><strong>Rules:</strong> ${escapeHtml(ch.rules)}</div>` : ''}
   `;
   const shareBtn = document.getElementById('cdShareBtn');
@@ -16785,9 +16841,9 @@ function renderFeedChallengeCard(ch) {
   const entryCount = state.entryCounts[ch.id] || 0;
   const entryWord = entryCount === 1 ? 'entry' : 'entries';
   const meta = ch.computedStatus === 'submitting'
-    ? `${entryCount} ${entryWord} · enter by ${formatCountdown(ch.submission_deadline)}`
+    ? `${entryCount} ${entryWord} · enter by ${formatCountdown(ch.submission_deadline)} → then voting`
     : ch.computedStatus === 'voting'
-    ? `${entryCount} ${entryWord} · voting ends ${formatCountdown(ch.voting_end)}`
+    ? `${entryCount} ${entryWord} · voting ends ${formatCountdown(ch.voting_end)} → then winner`
     : `${entryCount} ${entryWord} · by ${escapeHtml(creator.name)}`;
   const isChampionship = ch.title && ch.title.startsWith('⚡');
   const expanded = state.feedExpanded;
