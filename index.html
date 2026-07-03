@@ -3701,6 +3701,32 @@ html[data-theme="light"] .ps-heat-card { background: #1a1008; }
 }
 .ch-status .dot { width: 6px; height: 6px; border-radius: 50%; }
 .ch-status.submitting { background: rgba(74,222,128,0.18); color: #6effa6; }
+/* Feed viewer phase banner */
+.fv-phase-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 16px;
+}
+.fv-phase-banner .fv-pb-left {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+.fv-phase-banner .fv-pb-left .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.fv-phase-banner .fv-pb-right { font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+.fv-phase-banner.submitting { background: rgba(74,222,128,0.13); border-bottom: 1px solid rgba(74,222,128,0.25); }
+.fv-phase-banner.submitting .fv-pb-left { color: #3ecf74; }
+.fv-phase-banner.submitting .fv-pb-left .dot { background: #3ecf74; box-shadow: 0 0 8px #3ecf74; }
+.fv-phase-banner.submitting .fv-pb-right { color: var(--ember); }
+.fv-phase-banner.voting { background: rgba(255,106,44,0.13); border-bottom: 1px solid rgba(255,106,44,0.3); }
+.fv-phase-banner.voting .fv-pb-left { color: var(--ember); }
+.fv-phase-banner.voting .fv-pb-left .dot { background: var(--ember); box-shadow: 0 0 8px var(--ember); }
+.fv-phase-banner.voting .fv-pb-right { color: var(--text-dim); }
+.fv-phase-banner.closed { background: rgba(255,200,87,0.12); border-bottom: 1px solid rgba(255,200,87,0.3); }
+.fv-phase-banner.closed .fv-pb-left { color: var(--gold); }
+.fv-phase-banner.closed .fv-pb-left .dot { background: var(--gold); box-shadow: 0 0 8px var(--gold); }
+.fv-phase-banner.closed .fv-pb-right { color: var(--text-dim); }
+body.theme-light .fv-phase-banner.submitting .fv-pb-left { color: #1e7a44; }
+body.theme-light .fv-phase-banner.closed .fv-pb-left { color: #9a7416; }
 .ch-status.submitting .dot { background: #6effa6; box-shadow: 0 0 8px #6effa6; }
 .ch-status.voting { background: rgba(255,106,44,0.22); color: var(--ember-bright); }
 .ch-status.voting .dot { background: var(--ember-bright); box-shadow: 0 0 8px var(--ember-bright); }
@@ -6366,6 +6392,8 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       </div>
       <button onclick="closeFeedViewer()" style="background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.25);border-radius:50%;width:36px;height:36px;color:#fff;font-size:20px;cursor:pointer;display:grid;place-items:center;flex-shrink:0;line-height:1;">×</button>
     </div>
+    <!-- Phase banner — full-width lifecycle bar (green=enter, ember=vote, gold=decided) -->
+    <div id="fvPhaseBanner" style="display:none;"></div>
     <!-- Horizontal snap-scroll entries -->
     <div style="position:relative;">
       <div id="fvEntries" style="display:flex;flex-direction:row;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scroll-snap-stop:always;-webkit-overflow-scrolling:touch;scrollbar-width:none;gap:0;"></div>
@@ -6791,7 +6819,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v583 · viewer-phase";
+const APP_VERSION = "v584 · phase-banner";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -18085,11 +18113,34 @@ async function openFeedViewer(chId, startEntryId = null) {
   const status = computeChallengeStatus(ch);
   const phase  = challengePhase(status);
   title.textContent = ch.title;
-  meta.textContent  = status === 'submitting' && ch.submission_deadline
-    ? `${phase.label} · voting in ${formatCountdown(ch.submission_deadline)}`
-    : status === 'voting' && ch.voting_end
-    ? `${phase.label} · winner in ${formatCountdown(ch.voting_end)}`
-    : phase.label;
+  meta.textContent  = phase.label;
+  // Phase banner — full-width, color-coded, shows current phase + what's next
+  const pb = document.getElementById('fvPhaseBanner');
+  if (pb) {
+    const isSD = status === 'sd_submitting' || status === 'sudden_death';
+    let pbCls = '', pbLeft = '', pbRight = '';
+    if (status === 'submitting') {
+      pbCls = 'submitting'; pbLeft = 'Open to Enter';
+      pbRight = ch.submission_deadline ? `🗳️ Voting in ${formatCountdown(ch.submission_deadline)}` : '🗳️ Voting next';
+    } else if (status === 'voting') {
+      pbCls = 'voting'; pbLeft = 'Vote Now';
+      pbRight = ch.voting_end ? `🏆 Winner in ${formatCountdown(ch.voting_end)}` : '🏆 Winner next';
+    } else if (isSD) {
+      pbCls = 'voting'; pbLeft = '⚡ Sudden Death';
+      const sdT = status === 'sd_submitting' ? ch.sd_submit_end : ch.voting_end;
+      pbRight = sdT ? `🏆 Winner in ${formatCountdown(sdT)}` : '🏆 Winner next';
+    } else if (status === 'closed') {
+      pbCls = 'closed'; pbLeft = 'Closed'; pbRight = '🏆 Winner decided';
+    }
+    if (pbCls) {
+      pb.className = 'fv-phase-banner ' + pbCls;
+      pb.innerHTML = `<span class="fv-pb-left"><span class="dot"></span>${pbLeft}</span><span class="fv-pb-right">${pbRight}</span>`;
+      pb.style.display = 'flex';
+      meta.textContent = ''; // banner replaces the subtitle — no double status
+    } else {
+      pb.style.display = 'none';
+    }
+  }
   // Will update button after entries load — set placeholder for now
   btn.textContent = '📋 View Details';
   btn.style.display = 'block';
