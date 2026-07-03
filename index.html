@@ -6791,7 +6791,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v582 · phase-strip";
+const APP_VERSION = "v583 · viewer-phase";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -18085,7 +18085,11 @@ async function openFeedViewer(chId, startEntryId = null) {
   const status = computeChallengeStatus(ch);
   const phase  = challengePhase(status);
   title.textContent = ch.title;
-  meta.textContent  = phase.label;
+  meta.textContent  = status === 'submitting' && ch.submission_deadline
+    ? `${phase.label} · voting in ${formatCountdown(ch.submission_deadline)}`
+    : status === 'voting' && ch.voting_end
+    ? `${phase.label} · winner in ${formatCountdown(ch.voting_end)}`
+    : phase.label;
   // Will update button after entries load — set placeholder for now
   btn.textContent = '📋 View Details';
   btn.style.display = 'block';
