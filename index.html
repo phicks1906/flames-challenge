@@ -2893,6 +2893,33 @@ body.theme-light .skeleton {
 .hof-laurel-photo img, .hof-laurel-photo .avatar-img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
 .lb-avatar-laurel { position: relative; display: grid; place-items: center; flex-shrink: 0; margin: -10px 0; }
 /* Fire ring behind the "Your Standing" crest */
+/* Championship charge-up (Ranks page) */
+.champ-charge { padding: 10px 14px 11px; border-radius: 14px; background: rgba(255,200,87,0.13); border: 1px solid rgba(255,200,87,0.35); margin: 0 0 12px; }
+.champ-charge .cc-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 7px; }
+.champ-charge .cc-l { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.07em; color: var(--gold); white-space: nowrap; }
+.champ-charge .cc-r { font-size: 12.5px; font-weight: 700; color: var(--text); white-space: nowrap; }
+.champ-charge .cc-bar { height: 5px; border-radius: 4px; background: var(--overlay-3); overflow: hidden; }
+.champ-charge .cc-bar i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--gold), var(--ember)); box-shadow: 0 0 10px rgba(255,200,87,0.55); }
+.champ-charge .cc-sub { margin-top: 5px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); display: flex; justify-content: space-between; gap: 8px; }
+body.theme-light .champ-charge .cc-l { color: #9a7416; }
+
+/* HOF standing card (Hall of Fame hero) */
+.hof-stand { display: flex; align-items: center; gap: 16px; border-radius: 20px; padding: 18px; margin: 2px 0 22px;
+  background: radial-gradient(120% 160% at 15% 20%, #3a2416 0%, #17100b 55%, #0d0906 100%);
+  border: 1px solid rgba(255,140,60,0.35); box-shadow: inset 0 0 40px rgba(255,106,44,0.12); }
+.hof-stand .hs-crest { flex-shrink: 0; position: relative; display: grid; place-items: center; }
+.hof-stand .hs-crest::before { content: ''; position: absolute; inset: -4px; border-radius: 50%;
+  background: conic-gradient(from 40deg, var(--ember), var(--gold), var(--flame), var(--ember));
+  filter: blur(12px); opacity: 0.5; }
+.hof-stand .hs-crest > * { position: relative; z-index: 1; }
+.hof-stand .hs-info { flex: 1; min-width: 0; }
+.hof-stand .hs-tier { font-family: var(--font-display); font-size: 25px; letter-spacing: 0.04em; text-transform: uppercase; line-height: 1.05;
+  background: linear-gradient(90deg, #ffd9a0, var(--gold), #ffb35c); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hof-stand .hs-stat { font-size: 12.5px; color: #d8c9b8; margin-top: 4px; }
+.hof-stand .hs-stat b { color: #fff; }
+.hof-stand .hs-bar { margin-top: 9px; height: 5px; border-radius: 4px; background: rgba(255,255,255,0.12); overflow: hidden; }
+.hof-stand .hs-bar i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--ember), var(--gold)); box-shadow: 0 0 8px rgba(255,200,87,0.45); }
+.hof-stand .hs-next { margin-top: 4px; font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #a08b74; }
 .hof-crest-ring-wrap { position: relative; display: inline-block; line-height: 0; }
 .hof-crest-ring { position: absolute; left: 50%; top: 49%; transform: translate(-50%, -50%); width: 158%; height: 158%; object-fit: contain; mix-blend-mode: screen; pointer-events: none; z-index: 0; }
 .hof-crest-ring-wrap > svg { position: relative; z-index: 1; }
@@ -6826,7 +6853,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v586 · fire-track-journey";
+const APP_VERSION = "v587 · charge-standing";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -10548,13 +10575,21 @@ function renderLeaderboard() {
     } else {
       const daysLeft = Math.ceil((lastDay - now) / 86400000);
       const label = daysLeft === 0
-        ? '⚡ Championship launches today!'
+        ? 'Launches today!'
         : daysLeft === 1
-        ? '⚡ Championship launches tomorrow!'
-        : `⚡ Next Championship launches in ${daysLeft} days`;
-      countdownEl.textContent = label;
+        ? 'Launches tomorrow!'
+        : `Launches in ${daysLeft} days`;
+      // Charge bar: how far the month has elapsed — the championship "charges up"
+      const monthStart = new Date(year, month, 1).getTime();
+      const monthEnd = new Date(year, month + 1, 1).getTime();
+      const pct = Math.round(Math.min(0.97, Math.max(0.04, (now - monthStart) / (monthEnd - monthStart))) * 100);
+      countdownEl.innerHTML = `<div class="champ-charge">
+        <div class="cc-top"><span class="cc-l">⚡ Championship</span><span class="cc-r">${label}</span></div>
+        <div class="cc-bar"><i style="width:${pct}%"></i></div>
+        <div class="cc-sub"><span>Month in progress</span><span>Top 3 per category qualify</span></div>
+      </div>`;
       countdownEl.style.display = 'block';
-      countdownEl.style.color = daysLeft <= 3 ? 'var(--ember)' : 'var(--text-muted)';
+      countdownEl.style.color = '';
     }
   }
 
@@ -11529,22 +11564,29 @@ function renderHallOfFame() {
       </div>`;
     }).join('')}` : '';
 
+  // Standing card: crest on a fire glow, tier in gold, championships + progress
+  // to the next honor. Honor thresholds: Legend 5 → Icon 10 → Immortal 15 → GOAT 20.
   const myTier = hofTierOf(myId);
-  let crestHero;
-  if (myTier) {
-    const myChamps = myTier.isFounder ? '' : String(log.filter(r => r.userId === myId).length);
-    crestHero = `<div style="text-align:center;margin:2px 0 22px">
-      <span class="hof-crest-ring-wrap">
-        <video class="hof-crest-ring" autoplay muted loop playsinline preload="metadata" poster="media/ring%20hof%20poster.jpeg"><source src="media/ring%20hof.mp4" type="video/mp4"></video>
-        ${hofWreath({ metal: hofMetalForTier(myTier), crown: true, center: myChamps, ribbon: myTier.label, size: 176 })}
-      </span>
-      <div style="font-family:var(--font-display);text-transform:uppercase;letter-spacing:.04em;color:var(--text);font-size:14px;margin-top:2px">Your Standing</div>
-    </div>`;
-  } else {
-    crestHero = `<div style="text-align:center;margin:2px 0 18px">
-      ${hofWreath({ metal: 'gold', crown: true, center: '', ribbon: 'HALL OF FAME', size: 150 })}
-    </div>`;
-  }
+  const myChampCount = log.filter(r => r.userId === myId).length;
+  const HONOR_STEPS = [[5, 'Legend'], [10, 'Icon'], [15, 'Immortal'], [20, 'GOAT']];
+  const nextStep = HONOR_STEPS.find(([n]) => myChampCount < n);
+  const nextPct = nextStep ? Math.round((myChampCount / nextStep[0]) * 100) : 100;
+  const nextTxt = nextStep
+    ? `${nextStep[0] - myChampCount} championship${nextStep[0] - myChampCount === 1 ? '' : 's'} to ${nextStep[1]}`
+    : 'Highest honor achieved';
+  const heroTier = myTier ? myTier.label : 'Hall of Fame';
+  const heroCrest = myTier
+    ? hofWreath({ metal: hofMetalForTier(myTier), crown: true, center: myTier.isFounder ? '' : String(myChampCount), ribbon: myTier.label, size: 116 })
+    : hofWreath({ metal: 'gold', crown: true, center: '', ribbon: 'HALL OF FAME', size: 116 });
+  const crestHero = `<div class="hof-stand">
+    <div class="hs-crest">${heroCrest}</div>
+    <div class="hs-info">
+      <div class="hs-tier">${escapeHtml(heroTier)}</div>
+      <div class="hs-stat"><b>${myChampCount}</b> championship${myChampCount === 1 ? '' : 's'} won</div>
+      <div class="hs-bar"><i style="width:${nextPct}%"></i></div>
+      <div class="hs-next">${nextTxt}</div>
+    </div>
+  </div>`;
   el.innerHTML = crestHero + foundersHtml + legendsSection + historyHtml;
 }
 
