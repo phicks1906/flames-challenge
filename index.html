@@ -848,6 +848,11 @@ body.theme-light .nav { background: rgba(255, 255, 255, 0.88); border-bottom-col
   text-align: right; margin-top: 2px;
 }
 /* ── How it works card ── */
+/* v588: compressed leaderboard header */
+#leaderboardViewSection .section-title { font-size: clamp(26px, 5.5vw, 40px); text-shadow: none; }
+#leaderboardViewSection .section-head { margin-bottom: 12px; }
+.lb-how-link { color: var(--ember); font-weight: 700; cursor: pointer; white-space: nowrap; }
+.lb-how-link:active { opacity: 0.7; }
 .lb-how-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -5539,15 +5544,11 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     <div class="section-head">
       <div>
         <h2 class="section-title">Leaderboard</h2>
-        <p class="section-sub">Monthly wins · updated live</p>
+        <p class="section-sub">Monthly wins · updated live · <a class="lb-how-link" onclick="toggleLbHow()">ⓘ how it works</a></p>
       </div>
     </div>
-    <div class="lb-how-card" id="lbHowCard">
-      <div class="lb-how-header" onclick="toggleLbHow()">
-        <span class="lb-how-title">ℹ️ How it works</span>
-        <span class="lb-how-chevron" id="lbHowChevron">▾</span>
-      </div>
-      <div class="lb-how-body" id="lbHowBody" style="display:none">
+    <div class="lb-how-card" id="lbHowCard" style="display:none">
+      <div class="lb-how-body" id="lbHowBody">
         <div class="lb-how-item">
           <div class="lb-how-icon">🏆</div>
           <div><strong>Win challenges</strong> — Enter and win challenges in any category. Every win counts toward your rank.</div>
@@ -5575,7 +5576,8 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       </div>
     </div>
 
-    <div class="feed-tabs" style="margin-bottom:16px" id="lbMainTabs">
+    <div id="lbChampCountdown" style="display:none;margin-bottom:10px"></div>
+    <div class="feed-tabs" style="margin-bottom:10px" id="lbMainTabs">
       <button class="feed-tab active" data-lbtab="rankings">🏆 Rankings</button>
       <button class="feed-tab" data-lbtab="championship">⚡ Championship</button>
       <button class="feed-tab" data-lbtab="halloffame">🌟 Hall of Fame</button>
@@ -5584,8 +5586,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     <!-- RANKINGS TAB -->
     <div id="lbTabRankings">
       <div id="lbChampionBanner" style="display:none"></div>
-      <div id="lbChampCountdown" style="display:none;text-align:center;padding:10px 0 4px;font-size:13px;color:var(--text-muted);"></div>
-      <div class="ch-tabs" id="lbCategoryTabs" style="margin-bottom:20px"></div>
+      <div class="ch-tabs" id="lbCategoryTabs" style="margin-bottom:12px"></div>
       <div class="leaderboard" id="lbList"></div>
     </div>
 
@@ -6853,7 +6854,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v587 · charge-standing";
+const APP_VERSION = "v588 · lb-compress";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -10572,6 +10573,7 @@ function renderLeaderboard() {
     });
     if (hasLaunchedThisMonth) {
       countdownEl.style.display = 'none';
+      countdownEl.dataset.active = '';
     } else {
       const daysLeft = Math.ceil((lastDay - now) / 86400000);
       const label = daysLeft === 0
@@ -10589,7 +10591,7 @@ function renderLeaderboard() {
         <div class="cc-sub"><span>Month in progress</span><span>Top 3 per category qualify</span></div>
       </div>`;
       countdownEl.style.display = 'block';
-      countdownEl.style.color = '';
+      countdownEl.dataset.active = '1';
     }
   }
 
@@ -11138,12 +11140,9 @@ function toggleTickerSetting() {
 }
 
 function toggleLbHow() {
-  const body = document.getElementById('lbHowBody');
-  const chevron = document.getElementById('lbHowChevron');
-  if (!body) return;
-  const isOpen = body.style.display !== 'none';
-  body.style.display = isOpen ? 'none' : 'block';
-  if (chevron) chevron.textContent = isOpen ? '▾' : '▴';
+  const card = document.getElementById('lbHowCard');
+  if (!card) return;
+  card.style.display = card.style.display === 'none' ? 'block' : 'none';
 }
 
 function initLbTabs() {
@@ -11154,6 +11153,8 @@ function initLbTabs() {
       document.getElementById('lbTabRankings').style.display = _lbTab === 'rankings' ? 'block' : 'none';
       document.getElementById('lbTabHallOfFame').style.display = _lbTab === 'halloffame' ? 'block' : 'none';
       document.getElementById('lbTabChampionship').style.display = _lbTab === 'championship' ? 'block' : 'none';
+      const cdEl = document.getElementById('lbChampCountdown');
+      if (cdEl) cdEl.style.display = (_lbTab !== 'halloffame' && cdEl.dataset.active) ? 'block' : 'none';
       if (_lbTab === 'halloffame') renderHallOfFame();
       if (_lbTab === 'championship') renderChampionshipTab();
     });
@@ -11635,18 +11636,18 @@ function renderChampionshipTab() {
     const myRank = myId ? allInCat.findIndex(u => u.id === myId) + 1 : 0;
     const myWins = myId ? (data.users || []).find(u => u.id === myId)?.rolling30ByCategory[cat] || 0 : 0;
     return { cat, top5, champion, currentLeader, myRank, myWins, totalInCat: allInCat.length };
-  }).filter(s => s.totalInCat >= 1);
+  });
 
-  if (!sections.length) {
-    el.innerHTML = `<div class="lb-champ-empty">
-      <div style="font-size:48px;margin-bottom:12px">⚡</div>
-      <div style="font-weight:700;font-size:18px;margin-bottom:6px">No championships yet</div>
-      <div style="color:var(--text-muted);font-size:14px;line-height:1.5">Win challenges to start climbing the rankings. The top 3 in each category qualify for a Championship Challenge each month.</div>
-    </div>`;
-    return;
-  }
-
-  el.innerHTML = sections.map(({ cat, top5, champion, currentLeader, myRank, myWins, totalInCat }) => {
+  el.innerHTML = `<div style="font-size:11px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:var(--gold);margin:2px 2px 10px">🔥 Qualifying right now</div>` + sections.map(({ cat, top5, champion, currentLeader, myRank, myWins, totalInCat }) => {
+    // No wins in this category yet — render an open invitation instead of hiding it
+    if (totalInCat === 0) {
+      return `<div class="lb-champ-section">
+        <div class="lb-champ-section-head"><div class="lb-champ-section-cat">${cat}</div></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:4px 0 2px;color:var(--text-muted);font-size:13px">
+          <span style="font-size:16px">🥇</span><em style="font-style:normal">No wins yet this month — first ${cat} win takes the lead</em>
+        </div>
+      </div>`;
+    }
     const iQualify = myRank > 0 && myRank <= 3;
     const isChamp = myId && champion?.id === myId;
     const isLeadingCat = myId && currentLeader?.id === myId;
