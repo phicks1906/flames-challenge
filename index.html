@@ -6939,7 +6939,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v593 · wreath-off";
+const APP_VERSION = "v594 · chip-placement";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -12227,7 +12227,7 @@ function _renderEvEntry() {
   document.getElementById('evName').textContent = sub.name;
   const evBadge = renderLadderChip(sub.id);
   const evNameEl = document.getElementById('evName');
-  if (evBadge) { evNameEl.innerHTML = escapeHtml(sub.name) + evBadge; } else { evNameEl.textContent = sub.name; }
+  if (evBadge) { evNameEl.innerHTML = escapeHtml(sub.name) + `<div style="margin-top:3px">${evBadge}</div>`; } else { evNameEl.textContent = sub.name; }
   document.getElementById('evChallenge').textContent = ch.title;
 
   // Media — rebuild keeping nav buttons in place
@@ -14863,7 +14863,7 @@ function renderChallengeDetail() {
         <div class="cd-entry-body">
           <div class="cd-entry-submitter ${entry.user_id && entry.user_id !== state.profile?.id ? 'user-clickable' : ''}" ${entry.user_id && entry.user_id !== state.profile?.id ? `data-user-id="${entry.user_id}"` : ''}>
             <div class="avatar">${honoredAvatarHTML(entry.user_id, avatarInner(entry.submitter?.avatar), 44)}</div>
-            <span>${escapeHtml(entry.submitter?.name || 'Unknown')}${isMyEntry ? ' (you)' : (needsFollowPlus(entry.user_id) ? ' <span class="user-plus">+</span>' : '')}${renderLadderChip(entry.user_id)}</span>
+            <span>${escapeHtml(entry.submitter?.name || 'Unknown')}${isMyEntry ? ' (you)' : (needsFollowPlus(entry.user_id) ? ' <span class="user-plus">+</span>' : '')}${renderLadderChip(entry.user_id) ? `<div style="margin-top:3px">${renderLadderChip(entry.user_id)}</div>` : ''}</span>
           </div>
           ${champEntryCredentials(entry.user_id)}
           ${entry.media_type !== 'text' && entry.caption ? `<div class="cd-entry-caption">${formatBody(entry.caption)}</div>` : ''}
@@ -16859,7 +16859,7 @@ function renderPostCard(p) {
       <div class="post-card-header" style="padding-top:8px">
         <div class="post-card-avatar" ${userClickAttr}>${honoredAvatarHTML(author.id, avatarInner(author.avatar), 44)}</div>
         <div class="post-card-meta">
-          <div class="post-card-name" ${userClickAttr}>${escapeHtml(author.name)}${plusBadge}${renderLadderChip(author.id)}</div>
+          <div class="post-card-name" ${userClickAttr}>${escapeHtml(author.name)}${plusBadge}${renderLadderChip(author.id) ? `<div style="margin-top:3px">${renderLadderChip(author.id)}</div>` : ''}</div>
         </div>
         ${isMine ? `<button class="post-card-menu" data-pid="${p.id}" aria-label="Delete post">⋯</button>` : `<button class="post-card-menu" data-report-type="post" data-report-id="${p.id}" data-report-text="${escapeHtml((p.content||'').slice(0,200))}" aria-label="Report post">⋯</button>`}
       </div>
@@ -18652,10 +18652,10 @@ function renderFvEntry(entry, ch, canVote, myVoteEntryId, status) {
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
         <div style="width:38px;height:38px;border-radius:50%;overflow:hidden;flex-shrink:0;background:linear-gradient(135deg,var(--ember),var(--coral));display:grid;place-items:center;font-size:18px;cursor:pointer;" class="fv-av-host" data-fv-user="${sub.id||''}">${honoredAvatarHTML(sub.id, avatarInner(sub.avatar), 38)}</div>
         <div style="flex:1;min-width:0;">
-          <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
+          <div style="display:flex;align-items:center;gap:5px;">
             <span style="font-weight:700;font-size:15px;cursor:pointer;" data-fv-user="${sub.id||''}">${escapeHtml(sub.name)}${isMine?' (you)':''}</span>
-            <span>${renderLadderChip(sub.id)}</span>
           </div>
+          ${renderLadderChip(sub.id) ? `<div style="margin-top:2px">${renderLadderChip(sub.id)}</div>` : ''}
           <div style="font-size:12px;color:var(--text-muted);margin-top:1px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
             ${recordLine ? `<span>${escapeHtml(recordLine)}</span>` : ''}
             ${entry.caption && mediaType !== 'text' ? `${recordLine ? '<span style="opacity:0.4">·</span>' : ''}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:50vw;">${escapeHtml(entry.caption)}</span>` : ''}
