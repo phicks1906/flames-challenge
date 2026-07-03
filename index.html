@@ -2894,6 +2894,30 @@ body.theme-light .skeleton {
 /* Laurel-framed avatar (status frame, used everywhere a profile pic shows) */
 .hof-laurel { position: relative; display: inline-block; line-height: 0; vertical-align: middle; }
 .hof-laurel > svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+/* ── Wreath pop (v592): shimmer sweep, gold name, faint row tint ── */
+.hof-laurel::after, .hof-frame::after {
+  content: '';
+  position: absolute; inset: -4%;
+  background: linear-gradient(115deg, transparent 32%, rgba(255,224,150,0.5) 45%, rgba(255,255,255,0.85) 50%, rgba(255,224,150,0.5) 55%, transparent 68%);
+  background-size: 260% 260%;
+  mix-blend-mode: overlay;
+  animation: hofShimmer 4.5s ease-in-out infinite;
+  pointer-events: none;
+  border-radius: 50%;
+}
+@keyframes hofShimmer {
+  0%   { background-position: 220% 220%; }
+  100% { background-position: -60% -60%; }
+}
+.hof-gold-name {
+  background: linear-gradient(90deg, #ffd9a0, var(--gold), #ffb35c);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;
+  font-weight: 800;
+}
+.hof-row-tint {
+  background: linear-gradient(90deg, rgba(255,200,87,0.10), transparent 75%) !important;
+}
 .hof-laurel-photo { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; overflow: hidden; display: grid; place-items: center; background: var(--overlay-2); }
 .hof-laurel-photo img, .hof-laurel-photo .avatar-img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
 .lb-avatar-laurel { position: relative; display: grid; place-items: center; flex-shrink: 0; margin: -10px 0; }
@@ -6915,7 +6939,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v591 · chip-simplify";
+const APP_VERSION = "v592 · wreath-pop";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -10746,10 +10770,11 @@ function renderLeaderboard() {
   ranked.forEach((u, i) => {
     const isYou = state.profile && u.id === state.profile.id;
     const isLeader = u.id === leaderId;
-  const isChamp = champTitle && u.id === champTitle.userId;
+    const isChamp = champTitle && u.id === champTitle.userId;
     const isFollowing = state.myFollowing.has(u.id);
+    const isHonored = !!hofTierOf(u.id);
     const row = document.createElement('div');
-    row.className = 'lb-row' + (isYou ? ' you' : '');
+    row.className = 'lb-row' + (isYou ? ' you' : '') + (isHonored && !isYou ? ' hof-row-tint' : '');
     const lbRank = lbRankByIndex[i];
     const lbMedalColor = lbRank === 1 ? 'var(--gold)' : lbRank === 2 ? '#aab3bd' : lbRank === 3 ? '#cd7f32' : '';
     const lbRankIcon = '#' + lbRank;
@@ -10763,11 +10788,12 @@ function renderLeaderboard() {
       <div class="lb-user" style="cursor:pointer" data-lb-uid="${u.id}">
         ${lbAvatar}
         <div style="min-width:0">
-          <div class="lb-name">${escapeHtml(u.name)}${isYou ? ' (you)' : ''}${isChamp ? ' <span class="lb-champ-tag">👑 Champ</span>' : ''}${isLeader && !isChamp ? ' <span class="lb-leader-tag">🔥 Leader</span>' : ''}</div>
-          <div class="lb-streak" style="font-size:11px;color:var(--text-muted);line-height:1.35"><div>${u.catWins}–${u.catLosses} this month</div><div style="opacity:.7">${u.catAllTime} all-time</div></div>
+          <div class="lb-name">${hofNameHTML(u.id, escapeHtml(u.name))}${isYou ? ' (you)' : ''}${isChamp ? ' <span class="lb-champ-tag">👑 Champ</span>' : ''}${isLeader && !isChamp ? ' <span class="lb-leader-tag">🔥 Leader</span>' : ''}</div>
+          <div class="lb-streak" style="font-size:11px;color:var(--text-muted)">${u.catWins}–${u.catLosses} this month · ${u.catAllTime} all-time</div>
+          ${renderLadderChip(u.id, { showSpark: true, size: 15 })}
         </div>
       </div>
-      ${!isYou ? `<button class="lb-follow-btn${isFollowing ? ' following' : ''}" data-lb-follow="${u.id}">${isFollowing ? '✓' : '+ Follow'}</button>` : '<div></div>'}
+      ${!isYou ? `<button class="lb-follow-btn${isFollowing ? ' following' : ''}" data-lb-follow="${u.id}" title="${isFollowing ? 'Tap to unfollow' : 'Follow'}">${isFollowing ? '✓ Following' : '+ Follow'}</button>` : '<div></div>'}
     `;
     row.querySelector('[data-lb-uid]')?.addEventListener('click', () => openUserProfile(u.id));
     const followBtn = row.querySelector('[data-lb-follow]');
@@ -12862,6 +12888,12 @@ function hofTierOf(userId){
   const ls = getLadderStatus(userId);
   if (!ls || ls.stageIndex < 5) return null;
   return { tier: ls.key, label: ls.name.toUpperCase(), center: String(ls.displayCount) };
+}
+// Wraps a name in the gold-gradient treatment for Founders/HOF (Legend+) —
+// same population that gets the laurel wreath. escapedName must already be
+// HTML-escaped by the caller (this just adds the wrapping span).
+function hofNameHTML(userId, escapedName) {
+  return hofTierOf(userId) ? `<span class="hof-gold-name">${escapedName}</span>` : escapedName;
 }
 // Big crest medallion. opts: {center, tier(label), top, bottom, isFounder, size}
 function hofCrest(opts){
