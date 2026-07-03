@@ -6939,7 +6939,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v592 · wreath-pop";
+const APP_VERSION = "v593 · wreath-off";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -10778,11 +10778,8 @@ function renderLeaderboard() {
     const lbRank = lbRankByIndex[i];
     const lbMedalColor = lbRank === 1 ? 'var(--gold)' : lbRank === 2 ? '#aab3bd' : lbRank === 3 ? '#cd7f32' : '';
     const lbRankIcon = '#' + lbRank;
-    const uMetal = hofMetalForTier(hofTierOf(u.id));
     const lbDot = isChamp ? '<span class="lb-champ-dot">👑</span>' : isLeader ? '<span class="lb-champ-dot">🔥</span>' : '';
-    const lbAvatar = uMetal
-      ? `<div class="lb-avatar-laurel">${hofLaurelAvatar(avatarInner(u.avatar), 74, uMetal)}</div>`
-      : `<div class="lb-avatar" style="position:relative">${avatarInner(u.avatar)}${lbDot}</div>`;
+    const lbAvatar = `<div class="lb-avatar" style="position:relative">${avatarInner(u.avatar)}${lbDot}</div>`;
     row.innerHTML = `
       <div class="lb-rank"${lbMedalColor ? ` style="color:${lbMedalColor}"` : ''}>${lbRankIcon}</div>
       <div class="lb-user" style="cursor:pointer" data-lb-uid="${u.id}">
@@ -13459,16 +13456,15 @@ function hofLaurelAvatar(avatarHTML, W, metal){
     + `<span class="hof-laurel-photo" style="width:${photoD}px;height:${photoD}px;left:${px}px;top:${py}px;font-size:${Math.round(photoD*0.55)}px">${avatarHTML}</span>`
     + svg + `</span>`;
 }
-// Central helper: wrap any avatar with the user's HOF-status laurel, or return plain if not honored.
-// `size` = the base avatar diameter it replaces. Big avatars get the tier-word ribbon; small ones stay clean.
+// Central helper: previously wrapped avatars in the laurel wreath for Founders/
+// HOF. Removed v593 — the gold-gradient name, ladder chip, row tint, and
+// shimmer already say "this person is notable" unambiguously; the wreath was
+// a fifth signal for the same fact and just added visual weight. Kept as a
+// passthrough (not deleted) so all 23 call sites don't need touching, and so
+// the wreath can come back easily if wanted later. The big "Your Standing"
+// hero crest is untouched — separate function (hofWreath), different context.
 function honoredAvatarHTML(userId, avatarHTML, size){
-  const t = hofTierOf(userId);
-  const metal = hofMetalForTier(t);
-  if(!metal) return avatarHTML;
-  if(size >= 120){
-    return hofFrameHTML(avatarHTML, size, { metal, crown:true, ribbon: t.label, photoRatio: 0.38 });
-  }
-  return hofLaurelAvatar(avatarHTML, Math.round(size*1.85), metal);
+  return avatarHTML;
 }
 
 
