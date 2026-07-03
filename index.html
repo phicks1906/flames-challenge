@@ -4415,6 +4415,36 @@ body.theme-light .fvj.closed .fvj-node.live .fvj-t { color: #9a7416; }
 .cd-challenger-rank.top { color: var(--gold); }
 
 /* ── Badge ladder chips ── */
+/* ── Ladder chip — just the emblem + tinted text, no shape/border/fill ── */
+.ladder-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  vertical-align: middle;
+  cursor: pointer;
+}
+.ladder-chip .hof-badge-img { border-radius: 50%; flex-shrink: 0; }
+.ladder-chip-spark    { color: #9aa0a8; }
+.ladder-chip-flame    { color: #cd8a52; }
+.ladder-chip-blaze    { color: #e8794e; }
+.ladder-chip-inferno  { color: #ced3da; }
+.ladder-chip-legend   { color: #ffc857; }
+.ladder-chip-icon     { color: #ffd700; }
+.ladder-chip-immortal { color: #ff8c42; }
+.ladder-chip-goat     { color: #ffd700; font-weight: 800; }
+.ladder-chip-founder  { color: #ff9a6c; font-weight: 800; }
+body.theme-light .ladder-chip-spark    { color: #64748b; }
+body.theme-light .ladder-chip-flame    { color: #8a4a1c; }
+body.theme-light .ladder-chip-blaze    { color: #b0431c; }
+body.theme-light .ladder-chip-inferno  { color: #475569; }
+body.theme-light .ladder-chip-legend   { color: #92400e; }
+body.theme-light .ladder-chip-icon     { color: #78350f; }
+body.theme-light .ladder-chip-immortal { color: #9a3412; }
+body.theme-light .ladder-chip-goat     { color: #b45309; }
+body.theme-light .ladder-chip-founder  { color: #bf360c; }
+
 .fc-badge {
   display: inline-flex;
   align-items: center;
@@ -6885,7 +6915,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v590 · unified-ladder";
+const APP_VERSION = "v591 · chip-simplify";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -12774,12 +12804,12 @@ function renderLadderChip(userId, opts = {}) {
   if (!userId) return '';
   const ls = getLadderStatus(userId);
   if (!ls) return '';
+  const s = opts.size || 22;
   if (ls.isFounder) {
-    return `<span class="fc-badge fc-badge-founder" title="Founder"><img class="hof-badge-img" src="${LADDER_BADGE_BASE}founder.png" width="15" height="15" alt=""></span> Founder`;
+    return `<span class="ladder-chip ladder-chip-founder" title="Founder"><img class="hof-badge-img" src="${LADDER_BADGE_BASE}founder.png" width="${s}" height="${s}" alt="">Founder</span>`;
   }
   if (ls.champCount < 1 && !opts.showSpark) return '';
-  const hofShape = ls.stageIndex >= 5 ? ' fc-badge-hof' : '';
-  return `<span class="fc-badge fc-badge-${ls.key}${hofShape}" title="${ls.name} · ${ls.champCount} championship${ls.champCount === 1 ? '' : 's'}"><img class="hof-badge-img" src="${LADDER_BADGE_BASE}${ls.key}.png" width="15" height="15" alt="">${ls.name}</span>`;
+  return `<span class="ladder-chip ladder-chip-${ls.key}" title="${ls.name} · ${ls.champCount} championship${ls.champCount === 1 ? '' : 's'}"><img class="hof-badge-img" src="${LADDER_BADGE_BASE}${ls.key}.png" width="${s}" height="${s}" alt="">${ls.name}</span>`;
 }
 
 // ===== HOF CREST + WREATH RING (generated SVG — no image assets, scales, low egress) =====
@@ -18064,7 +18094,7 @@ function closeBadgeLegend() {
 
 // Delegated tap handler — any badge chip anywhere opens the legend
 document.addEventListener('click', e => {
-  const badge = e.target.closest('.fc-badge, .hof-badge-img');
+  const badge = e.target.closest('.fc-badge, .hof-badge-img, .ladder-chip');
   if (!badge) return;
   e.stopPropagation();
   e.preventDefault();
