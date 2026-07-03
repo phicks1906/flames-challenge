@@ -3725,6 +3725,11 @@ html[data-theme="light"] .ps-heat-card { background: #1a1008; }
 .fv-phase-banner.closed .fv-pb-left { color: var(--gold); }
 .fv-phase-banner.closed .fv-pb-left .dot { background: var(--gold); box-shadow: 0 0 8px var(--gold); }
 .fv-phase-banner.closed .fv-pb-right { color: var(--text-dim); }
+/* .fcc-pb — banner inside a 16px-padded card: span edge-to-edge */
+.fv-phase-banner.fcc-pb { margin: 8px -16px 10px; padding: 8px 16px; border-top: 1px solid transparent; }
+.fv-phase-banner.fcc-pb.submitting { border-top-color: rgba(74,222,128,0.25); }
+.fv-phase-banner.fcc-pb.voting { border-top-color: rgba(255,106,44,0.3); }
+.fv-phase-banner.fcc-pb.closed { border-top-color: rgba(255,200,87,0.3); }
 body.theme-light .fv-phase-banner.submitting .fv-pb-left { color: #1e7a44; }
 body.theme-light .fv-phase-banner.closed .fv-pb-left { color: #9a7416; }
 .ch-status.submitting .dot { background: #6effa6; box-shadow: 0 0 8px #6effa6; }
@@ -6819,7 +6824,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v584 · phase-banner";
+const APP_VERSION = "v585 · card-banner";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -14188,9 +14193,9 @@ function renderChallenges() {
     const entryCount = state.entryCounts[ch.id] || 0;
     const entryWord = entryCount === 1 ? 'entry' : 'entries';
     const meta = ch.computedStatus === 'submitting'
-      ? `${entryCount} ${entryWord} · enter by ${formatCountdown(ch.submission_deadline)} → then voting`
+      ? `${entryCount} ${entryWord} · enter by ${formatCountdown(ch.submission_deadline)}`
       : ch.computedStatus === 'voting'
-      ? `${entryCount} ${entryWord} · voting ends ${formatCountdown(ch.voting_end)} → then winner`
+      ? `${entryCount} ${entryWord} · voting ends ${formatCountdown(ch.voting_end)}`
       : `${entryCount} ${entryWord}`;
     const phase = challengePhase(ch.computedStatus);
 
@@ -14233,7 +14238,7 @@ function renderChallenges() {
       }
       const voteBtn = canVoteCh && state.profile
         ? `<button class="fcc-vote-btn${iVoted?' voted':''}" data-fcc-vote="${e.id}" data-fcc-chid="${ch.id}">${iVoted?'✓ Voted':'🗳️ Vote'}</button>`
-        : isMyEntry ? `<span class="fcc-your-entry">${ch.computedStatus === 'submitting' && ch.submission_deadline ? '🗳️ Voting in ' + formatCountdown(ch.submission_deadline) : 'Your entry'}</span>` : '';
+        : isMyEntry ? `<span class="fcc-your-entry">Your entry</span>` : '';
       return `<div class="fcc-entry-card" style="cursor:pointer;" data-entry-open="${ch.id}" data-entry-id="${e.id}">${mHtml}<div class="fcc-entry-footer"><div class="fcc-entry-avatar">${honoredAvatarHTML(sub.id, avatarInner(sub.avatar), 36)}</div><div class="fcc-entry-name">${escapeHtml(sub.name)}</div>${(state.entryLikeCounts[e.id] || state.entryCommentCounts[e.id]) ? `<div class="fcc-entry-counts">${state.entryLikeCounts[e.id] ? '🔥 ' + state.entryLikeCounts[e.id] : ''}${state.entryLikeCounts[e.id] && state.entryCommentCounts[e.id] ? ' · ' : ''}${state.entryCommentCounts[e.id] ? '💬 ' + state.entryCommentCounts[e.id] : ''}</div>` : ''}${voteBtn}</div></div>`;
     }).join('');
 
@@ -14272,7 +14277,7 @@ function renderChallenges() {
             <span class="feed-poll-tag" style="color:${isChampionship ? '#e8e8e8' : 'var(--ember)'};">${isChampionship ? `⚡ CHAMPIONSHIP · ${champMonthLabel(ch.id) ? champMonthLabel(ch.id).toUpperCase() + ' · ' : ''}` : '🏆 CHALLENGE · '}${escapeHtml((ch.category||'').toUpperCase())}${ch.media_type ? ' · ' + mediaTypeLabel(ch.media_type) : ''}</span>
             <span class="feed-poll-time">${countdownText}</span>
           </div>
-          <div class="feed-challenge-label ${phase.cls}" style="margin-bottom:6px;"><span class="fcl-dot"></span>${phase.label}</div>
+          ${cardPhaseBannerHTML(ch, ch.computedStatus)}
           <div style="font-family:var(--font-bricolage);font-weight:700;font-size:17px;color:var(--text);margin-bottom:3px;">${escapeHtml(ch.title)}</div>
           <div style="font-size:13px;color:var(--text-muted);">${meta}</div>
         </div>
@@ -14475,6 +14480,31 @@ async function loadChallengeDetail(challengeId) {
       if (!invRes.error && invRes.data) state.myChampInvite = invRes.data;
     }
   } catch (e) { /* non-critical */ }
+}
+
+// Full-width phase banner for challenge CARDS (same visual language as the feed
+// viewer's #fvPhaseBanner). Reuses .fv-phase-banner CSS + .fcc-pb negative-margin
+// modifier so it spans the card edge-to-edge despite the 16px card padding.
+function cardPhaseBannerHTML(ch, status) {
+  const isSD = status === 'sd_submitting' || status === 'sudden_death';
+  let cls = '', left = '', right = '';
+  if (status === 'submitting') {
+    cls = 'submitting'; left = 'Open to Enter';
+    right = ch.submission_deadline ? `🗳️ Voting in ${formatCountdown(ch.submission_deadline)}` : '🗳️ Voting next';
+  } else if (status === 'voting') {
+    cls = 'voting'; left = 'Vote Now';
+    right = ch.voting_end ? `🏆 Winner in ${formatCountdown(ch.voting_end)}` : '🏆 Winner next';
+  } else if (isSD) {
+    cls = 'voting'; left = '⚡ Sudden Death';
+    const t = status === 'sd_submitting' ? ch.sd_submit_end : ch.voting_end;
+    right = t ? `🏆 Winner in ${formatCountdown(t)}` : '🏆 Winner next';
+  } else if (status === 'closed') {
+    cls = 'closed'; left = 'Closed'; right = '🏆 Winner decided';
+  } else if (status === 'voided') {
+    cls = 'closed'; left = 'Voided'; right = '';
+  }
+  if (!cls) return '';
+  return `<div class="fv-phase-banner fcc-pb ${cls}"><span class="fv-pb-left"><span class="dot"></span>${left}</span>${right ? `<span class="fv-pb-right">${right}</span>` : ''}</div>`;
 }
 
 // 3-step lifecycle strip: ① Enter → ② Vote → ③ Winner. Teaches new users that a
@@ -14732,9 +14762,6 @@ function renderChallengeDetail() {
         // Everyone — including the submitter — can cast their one vote
         actionsHtml = `${isMyEntry ? '<span class="cd-entry-tag">Your entry</span> ' : ''}<button class="btn-vote ${iVoted ? 'is-voted' : 'not-voted'}" data-vote-entry="${entry.id}">${iVoted ? '✓ Voted' : '🗳️ Vote'}</button>`;
       }
-    } else if (status === 'submitting' && isMyEntry && ch.submission_deadline) {
-      // Entry phase: tell the submitter when voting starts (self-votes ARE allowed once it does)
-      actionsHtml = `<span class="cd-entry-tag">🗳️ Voting in ${formatCountdown(ch.submission_deadline)}</span>`;
     }
     // (Closed challenges show the tally in the standings bar below, not as separate text.)
 
@@ -16334,7 +16361,7 @@ function renderFeed() {
               <span class="feed-poll-tag" style="color:#e8e8e8;">⚡ CHAMPIONSHIP</span>
               <span class="feed-poll-time">⏱ ${countdown}</span>
             </div>
-            <div class="feed-challenge-label ${status === 'voting' ? 'voting' : 'submitting'}" style="margin-bottom:6px;"><span class="fcl-dot"></span>${phase}</div>
+            ${cardPhaseBannerHTML(ch, status)}
             <div class="feed-poll-question">${escapeHtml(ch.title)}</div>
             <div class="feed-poll-time">${entryCount} entr${entryCount===1?'y':'ies'} · ${ch.category}</div>
           </div>
@@ -16869,9 +16896,9 @@ function renderFeedChallengeCard(ch) {
   const entryCount = state.entryCounts[ch.id] || 0;
   const entryWord = entryCount === 1 ? 'entry' : 'entries';
   const meta = ch.computedStatus === 'submitting'
-    ? `${entryCount} ${entryWord} · enter by ${formatCountdown(ch.submission_deadline)} → then voting`
+    ? `${entryCount} ${entryWord} · enter by ${formatCountdown(ch.submission_deadline)}`
     : ch.computedStatus === 'voting'
-    ? `${entryCount} ${entryWord} · voting ends ${formatCountdown(ch.voting_end)} → then winner`
+    ? `${entryCount} ${entryWord} · voting ends ${formatCountdown(ch.voting_end)}`
     : `${entryCount} ${entryWord} · by ${escapeHtml(creator.name)}`;
   const isChampionship = ch.title && ch.title.startsWith('⚡');
   const expanded = state.feedExpanded;
@@ -16887,7 +16914,7 @@ function renderFeedChallengeCard(ch) {
         
       </div>
     </div>
-    <div class="feed-challenge-label ${phase.cls}" style="margin-bottom:6px;"><span class="fcl-dot"></span>${phase.label}</div>
+    ${cardPhaseBannerHTML(ch, ch.computedStatus)}
     <div class="feed-poll-question">${escapeHtml(ch.title)}</div>
     <div class="feed-poll-time">${meta}</div>
     ${entryCount > 0 ? `<div style="color:var(--ember);font-size:11px;font-weight:700;margin-top:6px;letter-spacing:0.01em;">Tap to see ${entryCount} entr${entryCount===1?'y':'ies'} ›</div>` : ''}`;
@@ -16947,7 +16974,7 @@ function renderFeedChallengeCard(ch) {
       }
       const voteBtn = canVote && state.profile
         ? `<button class="fcc-vote-btn${iVoted ? ' voted' : ''}" data-fcc-vote="${e.id}" data-fcc-chid="${ch.id}">${iVoted ? '✓ Voted' : '🗳️ Vote'}</button>`
-        : isMyEntry ? `<span class="fcc-your-entry">${ch.computedStatus === 'submitting' && ch.submission_deadline ? '🗳️ Voting in ' + formatCountdown(ch.submission_deadline) : 'Your entry'}</span>` : '';
+        : isMyEntry ? `<span class="fcc-your-entry">Your entry</span>` : '';
       return `<div class="fcc-entry-card" style="flex:0 0 72vw!important;min-width:72vw!important;max-width:280px!important;cursor:pointer;" data-entry-open="${ch.id}" data-entry-id="${e.id}">
         ${mediaHtml}
         <div class="fcc-entry-footer">
