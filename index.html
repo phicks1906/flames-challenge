@@ -2099,7 +2099,7 @@ body.theme-light .auth-form input { background: #ffffff; }
 .hc-status-line {
   display:flex; align-items:center; gap:12px; margin-top:16px; cursor:pointer;
 }
-.hc-sl-coin { width:44px; height:44px; border-radius:50%; flex-shrink:0; }
+.hc-sl-coin { width:44px; height:44px; border-radius:50%; flex-shrink:0; margin-left:-3px; }
 .hc-sl-info { flex:1; min-width:0; }
 .hc-sl-tier {
   font-size:18px; font-weight:800; color: var(--ember);
@@ -2109,19 +2109,25 @@ body.theme-light .auth-form input { background: #ffffff; }
 .hc-ladder { display:flex; align-items:flex-end; gap:4px; margin-top:16px; }
 .hc-rung { flex:1; display:flex; flex-direction:column; align-items:center; gap:5px; min-width:0; }
 .hc-rdot { width:28px; height:28px; border-radius:50%; display:grid; place-items:center; font-size:12px; font-weight:800; transition:transform 0.2s; position:relative; }
-.hc-rung.done .hc-rdot { background:rgba(255,106,44,0.15); border:1.5px solid rgba(255,106,44,0.45); color:var(--ember); }
+/* v601: every state now shows the real designed coin — not a Unicode glyph.
+   Done = full color + small ember checkmark badge. Future = same art, dimmed/
+   grayscale so it reads as "not yet earned" while still looking like a real prize. */
+.hc-coin-img { width:100%; height:100%; border-radius:50%; object-fit:cover; display:block; }
+.hc-coin-locked { filter: grayscale(1) brightness(0.8) opacity(0.55); }
+.hc-chk {
+  position:absolute; bottom:-2px; right:-2px; width:13px; height:13px; border-radius:50%;
+  background:var(--ember); color:#fff; font-size:8px; font-weight:800; line-height:1;
+  display:grid; place-items:center; border:1.5px solid var(--surface);
+}
 /* v600: gold is reserved for the current stage ONLY — done stages stay one
    consistent ember, no drift toward gold as you approach GOAT. */
-.hc-rung.cur .hc-rdot-wrap { position:relative; display:inline-block; }
 .hc-rung.cur .hc-rdot {
-  background:radial-gradient(circle at 38% 30%,#fff4d6,var(--gold)); border:2.5px solid #fff; color:#7a4410; padding:0;
   animation: hcPulseGlow 1.6s ease-in-out infinite;
 }
 @keyframes hcPulseGlow {
   0%, 100% { transform:scale(1); box-shadow:0 0 10px rgba(255,200,87,0.7); }
   50% { transform:scale(1.12); box-shadow:0 0 20px rgba(255,200,87,1); }
 }
-.hc-rung.cur .hc-rdot img { width:100%; height:100%; border-radius:50%; object-fit:cover; }
 .hc-rung.cur .hc-ping {
   position:absolute; inset:0; border-radius:50%; border:2px solid var(--gold);
   opacity:0; pointer-events:none; animation: hcPingOut 2.4s ease-out infinite;
@@ -2131,7 +2137,6 @@ body.theme-light .auth-form input { background: #ffffff; }
   0% { transform:scale(1); opacity:0.8; }
   100% { transform:scale(2.2); opacity:0; }
 }
-.hc-rung.future .hc-rdot { background:var(--overlay-2); color:var(--text-muted); opacity:0.7; }
 .hc-rname { font-size:8px; font-weight:800; letter-spacing:0.02em; text-transform:uppercase; color:var(--text-muted); }
 .hc-rung.cur .hc-rname, .hc-rung.cur .hc-rreq { color:var(--ember); }
 .hc-rung.done .hc-rname { color:#c0763f; }
@@ -6832,7 +6837,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v600 · palette-pulse-fix";
+const APP_VERSION = "v601 · real-coin-ladder";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -10012,7 +10017,6 @@ function renderHeatCheck() {
   const ladEl = document.getElementById('hcLadder');
   if (ladEl && ls) {
     const curIdx = ls.stageIndex - 1;  // 0-based
-    const glyphs = ['✦','◆','▲','★','✦','✦','✦','✦'];
     const shortNames = ['Spark','Flame','Blaze','Inferno','Legend','Icon','Immo','GOAT'];
     // Level-up detection: compare to the last stage we rendered for this user.
     // If it advanced, fire the burst on the newly-completed dot + scale-in the new current.
@@ -10026,10 +10030,10 @@ function renderHeatCheck() {
     LADDER.forEach((st, i) => {
       const state2 = i < curIdx ? 'done' : (i === curIdx ? 'cur' : 'future');
       const dotInner = state2 === 'done'
-        ? '✓'
+        ? `<img class="hc-coin-img" src="${LADDER_BADGE_BASE}${st.key}.png" alt=""><div class="hc-chk">✓</div>`
         : (state2 === 'cur'
-            ? `<div class="hc-ping"></div><div class="hc-ping hc-ping-2"></div><img src="${LADDER_BADGE_BASE}${st.key}.png" alt="">`
-            : glyphs[i]);
+            ? `<div class="hc-ping"></div><div class="hc-ping hc-ping-2"></div><img class="hc-coin-img" src="${LADDER_BADGE_BASE}${st.key}.png" alt="">`
+            : `<img class="hc-coin-img hc-coin-locked" src="${LADDER_BADGE_BASE}${st.key}.png" alt="">`);
       const burstCls = justLeveledUp && i === lastIdx ? ' hc-just-completed' : '';
       const newCurCls = justLeveledUp && i === curIdx ? ' hc-just-current' : '';
       html += `<div class="hc-rung ${state2}${burstCls}${newCurCls}"><div class="hc-rdot">${dotInner}</div><div class="hc-rname">${shortNames[i]}</div><div class="hc-rreq">${st.min}</div></div>`;
