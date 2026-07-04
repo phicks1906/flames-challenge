@@ -2096,25 +2096,60 @@ body.theme-light .auth-form input { background: #ffffff; }
 .hc-rank-prog-max { font-family: var(--font-display); font-size: 11px; letter-spacing: 2px; color: var(--gold); text-transform: uppercase; text-align: center; margin-top: 4px; }
 
 /* ── V3 Heat Check: status line + championship ladder + gauge companion ── */
-.hc-status-line { display:flex; align-items:center; gap:12px; margin-top:14px; cursor:pointer; }
+.hc-status-line {
+  display:flex; align-items:center; gap:12px; margin-top:14px; cursor:pointer;
+  padding:12px 14px; border-radius:16px;
+  background: radial-gradient(120% 160% at 15% 20%, #3a2416 0%, #17100b 60%, #0d0906 100%);
+  border: 1px solid rgba(255,150,70,0.28);
+}
 .hc-sl-coin { width:44px; height:44px; border-radius:50%; flex-shrink:0; }
 .hc-sl-info { flex:1; min-width:0; }
-.hc-sl-tier { font-size:17px; font-weight:800; color:var(--text); }
-.hc-sl-txt { font-size:12px; color:var(--text-muted); margin-top:1px; }
+.hc-sl-tier {
+  font-size:17px; font-weight:800;
+  background: linear-gradient(90deg, #ffd9a0, var(--gold), #ffb35c);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;
+}
+.hc-sl-txt { font-size:12px; color:#c9b8a0; margin-top:1px; }
 
 .hc-ladder { display:flex; align-items:flex-end; gap:4px; margin-top:16px; }
 .hc-rung { flex:1; display:flex; flex-direction:column; align-items:center; gap:5px; min-width:0; }
-.hc-rdot { width:28px; height:28px; border-radius:50%; display:grid; place-items:center; font-size:12px; font-weight:800; }
+.hc-rdot { width:28px; height:28px; border-radius:50%; display:grid; place-items:center; font-size:12px; font-weight:800; transition:transform 0.2s; }
 .hc-rung.done .hc-rdot { background:rgba(255,106,44,0.15); border:1.5px solid rgba(255,106,44,0.45); color:var(--ember); }
-.hc-rung.cur .hc-rdot { background:radial-gradient(circle at 38% 30%,#fff0c2,#e0962a); border:2.5px solid #fff; box-shadow:0 0 12px rgba(255,138,80,0.8); color:#7a4410; padding:0; overflow:hidden; }
+/* Escalating warmth toward GOAT — later completed stages glow a touch brighter */
+.hc-rung.done:nth-child(9) .hc-rdot, .hc-rung.done:nth-child(11) .hc-rdot { border-color:rgba(255,160,60,0.7); box-shadow:0 0 6px rgba(255,150,60,0.35); }
+.hc-rung.done:nth-child(13) .hc-rdot, .hc-rung.done:nth-child(15) .hc-rdot { border-color:rgba(255,190,80,0.85); box-shadow:0 0 9px rgba(255,180,80,0.5); }
+.hc-rung.cur .hc-rdot {
+  background:radial-gradient(circle at 38% 30%,#fff0c2,#e0962a); border:2.5px solid #fff; color:#7a4410; padding:0; overflow:hidden;
+  animation: hcPulseGlow 2.2s ease-in-out infinite;
+}
+@keyframes hcPulseGlow {
+  0%, 100% { box-shadow:0 0 10px rgba(255,138,80,0.6); }
+  50% { box-shadow:0 0 18px rgba(255,160,80,0.9); }
+}
 .hc-rung.cur .hc-rdot img { width:100%; height:100%; border-radius:50%; object-fit:cover; }
 .hc-rung.future .hc-rdot { background:var(--overlay-2); color:var(--text-muted); opacity:0.7; }
+/* GOAT teases gold even while locked — the top of the mountain glows */
+.hc-rung.future:last-child .hc-rdot { border:1.5px solid rgba(255,200,87,0.35); box-shadow:0 0 6px rgba(255,200,87,0.2); }
 .hc-rname { font-size:8px; font-weight:800; letter-spacing:0.02em; text-transform:uppercase; color:var(--text-muted); }
 .hc-rung.cur .hc-rname, .hc-rung.cur .hc-rreq { color:var(--ember); }
 .hc-rung.done .hc-rname { color:#c0763f; }
 .hc-rreq { font-size:8px; color:var(--text-muted); opacity:0.7; }
-.hc-rline { flex:1; height:3px; border-radius:2px; background:var(--overlay-2); margin-bottom:13px; min-width:4px; }
-.hc-rline.done { background:rgba(255,106,44,0.5); }
+.hc-rline {
+  flex:1; height:3px; border-radius:2px; background:var(--overlay-2); margin-bottom:13px; min-width:4px;
+  position:relative; overflow:hidden;
+}
+.hc-rline.done {
+  background:linear-gradient(90deg, rgba(255,106,44,0.55), rgba(255,160,60,0.55));
+}
+.hc-rline.done::after {
+  content:''; position:absolute; inset:0; width:60%;
+  background:linear-gradient(90deg, transparent, rgba(255,220,150,0.9), transparent);
+  animation: hcLineShimmer 3s ease-in-out infinite;
+}
+@keyframes hcLineShimmer {
+  0% { transform:translateX(-150%); }
+  100% { transform:translateX(250%); }
+}
 
 .hc-winrate { display:flex; align-items:center; gap:8px; margin-top:18px; padding-top:14px; border-top:1px solid var(--border); cursor:pointer; }
 .hc-gauge-mini { width:88px !important; height:88px !important; min-height:0 !important; flex-shrink:0; padding:0 !important; }
@@ -2178,8 +2213,9 @@ body.theme-light .hc-rung.future .hc-rdot { background:#e6e3dd; }
 
 /* Light-mode adjustments — gauge sits on the page background, no dark card */
 body.theme-light .heat-check {
-  background: var(--surface);
-  border-color: var(--border);
+  background: linear-gradient(160deg, #fffaf3, #fdf3e7);
+  border-color: rgba(255, 106, 44, 0.28);
+  box-shadow: 0 6px 20px rgba(120, 70, 20, 0.08);
 }
 body.theme-light .hc-gauge-stage {
   background: none;
@@ -2189,6 +2225,9 @@ body.theme-light .hc-gauge-stage::after {
   mix-blend-mode: multiply;
   opacity: 0.25;
 }
+/* Mini gauge (v596): kill the trophy ghost entirely — it turns to mud at 88px */
+.hc-gauge-mini.hc-gauge-stage::after,
+.hc-gauge-mini.hc-gauge-stage::before { display: none !important; }
 body.theme-light .hc-arc-glow {
   animation: none;
   filter: drop-shadow(0 0 6px rgba(255, 106, 44, 0.25)) drop-shadow(0 0 6px rgba(26, 143, 196, 0.2));
@@ -2197,6 +2236,8 @@ body.theme-light .hc-pct-text { fill: url(#hcPctGrad); opacity: 0.78; }
 body.theme-light .hc-pct-label { fill: #7a716a; }
 body.theme-light .hc-tile { background: rgba(255,106,44,0.06); border-color: rgba(255,106,44,0.15); }
 body.theme-light .hc-view-stats { border-color: var(--ember); color: var(--ember); }
+body.theme-light .hc-wr-sub { color: #7a6a58; }
+body.theme-light .hc-rreq { color: #9a8a76; }
 
 /* Record sheet */
 .record-tabs {
@@ -6761,7 +6802,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v595 · ladder-home-card";
+const APP_VERSION = "v596 · less-bland-polish";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
