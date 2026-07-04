@@ -2102,31 +2102,36 @@ body.theme-light .auth-form input { background: #ffffff; }
 .hc-sl-coin { width:44px; height:44px; border-radius:50%; flex-shrink:0; }
 .hc-sl-info { flex:1; min-width:0; }
 .hc-sl-tier {
-  font-size:18px; font-weight:800;
-  background: linear-gradient(90deg, #e08a2e, var(--ember), #c94a1a);
-  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;
+  font-size:18px; font-weight:800; color: var(--ember);
 }
 .hc-sl-txt { font-size:12px; color:var(--text-muted); margin-top:1px; }
 
 .hc-ladder { display:flex; align-items:flex-end; gap:4px; margin-top:16px; }
 .hc-rung { flex:1; display:flex; flex-direction:column; align-items:center; gap:5px; min-width:0; }
-.hc-rdot { width:28px; height:28px; border-radius:50%; display:grid; place-items:center; font-size:12px; font-weight:800; transition:transform 0.2s; }
+.hc-rdot { width:28px; height:28px; border-radius:50%; display:grid; place-items:center; font-size:12px; font-weight:800; transition:transform 0.2s; position:relative; }
 .hc-rung.done .hc-rdot { background:rgba(255,106,44,0.15); border:1.5px solid rgba(255,106,44,0.45); color:var(--ember); }
-/* Escalating warmth toward GOAT — later completed stages glow a touch brighter */
-.hc-rung.done:nth-child(9) .hc-rdot, .hc-rung.done:nth-child(11) .hc-rdot { border-color:rgba(255,160,60,0.7); box-shadow:0 0 6px rgba(255,150,60,0.35); }
-.hc-rung.done:nth-child(13) .hc-rdot, .hc-rung.done:nth-child(15) .hc-rdot { border-color:rgba(255,190,80,0.85); box-shadow:0 0 9px rgba(255,180,80,0.5); }
+/* v600: gold is reserved for the current stage ONLY — done stages stay one
+   consistent ember, no drift toward gold as you approach GOAT. */
+.hc-rung.cur .hc-rdot-wrap { position:relative; display:inline-block; }
 .hc-rung.cur .hc-rdot {
-  background:radial-gradient(circle at 38% 30%,#fff0c2,#e0962a); border:2.5px solid #fff; color:#7a4410; padding:0; overflow:hidden;
-  animation: hcPulseGlow 2.2s ease-in-out infinite;
+  background:radial-gradient(circle at 38% 30%,#fff4d6,var(--gold)); border:2.5px solid #fff; color:#7a4410; padding:0;
+  animation: hcPulseGlow 1.6s ease-in-out infinite;
 }
 @keyframes hcPulseGlow {
-  0%, 100% { box-shadow:0 0 10px rgba(255,138,80,0.6); }
-  50% { box-shadow:0 0 18px rgba(255,160,80,0.9); }
+  0%, 100% { transform:scale(1); box-shadow:0 0 10px rgba(255,200,87,0.7); }
+  50% { transform:scale(1.12); box-shadow:0 0 20px rgba(255,200,87,1); }
 }
 .hc-rung.cur .hc-rdot img { width:100%; height:100%; border-radius:50%; object-fit:cover; }
+.hc-rung.cur .hc-ping {
+  position:absolute; inset:0; border-radius:50%; border:2px solid var(--gold);
+  opacity:0; pointer-events:none; animation: hcPingOut 2.4s ease-out infinite;
+}
+.hc-rung.cur .hc-ping.hc-ping-2 { animation-delay: 1.2s; }
+@keyframes hcPingOut {
+  0% { transform:scale(1); opacity:0.8; }
+  100% { transform:scale(2.2); opacity:0; }
+}
 .hc-rung.future .hc-rdot { background:var(--overlay-2); color:var(--text-muted); opacity:0.7; }
-/* GOAT teases gold even while locked — the top of the mountain glows */
-.hc-rung.future:last-child .hc-rdot { border:1.5px solid rgba(255,200,87,0.35); box-shadow:0 0 6px rgba(255,200,87,0.2); }
 .hc-rname { font-size:8px; font-weight:800; letter-spacing:0.02em; text-transform:uppercase; color:var(--text-muted); }
 .hc-rung.cur .hc-rname, .hc-rung.cur .hc-rreq { color:var(--ember); }
 .hc-rung.done .hc-rname { color:#c0763f; }
@@ -2136,16 +2141,44 @@ body.theme-light .auth-form input { background: #ffffff; }
   position:relative; overflow:hidden;
 }
 .hc-rline.done {
-  background:linear-gradient(90deg, rgba(255,106,44,0.55), rgba(255,160,60,0.55));
+  background: rgba(255,106,44,0.5);
 }
 .hc-rline.done::after {
-  content:''; position:absolute; inset:0; width:60%;
-  background:linear-gradient(90deg, transparent, rgba(255,220,150,0.9), transparent);
-  animation: hcLineShimmer 3s ease-in-out infinite;
+  content:''; position:absolute; inset:0; width:50%;
+  background:linear-gradient(90deg, transparent, rgba(255,150,90,0.85), transparent);
+  animation: hcLineShimmer 2.2s linear infinite;
 }
 @keyframes hcLineShimmer {
-  0% { transform:translateX(-150%); }
-  100% { transform:translateX(250%); }
+  0% { transform:translateX(-180%); }
+  100% { transform:translateX(280%); }
+}
+
+/* ── Level-up burst (v598): fires only when a stage actually advances ── */
+.hc-rdot { position:relative; transition: transform 0.25s; }
+.hc-rung.hc-just-completed .hc-rdot {
+  animation: hcBurst 0.6s ease-out;
+}
+@keyframes hcBurst {
+  0% { transform:scale(1); }
+  40% { transform:scale(1.35); box-shadow:0 0 0 8px rgba(255,180,80,0.4), 0 0 20px rgba(255,150,60,0.85); }
+  100% { transform:scale(1); }
+}
+.hc-rung.hc-just-current .hc-rdot {
+  animation: hcNewCurrent 0.5s ease-out 0.35s backwards, hcPulseGlow 2.2s ease-in-out 0.85s infinite;
+}
+@keyframes hcNewCurrent {
+  0% { transform:scale(0.5); opacity:0; }
+  60% { transform:scale(1.2); }
+  100% { transform:scale(1); opacity:1; }
+}
+.hc-spark {
+  position:absolute; top:50%; left:50%; width:4px; height:4px; border-radius:50%;
+  background:#ffd88a; opacity:0; pointer-events:none;
+  animation: hcSparkFly 0.7s ease-out 0.05s forwards;
+}
+@keyframes hcSparkFly {
+  0% { opacity:1; transform:translate(-50%,-50%) scale(1); }
+  100% { opacity:0; transform:translate(calc(-50% + var(--sx)), calc(-50% + var(--sy))) scale(0); }
 }
 
 .hc-winrate { display:flex; align-items:center; gap:8px; margin-top:18px; padding-top:14px; border-top:1px solid var(--border); cursor:pointer; }
@@ -2210,9 +2243,9 @@ body.theme-light .hc-rung.future .hc-rdot { background:#e6e3dd; }
 
 /* Light-mode adjustments — gauge sits on the page background, no dark card */
 body.theme-light .heat-check {
-  background: linear-gradient(160deg, #fffaf3, #fdf3e7);
-  border-color: rgba(255, 106, 44, 0.28);
-  box-shadow: 0 6px 20px rgba(120, 70, 20, 0.08);
+  background: #fdfcfb;
+  border-color: rgba(20, 16, 12, 0.08);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
 }
 body.theme-light .hc-gauge-stage {
   background: none;
@@ -6799,7 +6832,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v597 · status-line-simplify";
+const APP_VERSION = "v600 · palette-pulse-fix";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -9981,20 +10014,44 @@ function renderHeatCheck() {
     const curIdx = ls.stageIndex - 1;  // 0-based
     const glyphs = ['✦','◆','▲','★','✦','✦','✦','✦'];
     const shortNames = ['Spark','Flame','Blaze','Inferno','Legend','Icon','Immo','GOAT'];
+    // Level-up detection: compare to the last stage we rendered for this user.
+    // If it advanced, fire the burst on the newly-completed dot + scale-in the new current.
+    const lastKey = `hcLastStage_${myId}`;
+    let lastIdx = -1;
+    try { const v = localStorage.getItem(lastKey); if (v !== null) lastIdx = parseInt(v, 10); } catch(e) {}
+    const justLeveledUp = lastIdx >= 0 && curIdx > lastIdx;
+    try { localStorage.setItem(lastKey, String(curIdx)); } catch(e) {}
+
     let html = '';
     LADDER.forEach((st, i) => {
       const state2 = i < curIdx ? 'done' : (i === curIdx ? 'cur' : 'future');
       const dotInner = state2 === 'done'
         ? '✓'
         : (state2 === 'cur'
-            ? `<img src="${LADDER_BADGE_BASE}${st.key}.png" alt="">`
+            ? `<div class="hc-ping"></div><div class="hc-ping hc-ping-2"></div><img src="${LADDER_BADGE_BASE}${st.key}.png" alt="">`
             : glyphs[i]);
-      html += `<div class="hc-rung ${state2}"><div class="hc-rdot">${dotInner}</div><div class="hc-rname">${shortNames[i]}</div><div class="hc-rreq">${st.min}</div></div>`;
+      const burstCls = justLeveledUp && i === lastIdx ? ' hc-just-completed' : '';
+      const newCurCls = justLeveledUp && i === curIdx ? ' hc-just-current' : '';
+      html += `<div class="hc-rung ${state2}${burstCls}${newCurCls}"><div class="hc-rdot">${dotInner}</div><div class="hc-rname">${shortNames[i]}</div><div class="hc-rreq">${st.min}</div></div>`;
       if (i < LADDER.length - 1) {
         html += `<div class="hc-rline ${i < curIdx ? 'done' : ''}"></div>`;
       }
     });
     ladEl.innerHTML = html;
+    // Small celebratory sparks on the stage that just got completed
+    if (justLeveledUp) {
+      const completedDot = ladEl.querySelectorAll('.hc-rung')[lastIdx]?.querySelector('.hc-rdot');
+      if (completedDot) {
+        for (let i = 0; i < 6; i++) {
+          const s = document.createElement('div');
+          s.className = 'hc-spark';
+          const ang = Math.random() * Math.PI * 2, dist = 20 + Math.random() * 16;
+          s.style.setProperty('--sx', Math.cos(ang) * dist + 'px');
+          s.style.setProperty('--sy', Math.sin(ang) * dist + 'px');
+          completedDot.appendChild(s);
+        }
+      }
+    }
   }
 
   // Pending line
@@ -17517,7 +17574,7 @@ const TOUR_STEPS = [
   {
     target: () => document.querySelector('.bnav-btn[data-view="leaderboard"]'),
     title: 'Prestige',
-    body: 'Win challenges to go from Spark to Inferno and climb to the Hall of Fame. A new champ is crowned every round — could be you.',
+    body: 'This is the climb. Regular wins get you in the game — Championships are what move you up the ladder, Spark all the way to G.O.A.T. Win one, watch your rank change. 🏆',
     position: 'above',
   },
   {
