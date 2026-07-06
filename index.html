@@ -6838,7 +6838,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v608 · moderation-gaps-fix";
+const APP_VERSION = "v609 · tie-medal-fix";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -14716,6 +14716,22 @@ function renderChallengeDetail() {
     return;
   }
 
+  // Competition ranking (1224-style): tied entries share a rank/medal, same
+  // logic already used in the Final Standings section below. Previously this
+  // block assigned medals by raw array index, so a tie for 1st still showed
+  // one entry as "1st" and the other as "2nd" — this fixes that.
+  const cdRankByIndex = [];
+  sortedEntries.forEach((e, i) => {
+    if (i === 0) { cdRankByIndex[i] = 1; return; }
+    const prevVotes = voteCountByEntry[sortedEntries[i - 1].id] || 0;
+    const curVotes = voteCountByEntry[e.id] || 0;
+    cdRankByIndex[i] = curVotes === prevVotes ? cdRankByIndex[i - 1] : i + 1;
+  });
+  const cdIsTiedAtIndex = (i) => {
+    const v = voteCountByEntry[sortedEntries[i].id] || 0;
+    return v > 0 && sortedEntries.filter(e => (voteCountByEntry[e.id] || 0) === v).length > 1;
+  };
+
   grid.innerHTML = sortedEntries.map((entry, idx) => {
     const isMyEntry = state.profile && entry.user_id === state.profile.id;
     const voteCount = voteCountByEntry[entry.id] || 0;
@@ -14724,9 +14740,12 @@ function renderChallengeDetail() {
     let medalBadge = '';
     let winnerClass = '';
     if (isClosed && voteCount > 0 && sortedEntries.length > 1) {
-      if (idx === 0) { medalBadge = '<div class="cd-medal gold">🥇 1st</div>'; winnerClass = ' winner'; }
-      else if (idx === 1) { medalBadge = '<div class="cd-medal silver">🥈 2nd</div>'; }
-      else if (idx === 2) { medalBadge = '<div class="cd-medal bronze">🥉 3rd</div>'; }
+      const cdRank = cdRankByIndex[idx];
+      const cdTied = cdIsTiedAtIndex(idx);
+      const tiedPrefix = cdTied ? 'Tied · ' : '';
+      if (cdRank === 1) { medalBadge = `<div class="cd-medal gold">🥇 ${tiedPrefix}1st</div>`; winnerClass = ' winner'; }
+      else if (cdRank === 2) { medalBadge = `<div class="cd-medal silver">🥈 ${tiedPrefix}2nd</div>`; }
+      else if (cdRank === 3) { medalBadge = `<div class="cd-medal bronze">🥉 ${tiedPrefix}3rd</div>`; }
     }
 
     // Moderation status badge — only ever shown to the entry's own submitter
