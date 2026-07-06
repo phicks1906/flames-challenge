@@ -6838,7 +6838,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v609 · tie-medal-fix";
+const APP_VERSION = "v610 · remove-video-option";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -15251,7 +15251,7 @@ function openSubmitEntry(entryToEdit = null) {
         ? `<video src="${entryToEdit.media_url}" ${_videoPosterAttr(entryToEdit.media_url, entryToEdit.poster_url)} controls></video>`
         : `<video src="${entryToEdit.media_url}" controls></video>`;
       else if (ch.media_type === 'audio') mediaEl = `<div style="padding:16px;background:#0a0805"><audio preload="metadata" src="${entryToEdit.media_url}" controls style="width:100%"></audio></div>`;
-      preview.innerHTML = mediaEl + `<div class="cc-preview-info"><span>Current file · tap below to replace</span></div>`;
+      preview.innerHTML = mediaEl + `<div class="cc-preview-info"><span>Current file · tap below to replace</span><button type="button" onclick="removeCurrentEntryMedia()" style="margin-left:10px;background:none;border:1px solid var(--error,#ff2d1f);color:var(--error,#ff2d1f);border-radius:100px;padding:3px 12px;font-size:12px;font-weight:700;cursor:pointer">🗑️ Remove</button></div>`;
       preview.style.display = 'block';
       _validateVideoPosters(preview);
       document.getElementById('seUploadZone').classList.add('has-file');
@@ -15262,6 +15262,28 @@ function openSubmitEntry(entryToEdit = null) {
   }
 
   document.getElementById('submitEntrySheet').classList.add('open');
+}
+
+// Clears the current media on an entry being edited — NOT the same as
+// deleting the entry. Clears both the visual preview AND the tracked
+// media_url/poster_url on seState.editingEntry so the save-time validation
+// (`!seState.file && !seState.editingEntry?.media_url`) correctly requires a
+// fresh upload instead of silently keeping the old file after "removal."
+function removeCurrentEntryMedia() {
+  seState.file = null;
+  if (seState.editingEntry) {
+    seState.editingEntry.media_url = null;
+    seState.editingEntry.poster_url = null;
+  }
+  const preview = document.getElementById('sePreview');
+  if (preview) { preview.innerHTML = ''; preview.style.display = 'none'; }
+  const zone = document.getElementById('seUploadZone');
+  if (zone) zone.classList.remove('has-file');
+  const fileInput = document.getElementById('seFile');
+  if (fileInput) fileInput.value = '';
+  const cameraInput = document.getElementById('seFileCamera');
+  if (cameraInput) cameraInput.value = '';
+  toast('Video removed — choose a new file to save your entry.');
 }
 
 function closeSubmitEntry() {
