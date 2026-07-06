@@ -6838,7 +6838,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v607 · coin-color-fix";
+const APP_VERSION = "v608 · moderation-gaps-fix";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -13893,7 +13893,11 @@ document.getElementById('createChallengeForm').addEventListener('submit', async 
   try {
     let mediaUrl = null;
     let posterUrl = null;
-    if (!await moderateText(`${title} ${rules || ''}`.trim(), 'challenge')) { btn.disabled = false; btn.textContent = orig; return; }
+    // Moderate ALL user text in one shot: challenge title, rules, the entry
+    // caption, and (for text entries) the text body itself. Previously only
+    // title+rules were checked, letting harassment text ride in the caption.
+    const _allText = [title, rules || '', caption || '', (ccState.mediaType === 'text' ? textEntry : '')].filter(Boolean).join(' ').trim();
+    if (_allText && !await moderateText(_allText, 'challenge')) { btn.disabled = false; btn.textContent = orig; return; }
     if (ccState.mediaType !== 'text') {
       // Compress if user opted in
       let fileToUpload = ccState.file;
@@ -13959,6 +13963,19 @@ document.getElementById('createChallengeForm').addEventListener('submit', async 
     if (chError) throw new Error('Challenge create failed: ' + chError.message);
 
     btn.textContent = 'Adding entry...';
+    // Moderate photo entries BEFORE creating the entry — same gate the normal
+    // entry-submission path uses. Without this, photos inserted straight to
+    // 'clear' and went live with zero moderation (critical bug found in beta).
+    if (ccState.mediaType === 'photo' && mediaUrl) {
+      btn.textContent = 'Checking...';
+      if (!await moderateImage(mediaUrl, 'entry')) {
+        // moderateImage already toasted the user. Roll back the challenge we
+        // just created so we don't leave an empty challenge behind.
+        try { await db.from('challenges').delete().eq('id', chData.id); } catch (e) {}
+        btn.disabled = false; btn.textContent = orig;
+        return;
+      }
+    }
     // The creator's first entry needs moderation too, exactly like a normal
     // entry submission. Video entries insert as 'pending' and get triggered below.
     const ccEntryRow = {
@@ -20417,13 +20434,13 @@ async function renderAdminFlags() {
     `<div id="modQueueSection" style="margin-bottom:8px"><div style="color:var(--text-dim);font-size:13px;padding:12px 0">Loading moderation queue…</div></div>` +
     togglesHtml;
 
-  // ── Video moderation queue (escalated + flagged entries) ────────────────────
+  // ── Video moderation queue (escalated + flagged + rejected entries) ─────────
   const vqs = document.getElementById('videoModQueueSection');
   try {
     const { data: videoQueue } = await db.from('entries')
       .select('id, challenge_id, media_url, poster_url, caption, moderation_status, moderation_reason, moderation_checked_at, submitter:profiles!entries_user_id_fkey(id, name, avatar)')
-      .in('moderation_status', ['escalated', 'flagged'])
-      .order('moderation_status', { ascending: true }) // 'escalated' sorts before 'flagged' alphabetically
+      .in('moderation_status', ['escalated', 'flagged', 'rejected'])
+      .order('moderation_status', { ascending: true }) // 'escalated' sorts before 'flagged'/'rejected' alphabetically
       .order('moderation_checked_at', { ascending: false })
       .limit(50);
 
