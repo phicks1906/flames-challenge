@@ -4741,6 +4741,11 @@ body.theme-light .ladder-chip-founder  { color: #bf360c; }
 .lb-qual-line i { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, var(--gold), transparent); }
 .lb-qual-line span { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; color: var(--gold); white-space: nowrap; }
 .lb-back { color: var(--ember); font-weight: 700; }
+.reign-chip { display:inline-flex; align-items:center; gap:3px; font-size:9px; font-weight:800; letter-spacing:0.07em; color:#241a05; background:linear-gradient(135deg,#ffe9b0,var(--gold)); border-radius:999px; padding:2px 7px; vertical-align:middle; white-space:nowrap; }
+.dethrone-banner { background:rgba(255,200,87,0.06); border:1px solid rgba(255,200,87,0.35); border-radius:12px; padding:11px 13px; margin:8px 0; text-align:left; }
+.dethrone-banner h4 { font-family:var(--font-anton),sans-serif; font-size:14px; letter-spacing:0.05em; color:var(--ember); margin:0 0 4px; }
+.dethrone-banner p { font-size:12.5px; color:var(--text-dim); line-height:1.45; margin:0; }
+.dethrone-banner .ember-q { color:var(--ember); font-style:italic; }
 /* ---------- End championship hype ---------- */
 
 /* ADMIN PAGE */
@@ -6940,7 +6945,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v615 · launch-fix";
+const APP_VERSION = "v616 · championship-hype-3";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -10915,7 +10920,7 @@ function renderLeaderboard() {
       <div class="lb-user" style="cursor:pointer" data-lb-uid="${u.id}">
         ${lbAvatar}
         <div style="min-width:0">
-          <div class="lb-name">${hofNameHTML(u.id, escapeHtml(u.name))}${isYou ? ' (you)' : ''}${isChamp ? ' <span class="lb-champ-tag">👑 Champ</span>' : ''}${isLeader && !isChamp ? ' <span class="lb-leader-tag">🔥 Leader</span>' : ''}</div>
+          <div class="lb-name">${hofNameHTML(u.id, escapeHtml(u.name))}${isYou ? ' (you)' : ''}${isChamp ? ' <span class="lb-champ-tag">👑 Champ</span>' : reigningChampChipHTML(u.id)}${isLeader && !isChamp ? ' <span class="lb-leader-tag">🔥 Leader</span>' : ''}</div>
           <div class="lb-streak" style="font-size:11px;color:var(--text-muted)">${u.catWins}–${u.catLosses} this month · ${u.catAllTime} all-time${(_qualCut >= 0 && i > _qualCut && _thirdWins !== null) ? ` · <span class="lb-back">${_thirdWins - u.catWins <= 0 ? 'tied for the spot' : (_thirdWins - u.catWins) + ' win' + (_thirdWins - u.catWins === 1 ? '' : 's') + ' back'}</span>` : ''}</div>
           ${renderLadderChip(u.id, { showSpark: true, size: 15 })}
         </div>
@@ -11474,6 +11479,45 @@ function ballotsSealed(ch, status) {
 function champTitleLine(userId) {
   const n = (state.hofData || []).filter(r => r.userId === userId).length;
   return n === 0 ? 'First final' : n === 1 ? '1x champion' : `${n}x champion`;
+}
+// Reigning champions (v616): latest hall_of_fame month per category, worn until
+// the next championship is decided (stale crowns drop after 2 calendar months).
+function reigningChampsByCat() {
+  const out = {};
+  (state.hofData || []).forEach(r => {
+    if (!r.category || !r.month) return;
+    const cur = out[r.category];
+    if (!cur || r.month > cur.month) out[r.category] = { userId: r.userId, name: r.name, month: r.month };
+  });
+  const now = new Date();
+  Object.keys(out).forEach(cat => {
+    const [y, m] = out[cat].month.split('-').map(Number);
+    if (!y || !m) { delete out[cat]; return; }
+    const ageMonths = (now.getFullYear() - y) * 12 + (now.getMonth() + 1 - m);
+    if (ageMonths > 2) delete out[cat];
+  });
+  return out;
+}
+// Consecutive title defenses (months in a row won in this category, beyond the first)
+function champDefenseCount(userId, cat) {
+  const months = [...new Set((state.hofData || [])
+    .filter(r => r.userId === userId && r.category === cat)
+    .map(r => r.month))].sort().reverse();
+  if (!months.length) return 0;
+  const prevMonth = m => { let [y, mo] = m.split('-').map(Number); mo--; if (mo === 0) { mo = 12; y--; } return `${y}-${String(mo).padStart(2, '0')}`; };
+  let streak = 1, expect = prevMonth(months[0]);
+  for (let i = 1; i < months.length; i++) {
+    if (months[i] === expect) { streak++; expect = prevMonth(months[i]); } else break;
+  }
+  return streak - 1;
+}
+// Compact gold crown chip worn by reigning champions on name rows
+function reigningChampChipHTML(userId) {
+  const reign = reigningChampsByCat();
+  const cats = Object.keys(reign).filter(c => reign[c].userId === userId);
+  if (!cats.length) return '';
+  const label = cats.length === 1 ? `${cats[0].toUpperCase()} CHAMP` : `${cats.length}x CHAMP`;
+  return ` <span class="reign-chip">👑 ${escapeHtml(label)}</span>`;
 }
 // Ember's tale of the tape — deterministic per challenge so it doesn't flicker
 function emberTapeLine(ch, fighters) {
@@ -12063,7 +12107,19 @@ function renderChampionshipTab() {
             <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Earned the title this month</div>
           </div>
         </div>
-      </div>` : `<div class="lb-champ-current lb-champ-current-empty">👑 No champion yet — Championship Challenge hasn't been held this month</div>`;
+      </div>` : (() => {
+        // v616: if someone still wears last cycle's crown, frame this month as a title defense
+        const _reign = reigningChampsByCat()[cat];
+        if (_reign) {
+          const _def = champDefenseCount(_reign.userId, cat);
+          const _isMeReign = myId && _reign.userId === myId;
+          return `<div class="dethrone-banner">
+            <h4>${_isMeReign ? '👑 DEFEND YOUR CROWN' : 'DETHRONE THE CHAMPION'}</h4>
+            <p>${_isMeReign ? 'You defend' : escapeHtml(_reign.name) + ' defends'} the ${cat} crown${_def > 0 ? ` · ${_def + 1}x defending` : ''} — top 3 this month earn the right to take it. <span class="ember-q">🔥 Ember: "Crowns are borrowed, not owned."</span></p>
+          </div>`;
+        }
+        return `<div class="lb-champ-current lb-champ-current-empty">👑 No champion yet — Championship Challenge hasn't been held this month</div>`;
+      })();
 
     // Leader block — only show if #1 is genuinely ahead of #2. If tied, show count.
     let leaderBlock = '';
@@ -12272,6 +12328,20 @@ async function launchChampionshipChallenge(category) {
     const { error: invErr } = await db.from('challenge_invites').insert(inviteRows);
     if (invErr) throw invErr;
 
+    // Prediction poll (v616): "Who takes the crown?" — spectators pick before
+    // ballots seal; the poll clock matches the championship's vote window.
+    try {
+      const _pollHours = Math.max(1, Math.round((new Date(voteEnd).getTime() - Date.now()) / 3600000));
+      await db.from('polls').insert({
+        id: crypto.randomUUID(),
+        question: `👑 Who takes the ${category} crown?`,
+        options: contenders.map(u => ({ label: u.name, seed_votes: 0 })),
+        hours_remaining: _pollHours,
+        category: 'general',
+        creator_id: state.profile.id,
+      });
+    } catch (pe) { console.warn('prediction poll', pe); }
+
     // Record launch in Supabase (replaces localStorage recordChampionshipLaunch)
     const { error: launchErr } = await db.from('championship_launches').upsert({
       category,
@@ -12335,6 +12405,18 @@ async function autoLaunchMonthlyChampionships(month) {
       }).select().single();
       if (chErr) throw chErr;
       await db.from('challenge_invites').insert(contenders.map(u => ({ challenge_id: ch.id, invited_user_id: u.id })));
+      // Prediction poll (v616) — same as the manual launch path
+      try {
+        const _pollHours = Math.max(1, Math.round((new Date(voteEnd).getTime() - Date.now()) / 3600000));
+        await db.from('polls').insert({
+          id: crypto.randomUUID(),
+          question: `👑 Who takes the ${cat} crown?`,
+          options: contenders.map(u => ({ label: u.name, seed_votes: 0 })),
+          hours_remaining: _pollHours,
+          category: 'general',
+          creator_id: state.profile.id,
+        });
+      } catch (pe) { console.warn('prediction poll', pe); }
       const { error: le } = await db.from('championship_launches').insert({ category: cat, month, challenge_id: ch.id, launched_by: state.profile.id, is_sponsored: false });
       if (le && le.code !== '23505') throw le;
       state.champLaunches = state.champLaunches || [];
@@ -15213,7 +15295,7 @@ function renderChallengeDetail() {
         <div class="cd-entry-body">
           <div class="cd-entry-submitter ${entry.user_id && entry.user_id !== state.profile?.id ? 'user-clickable' : ''}" ${entry.user_id && entry.user_id !== state.profile?.id ? `data-user-id="${entry.user_id}"` : ''}>
             <div class="avatar">${honoredAvatarHTML(entry.user_id, avatarInner(entry.submitter?.avatar), 44)}</div>
-            <span>${escapeHtml(entry.submitter?.name || 'Unknown')}${isMyEntry ? ' (you)' : (needsFollowPlus(entry.user_id) ? ' <span class="user-plus">+</span>' : '')}${renderLadderChip(entry.user_id) ? `<div style="margin-top:3px">${renderLadderChip(entry.user_id)}</div>` : ''}</span>
+            <span>${escapeHtml(entry.submitter?.name || 'Unknown')}${isMyEntry ? ' (you)' : (needsFollowPlus(entry.user_id) ? ' <span class="user-plus">+</span>' : '')}${reigningChampChipHTML(entry.user_id)}${renderLadderChip(entry.user_id) ? `<div style="margin-top:3px">${renderLadderChip(entry.user_id)}</div>` : ''}</span>
           </div>
           ${champEntryCredentials(entry.user_id)}
           ${entry.media_type !== 'text' && entry.caption ? `<div class="cd-entry-caption">${formatBody(entry.caption)}</div>` : ''}
@@ -16808,17 +16890,22 @@ function renderFeed() {
           const meta = getChampIds()[ch.id] || {};
           const monthLbl = meta.month && typeof formatStoredMonth === 'function'
             ? formatStoredMonth(meta.month).toUpperCase() : '';
+          const _reignFC = reigningChampsByCat()[ch.category];
+          const _defenderIn = _reignFC && fighters.some(f => f.id === _reignFC.userId);
           const fightersHtml = fighters.map((f, i) => {
             const avHtml = f.avatar && /^https?:/.test(f.avatar)
               ? `<img src="${escapeHtml(f.avatar)}" alt="">`
               : `<span>${escapeHtml(f.avatar || '🔥')}</span>`;
+            const _subLine = (_defenderIn && f.id === _reignFC.userId) ? '👑 Defending champ' : champTitleLine(f.id);
             return `${i > 0 ? '<div class="fight-vs">VS</div>' : ''}
               <div class="fighter">
                 <div class="fighter-av">${avHtml}</div>
                 <div class="fighter-name">${escapeHtml((f.name || '').toUpperCase())}</div>
-                <div class="fighter-sub">${escapeHtml(champTitleLine(f.id))}</div>
+                <div class="fighter-sub">${escapeHtml(_subLine)}</div>
               </div>`;
           }).join('');
+          const _subTitle = _defenderIn ? 'DETHRONE THE CHAMPION'
+            : fighters.length === 3 ? 'THREE QUALIFY · ONE IS CROWNED' : 'HEAD TO HEAD · ONE IS CROWNED';
           const statusLine = status === 'submitting'
             ? `🎬 ENTRIES DUE · ${countdown}`
             : `🔒 SEALED VOTING · ENDS ${countdown.toUpperCase()}`;
@@ -16826,7 +16913,7 @@ function renderFeed() {
             <div class="fight-inner">
               <div class="fight-eyebrow">${monthLbl}${monthLbl ? ' · ' : ''}${escapeHtml((ch.category || '').toUpperCase())}</div>
               <div class="fight-title">CHAMPIONSHIP<br>NIGHT</div>
-              <div class="fight-sub">${fighters.length === 3 ? 'THREE QUALIFY · ONE IS CROWNED' : 'HEAD TO HEAD · ONE IS CROWNED'}</div>
+              <div class="fight-sub">${_subTitle}</div>
               <div class="fight-roster">${fightersHtml}</div>
               <div class="fight-tape">
                 <h5>🔥 EMBER'S TALE OF THE TAPE</h5>
@@ -17584,7 +17671,7 @@ function renderFeedWinnerCard({ challenge, entry }) {
           </div>
           <div style="flex:1;min-width:0;">
             <div style="font-family:var(--font-anton);font-size:22px;letter-spacing:0.02em;color:var(--text);line-height:1.1;" ${userAttr}>
-              ${escapeHtml(s.name.toUpperCase())}${isMine ? ' <span style="color:var(--ember);font-size:13px;font-family:var(--font-body);">(you)</span>' : ''}${plus}
+              ${escapeHtml(s.name.toUpperCase())}${reigningChampChipHTML(s.id)}${isMine ? ' <span style="color:var(--ember);font-size:13px;font-family:var(--font-body);">(you)</span>' : ''}${plus}
             </div>
             <div style="font-size:13px;color:var(--gold);font-weight:600;margin-top:3px;">🥇 ${escapeHtml(challenge.title)}</div>
           </div>
