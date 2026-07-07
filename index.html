@@ -6945,7 +6945,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v618 · submit-sheet-context";
+const APP_VERSION = "v619 · youre-in-consistency";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -15672,10 +15672,12 @@ function openSubmitEntry(entryToEdit = null) {
   if (entryToEdit && entryToEdit.challenge_id && entryToEdit.challenge_id !== ch.id) entryToEdit = null;
 
   // If user already has an entry IN THIS CHALLENGE and we're not explicitly
-  // editing, switch to edit mode
-  if (!entryToEdit && state.profile && state.currentEntries) {
-    const existing = state.currentEntries.find(e => e.user_id === state.profile.id && e.challenge_id === ch.id);
-    if (existing) entryToEdit = existing;
+  // editing, switch to edit mode. Check both entry sources: currentEntries
+  // (challenge detail) and feedEntries (feed/challenges cards), since either
+  // can be the fresh one depending on where the tap came from.
+  if (!entryToEdit && state.profile) {
+    const _mine = e => e.user_id === state.profile.id && e.challenge_id === ch.id;
+    entryToEdit = (state.currentEntries || []).find(_mine) || (state.feedEntries || []).find(_mine) || null;
   }
 
   seState.editingEntry = entryToEdit;
@@ -17582,9 +17584,26 @@ function renderFeedChallengeCard(ch) {
     }).join('') + `<div style="flex:0 0 28vw;min-width:28vw;pointer-events:none;opacity:0;"></div></div>`;
   }
 
-  const submitBtn = canEnter
-    ? `<div style="padding:0 0 8px"><button class="fcc-submit-btn" data-fcc-submit="${ch.id}">+ Submit your entry</button></div>`
-    : '';
+  // Bottom bar (v619): mirror the challenges-page states so the two surfaces
+  // never disagree — submit / "You're in!"+Edit / "in the running".
+  const _feedMyEntry = state.profile && chEntries.some(e => e.user_id === state.profile.id);
+  let submitBtn = '';
+  if (canEnter) {
+    submitBtn = `<div style="padding:0 0 8px"><button class="fcc-submit-btn" data-fcc-submit="${ch.id}">+ Submit your entry</button></div>`;
+  } else if (_feedMyEntry && ch.computedStatus === 'submitting') {
+    const _fdl = ch.submission_deadline ? formatCountdown(ch.submission_deadline) : null;
+    submitBtn = `<div style="padding:6px 12px;background:rgba(255,106,44,0.06);border-top:1px solid var(--border);">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${_fdl ? '4px' : '0'};">
+        <span style="font-size:13px;color:var(--ember);font-weight:700;">✓ You're in!</span>
+        <button class="fcc-submit-btn" style="padding:6px 12px;font-size:12px;" data-fcc-submit="${ch.id}" data-edit="1">✏️ Edit</button>
+      </div>
+      ${_fdl ? `<div style="font-size:11px;color:var(--text-muted);">You can change your entry for ${_fdl}</div>` : ''}
+    </div>`;
+  } else if (_feedMyEntry && ch.computedStatus === 'voting') {
+    submitBtn = `<div style="padding:6px 12px;background:rgba(255,106,44,0.06);border-top:1px solid var(--border);">
+      <span style="font-size:13px;color:var(--ember);font-weight:700;">🔥 Your entry is in the running — voting is live</span>
+    </div>`;
+  }
 
   // Return card + separate drawer div — keeps scroll outside overflow:hidden card
   return `<div class="fcc-challenge-wrap${isChampionship ? ' champ-gold' : ''}" data-cid="${ch.id}">
