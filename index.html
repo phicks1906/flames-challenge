@@ -6838,7 +6838,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v610 · remove-video-option";
+const APP_VERSION = "v611 · sudden-death-fix";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -7851,7 +7851,7 @@ async function loadFeedActivity(opts = {}) {
     ]);
     const [entriesRes, votesRes] = await Promise.all([
       withTimeout(db.from('entries')
-        .select('id, challenge_id, user_id, created_at, media_url, media_type, poster_url, caption, moderation_status, submitter:profiles!entries_user_id_fkey(id, name, avatar)')
+        .select('id, challenge_id, user_id, created_at, media_url, media_type, poster_url, caption, moderation_status, sd_round, submitter:profiles!entries_user_id_fkey(id, name, avatar)')
         .gte('created_at', entryCutoff)
         .order('created_at', { ascending: false })
         .limit(opts.incremental ? 50 : 200), 12000, 'Feed entries'),
@@ -8023,6 +8023,23 @@ async function loadLeaderboard() {
 
     const wentThroughSD = (chInfo[chId]?.sdRound || 0) > 0;
 
+    // ── Forfeit walkover: Sudden Death happened but only ONE tied player
+    // resubmitted. Their lone final-round entry has zero votes (voting never
+    // opened), so the normal max>0 paths can't see it — the sole survivor
+    // wins outright. (No losses recorded: the no-shows' entries live in an
+    // earlier round and aren't in this final-round set.)
+    if (wentThroughSD && entries.length === 1 && max === 0) {
+      const uid = entries[0].user_id;
+      ensureUser(uid);
+      winsByUser[uid].allTime++;
+      winsByUser[uid].byCategory[cat] = (winsByUser[uid].byCategory[cat] || 0) + 1;
+      if (thisMonthChIds.has(chId)) {
+        winsByUser[uid].rolling30++;
+        winsByUser[uid].rolling30ByCategory[cat] = (winsByUser[uid].rolling30ByCategory[cat] || 0) + 1;
+      }
+      return;
+    }
+
     if (max > 0 && topEntries.length === 1) {
       // ── Clean single winner ───────────────────────────────────────────────
       const winner = topEntries[0];
@@ -8099,7 +8116,9 @@ async function loadLeaderboard() {
         if (v > mx) { mx = v; winner = e.user_id; }
         else if (v === mx && v > 0) winner = null;
       });
-      if (mx === 0 || winner === null) continue; // pending/tie — skip
+      // Forfeit walkover: sole final-round entry after Sudden Death wins with 0 votes
+      if (mx === 0 && chEntries.length === 1 && (chInfo[chId]?.sdRound || 0) > 0) winner = chEntries[0].user_id;
+      else if (mx === 0 || winner === null) continue; // pending/tie — skip
       if (winner === uid) st++;
       else break;
     }
@@ -8726,13 +8745,13 @@ async function loadMyRecord() {
   // Fetch my entries — no join, simple query like leaderboard does
   const [myEntriesRes, allChallengesRes, allEntriesRes, allVotesRes] = await Promise.all([
     db.from('entries')
-      .select('id, challenge_id, created_at, caption, media_type, media_url')
+      .select('id, challenge_id, created_at, caption, media_type, media_url, sd_round')
       .eq('user_id', me)
       .order('created_at', { ascending: false }),
     db.from('challenges')
-      .select('id, title, category, submission_deadline, voting_end, is_public, creator_id, status'),
+      .select('id, title, category, submission_deadline, voting_end, is_public, creator_id, status, sd_round, sd_phase'),
     db.from('entries')
-      .select('id, challenge_id, user_id'),
+      .select('id, challenge_id, user_id, sd_round'),
     db.from('entry_votes')
       .select('entry_id, challenge_id'),
   ]);
@@ -8754,24 +8773,47 @@ async function loadMyRecord() {
     votesByEntry[v.entry_id] = (votesByEntry[v.entry_id] || 0) + 1;
   });
 
+  // For Sudden Death challenges I re-entered, I have entries in multiple rounds —
+  // show ONE record row per challenge (my latest-round entry carries the result).
+  const myBestRound = {};
+  myEntries.forEach(e => {
+    const r = e.sd_round || 0;
+    if (myBestRound[e.challenge_id] === undefined || r > myBestRound[e.challenge_id]) {
+      myBestRound[e.challenge_id] = r;
+    }
+  });
+
   state.myRecord = myEntries.map(e => {
     const ch = challengeMap[e.challenge_id];
     if (!ch) return null;
+    if ((e.sd_round || 0) !== myBestRound[e.challenge_id]) return null; // dedupe SD rounds
 
-    const chEntries = entriesByChallenge[ch.id] || [];
-    const allChEntries = chEntries.some(en => en.id === e.id)
+    // Sudden Death: only the FINAL round's entries + votes decide the outcome.
+    const finalR = ch.sd_round || 0;
+    const chEntriesAll = entriesByChallenge[ch.id] || [];
+    const chEntries = chEntriesAll.filter(en => (en.sd_round || 0) === finalR);
+    const mineIsFinal = (e.sd_round || 0) === finalR;
+    const allChEntries = (!mineIsFinal || chEntries.some(en => en.id === e.id))
       ? chEntries
-      : [...chEntries, { id: e.id, challenge_id: e.challenge_id }];
+      : [...chEntries, { id: e.id, challenge_id: e.challenge_id, user_id: me }];
 
-    const status = computeChallengeStatusFromCh(ch, allChEntries.length);
+    const status = computeChallengeStatusFromCh(ch, chEntriesAll.length);
     let result = 'pending';
 
-    if (status === 'closed') {
+    if (ch.sd_phase) {
+      result = 'pending'; // mid-Sudden-Death — not decided yet
+    } else if (status === 'closed') {
       const counts = allChEntries.map(en => votesByEntry[en.id] || 0);
       const maxVotes = counts.length ? Math.max(...counts) : 0;
-      const myVotes = votesByEntry[e.id] || 0;
+      const myVotes = mineIsFinal ? (votesByEntry[e.id] || 0) : 0;
       const topCount = counts.filter(c => c === maxVotes).length;
-      if (maxVotes === 0) {
+      const forfeitWin = finalR > 0 && allChEntries.length === 1 && maxVotes === 0;
+      if (forfeitWin) {
+        // Sole survivor of a Sudden Death round wins by walkover (no votes cast)
+        result = allChEntries[0].user_id === me || (mineIsFinal && allChEntries[0].id === e.id) ? 'won' : 'lost';
+      } else if (!mineIsFinal) {
+        result = maxVotes > 0 ? 'lost' : 'voided'; // I didn't make the final round
+      } else if (maxVotes === 0) {
         result = 'voided'; // single entrant or no votes — not a real win
       } else if (myVotes === maxVotes) {
         result = topCount > 1 ? 'tied' : 'won';
@@ -8784,11 +8826,13 @@ async function loadMyRecord() {
 
     // Find the winning entry's user_id
     let winnerUserId = null;
-    if (status === 'closed' && allChEntries.length > 0) {
+    if (!ch.sd_phase && status === 'closed' && allChEntries.length > 0) {
       const counts = allChEntries.map(en => votesByEntry[en.id] || 0);
       const maxVotes = Math.max(...counts);
-      const winnerEntry = allChEntries.find(en => (votesByEntry[en.id] || 0) === maxVotes);
-      if (winnerEntry && winnerEntry.user_id !== me) winnerUserId = winnerEntry.user_id;
+      if (maxVotes > 0 || (finalR > 0 && allChEntries.length === 1)) {
+        const winnerEntry = allChEntries.find(en => (votesByEntry[en.id] || 0) === maxVotes);
+        if (winnerEntry && winnerEntry.user_id !== me) winnerUserId = winnerEntry.user_id;
+      }
     }
     return { challenge: ch, myEntryId: e.id, myCreated: e.created_at, result, myMediaType: e.media_type, myMediaUrl: e.media_url, myVotes: votesByEntry[e.id] || 0, entryCount: allChEntries.length, winnerUserId };
   }).filter(Boolean);
@@ -15019,11 +15063,20 @@ function renderChallengeResults() {
   // renders the Final Standings summary once the challenge closes.
   if (!isClosed) { panel.style.display = 'none'; return; }
 
-  const voteCountByEntry = {};
-  state.currentVotes.forEach(v => { voteCountByEntry[v.entry_id] = (voteCountByEntry[v.entry_id] || 0) + 1; });
-  const totalVotes = state.currentVotes.length;
+  // Sudden Death: final standings come from the FINAL round only.
+  const _finalR = ch.sd_round || 0;
+  const _resultEntries = _finalR > 0
+    ? state.currentEntries.filter(e => (e.sd_round || 0) === _finalR)
+    : state.currentEntries;
+  const _resultEntryIds = new Set(_resultEntries.map(e => e.id));
+  const _resultVotes = state.currentVotes.filter(v => _resultEntryIds.has(v.entry_id));
+  const _isForfeit = _finalR > 0 && _resultEntries.length === 1 && _resultVotes.length === 0;
 
-  const sorted = [...state.currentEntries]
+  const voteCountByEntry = {};
+  _resultVotes.forEach(v => { voteCountByEntry[v.entry_id] = (voteCountByEntry[v.entry_id] || 0) + 1; });
+  const totalVotes = _resultVotes.length;
+
+  const sorted = [..._resultEntries]
     .map(e => ({ e, votes: voteCountByEntry[e.id] || 0 }))
     .sort((a, b) => b.votes - a.votes)
     .slice(0, 3);
@@ -15046,13 +15099,15 @@ function renderChallengeResults() {
     const sub = e.submitter || { name: 'Unknown', avatar: '🔥' };
     const rank = rankByIndex[i];
     const isTied = votes > 0 && isTiedAtIndex(i);
-    const isLeading = rank === 1 && votes > 0 && !isTied;
+    const isLeading = (rank === 1 && votes > 0 && !isTied) || _isForfeit;
     const isMyPick = state.myCurrentVote === e.id;
     // Rank 1-3 → medal (shared when tied). Rank 4+ → plain number. No votes → positional #.
-    const rankIcon = votes === 0 ? '#' + (i + 1)
+    const rankIcon = _isForfeit ? medals[0]
+      : votes === 0 ? '#' + (i + 1)
       : (rank <= 3 ? medals[rank - 1] : rank);
     const ordinal = rank === 1 ? 'Winner' : rank === 2 ? '2nd' : rank === 3 ? '3rd' : '#' + rank;
-    const rankLabel = votes === 0 ? 'No votes'
+    const rankLabel = _isForfeit ? 'Winner · walkover'
+      : votes === 0 ? 'No votes'
       : isTied ? `Tied · ${ordinal}`
       : ordinal;
     const canFollow = e.user_id && e.user_id !== state.profile?.id;
@@ -16371,11 +16426,18 @@ function renderFeed() {
     if (computeChallengeStatus(ch) !== 'closed') return;
     if (!(ch.is_public || ch.creator_id === myId)) return;
     if (new Date(ch.voting_end).getTime() < recentClosedCutoff) return;
-    const chEntries = (state.feedEntries || []).filter(e => e.challenge_id === ch.id);
-    if (chEntries.length < 2) return;
+    if (ch.sd_phase) return; // mid-Sudden-Death — not decided yet
+    // Sudden Death: only the FINAL round's entries decide the winner
+    const _finalR = ch.sd_round || 0;
+    const chEntries = (state.feedEntries || []).filter(e =>
+      e.challenge_id === ch.id && (e.sd_round || 0) === _finalR);
+    // Forfeit walkover: SD round with a single (unvoted) survivor is a valid win
+    const _forfeit = _finalR > 0 && chEntries.length === 1;
+    if (chEntries.length < 2 && !_forfeit) return;
     let winner = null, max = 0;
     chEntries.forEach(e => { const v = state.feedVoteCounts[e.id] || 0; if (v > max) { max = v; winner = e; } });
-    if (!winner || max === 0) return;
+    if (_forfeit && !winner) winner = chEntries[0];
+    else if (!winner || max === 0) return;
     winnerEvents.push({ ch, entry: winner });
   });
   if (followingMode && myId) {
