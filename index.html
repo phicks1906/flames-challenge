@@ -6945,7 +6945,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v616 · championship-hype-3";
+const APP_VERSION = "v617 · moderation-visibility";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -8664,7 +8664,7 @@ function notifTypeCategory(type) {
   // Maps each raw notification type to one of the 4 grouped toggle keys.
   return ({
     // My competitions
-    vote: 'competitions', entry: 'competitions', challenge_closed: 'competitions', poll_ended: 'competitions',
+    vote: 'competitions', entry: 'competitions', challenge_closed: 'competitions', poll_ended: 'competitions', entry_rejected: 'competitions',
     // Social
     post_like: 'social', entry_like: 'social', comment: 'social', reply: 'social',
     mention: 'social', follow: 'social',
@@ -9147,7 +9147,7 @@ function renderNotifs() {
       : `<div class="notif-empty"><div class="icon">🔔</div>No notifications yet.<br>When people like, follow, vote, or join your challenges, it'll show up here.</div>`;
     return;
   }
-  const kindIcon = { post_like: '🔥', entry_like: '🔥', follow: '👤', vote: '🗳️', entry: '🎬', comment: '💬', reply: '↩️', mention: '@', challenge_closed: '🏁', new_challenge: '🏆', new_poll: '🗳️', poll_ended: '📊', champ_qualified: '⚡', champ_race: '🔥', champ_won: '👑', champ_friend_qualified: '⚡', champ_friend_won: '👑', challenge_invite: '🔒', group_invite: '👥' };
+  const kindIcon = { post_like: '🔥', entry_like: '🔥', follow: '👤', vote: '🗳️', entry: '🎬', comment: '💬', reply: '↩️', mention: '@', challenge_closed: '🏁', entry_rejected: '🚫', new_challenge: '🏆', new_poll: '🗳️', poll_ended: '📊', champ_qualified: '⚡', champ_race: '🔥', champ_won: '👑', champ_friend_qualified: '⚡', champ_friend_won: '👑', challenge_invite: '🔒', group_invite: '👥' };
   list.innerHTML = shown.map((n, i) => {
     const unread = isNotifUnread(n);
     const av = n.actor ? honoredAvatarHTML(n.actor.id, avatarInner(n.actor.avatar), 42) : '🏁';
@@ -11458,6 +11458,16 @@ function getChampIds() {
 }
 
 /* ---------- CHAMPIONSHIP HYPE (v612) ---------- */
+// Moderation visibility (v617): one rule for every surface. An entry is visible
+// if it passed moderation, or it's yours; admins get a bypass only where the
+// surface is a review context (allowAdmin).
+function entryModVisible(e, { allowAdmin = false } = {}) {
+  const st = e?.moderation_status;
+  if (!st || st === 'clear' || st === 'approved') return true;
+  if (state.profile && e.user_id === state.profile.id) return true;
+  if (allowAdmin && typeof isAdmin === 'function' && isAdmin()) return true;
+  return false;
+}
 // The active championship month per category (from launch records, not calendar).
 // Global: used by renderChampionshipTab AND both launch flows.
 function getChampMonth(cat) {
@@ -12556,7 +12566,9 @@ async function openEntryViewer(entryId, chId) {
       const { data } = await db.from('entries')
         .select('*, submitter:profiles!entries_user_id_fkey(id, name, avatar)')
         .eq('id', entryId).single();
-      if (data) {
+      // Moderation gate (v617): a direct fetch bypasses the filtered state lists,
+      // so enforce visibility here. Admin bypass allowed — this path serves review.
+      if (data && entryModVisible(data, { allowAdmin: true })) {
         _evEntries = [data];
         entry = data;
       }
@@ -18724,7 +18736,11 @@ async function openFeedViewer(chId, startEntryId = null) {
 
     if (!_fvChallenge || _fvChallenge.id !== chId) return; // sheet closed while loading
 
-    const entries = entriesRes.data || [];
+    // Moderation gate (v617): the viewer fetches straight from the DB, so it must
+    // apply the same visibility rule as the feed — pending/flagged/escalated/
+    // rejected entries are invisible to everyone except their own submitter.
+    // (No admin bypass here: admins review via the Admin queue, not the viewer.)
+    const entries = (entriesRes.data || []).filter(e => entryModVisible(e));
     const votes   = votesRes.data  || [];
 
     // Sudden Death visibility:
@@ -21090,15 +21106,34 @@ async function approveAllFlagged() {
   toast('✅ All non-urgent flagged videos approved');
   renderAdminFlags();
 }
+// Tell the submitter their entry didn't pass review (v617). Fire-and-forget.
+async function notifyEntryModerated(entryId, action) {
+  try {
+    const { data: e } = await db.from('entries')
+      .select('id, user_id, challenge_id, challenge:challenges(id, title)')
+      .eq('id', entryId).maybeSingle();
+    if (!e || !e.user_id) return;
+    const title = e.challenge?.title || 'a challenge';
+    const message = action === 'deleted'
+      ? `🚫 Your entry to "${title}" was removed by moderation for violating community guidelines.`
+      : `🚫 Your entry to "${title}" was rejected by moderation and is not visible to others. Review the community guidelines before resubmitting.`;
+    await db.from('notifications').insert({
+      user_id: e.user_id, type: 'entry_rejected', challenge_id: e.challenge_id,
+      message, created_at: new Date().toISOString(),
+    });
+  } catch (err) { console.warn('notifyEntryModerated', err); }
+}
 async function rejectVideoEntry(entryId) {
   await db.from('entries').update({ moderation_status: 'rejected', moderation_checked_at: new Date().toISOString() }).eq('id', entryId);
-  toast('🚫 Entry rejected — stays hidden');
+  notifyEntryModerated(entryId, 'rejected');
+  toast('🚫 Entry rejected — hidden from everyone, submitter notified');
   renderAdminFlags();
 }
 async function removeVideoEntry(entryId) {
   if (!confirm('Permanently delete this entry?')) return;
+  await notifyEntryModerated(entryId, 'deleted'); // must read the row before it's gone
   await db.from('entries').delete().eq('id', entryId);
-  toast('🗑️ Entry deleted');
+  toast('🗑️ Entry deleted — submitter notified');
   renderAdminFlags();
 }
 
