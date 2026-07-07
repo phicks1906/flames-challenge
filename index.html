@@ -1196,14 +1196,15 @@ body.theme-light .nav { background: rgba(255, 255, 255, 0.88); border-bottom-col
 
 /* ============ TOAST ============ */
 .toast {
-  position: fixed; bottom: 24px; left: 50%;
-  transform: translateX(-50%) translateY(120%);
+  position: fixed; bottom: calc(76px + max(12px, env(safe-area-inset-bottom)));
+  left: 50%;
+  transform: translateX(-50%) translateY(140%);
   background: var(--surface);
   border: 1px solid var(--ember);
   border-radius: 100px;
   padding: 14px 24px;
   font-size: 14px; font-weight: 600;
-  z-index: 300;
+  z-index: 9000;
   box-shadow: var(--shadow-warm);
   transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   display: flex; align-items: center; gap: 10px;
@@ -4735,6 +4736,11 @@ body.theme-light .ladder-chip-founder  { color: #bf360c; }
   font-family: var(--font-anton, 'Anton'), sans-serif; font-size: 14px; letter-spacing: 0.06em;
   padding: 11px 26px; border-radius: 12px; cursor: pointer;
 }
+.lb-row.lb-qual { background: linear-gradient(90deg, rgba(255,200,87,0.07), transparent); border-radius: 12px; }
+.lb-qual-line { display: flex; align-items: center; gap: 10px; margin: 6px 2px; }
+.lb-qual-line i { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, var(--gold), transparent); }
+.lb-qual-line span { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; color: var(--gold); white-space: nowrap; }
+.lb-back { color: var(--ember); font-weight: 700; }
 /* ---------- End championship hype ---------- */
 
 /* ADMIN PAGE */
@@ -6934,7 +6940,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v612 · championship-hype-1";
+const APP_VERSION = "v615 · launch-fix";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -7727,6 +7733,7 @@ async function loadAppData() {
   await loadMyRecord();
   await loadChampionshipData();
   try { maybeShowCoronation(); } catch (e) {}
+  try { maybeChampRaceToast(); } catch (e) {}
   state.loading = false;
   renderPolls();
   renderLeaderboard();
@@ -8595,6 +8602,39 @@ async function loadNotifications() {
     }
   } catch(e) { console.warn('notif championship', e); }
 
+  // 13.5. Championship qualifying race (v614) — Ember's bubble alerts, final week.
+  //   Synthesized from leaderboard data like #13 (no DB rows, so they vanish on
+  //   their own once the race resolves — no spam, no cleanup).
+  try {
+    const race = champRaceInfo();
+    if (race && race.daysLeft <= 7 && state.profile) {
+      const dLbl = race.daysLeft <= 1 ? 'Last day' : `${race.daysLeft} days left`;
+      Object.entries(race.cats).forEach(([cat, r]) => {
+        const idx = r.ranked.findIndex(u => u.id === me);
+        if (idx === -1) return;
+        if (idx >= 3 && idx <= 4 && r.thirdWins !== null) {
+          const back = r.thirdWins - r.wins(r.ranked[idx]);
+          if (back <= 2) {
+            notifs.push({
+              type: 'champ_race', actorId: null, ts: null,
+              text: `🔥 Ember: You're #${idx + 1} in ${cat} — ${back <= 0 ? 'tied for the last Championship spot' : back + ' win' + (back === 1 ? '' : 's') + ' from the Championship'}. ${dLbl}.`,
+              target: { kind: 'leaderboard' }
+            });
+          }
+        } else if (idx <= 2 && r.bubble && r.thirdWins !== null) {
+          const gap = r.wins(r.ranked[idx]) - r.wins(r.bubble);
+          if (gap <= 1) {
+            notifs.push({
+              type: 'champ_race', actorId: null, ts: null,
+              text: `👀 Ember: You're holding #${idx + 1} in ${cat} — but ${r.bubble.name} is ${gap <= 0 ? 'tied with you' : 'one win behind'}. Defend it. ${dLbl}.`,
+              target: { kind: 'leaderboard' }
+            });
+          }
+        }
+      });
+    }
+  } catch(e) { console.warn('notif champ race', e); }
+
   // 14/15. (Removed.) Private-challenge invites are no longer derived client-side
   //   — they arrive via the server-side notifications outbox (source #5 above).
   //   Group-adds are intentionally silent: group membership is organizational
@@ -8626,7 +8666,7 @@ function notifTypeCategory(type) {
     // From people you follow
     new_challenge: 'following', new_poll: 'following',
     // Championships
-    champ_qualified: 'championship', champ_won: 'championship',
+    champ_qualified: 'championship', champ_won: 'championship', champ_race: 'championship',
     champ_friend_qualified: 'championship', champ_friend_won: 'championship',
   })[type];
 }
@@ -9102,7 +9142,7 @@ function renderNotifs() {
       : `<div class="notif-empty"><div class="icon">🔔</div>No notifications yet.<br>When people like, follow, vote, or join your challenges, it'll show up here.</div>`;
     return;
   }
-  const kindIcon = { post_like: '🔥', entry_like: '🔥', follow: '👤', vote: '🗳️', entry: '🎬', comment: '💬', reply: '↩️', mention: '@', challenge_closed: '🏁', new_challenge: '🏆', new_poll: '🗳️', poll_ended: '📊', champ_qualified: '⚡', champ_won: '👑', champ_friend_qualified: '⚡', champ_friend_won: '👑', challenge_invite: '🔒', group_invite: '👥' };
+  const kindIcon = { post_like: '🔥', entry_like: '🔥', follow: '👤', vote: '🗳️', entry: '🎬', comment: '💬', reply: '↩️', mention: '@', challenge_closed: '🏁', new_challenge: '🏆', new_poll: '🗳️', poll_ended: '📊', champ_qualified: '⚡', champ_race: '🔥', champ_won: '👑', champ_friend_qualified: '⚡', champ_friend_won: '👑', challenge_invite: '🔒', group_invite: '👥' };
   list.innerHTML = shown.map((n, i) => {
     const unread = isNotifUnread(n);
     const av = n.actor ? honoredAvatarHTML(n.actor.id, avatarInner(n.actor.avatar), 42) : '🏁';
@@ -10846,14 +10886,25 @@ function renderLeaderboard() {
     const tiedPrev = u.catWins === prev.catWins && u.catAllTime === prev.catAllTime;
     lbRankByIndex[i] = tiedPrev ? lbRankByIndex[i-1] : i + 1;
   });
+  // Championship qualifying race (v614): gold line splits qualified from chasing.
+  // Only on category views, only while this category's championship hasn't launched.
+  const _raceOn = cat !== 'All'
+    && !(state.champLaunches || []).some(l => l.month === curMonth && l.category === cat && !l.is_sponsored);
+  const _monthWinners = ranked.filter(u => u.catWins > 0).length;
+  const _qualCut = _raceOn && _monthWinners > 0 ? Math.min(3, _monthWinners) - 1 : -1;
+  const _thirdWins = _qualCut >= 0 ? ranked[_qualCut].catWins : null;
+  const _lastDayLb = new Date(now2.getFullYear(), now2.getMonth() + 1, 0);
+  const _daysLeftLb = Math.max(0, Math.ceil((_lastDayLb - now2) / 86400000));
+
   ranked.forEach((u, i) => {
     const isYou = state.profile && u.id === state.profile.id;
     const isLeader = u.id === leaderId;
     const isChamp = champTitle && u.id === champTitle.userId;
     const isFollowing = state.myFollowing.has(u.id);
     const isHonored = !!hofTierOf(u.id);
+    const _isQual = _qualCut >= 0 && i <= _qualCut && u.catWins > 0;
     const row = document.createElement('div');
-    row.className = 'lb-row' + (isYou ? ' you' : '') + (isHonored && !isYou ? ' hof-row-tint' : '');
+    row.className = 'lb-row' + (isYou ? ' you' : '') + (isHonored && !isYou ? ' hof-row-tint' : '') + (_isQual ? ' lb-qual' : '');
     const lbRank = lbRankByIndex[i];
     const lbMedalColor = lbRank === 1 ? 'var(--gold)' : lbRank === 2 ? '#aab3bd' : lbRank === 3 ? '#cd7f32' : '';
     const lbRankIcon = '#' + lbRank;
@@ -10865,7 +10916,7 @@ function renderLeaderboard() {
         ${lbAvatar}
         <div style="min-width:0">
           <div class="lb-name">${hofNameHTML(u.id, escapeHtml(u.name))}${isYou ? ' (you)' : ''}${isChamp ? ' <span class="lb-champ-tag">👑 Champ</span>' : ''}${isLeader && !isChamp ? ' <span class="lb-leader-tag">🔥 Leader</span>' : ''}</div>
-          <div class="lb-streak" style="font-size:11px;color:var(--text-muted)">${u.catWins}–${u.catLosses} this month · ${u.catAllTime} all-time</div>
+          <div class="lb-streak" style="font-size:11px;color:var(--text-muted)">${u.catWins}–${u.catLosses} this month · ${u.catAllTime} all-time${(_qualCut >= 0 && i > _qualCut && _thirdWins !== null) ? ` · <span class="lb-back">${_thirdWins - u.catWins <= 0 ? 'tied for the spot' : (_thirdWins - u.catWins) + ' win' + (_thirdWins - u.catWins === 1 ? '' : 's') + ' back'}</span>` : ''}</div>
           ${renderLadderChip(u.id, { showSpark: true, size: 15 })}
         </div>
       </div>
@@ -10875,6 +10926,12 @@ function renderLeaderboard() {
     const followBtn = row.querySelector('[data-lb-follow]');
     if (followBtn) followBtn.addEventListener('click', async e => { e.stopPropagation(); await lbToggleFollow(followBtn); });
     list.appendChild(row);
+    if (_qualCut >= 0 && i === _qualCut) {
+      const line = document.createElement('div');
+      line.className = 'lb-qual-line';
+      line.innerHTML = `<i></i><span>🏆 CHAMPIONSHIP LINE · ${_daysLeftLb <= 1 ? 'LAST DAY' : _daysLeftLb + ' DAYS'}</span><i></i>`;
+      list.appendChild(line);
+    }
   });
 }
 
@@ -11105,6 +11162,25 @@ function buildTicker() {
       const mLabel = champMonthLabel(ch.id);
       items.push({ icon: '', name: '', badge: 'champ', category: `⚡ ${ch.category.toUpperCase()} CHAMPIONSHIP${mLabel ? ' · ' + mLabel.toUpperCase() : ''}`, text: action, grouped: true });
     });
+
+  // 0.5. Championship qualifying race (v614) — countdown + bubble drama, last 10 days
+  try {
+    const race = champRaceInfo();
+    if (race && race.daysLeft <= 10) {
+      const dLbl = race.daysLeft <= 1 ? 'today' : `in ${race.daysLeft} days`;
+      Object.entries(race.cats).forEach(([cat, r]) => {
+        if (!selectedCats.has(cat)) return;
+        const holders = r.ranked.slice(0, 3).map(u => u.name).join(' · ');
+        items.push({ icon: '', name: '', badge: 'champ', category: `🏆 ${cat.toUpperCase()} QUALIFYING`, text: `Closes ${dLbl} — ${holders} hold the spots`, grouped: true });
+        if (r.bubble && r.thirdWins !== null) {
+          const gap = r.thirdWins - r.wins(r.bubble);
+          if (gap <= 1) {
+            items.push({ icon: '', name: '', badge: 'champ', category: `⚡ BUBBLE`, text: `${r.bubble.name} is ${gap <= 0 ? 'tied for' : '1 win from stealing'} #3 in ${cat}`, grouped: true });
+          }
+        }
+      });
+    }
+  } catch (e) { console.warn('ticker race', e); }
 
   // 1. Current Champions (from Championship Challenges) — announced with excitement
   Object.values(champTitlesT)
@@ -11377,6 +11453,16 @@ function getChampIds() {
 }
 
 /* ---------- CHAMPIONSHIP HYPE (v612) ---------- */
+// The active championship month per category (from launch records, not calendar).
+// Global: used by renderChampionshipTab AND both launch flows.
+function getChampMonth(cat) {
+  const now = new Date();
+  const curMonthStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const launch = (state.champLaunches || [])
+    .filter(l => l.category === cat)
+    .sort((a, b) => b.month.localeCompare(a.month))[0];
+  return launch?.month || curMonthStr;
+}
 function isChampionshipCh(ch) {
   return !!(ch && (ch.is_championship || getChampIds()[ch.id]));
 }
@@ -11406,6 +11492,55 @@ function emberTapeLine(ch, fighters) {
   let seed = 0; const s = String(ch.id || '');
   for (let i = 0; i < s.length; i++) seed = (seed * 31 + s.charCodeAt(i)) >>> 0;
   return pool[seed % pool.length];
+}
+// Championship qualifying race (v614): per-category snapshot of who holds the
+// top-3 spots and who's chasing, during the current month (before launch).
+function champRaceInfo() {
+  const data = state.leaderboardData;
+  if (!data) return null;
+  const now = new Date();
+  const month = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const daysLeft = Math.max(0, Math.ceil((lastDay - now) / 86400000));
+  const out = { month, daysLeft, cats: {} };
+  (typeof CATEGORIES !== 'undefined' ? CATEGORIES : []).forEach(cat => {
+    const launched = (state.champLaunches || []).some(l => l.month === month && l.category === cat && !l.is_sponsored);
+    if (launched) return;
+    const w = u => u.rolling30ByCategory?.[cat] || 0;
+    const ranked = (data.users || []).filter(u => w(u) > 0).sort((a, b) => w(b) - w(a));
+    if (!ranked.length) return;
+    out.cats[cat] = { ranked, wins: w, thirdWins: ranked[2] ? w(ranked[2]) : null, bubble: ranked[3] || null };
+  });
+  return out;
+}
+// Ember race toast on app open — final week only, capped one per category per week
+function maybeChampRaceToast() {
+  try {
+    if (!state.profile) return;
+    const info = champRaceInfo();
+    if (!info || info.daysLeft > 7) return;
+    const me = state.profile.id;
+    const dLbl = info.daysLeft <= 1 ? 'Last day' : `${info.daysLeft} days left`;
+    const weekKey = `${info.month}_w${Math.floor(new Date().getDate() / 7)}`;
+    for (const [cat, r] of Object.entries(info.cats)) {
+      const idx = r.ranked.findIndex(u => u.id === me);
+      if (idx === -1) continue;
+      let msg = null;
+      if (idx >= 3 && idx <= 4 && r.thirdWins !== null) {
+        const back = r.thirdWins - r.wins(r.ranked[idx]);
+        if (back <= 2) msg = `🔥 Ember: You're #${idx + 1} in ${cat} — ${back <= 0 ? 'tied for' : back + ' win' + (back === 1 ? '' : 's') + ' from'} the Championship. ${dLbl}.`;
+      } else if (idx <= 2 && r.bubble && r.thirdWins !== null) {
+        const gap = r.wins(r.ranked[idx]) - r.wins(r.bubble);
+        if (gap <= 1) msg = `👀 Ember: ${r.bubble.name} is ${gap <= 0 ? 'tied with you' : 'one win behind you'} in ${cat}. Defend your spot — ${dLbl.toLowerCase()}.`;
+      }
+      if (!msg) continue;
+      const key = `fc_race_toast_${cat}_${weekKey}`;
+      if (localStorage.getItem(key)) continue;
+      localStorage.setItem(key, '1');
+      toast(msg);
+      break; // one toast per app open is plenty
+    }
+  } catch (e) { console.warn('race toast', e); }
 }
 // Full-screen coronation the first time a fresh champion opens the app
 function maybeShowCoronation() {
@@ -11862,13 +11997,9 @@ function renderChampionshipTab() {
   const curMonthStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
   const myId = state.profile?.id;
 
-  // Find the active championship month per category (from launch records, not current calendar month)
-  const getChampMonth = (cat) => {
-    const launch = (state.champLaunches || [])
-      .filter(l => l.category === cat)
-      .sort((a,b) => b.month.localeCompare(a.month))[0];
-    return launch?.month || curMonthStr;
-  };
+  // Find the active championship month per category — getChampMonth is now a
+  // global helper (v615): the launch flows call it too, and a local const here
+  // was invisible to them ("Can't find variable: getChampMonth").
 
   // Build sections — top 5 per category
   const sections = CATEGORIES.map(cat => {
