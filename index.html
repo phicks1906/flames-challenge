@@ -6945,7 +6945,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v617 · moderation-visibility";
+const APP_VERSION = "v618 · submit-sheet-context";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -15665,9 +15665,16 @@ function openSubmitEntry(entryToEdit = null) {
   const ch = state.currentChallenge;
   if (!ch) return;
 
-  // If user already has an entry and we're not explicitly editing, switch to edit mode
+  // Context guard (v618): never carry an entry from a DIFFERENT challenge into
+  // this sheet — the feed submit buttons set currentChallenge without reloading
+  // currentEntries, so both the passed entry and the auto-edit lookup must be
+  // verified against the challenge we're actually submitting to.
+  if (entryToEdit && entryToEdit.challenge_id && entryToEdit.challenge_id !== ch.id) entryToEdit = null;
+
+  // If user already has an entry IN THIS CHALLENGE and we're not explicitly
+  // editing, switch to edit mode
   if (!entryToEdit && state.profile && state.currentEntries) {
-    const existing = state.currentEntries.find(e => e.user_id === state.profile.id);
+    const existing = state.currentEntries.find(e => e.user_id === state.profile.id && e.challenge_id === ch.id);
     if (existing) entryToEdit = existing;
   }
 
@@ -15880,6 +15887,11 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
   e.preventDefault();
   const ch = state.currentChallenge;
   if (!ch || !state.profile) return;
+  // Context guard (v618): if editing state somehow belongs to another challenge,
+  // drop it — an update must never cross challenges.
+  if (seState.editingEntry && seState.editingEntry.challenge_id && seState.editingEntry.challenge_id !== ch.id) {
+    seState.editingEntry = null;
+  }
   const errBox = document.getElementById('seError');
   errBox.classList.remove('show');
 
