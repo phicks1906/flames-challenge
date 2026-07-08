@@ -4758,6 +4758,20 @@ body.theme-light .ladder-chip-founder  { color: #bf360c; }
   margin-top: 5px; font-weight: 600;
 }
 .boost-line b { color: var(--gold); font-weight: 800; }
+.pboost-card {
+  background: linear-gradient(160deg, rgba(255,200,87,0.06), var(--surface-2));
+  border: 1px solid rgba(255,200,87,0.28); border-radius: 14px;
+  padding: 13px 14px; margin: 12px 0;
+}
+.pboost-row { display: flex; gap: 10px; }
+.pboost-stat { flex: 1; text-align: center; }
+.pboost-num { font-family: var(--font-anton), sans-serif; font-size: 24px; color: var(--gold); line-height: 1; }
+.pboost-lbl { font-size: 9.5px; letter-spacing: 0.1em; color: var(--text-muted); margin-top: 4px; font-weight: 700; }
+.pboost-sig {
+  margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--border);
+  font-size: 12.5px; color: var(--ember); font-weight: 600; text-align: center;
+}
+.pboost-sig b { color: var(--gold); font-weight: 800; }
 /* ---------- End championship hype ---------- */
 
 /* ADMIN PAGE */
@@ -6262,6 +6276,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     <button class="pm-close" onclick="closeModals()" aria-label="Close">×</button>
     <h2 id="profileName">You</h2>
     <p id="profileStats" style="margin-bottom:14px"></p>
+    <div id="profileBoostCard"></div>
     <button class="pm-featured" onclick="openEmber()"><span style="font-size:19px">🔥</span> Ask Ember</button>
     <div class="pm-grid">
       <button class="pm-tile" onclick="openEditProfile()"><span class="pm-ic">✏️</span>Edit Profile</button>
@@ -6957,7 +6972,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v628 · boost-breakdown";
+const APP_VERSION = "v629 · boost-profile";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -10508,6 +10523,8 @@ function openProfile() {
     `<strong style="color:var(--gold)">${winCount}</strong> wins · ` +
     `<strong>${voteCount}</strong> votes · ` +
     `<strong>${winStreak}</strong>-win streak`;
+  const _pbc = document.getElementById('profileBoostCard');
+  if (_pbc) _pbc.innerHTML = profileBoostCardHTML(state.profile.id);
   document.getElementById('profileModal').classList.add('open');
 }
 
@@ -11552,7 +11569,37 @@ function boostVotePts(voteCount) {
   for (const t of BOOST_CFG.voteTiers) if (voteCount >= t.min) return t.pts;
   return 0;
 }
-// Ember's itemized boost breakdown for a resolved challenge's winner card.
+// Profile boost card (v629): season boost total + permanent Signature Win.
+// Season = current-month boost from the leaderboard aggregate; Signature = the
+// single highest-boost win ever, read from the ledger (best scalp, remembered).
+function profileBoostCardHTML(userId) {
+  const u = (state.leaderboardData?.users || []).find(x => x.id === userId);
+  const seasonBoost = u?.boostMonth || 0;
+  const allTimeBoost = u?.boostAllTime || 0;
+  // Signature win: highest total_boost row this user won. Ledger is loaded for
+  // the challenges in the leaderboard window; good enough for the card.
+  let sig = null;
+  Object.values(state.boostByChallenge || {}).forEach(r => {
+    if (r.winner_id !== userId || !r.total_boost) return;
+    if (!sig || r.total_boost > sig.total_boost) sig = r;
+  });
+  let sigLine = '';
+  if (sig) {
+    const d = sig.detail || {};
+    const top = (d.opponents || []).slice().sort((a, b) => (b.pts || 0) - (a.pts || 0))[0];
+    const who = top ? `${TIER_LABEL[top.tier] || top.tier}-tier` : 'the field';
+    sigLine = `<div class="pboost-sig">🏅 Signature win: beat ${who} · <b>${sig.total_boost} Boost</b></div>`;
+  }
+  if (!seasonBoost && !allTimeBoost && !sig) return '';
+  return `<div class="pboost-card">
+    <div class="pboost-row">
+      <div class="pboost-stat"><div class="pboost-num">${seasonBoost}</div><div class="pboost-lbl">BOOST THIS MONTH</div></div>
+      <div class="pboost-stat"><div class="pboost-num">${allTimeBoost}</div><div class="pboost-lbl">ALL-TIME BOOST</div></div>
+    </div>
+    ${sigLine}
+  </div>`;
+}
+
 // Reads the frozen ledger row (state.boostByChallenge). Win is shown by the card
 // itself; this is the amplifier line underneath. Returns '' if no boost (e.g.
 // championship, private, or not yet settled).
@@ -20407,7 +20454,8 @@ function renderProfileSheet() {
         <div class="ps-heat-wlt">${wltLine}</div>
         ${rankChipHtml}
       </div>
-      ${rankProgHtml}`;
+      ${rankProgHtml}
+      ${profileBoostCardHTML(prof.id)}`;
   }
 
   // Social line
