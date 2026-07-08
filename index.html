@@ -6945,7 +6945,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v620 · toast-throttle-fix";
+const APP_VERSION = "v621 · toast-watchdog";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -7839,6 +7839,7 @@ function startRealtimeSubscriptions() {
 }
 
 async function liveTick() {
+  try { _toastCorrect(); } catch (e) {} // backstop: never let a toast outlive its clock
   if (_liveTickRunning) return;       // skip if previous still running
   if (document.hidden) return;
   if (!state.profile) return;
@@ -12930,17 +12931,23 @@ function toast(msg) {
   toastHideAt = Date.now() + 2600;
   toastTimer = setTimeout(() => { t.classList.remove('show'); toastHideAt = 0; }, 2600);
 }
-// iOS Safari throttles setTimeout while a tab is backgrounded — a toast's
-// dismiss timer can stall for minutes and appear "stuck." On refocus, check
-// the wall clock and force-hide if we're already past when it should have gone.
+// iOS Safari throttles or freezes setTimeout when a page is backgrounded or
+// suspended — a toast's dismiss timer can stall indefinitely and the toast
+// appears "stuck." Correct against the wall clock whenever the page wakes up,
+// via every wake path iOS uses: visibilitychange, pageshow (BFCache restore),
+// and window focus. (v621)
+function _toastCorrect() {
+  if (!toastHideAt || Date.now() < toastHideAt) return;
+  const t = document.getElementById('toast');
+  if (t) t.classList.remove('show');
+  clearTimeout(toastTimer);
+  toastHideAt = 0;
+}
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && toastHideAt && Date.now() >= toastHideAt) {
-    const t = document.getElementById('toast');
-    if (t) t.classList.remove('show');
-    clearTimeout(toastTimer);
-    toastHideAt = 0;
-  }
+  if (document.visibilityState === 'visible') _toastCorrect();
 });
+window.addEventListener('pageshow', _toastCorrect);
+window.addEventListener('focus', _toastCorrect);
 
 function confirmSheet(message, confirmLabel = 'Confirm', cancelLabel = 'Cancel') {
   return new Promise(resolve => {
