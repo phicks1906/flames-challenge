@@ -6952,7 +6952,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v626 · self-likes";
+const APP_VERSION = "v627 · boost-engine";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -8049,7 +8049,7 @@ async function loadLeaderboard() {
   // ── Step 1a: ALL closed challenges (lifetime wins / rank chips) ───────────────
   // ── Step 1b: This month only (monthly leaderboard ranking) ───────────────────
   const [allChRes, monthChRes] = await Promise.all([
-    db.from('challenges').select('id, category, voting_end, sd_round, sd_phase').lte('voting_end', now.toISOString()).limit(2000),
+    db.from('challenges').select('id, category, voting_end, sd_round, sd_phase, is_championship, is_public').lte('voting_end', now.toISOString()).limit(2000),
     db.from('challenges').select('id').gte('voting_end', MONTH_START).lte('voting_end', now.toISOString()).limit(500),
   ]);
 
@@ -8059,7 +8059,7 @@ async function loadLeaderboard() {
   const decidedChs = allChs.filter(c => !c.sd_phase);
   const chIds = decidedChs.map(c => c.id);
   const chInfo = {};
-  decidedChs.forEach(c => { chInfo[c.id] = { category: c.category, votingEnd: c.voting_end, sdRound: c.sd_round || 0 }; });
+  decidedChs.forEach(c => { chInfo[c.id] = { category: c.category, votingEnd: c.voting_end, sdRound: c.sd_round || 0, isChampionship: !!c.is_championship, isPublic: c.is_public !== false }; });
 
   // Monthly subset — rolling30 / leaderboard ranking only
   const thisMonthChIds = new Set((monthChRes.data || []).map(c => c.id));
@@ -8128,6 +8128,16 @@ async function loadLeaderboard() {
     if (!scoreByUser[id]) scoreByUser[id] = 0;
   };
 
+  // -- Boost ledger (v627): load existing rows so we only settle challenges that
+  // haven't been boosted yet, and stash them for standings/display reads.
+  const boostByChallenge = {};
+  const boostToWrite = [];
+  try {
+    const { data: bl } = await db.from('boost_ledger').select('*').in('challenge_id', chIds);
+    (bl || []).forEach(r => { boostByChallenge[r.challenge_id] = r; });
+  } catch (e) { console.warn('boost ledger load', e); }
+  state.boostByChallenge = boostByChallenge;
+
   Object.entries(entriesByCh).forEach(([chId, entries]) => {
     const cat = chInfo[chId]?.category || 'Other';
 
@@ -8168,6 +8178,24 @@ async function loadLeaderboard() {
       entries.filter(e => e.user_id !== uid).forEach(e => {
         ensureUser(e.user_id); lossesByUser[e.user_id].allTime++;
       });
+
+      // -- Boost snapshot (v627): first time we see this resolved public,
+      // non-championship challenge with no ledger row, compute + queue a write.
+      // Tiers read live here = the resolution moment, then frozen in the row.
+      if (!boostByChallenge[chId] && !chInfo[chId]?.isChampionship && chInfo[chId]?.isPublic !== false) {
+        const opponents = [...new Set(entries.filter(e => e.user_id !== uid).map(e => e.user_id))];
+        const winnerVotes = (allVotesByEntry[winner.id] || []).length;
+        const snap = computeBoostSnapshot(opponents, winnerVotes);
+        const _d = new Date(chInfo[chId]?.votingEnd || Date.now());
+        const _row = {
+          challenge_id: chId, winner_id: uid, category: cat,
+          month: `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}`,
+          opponent_pts: snap.opponentPts, vote_pts: snap.votePts,
+          total_boost: snap.totalBoost, detail: snap.detail,
+        };
+        boostToWrite.push(_row);
+        boostByChallenge[chId] = _row; // local cache: this render can read it now
+      }
 
       // ── Weighted score: log2(entrants) × log2(voters)² × √(MOV) ──────────
       const entrants = entries.length;
@@ -8217,6 +8245,15 @@ async function loadLeaderboard() {
     }
   });
 
+  // -- Flush new boost snapshots (v627). Fire-and-forget; the challenge_id UNIQUE
+  // constraint + ignoreDuplicates makes concurrent settles harmless (first wins).
+  // Local cache already updated above so this render reads the values immediately.
+  if (boostToWrite.length) {
+    db.from('boost_ledger').upsert(boostToWrite, { onConflict: 'challenge_id', ignoreDuplicates: true })
+      .then(({ error }) => { if (error) console.warn('boost write', error); })
+      .catch(e => console.warn('boost write', e));
+  }
+
   // ── Compute streak per user (consecutive wins newest→oldest) ────────────────
   const streakByUser = {};
   const chIdsByDate = Object.entries(chInfo)
@@ -8243,6 +8280,21 @@ async function loadLeaderboard() {
     streakByUser[uid] = st;
   }
 
+  // -- Boost totals per user (v627) from the ledger. Monthly + per-category-monthly
+  // for standings; all-time for profile. thisMonth = same window as rolling30.
+  const boostByUser = {};
+  const _ensureBoost = id => { if (!boostByUser[id]) boostByUser[id] = { allTime: 0, month: 0, monthByCat: {} }; };
+  Object.values(boostByChallenge).forEach(r => {
+    if (!r || !r.winner_id) return;
+    _ensureBoost(r.winner_id);
+    boostByUser[r.winner_id].allTime += r.total_boost || 0;
+    if (thisMonthChIds.has(r.challenge_id)) {
+      boostByUser[r.winner_id].month += r.total_boost || 0;
+      const c = r.category || 'Other';
+      boostByUser[r.winner_id].monthByCat[c] = (boostByUser[r.winner_id].monthByCat[c] || 0) + (r.total_boost || 0);
+    }
+  });
+
   const users = allProfiles.map(p => ({
     ...p,
     isReal: true,
@@ -8253,6 +8305,9 @@ async function loadLeaderboard() {
     byCategory: winsByUser[p.id]?.byCategory || {},
     rolling30ByCategory: winsByUser[p.id]?.rolling30ByCategory || {},
     weightedScore: scoreByUser[p.id] || 0,
+    boostAllTime: boostByUser[p.id]?.allTime || 0,
+    boostMonth: boostByUser[p.id]?.month || 0,
+    boostMonthByCat: boostByUser[p.id]?.monthByCat || {},
     streak: streakByUser[p.id] || 0,
   }));
 
@@ -11465,6 +11520,50 @@ function getChampIds() {
   });
   return result;
 }
+
+/* ---------- BOOST POINTS (v627) ----------
+   A win is worth more when you beat strong players, more of them, and when
+   people loved your entry. Tiers are snapshotted at RESOLUTION (see loadLeaderboard):
+   opponent tier is read from championship count at the moment the challenge is
+   first settled, then frozen in the boost_ledger row forever.
+   ALL NUMBERS SOFT — retune here, one place, no logic changes. */
+const BOOST_CFG = {
+  // Opponent tier -> points for beating one such player
+  opponentPts: { spark: 1, flame: 2, blaze: 4, inferno: 6, legend: 10, icon: 14, immortal: 18, goat: 24 },
+  // Votes on your winning entry -> capped tier points (highest threshold met wins)
+  voteTiers: [ { min: 250, pts: 22 }, { min: 100, pts: 15 }, { min: 50, pts: 10 }, { min: 25, pts: 6 }, { min: 10, pts: 3 } ],
+};
+// Tier key from a raw championship count (mirrors LADDER thresholds, server-agnostic)
+function tierKeyForChampCount(n) {
+  let key = LADDER[0].key;
+  for (let k = LADDER.length - 1; k >= 0; k--) { if (n >= LADDER[k].min) { key = LADDER[k].key; break; } }
+  return key;
+}
+// Championship count for a user from loaded HOF data (same source as getLadderStatus)
+function champCountOf(userId) {
+  return (state.hofData || []).filter(r => r.userId === userId).length;
+}
+function boostVotePts(voteCount) {
+  for (const t of BOOST_CFG.voteTiers) if (voteCount >= t.min) return t.pts;
+  return 0;
+}
+// Compute a boost snapshot for a resolved challenge. opponents = array of userIds
+// beaten; winnerVotes = vote count on the winning entry. Reads tiers live at call
+// time (= resolution moment, since this only runs when first settling the challenge).
+function computeBoostSnapshot(opponents, winnerVotes) {
+  const detail = { opponents: [], voteTier: null };
+  let opponentPts = 0;
+  opponents.forEach(oid => {
+    const tier = tierKeyForChampCount(champCountOf(oid));
+    const pts = BOOST_CFG.opponentPts[tier] || 0;
+    opponentPts += pts;
+    detail.opponents.push({ opponent_id: oid, tier, pts });
+  });
+  const votePts = boostVotePts(winnerVotes);
+  detail.voteTier = votePts;
+  return { opponentPts, votePts, totalBoost: opponentPts + votePts, detail };
+}
+/* ---------- END BOOST POINTS ---------- */
 
 /* ---------- CHAMPIONSHIP HYPE (v612) ---------- */
 // Moderation visibility (v617): one rule for every surface. An entry is visible
