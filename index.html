@@ -4756,8 +4756,12 @@ body.theme-light .ladder-chip-founder  { color: #bf360c; }
 .boost-line {
   font-size: 12.5px; color: var(--ember); line-height: 1.4;
   margin-top: 5px; font-weight: 600;
+  display: flex; align-items: center; gap: 7px;
 }
 .boost-line b { color: var(--gold); font-weight: 800; }
+.ember-inline { display: inline-flex; position: relative; flex-shrink: 0; align-items: center; justify-content: center; overflow: visible; vertical-align: middle; }
+.ember-inline .ember-scale { position: relative; width: 50px; height: 58px; transform-origin: center; }
+.ember-inline .tcin { position: absolute; top: 0; left: 0; width: 50px; height: 58px; margin: 0; animation: tcin-bob 2.6s ease-in-out infinite; }
 .pboost-card {
   background: linear-gradient(160deg, rgba(255,200,87,0.06), var(--surface-2));
   border: 1px solid rgba(255,200,87,0.28); border-radius: 14px;
@@ -4770,6 +4774,7 @@ body.theme-light .ladder-chip-founder  { color: #bf360c; }
 .pboost-sig {
   margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--border);
   font-size: 12.5px; color: var(--ember); font-weight: 600; text-align: center;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
 }
 .pboost-sig b { color: var(--gold); font-weight: 800; }
 /* ---------- End championship hype ---------- */
@@ -6972,7 +6977,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v629 · boost-profile";
+const APP_VERSION = "v630 · ember-face";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11588,7 +11593,7 @@ function profileBoostCardHTML(userId) {
     const d = sig.detail || {};
     const top = (d.opponents || []).slice().sort((a, b) => (b.pts || 0) - (a.pts || 0))[0];
     const who = top ? `${TIER_LABEL[top.tier] || top.tier}-tier` : 'the field';
-    sigLine = `<div class="pboost-sig">🏅 Signature win: beat ${who} · <b>${sig.total_boost} Boost</b></div>`;
+    sigLine = `<div class="pboost-sig">${emberFace(24, 'celebrate')}<span>Signature win: beat ${who} · <b>${sig.total_boost} Boost</b></span></div>`;
   }
   if (!seasonBoost && !allTimeBoost && !sig) return '';
   return `<div class="pboost-card">
@@ -11604,6 +11609,15 @@ function profileBoostCardHTML(userId) {
 // itself; this is the amplifier line underneath. Returns '' if no boost (e.g.
 // championship, private, or not yet settled).
 const TIER_LABEL = { spark:'Spark', flame:'Flame', blaze:'Blaze', inferno:'Inferno', legend:'Legend', icon:'Icon', immortal:'Immortal', goat:'G.O.A.T.' };
+// Reusable Ember mascot (v630): same CSS character as the tour, inline at any
+// size with an optional pose ('wave' | 'celebrate' | ''). Ember is a character,
+// not just a voice — his face rides alongside the lines he narrates.
+function emberFace(size = 26, pose = '') {
+  // Native mascot is 50x58; scale the whole thing so proportions/eyes stay intact.
+  const scale = (size / 50).toFixed(3);
+  const boxH = Math.round(size * 1.16);
+  return `<span class="ember-inline" style="width:${size}px;height:${boxH}px;"><span class="ember-scale" style="transform:scale(${scale});"><span class="tcin ${pose}"><span class="tcf"></span><span class="tcface"><span class="tce l"></span><span class="tce r"></span><span class="tcm"></span></span><span class="tch"></span></span></span></span>`;
+}
 function boostBreakdownHTML(challengeId) {
   const row = (state.boostByChallenge || {})[challengeId];
   if (!row || !row.total_boost) return '';
@@ -11620,7 +11634,7 @@ function boostBreakdownHTML(challengeId) {
   }
   if (row.vote_pts > 0) parts.push(`strong turnout (+${row.vote_pts})`);
   if (!parts.length) return '';
-  return `<div class="boost-line">🔥 ${parts.join(' · ')} · <b>${row.total_boost} Boost</b></div>`;
+  return `<div class="boost-line">${emberFace(22, 'wave')}<span>${parts.join(' · ')} · <b>${row.total_boost} Boost</b></span></div>`;
 }
 
 // Compute a boost snapshot for a resolved challenge. opponents = array of userIds
