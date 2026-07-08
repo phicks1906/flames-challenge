@@ -1211,7 +1211,7 @@ body.theme-light .nav { background: rgba(255, 255, 255, 0.88); border-bottom-col
   max-width: calc(100vw - 40px);
 }
 .toast.show { transform: translateX(-50%) translateY(0); }
-.toast { cursor: pointer; }
+.toast { cursor: pointer; touch-action: manipulation; -webkit-user-select: none; user-select: none; }
 .toast::after { content: '✕'; font-size: 11px; opacity: 0.45; margin-left: 2px; }
 
 /* ============ FOOTER ============ */
@@ -6624,7 +6624,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
   </div>
 </div>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="button" tabindex="0" onclick="hideToast()"></div>
 
 <script>
 /* =========================================================
@@ -6947,7 +6947,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v623 · toast-dismiss";
+const APP_VERSION = "v624 · toast-tap-ios";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -12956,8 +12956,11 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('pageshow', _toastCorrect);
 window.addEventListener('focus', _toastCorrect);
-// v623: toasts are tappable — tap anywhere on one to dismiss it immediately
+// v623/v624: toasts are tappable — tap anywhere on one to dismiss it.
+// iOS Safari won't always fire 'click' on a plain div, so we cover every path:
+// inline onclick on the element itself, plus click + touchend listeners here.
 document.getElementById('toast').addEventListener('click', hideToast);
+document.getElementById('toast').addEventListener('touchend', (e) => { e.preventDefault(); hideToast(); });
 
 function confirmSheet(message, confirmLabel = 'Confirm', cancelLabel = 'Cancel') {
   return new Promise(resolve => {
