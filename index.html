@@ -6945,7 +6945,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v619 · youre-in-consistency";
+const APP_VERSION = "v620 · toast-throttle-fix";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -12872,7 +12872,6 @@ function avatarInner(avatar) {
   return escapeHtml(avatar || '🔥');
 }
 
-let toastTimer;
 // ── In-app debug logger ───────────────────────────────────────────────────────
 // iPhone-only dev: no desktop console available. This puts a console IN the app.
 // Toggle: tap the version stamp in the avatar menu 5× to show/hide. Off by default.
@@ -12921,13 +12920,27 @@ function _onVersionTap() {
   if (_versionTapCount >= 5) { _versionTapCount = 0; toggleDebugLog(); }
 }
 
+let toastTimer;
+let toastHideAt = 0; // v620: wall-clock deadline, corrected on refocus
 function toast(msg) {
   const t = document.getElementById('toast');
   t.textContent = '🔥 ' + msg;
   t.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+  toastHideAt = Date.now() + 2600;
+  toastTimer = setTimeout(() => { t.classList.remove('show'); toastHideAt = 0; }, 2600);
 }
+// iOS Safari throttles setTimeout while a tab is backgrounded — a toast's
+// dismiss timer can stall for minutes and appear "stuck." On refocus, check
+// the wall clock and force-hide if we're already past when it should have gone.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && toastHideAt && Date.now() >= toastHideAt) {
+    const t = document.getElementById('toast');
+    if (t) t.classList.remove('show');
+    clearTimeout(toastTimer);
+    toastHideAt = 0;
+  }
+});
 
 function confirmSheet(message, confirmLabel = 'Confirm', cancelLabel = 'Cancel') {
   return new Promise(resolve => {
