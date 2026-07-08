@@ -6977,7 +6977,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v630 · ember-face";
+const APP_VERSION = "v631 · upset-broadcasts";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -8157,6 +8157,7 @@ async function loadLeaderboard() {
   // haven't been boosted yet, and stash them for standings/display reads.
   const boostByChallenge = {};
   const boostToWrite = [];
+  const upsetsToBroadcast = [];
   try {
     const { data: bl } = await db.from('boost_ledger').select('*').in('challenge_id', chIds);
     (bl || []).forEach(r => { boostByChallenge[r.challenge_id] = r; });
@@ -8212,6 +8213,16 @@ async function loadLeaderboard() {
         const winnerVotes = (allVotesByEntry[winner.id] || []).length;
         const snap = computeBoostSnapshot(opponents, winnerVotes);
         const _d = new Date(chInfo[chId]?.votingEnd || Date.now());
+        // Upset detection (v631): did the winner beat someone >= upsetTierGap
+        // stages above their OWN tier? Record the biggest such victim for a broadcast.
+        const _winnerIdx = ladderIndexForChampCount(champCountOf(uid));
+        let _upset = null;
+        (snap.detail.opponents || []).forEach(o => {
+          const _oIdx = LADDER.findIndex(l => l.key === o.tier);
+          if (_oIdx - _winnerIdx >= BOOST_CFG.upsetTierGap) {
+            if (!_upset || _oIdx > _upset.idx) _upset = { opponentId: o.opponent_id, tier: o.tier, idx: _oIdx };
+          }
+        });
         const _row = {
           challenge_id: chId, winner_id: uid, category: cat,
           month: `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}`,
@@ -8220,6 +8231,7 @@ async function loadLeaderboard() {
         };
         boostToWrite.push(_row);
         boostByChallenge[chId] = _row; // local cache: this render can read it now
+        if (_upset) upsetsToBroadcast.push({ chId, winnerId: uid, winnerName: (allProfiles.find(p => p.id === uid)?.name) || 'Someone', victimId: _upset.opponentId, victimTier: _upset.tier, category: cat });
       }
 
       // ── Weighted score: log2(entrants) × log2(voters)² × √(MOV) ──────────
@@ -8277,6 +8289,29 @@ async function loadLeaderboard() {
     db.from('boost_ledger').upsert(boostToWrite, { onConflict: 'challenge_id', ignoreDuplicates: true })
       .then(({ error }) => { if (error) console.warn('boost write', error); })
       .catch(e => console.warn('boost write', e));
+  }
+
+  // Upset broadcasts (v631): when a boost row is newly written and it was an
+  // upset, notify the beaten player's followers — spectacle, no ping to the
+  // loser. Fire-and-forget; the boost_ledger UNIQUE guard already ensures each
+  // challenge settles once, so this only runs on first settle (no dupes).
+  if (upsetsToBroadcast.length) {
+    (async () => {
+      for (const u of upsetsToBroadcast) {
+        try {
+          const { data: fr } = await db.from('follows').select('follower_id').eq('followee_id', u.victimId);
+          const tierLabel = ({ legend:'Legend', icon:'Icon', immortal:'Immortal', goat:'G.O.A.T.', inferno:'Inferno', blaze:'Blaze' })[u.victimTier] || u.victimTier;
+          const rows = (fr || [])
+            .filter(r => r.follower_id !== u.winnerId)
+            .map(r => ({
+              user_id: r.follower_id, type: 'upset', challenge_id: u.chId,
+              message: `🔥 UPSET! ${u.winnerName} just took down a ${tierLabel} in ${u.category}.`,
+              created_at: new Date().toISOString(),
+            }));
+          if (rows.length) await db.from('notifications').insert(rows);
+        } catch (e) { console.warn('upset broadcast', e); }
+      }
+    })();
   }
 
   // ── Compute streak per user (consecutive wins newest→oldest) ────────────────
@@ -8760,7 +8795,7 @@ function notifTypeCategory(type) {
     // From people you follow
     new_challenge: 'following', new_poll: 'following',
     // Championships
-    champ_qualified: 'championship', champ_won: 'championship', champ_race: 'championship',
+    champ_qualified: 'championship', champ_won: 'championship', champ_race: 'championship', upset: 'championship',
     champ_friend_qualified: 'championship', champ_friend_won: 'championship',
   })[type];
 }
@@ -9236,7 +9271,7 @@ function renderNotifs() {
       : `<div class="notif-empty"><div class="icon">🔔</div>No notifications yet.<br>When people like, follow, vote, or join your challenges, it'll show up here.</div>`;
     return;
   }
-  const kindIcon = { post_like: '🔥', entry_like: '🔥', follow: '👤', vote: '🗳️', entry: '🎬', comment: '💬', reply: '↩️', mention: '@', challenge_closed: '🏁', entry_rejected: '🚫', new_challenge: '🏆', new_poll: '🗳️', poll_ended: '📊', champ_qualified: '⚡', champ_race: '🔥', champ_won: '👑', champ_friend_qualified: '⚡', champ_friend_won: '👑', challenge_invite: '🔒', group_invite: '👥' };
+  const kindIcon = { post_like: '🔥', entry_like: '🔥', follow: '👤', vote: '🗳️', entry: '🎬', comment: '💬', reply: '↩️', mention: '@', challenge_closed: '🏁', entry_rejected: '🚫', new_challenge: '🏆', new_poll: '🗳️', poll_ended: '📊', champ_qualified: '⚡', champ_race: '🔥', upset: '🔥', champ_won: '👑', champ_friend_qualified: '⚡', champ_friend_won: '👑', challenge_invite: '🔒', group_invite: '👥' };
   list.innerHTML = shown.map((n, i) => {
     const unread = isNotifUnread(n);
     const av = n.actor ? honoredAvatarHTML(n.actor.id, avatarInner(n.actor.avatar), 42) : '🏁';
@@ -11559,7 +11594,15 @@ const BOOST_CFG = {
   opponentPts: { spark: 1, flame: 2, blaze: 4, inferno: 6, legend: 10, icon: 14, immortal: 18, goat: 24 },
   // Votes on your winning entry -> capped tier points (highest threshold met wins)
   voteTiers: [ { min: 250, pts: 22 }, { min: 100, pts: 15 }, { min: 50, pts: 10 }, { min: 25, pts: 6 }, { min: 10, pts: 3 } ],
+  // Upset = you beat someone at least this many ladder stages above you.
+  upsetTierGap: 2,
 };
+// Ladder stage index (0=Spark ... 7=GOAT) from a championship count
+function ladderIndexForChampCount(n) {
+  let idx = 0;
+  for (let k = LADDER.length - 1; k >= 0; k--) { if (n >= LADDER[k].min) { idx = k; break; } }
+  return idx;
+}
 // Tier key from a raw championship count (mirrors LADDER thresholds, server-agnostic)
 function tierKeyForChampCount(n) {
   let key = LADDER[0].key;
