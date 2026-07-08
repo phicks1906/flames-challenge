@@ -4753,6 +4753,11 @@ body.theme-light .ladder-chip-founder  { color: #bf360c; }
 .dethrone-banner h4 { font-family:var(--font-anton),sans-serif; font-size:14px; letter-spacing:0.05em; color:var(--ember); margin:0 0 4px; }
 .dethrone-banner p { font-size:12.5px; color:var(--text-dim); line-height:1.45; margin:0; }
 .dethrone-banner .ember-q { color:var(--ember); font-style:italic; }
+.boost-line {
+  font-size: 12.5px; color: var(--ember); line-height: 1.4;
+  margin-top: 5px; font-weight: 600;
+}
+.boost-line b { color: var(--gold); font-weight: 800; }
 /* ---------- End championship hype ---------- */
 
 /* ADMIN PAGE */
@@ -6952,7 +6957,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v627 · boost-engine";
+const APP_VERSION = "v628 · boost-breakdown";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11547,6 +11552,30 @@ function boostVotePts(voteCount) {
   for (const t of BOOST_CFG.voteTiers) if (voteCount >= t.min) return t.pts;
   return 0;
 }
+// Ember's itemized boost breakdown for a resolved challenge's winner card.
+// Reads the frozen ledger row (state.boostByChallenge). Win is shown by the card
+// itself; this is the amplifier line underneath. Returns '' if no boost (e.g.
+// championship, private, or not yet settled).
+const TIER_LABEL = { spark:'Spark', flame:'Flame', blaze:'Blaze', inferno:'Inferno', legend:'Legend', icon:'Icon', immortal:'Immortal', goat:'G.O.A.T.' };
+function boostBreakdownHTML(challengeId) {
+  const row = (state.boostByChallenge || {})[challengeId];
+  if (!row || !row.total_boost) return '';
+  const d = row.detail || {};
+  const parts = [];
+  // Group opponents by tier for a readable phrase: "beat 2 Legends and a Blaze"
+  const byTier = {};
+  (d.opponents || []).forEach(o => { byTier[o.tier] = (byTier[o.tier] || 0) + 1; });
+  const tierPhrases = Object.entries(byTier)
+    .sort((a, b) => (BOOST_CFG.opponentPts[b[0]] || 0) - (BOOST_CFG.opponentPts[a[0]] || 0))
+    .map(([tier, n]) => `${n} ${TIER_LABEL[tier] || tier}${n > 1 ? 's' : ''}`);
+  if (tierPhrases.length && row.opponent_pts > 0) {
+    parts.push(`beat ${tierPhrases.join(' & ')} (+${row.opponent_pts})`);
+  }
+  if (row.vote_pts > 0) parts.push(`strong turnout (+${row.vote_pts})`);
+  if (!parts.length) return '';
+  return `<div class="boost-line">🔥 ${parts.join(' · ')} · <b>${row.total_boost} Boost</b></div>`;
+}
+
 // Compute a boost snapshot for a resolved challenge. opponents = array of userIds
 // beaten; winnerVotes = vote count on the winning entry. Reads tiers live at call
 // time (= resolution moment, since this only runs when first settling the challenge).
@@ -15688,6 +15717,7 @@ function renderChallengeResults() {
 
   panel.innerHTML = `<div class="cd-results-panel">
     <div class="cd-results-title">${isClosed ? "🏆 Final Standings" : "🏆 Current Standings"}</div>
+    ${isClosed ? boostBreakdownHTML(ch.id) : ''}
     ${rowsHtml}
     <div style="font-size:12px;color:var(--text-muted);margin-top:10px;text-align:center">${totalVotes} vote${totalVotes === 1 ? '' : 's'} total · ${state.currentEntries.length} ${state.currentEntries.length === 1 ? 'entry' : 'entries'}</div>
   </div>`;
@@ -17854,6 +17884,7 @@ function renderFeedWinnerCard({ challenge, entry }) {
               ${escapeHtml(s.name.toUpperCase())}${reigningChampChipHTML(s.id)}${isMine ? ' <span style="color:var(--ember);font-size:13px;font-family:var(--font-body);">(you)</span>' : ''}${plus}
             </div>
             <div style="font-size:13px;color:var(--gold);font-weight:600;margin-top:3px;">🥇 ${escapeHtml(challenge.title)}</div>
+            ${boostBreakdownHTML(challenge.id)}
           </div>
           <div style="font-size:28px;flex-shrink:0;">🎉</div>
         </div>
