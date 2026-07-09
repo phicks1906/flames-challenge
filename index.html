@@ -4796,6 +4796,36 @@ body.theme-light .ladder-chip-founder  { color: #bf360c; }
   display: flex; align-items: center; justify-content: center; gap: 7px;
 }
 .pboost-sig b { color: var(--gold); font-weight: 800; }
+/* Championship ARENA hero (v636) */
+.champ-arena {
+  border-radius: 20px; overflow: hidden; position: relative; text-align: center;
+  padding: 16px 16px 18px;
+  border: 1px solid rgba(255,200,87,0.5);
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(255,106,44,0.18), transparent 55%),
+    radial-gradient(100% 70% at 50% 115%, rgba(255,200,87,0.14), transparent 60%),
+    #0e0a07;
+}
+.champ-arena::before { content:''; position:absolute; inset:7px; border:1px solid rgba(255,200,87,0.22); border-radius:14px; pointer-events:none; }
+.champ-arena-topbar { display:flex; align-items:center; justify-content:space-between; position:relative; }
+.champ-arena-status { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:800; letter-spacing:0.08em; color:var(--gold); }
+.champ-arena-status .dot { width:7px; height:7px; border-radius:50%; background:var(--gold); }
+.champ-arena .cd-delete-btn { background:none; border:1px solid rgba(255,90,60,0.5); color:#ff7a5c; font-size:12px; font-weight:600; padding:5px 11px; border-radius:999px; }
+.champ-arena-crown { font-size:34px; margin-top:4px; filter:drop-shadow(0 0 14px rgba(255,200,87,0.75)); }
+.champ-arena-eyebrow { font-family:'Cinzel',serif; font-weight:700; font-size:10.5px; letter-spacing:0.28em; color:var(--gold); margin-top:4px; }
+.champ-arena-title { font-family:var(--font-anton),sans-serif; font-size:29px; letter-spacing:0.03em; line-height:1.05; margin-top:6px; background:linear-gradient(180deg,#ffe9b0,var(--gold) 55%,#c98f1f); -webkit-background-clip:text; background-clip:text; color:transparent; }
+.champ-arena-sub2 { font-family:'Cinzel',serif; font-size:10.5px; letter-spacing:0.2em; color:var(--text-dim); margin-top:5px; }
+.champ-arena-roster { display:flex; align-items:flex-start; justify-content:center; gap:6px; margin:16px 0 4px; }
+.champ-arena-fighter { width:32%; max-width:100px; text-align:center; }
+.champ-arena-av { width:56px; height:56px; border-radius:50%; margin:0 auto; overflow:hidden; border:2px solid var(--gold); box-shadow:0 0 18px -4px rgba(255,200,87,0.55); display:flex; align-items:center; justify-content:center; font-size:24px; background:var(--surface-2); }
+.champ-arena-av img { width:100%; height:100%; object-fit:cover; }
+.champ-arena-name { font-family:var(--font-anton),sans-serif; font-size:13px; margin-top:7px; letter-spacing:0.03em; color:var(--text); }
+.champ-arena-sub { font-size:10px; color:var(--gold); margin-top:2px; font-weight:700; }
+.champ-arena-vs { font-family:'Cinzel',serif; font-weight:900; color:var(--ember); font-size:14px; align-self:center; padding-top:14px; }
+.champ-arena-tape { display:flex; gap:9px; align-items:flex-start; margin:12px 4px 0; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:12px; padding:11px 12px; text-align:left; }
+.champ-arena-tape h5 { font-size:9.5px; letter-spacing:0.14em; color:var(--text-muted); font-weight:700; margin:0 0 4px; }
+.champ-arena-tape p { font-size:12.5px; color:var(--ember); font-style:italic; line-height:1.45; margin:0; }
+.champ-arena-phase { margin-top:14px; font-size:12px; font-weight:800; letter-spacing:0.08em; color:var(--gold); }
 /* ---------- End championship hype ---------- */
 
 /* ADMIN PAGE */
@@ -6995,7 +7025,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v634 · ember-poses";
+const APP_VERSION = "v636 · championship-arena";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -12582,7 +12612,7 @@ async function launchChampionshipChallenge(category) {
       rules: `Official ${category} Championship Challenge for ${formatStoredMonth(getChampMonth(category))}. Only the top performers from that month are invited to compete for the Champion title.`,
       submission_deadline: subDeadline,
       voting_end: voteEnd,
-      is_public: false,
+      is_public: true,   // championships are public spectacles; entry gated by invite
       is_championship: true,
       status: 'submitting',
       reserve_list: reserves.map(u => ({ id: u.id, name: u.name })),
@@ -12666,7 +12696,7 @@ async function autoLaunchMonthlyChampionships(month) {
         rules: `Official ${cat} Championship Challenge for ${formatStoredMonth(getChampMonth(cat))}. Top performers from that month are invited to compete for the Champion title.`,
         submission_deadline: subDeadline,
         voting_end: voteEnd,
-        is_public: false,
+        is_public: true,   // championships are public spectacles; entry gated by invite
         is_championship: true,
         status: 'submitting',
       }).select().single();
@@ -14950,7 +14980,11 @@ function renderChallenges() {
     const chEntries = (state.feedEntries || []).filter(e => e.challenge_id === ch.id);
     const canEnterCh = ch.computedStatus === 'submitting'
       && state.profile && !chEntries.some(e => e.user_id === state.profile.id)
-      && chEntries.length < MAX_ENTRIES_PER_CHALLENGE;
+      && chEntries.length < MAX_ENTRIES_PER_CHALLENGE
+      // Championships (v635): entry restricted to accepted invitees, since
+      // championships are now public (so everyone can watch) — the invite is
+      // what gates entry, not the public flag.
+      && (!ch.is_championship || state.myChampInvite?.invite_status === 'accepted');
     const canVoteCh = isVotingPhase(ch.computedStatus);
 
     const entryCardsHtml = chEntries.map(e => {
@@ -15310,6 +15344,53 @@ function emberJourneyHTML(ch, status, extraClass = '') {
   </div>`;
 }
 
+// Gold ARENA hero for the championship detail page (v636). Makes the marquee
+// event feel like an arena: crown, gold frame, fighter roster, Ember's Tale of
+// the Tape, phase-aware status. Falls back gracefully if fighters aren't loaded.
+function renderChampionshipHero(ch, status, countdownTarget) {
+  const el = document.getElementById('cdHero');
+  if (!el) return;
+  const meta = getChampIds()[ch.id] || {};
+  const monthLbl = meta.month && typeof formatStoredMonth === 'function'
+    ? formatStoredMonth(meta.month).toUpperCase() : '';
+  const fighters = ((state.champFighters || {})[ch.id] || []).slice(0, 3);
+  const _reign = reigningChampsByCat()[ch.category];
+  const _defenderIn = _reign && fighters.some(f => f.id === _reign.userId);
+
+  const phaseWord = status === 'submitting' ? `🎬 ENTRIES DUE · ${formatCountdown(countdownTarget)}`
+    : isVotingPhase(status) ? `🔒 SEALED VOTING · ${formatCountdown(countdownTarget)}`
+    : status === 'closed' ? '👑 CHAMPION CROWNED'
+    : formatCountdown(countdownTarget || ch.voting_end);
+
+  const canDelete = state.profile && (isAdmin() || (ch.creator_id === state.profile.id && (state.currentEntries || []).length === 0));
+
+  let rosterHtml = '';
+  if (fighters.length >= 2) {
+    rosterHtml = `<div class="champ-arena-roster">${fighters.map((f, i) => {
+      const avHtml = f.avatar && /^https?:/.test(f.avatar) ? `<img src="${escapeHtml(f.avatar)}" alt="">` : `<span>${escapeHtml(f.avatar || '🔥')}</span>`;
+      const sub = (_defenderIn && f.id === _reign.userId) ? '👑 Defending' : champTitleLine(f.id);
+      return `${i > 0 ? '<div class="champ-arena-vs">VS</div>' : ''}<div class="champ-arena-fighter"><div class="champ-arena-av">${avHtml}</div><div class="champ-arena-name">${escapeHtml((f.name || '').toUpperCase())}</div><div class="champ-arena-sub">${escapeHtml(sub)}</div></div>`;
+    }).join('')}</div>
+    <div class="champ-arena-tape">${emberFace(30, 'think')}<div><h5>EMBER'S TALE OF THE TAPE</h5><p>${escapeHtml(emberTapeLine(ch, fighters))}</p></div></div>`;
+  }
+
+  el.innerHTML = `
+    <div class="champ-arena">
+      <div class="champ-arena-topbar">
+        <span class="champ-arena-status ${status}"><span class="dot"></span>${status === 'submitting' ? 'OPEN TO ENTER' : isVotingPhase(status) ? 'VOTING' : status === 'closed' ? 'DECIDED' : ''}</span>
+        ${canDelete ? `<button class="cd-delete-btn" id="cdDeleteBtn">🗑 Delete</button>` : ''}
+      </div>
+      <div class="champ-arena-crown">👑</div>
+      <div class="champ-arena-eyebrow">${monthLbl}${monthLbl ? ' · ' : ''}${escapeHtml((ch.category || '').toUpperCase())} CHAMPIONSHIP</div>
+      <div class="champ-arena-title">${_defenderIn ? 'DETHRONE THE CHAMPION' : 'CHAMPIONSHIP NIGHT'}</div>
+      <div class="champ-arena-sub2">${fighters.length === 3 ? 'THREE QUALIFY · ONE IS CROWNED' : 'HEAD TO HEAD · ONE IS CROWNED'}</div>
+      ${rosterHtml}
+      <div class="champ-arena-phase">${phaseWord}</div>
+    </div>
+  `;
+  // (cdDeleteBtn is wired by the shared handler in renderChallengeDetail)
+}
+
 function renderChallengeDetail() {
   // Wire lazy preview videos after render completes
   requestAnimationFrame(() => wireLazyVideoThumbnails(document.getElementById('challengeDetailSheet')));
@@ -15323,6 +15404,8 @@ function renderChallengeDetail() {
   // Hero
   const creatorClickable = ch.creator?.id && ch.creator.id !== state.profile?.id;
   const fmtD = (d) => d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—';
+  if (ch.is_championship) { renderChampionshipHero(ch, status, countdownTarget); }
+  else {
   document.getElementById('cdHero').innerHTML = `
     <div class="cd-status-row">
       <span class="ch-status ${status}"><span class="dot"></span>${statusLabel}</span>
@@ -15330,7 +15413,7 @@ function renderChallengeDetail() {
       ${ch.is_public && status !== 'closed' && status !== 'voided' ? `<button class="cd-share-btn" id="cdShareBtn">📣 Promote</button>` : ''}
       ${(state.profile && (isAdmin() || (ch.creator_id === state.profile.id && state.currentEntries.length === 0))) ? `<button class="cd-share-btn" id="cdDeleteBtn" style="border-color:var(--error,#e53);color:var(--error,#e53);">🗑 Delete</button>` : ''}
     </div>
-    <div class="ch-category">${escapeHtml(ch.category)}${ch.is_public ? '' : ' · 🔒 Private'}</div>
+    <div class="ch-category">${escapeHtml(ch.category)}${(ch.is_public || ch.is_championship) ? '' : ' · 🔒 Private'}</div>
     <h1 class="cd-title">${escapeHtml(ch.title)}</h1>
     <div class="cd-creator${creatorClickable ? ' user-clickable' : ''}" ${creatorClickable ? `data-user-id="${ch.creator.id}"` : ''}>
       <div class="avatar">${avatarInner(ch.creator?.avatar)}</div>
@@ -15339,6 +15422,7 @@ function renderChallengeDetail() {
     ${emberJourneyHTML(ch, status, 'fvj-detail')}
     ${ch.rules ? `<div class="cd-rules"><strong>Rules:</strong> ${escapeHtml(ch.rules)}</div>` : ''}
   `;
+  }
   const shareBtn = document.getElementById('cdShareBtn');
   if (shareBtn) shareBtn.addEventListener('click', e => { e.stopPropagation(); openPromote('challenge', ch); });
 
