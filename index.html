@@ -4833,6 +4833,17 @@ body.theme-light .ladder-chip-founder  { color: #bf360c; }
 .champ-arena-tape h5 { font-size:9.5px; letter-spacing:0.14em; color:var(--text-muted); font-weight:700; margin:0 0 4px; }
 .champ-arena-tape p { font-size:12.5px; color:var(--ember); font-style:italic; line-height:1.45; margin:0; }
 .champ-arena-phase { margin-top:14px; font-size:12px; font-weight:800; letter-spacing:0.08em; color:var(--gold); }
+/* Theme-proof (v640): the fight card + arena backgrounds are hardcoded dark, so
+   their text must use FIXED light colors — theme vars flip dark in light mode
+   and made names/subtitles unreadable. */
+.fight-card .fighter-name { color: #f5efe9; }
+.fight-card .fight-sub { color: rgba(245,228,190,0.85); font-size: 11px; letter-spacing: 0.18em; }
+.fight-card .fight-tape { display: flex; gap: 9px; align-items: flex-start; text-align: left; }
+.fight-card .fight-tape h5 { color: rgba(220,205,185,0.75); }
+.fighter-rec { font-size: 10px; color: rgba(230,215,190,0.7); margin-top: 2px; }
+.champ-arena .champ-arena-name { color: #f5efe9; }
+.champ-arena .champ-arena-sub2 { color: rgba(245,228,190,0.85); }
+.champ-arena .champ-arena-tape h5 { color: rgba(220,205,185,0.75); }
 /* ---------- End championship hype ---------- */
 
 /* ADMIN PAGE */
@@ -7032,7 +7043,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v639 · fighter-load-fix";
+const APP_VERSION = "v640 · fight-card-polish";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -17322,6 +17333,7 @@ function renderFeed() {
                 <div class="fighter-av">${avHtml}</div>
                 <div class="fighter-name">${escapeHtml((f.name || '').toUpperCase())}</div>
                 <div class="fighter-sub">${escapeHtml(_subLine)}</div>
+                ${(() => { const _u = (state.leaderboardData?.users || []).find(x => x.id === f.id); return _u && (_u.rolling30 || _u.rolling30Losses) ? `<div class="fighter-rec">${_u.rolling30}–${_u.rolling30Losses} this month</div>` : ''; })()}
               </div>`;
           }).join('');
           const _subTitle = _defenderIn ? 'DETHRONE THE CHAMPION'
@@ -17336,8 +17348,11 @@ function renderFeed() {
               <div class="fight-sub">${_subTitle}</div>
               <div class="fight-roster">${fightersHtml}</div>
               <div class="fight-tape">
-                <h5>🔥 EMBER'S TALE OF THE TAPE</h5>
-                <p>${escapeHtml(emberTapeLine(ch, fighters))}</p>
+                ${emberFace(30, 'think')}
+                <div>
+                  <h5>EMBER'S TALE OF THE TAPE</h5>
+                  <p>${escapeHtml(emberTapeLine(ch, fighters))}</p>
+                </div>
               </div>
               <div class="fight-status">${statusLine}</div>
               <button class="fight-cta">SEE THE MATCHUP →</button>
