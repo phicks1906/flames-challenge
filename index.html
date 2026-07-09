@@ -7078,7 +7078,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v644 · DEBUG-modal-check";
+const APP_VERSION = "v645 · DEBUG-pixel-sample";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -19175,14 +19175,6 @@ async function openFeedViewer(chId, startEntryId = null) {
   if (!ch) return;
   _fvChallenge = ch;
 
-  // TEMP DEBUG v644: show every currently-open modal-backdrop on screen
-  try {
-    let dbg = document.getElementById('fvDebugReadout');
-    if (!dbg) { dbg = document.createElement('div'); dbg.id = 'fvDebugReadout'; document.body.appendChild(dbg); }
-    const openOnes = Array.from(document.querySelectorAll('.modal-backdrop.open')).map(el => '#' + el.id);
-    dbg.textContent = 'OPEN SHEETS: ' + (openOnes.length ? openOnes.join(', ') : 'none');
-  } catch (e) {}
-
   // Show sheet immediately with loading state
   const sheet = document.getElementById('feedViewerSheet');
   const title = document.getElementById('fvTitle');
@@ -19217,6 +19209,33 @@ async function openFeedViewer(chId, startEntryId = null) {
   empty.style.display = 'none';
   sheet.classList.add('open');
   document.body.style.overflow = 'hidden';
+
+  // TEMP DEBUG v645: after layout settles, sample the DOM directly at the exact
+  // spot below the phase banner (where the pink band has been reported) and
+  // report what real element is actually painting there — no more guessing.
+  setTimeout(() => {
+    try {
+      let dbg = document.getElementById('fvDebugReadout');
+      if (!dbg) { dbg = document.createElement('div'); dbg.id = 'fvDebugReadout'; document.body.appendChild(dbg); }
+      const pb = document.getElementById('fvPhaseBanner');
+      const r = pb ? pb.getBoundingClientRect() : null;
+      const openOnes = Array.from(document.querySelectorAll('.modal-backdrop.open')).map(el => '#' + el.id);
+      let lines = ['OPEN SHEETS: ' + (openOnes.length ? openOnes.join(', ') : 'none')];
+      if (r) {
+        [8, 20, 35].forEach(dy => {
+          const x = r.left + r.width / 2, y = r.bottom + dy;
+          const el = document.elementFromPoint(x, y);
+          if (el) {
+            const cs = getComputedStyle(el);
+            lines.push(`+${dy}px: <${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}${el.className ? '.' + String(el.className).split(' ').join('.') : ''}> bg=${cs.backgroundColor}`);
+          } else {
+            lines.push(`+${dy}px: (nothing)`);
+          }
+        });
+      }
+      dbg.textContent = lines.join('\n');
+    } catch (e) { console.warn('debug sample', e); }
+  }, 350);
 
   // Load entries
   try {
