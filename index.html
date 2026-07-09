@@ -4797,21 +4797,28 @@ body.theme-light .ladder-chip-founder  { color: #bf360c; }
 }
 .pboost-sig b { color: var(--gold); font-weight: 800; }
 /* Championship ARENA hero (v636) */
+/* When the hero holds a championship, drop the card chrome entirely so the
+   arena IS the page hero (edge-to-edge), not a black box nested in a white card. */
+.cd-hero.cd-hero-champ { padding: 0; background: none; border: none; border-radius: 0; margin: 0 0 20px; }
 .champ-arena {
   border-radius: 20px; overflow: hidden; position: relative; text-align: center;
-  padding: 16px 16px 18px;
-  border: 1px solid rgba(255,200,87,0.5);
+  padding: 20px 16px 20px;
+  border: 1.5px solid rgba(255,200,87,0.6);
   background:
-    radial-gradient(120% 80% at 50% 0%, rgba(255,106,44,0.18), transparent 55%),
-    radial-gradient(100% 70% at 50% 115%, rgba(255,200,87,0.14), transparent 60%),
-    #0e0a07;
+    radial-gradient(120% 80% at 50% 0%, rgba(255,106,44,0.22), transparent 55%),
+    radial-gradient(100% 70% at 50% 115%, rgba(255,200,87,0.16), transparent 60%),
+    linear-gradient(180deg, #14100a, #0b0806);
+  box-shadow: 0 0 34px -8px rgba(255,180,60,0.45), inset 0 0 40px -20px rgba(255,200,87,0.3);
 }
-.champ-arena::before { content:''; position:absolute; inset:7px; border:1px solid rgba(255,200,87,0.22); border-radius:14px; pointer-events:none; }
+.champ-arena::before { content:''; position:absolute; inset:7px; border:1px solid rgba(255,200,87,0.28); border-radius:14px; pointer-events:none; }
+.champ-arena::after { content:''; position:absolute; top:0; left:-70%; width:45%; height:100%; background:linear-gradient(105deg, transparent, rgba(255,220,150,0.10), transparent); animation: champShimmer 4.2s ease-in-out infinite; pointer-events:none; }
+@media (prefers-reduced-motion: reduce){ .champ-arena::after{ animation:none; } }
 .champ-arena-topbar { display:flex; align-items:center; justify-content:space-between; position:relative; }
 .champ-arena-status { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:800; letter-spacing:0.08em; color:var(--gold); }
 .champ-arena-status .dot { width:7px; height:7px; border-radius:50%; background:var(--gold); }
 .champ-arena .cd-delete-btn { background:none; border:1px solid rgba(255,90,60,0.5); color:#ff7a5c; font-size:12px; font-weight:600; padding:5px 11px; border-radius:999px; }
-.champ-arena-crown { font-size:34px; margin-top:4px; filter:drop-shadow(0 0 14px rgba(255,200,87,0.75)); }
+.champ-arena-crown { font-size:42px; margin-top:6px; filter:drop-shadow(0 0 16px rgba(255,200,87,0.85)); animation: champCrownFloat 3s ease-in-out infinite; }
+@keyframes champCrownFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
 .champ-arena-eyebrow { font-family:'Cinzel',serif; font-weight:700; font-size:10.5px; letter-spacing:0.28em; color:var(--gold); margin-top:4px; }
 .champ-arena-title { font-family:var(--font-anton),sans-serif; font-size:29px; letter-spacing:0.03em; line-height:1.05; margin-top:6px; background:linear-gradient(180deg,#ffe9b0,var(--gold) 55%,#c98f1f); -webkit-background-clip:text; background-clip:text; color:transparent; }
 .champ-arena-sub2 { font-family:'Cinzel',serif; font-size:10.5px; letter-spacing:0.2em; color:var(--text-dim); margin-top:5px; }
@@ -7025,7 +7032,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v637 · fight-card-load";
+const APP_VERSION = "v638 · arena-integrated";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -15407,8 +15414,9 @@ function renderChallengeDetail() {
   // Hero
   const creatorClickable = ch.creator?.id && ch.creator.id !== state.profile?.id;
   const fmtD = (d) => d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—';
-  if (ch.is_championship) { renderChampionshipHero(ch, status, countdownTarget); }
+  if (ch.is_championship) { document.getElementById('cdHero').classList.add('cd-hero-champ'); renderChampionshipHero(ch, status, countdownTarget); }
   else {
+  document.getElementById('cdHero').classList.remove('cd-hero-champ');
   document.getElementById('cdHero').innerHTML = `
     <div class="cd-status-row">
       <span class="ch-status ${status}"><span class="dot"></span>${statusLabel}</span>
