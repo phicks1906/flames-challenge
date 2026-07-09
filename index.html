@@ -4392,9 +4392,23 @@ body.theme-light .ch-status.voided .dot { background: #c92a2a; box-shadow: none;
 }
 .cd-status-row {
   display: flex; justify-content: space-between; align-items: center;
-  gap: 10px; margin-bottom: 14px; flex-wrap: wrap;
+  gap: 8px; margin-bottom: 14px; flex-wrap: nowrap;
 }
 .cd-status-row .ch-status { position: static; }
+/* v651: match the championship arena's lighter, single-row treatment — plain
+   colored text + dot instead of a filled pill, so it doesn't compete visually
+   with Promote/Delete, and everything actually fits on one row. */
+.cd-status-row .ch-status {
+  background: none !important; backdrop-filter: none; padding: 0; font-size: 11px;
+  border-radius: 0;
+}
+.cd-status-row .ch-status .dot { box-shadow: none; }
+.cd-status-row .cd-share-btn {
+  background: none; border: 1px solid rgba(255,106,44,0.4); padding: 5px 11px;
+  font-size: 12px; font-weight: 600; margin-left: 0; flex-shrink: 0;
+}
+#cdDeleteBtn.cd-share-btn { border-color: rgba(255,90,60,0.5) !important; }
+.cd-actions-group { display: flex; align-items: center; gap: 6px; margin-left: auto; flex-shrink: 0; }
 .cd-countdown { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 13px; color: var(--text-dim); }
 .cd-share-btn {
   margin-left: auto;
@@ -7082,7 +7096,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v650 · status-pill-contrast";
+const APP_VERSION = "v651 · status-row-blend";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -15490,8 +15504,10 @@ function renderChallengeDetail() {
     <div class="cd-status-row">
       <span class="ch-status ${status}"><span class="dot"></span>${statusLabel}</span>
       ${countdownTarget ? `<span class="cd-countdown">⏱ ${formatCountdown(countdownTarget)}</span>` : ''}
-      ${ch.is_public && status !== 'closed' && status !== 'voided' ? `<button class="cd-share-btn" id="cdShareBtn">📣 Promote</button>` : ''}
-      ${(state.profile && (isAdmin() || (ch.creator_id === state.profile.id && state.currentEntries.length === 0))) ? `<button class="cd-share-btn" id="cdDeleteBtn" style="border-color:var(--error,#e53);color:var(--error,#e53);">🗑 Delete</button>` : ''}
+      <div class="cd-actions-group">
+        ${ch.is_public && status !== 'closed' && status !== 'voided' ? `<button class="cd-share-btn" id="cdShareBtn">📣 Promote</button>` : ''}
+        ${(state.profile && (isAdmin() || (ch.creator_id === state.profile.id && state.currentEntries.length === 0))) ? `<button class="cd-share-btn" id="cdDeleteBtn">🗑 Delete</button>` : ''}
+      </div>
     </div>
     <div class="ch-category">${escapeHtml(ch.category)}${(ch.is_public || ch.is_championship) ? '' : ' · 🔒 Private'}</div>
     <h1 class="cd-title">${escapeHtml(ch.title)}</h1>
