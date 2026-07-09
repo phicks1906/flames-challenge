@@ -7032,7 +7032,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v638 · arena-integrated";
+const APP_VERSION = "v639 · fighter-load-fix";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11610,16 +11610,28 @@ async function loadChampionshipData() {
       const _liveChampIds = (state.challenges || []).filter(c => c.is_championship).map(c => c.id);
       const _activeChIds = [...new Set([..._launchChIds, ..._liveChampIds])];
       if (_activeChIds.length) {
-        const { data: _inv } = await db.from('challenge_invites')
-          .select('challenge_id, invited_user_id, invitee:profiles!challenge_invites_invited_user_id_fkey(id, name, avatar)')
+        // Two-step on purpose (v639): the previous embedded profiles join used a
+        // guessed FK name; if that FK doesn't exist the whole query silently
+        // fails and fighters never load. Plain selects only — proven patterns.
+        const { data: _inv, error: _invErr } = await db.from('challenge_invites')
+          .select('challenge_id, invited_user_id')
           .in('challenge_id', _activeChIds);
+        if (_invErr) console.warn('fighter invites', _invErr);
+        const _uids = [...new Set((_inv || []).map(r => r.invited_user_id).filter(Boolean))];
+        let _profById = {};
+        if (_uids.length) {
+          const { data: _profs, error: _pErr } = await db.from('profiles').select('id, name, avatar').in('id', _uids);
+          if (_pErr) console.warn('fighter profiles', _pErr);
+          (_profs || []).forEach(p => { _profById[p.id] = p; });
+        }
         state.champFighters = {}; // rebuild fresh each load
         (_inv || []).forEach(r => {
           if (!state.champFighters[r.challenge_id]) state.champFighters[r.challenge_id] = [];
+          const p = _profById[r.invited_user_id] || {};
           state.champFighters[r.challenge_id].push({
             id: r.invited_user_id,
-            name: r.invitee?.name || 'Someone',
-            avatar: r.invitee?.avatar || '🔥',
+            name: p.name || 'Someone',
+            avatar: p.avatar || '🔥',
           });
         });
       }
