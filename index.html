@@ -3949,6 +3949,16 @@ body.theme-light .fvj.closed .fvj-node.live .fvj-t { color: #9a7416; }
 .ch-status.closed .dot { background: rgba(255,255,255,0.5); }
 .ch-status.voided { background: rgba(255,80,80,0.15); color: #ff8080; }
 .ch-status.voided .dot { background: #ff8080; }
+/* Light-theme fix (v650): these text colors are bright dark-mode glow colors
+   with no readable counterpart on the pale pill backgrounds used in light
+   mode — light-on-light, genuinely unreadable. Real bug, not a style choice. */
+body.theme-light .ch-status.submitting { color: #1a8a3e; }
+body.theme-light .ch-status.submitting .dot { background: #1a8a3e; box-shadow: none; }
+body.theme-light .ch-status.voting { color: #c94f0f; }
+body.theme-light .ch-status.voting .dot { background: #c94f0f; box-shadow: none; }
+body.theme-light .ch-status.closed { color: #6b5d52; }
+body.theme-light .ch-status.voided { color: #c92a2a; }
+body.theme-light .ch-status.voided .dot { background: #c92a2a; box-shadow: none; }
 
 .ch-card .body {
   padding: 16px;
@@ -4863,11 +4873,11 @@ body.theme-light .ladder-chip-founder  { color: #bf360c; }
 }
 .arena-contenders small { display: block; font-family: var(--font-body, 'DM Sans'), sans-serif; font-size: 10px; letter-spacing: 0.12em; color: rgba(200,180,150,0.8); margin-top: 4px; font-weight: 600; }
 .cd-entry.champ-entry-trim { border: 1.5px solid rgba(214,167,66,0.5); box-shadow: 0 6px 22px -12px rgba(160,120,30,0.5); }
-/* Feed viewer glow-bleed fix (v648): neither opaque backgrounds (v646) nor
-   z-index reordering (v647) changed anything, which rules out bleed-through
-   and stacking order. The remaining mechanism: the live VOTE icon's box-shadow
-   (14px blur, on a 1.15x-scaled element) paints OUTSIDE its own box by design
-   — no background/z-index change can stop that, only clipping the container. */
+/* Feed viewer hardening (v646-648, kept as defense-in-depth): the REAL fix is
+   v649 — using the same 'fvj-detail' tracker variant (rounded, margined) that
+   every other phase tracker in the app already uses successfully, instead of
+   the plain edge-to-edge one unique to this sheet. These opaque backgrounds
+   and containment rules are harmless extra safety, not the primary fix. */
 #fvPhaseBanner { overflow: hidden; position: relative; z-index: 1; background: var(--surface); }
 #feedViewerModal > div[style*="position:relative"], #fvEntries {
   position: relative; z-index: 5; background: var(--surface);
@@ -7072,7 +7082,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v648 · feed-viewer-glow-clip";
+const APP_VERSION = "v650 · status-pill-contrast";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -19184,7 +19194,11 @@ async function openFeedViewer(chId, startEntryId = null) {
   // Ember journey — icon-node lifecycle bar (replaces the gray subtitle)
   const pb = document.getElementById('fvPhaseBanner');
   if (pb) {
-    const jHtml = emberJourneyHTML(ch, status);
+    // v649: use the same 'fvj-detail' variant everywhere else in the app uses
+    // (rounded corners, real margin) instead of the plain edge-to-edge tracker
+    // that was unique to this sheet — that inconsistency is very likely the
+    // actual source of the reported artifact, not something to patch around.
+    const jHtml = emberJourneyHTML(ch, status, 'fvj-detail');
     if (jHtml) {
       pb.innerHTML = jHtml;
       pb.style.display = 'block';
