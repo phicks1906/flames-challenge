@@ -4863,12 +4863,14 @@ body.theme-light .ladder-chip-founder  { color: #bf360c; }
 }
 .arena-contenders small { display: block; font-family: var(--font-body, 'DM Sans'), sans-serif; font-size: 10px; letter-spacing: 0.12em; color: rgba(200,180,150,0.8); margin-top: 4px; font-weight: 600; }
 .cd-entry.champ-entry-trim { border: 1.5px solid rgba(214,167,66,0.5); box-shadow: 0 6px 22px -12px rgba(160,120,30,0.5); }
-/* Feed viewer bleed-through fix (v646): the phase banner, entries wrapper, and
-   media host were all transparent-by-default, so anything painted behind them
-   (compositing layers, blur artifacts) could show through as a stray colored
-   fragment. Solid backgrounds all the way down close that gap for good. */
-#fvPhaseBanner, #feedViewerModal > div[style*="position:relative"], #fvEntries {
-  background: var(--surface); position: relative; z-index: 1;
+/* Feed viewer overlap fix (v647): v646's opaque backgrounds didn't help, which
+   rules out transparency bleed-through — this is a real box overlap, the phase
+   banner's rendered area extending onto the entry card below it. Rather than
+   chase the exact pixel overlap, force stacking order so entries always paint
+   ON TOP of the banner, so an overlap (if any) can never visually cover them. */
+#fvPhaseBanner { position: relative; z-index: 1; background: var(--surface); }
+#feedViewerModal > div[style*="position:relative"], #fvEntries {
+  position: relative; z-index: 5; background: var(--surface);
 }
 .fv-media-host { background: var(--surface-2) !important; }
 /* ---------- End championship hype ---------- */
@@ -7070,7 +7072,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v646 · feed-viewer-bleed-fix";
+const APP_VERSION = "v647 · feed-viewer-zindex-fix";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
