@@ -4848,6 +4848,21 @@ body.theme-light .ladder-chip-founder  { color: #bf360c; }
 .champ-arena .champ-arena-name { color: #f5efe9; }
 .champ-arena .champ-arena-sub2 { color: rgba(245,228,190,0.85); }
 .champ-arena .champ-arena-tape h5 { color: rgba(220,205,185,0.75); }
+/* Arena flows into the entries (v642) — approved mock */
+.champ-arena.flow { border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom: none; }
+.arena-apron {
+  height: 84px; margin: 0 0 -6px;
+  background: linear-gradient(180deg, #0b0806 0%, rgba(20,14,9,0.85) 30%, rgba(30,22,14,0.35) 70%, transparent 100%);
+  border-left: 1.5px solid rgba(255,200,87,0.25); border-right: 1.5px solid rgba(255,200,87,0.25);
+  position: relative;
+}
+.arena-contenders {
+  position: relative; top: 14px; text-align: center; cursor: pointer;
+  font-family: 'Cinzel', serif; font-weight: 700; font-size: 13px; letter-spacing: 0.26em;
+  color: var(--gold);
+}
+.arena-contenders small { display: block; font-family: var(--font-body, 'DM Sans'), sans-serif; font-size: 10px; letter-spacing: 0.12em; color: rgba(200,180,150,0.8); margin-top: 4px; font-weight: 600; }
+.cd-entry.champ-entry-trim { border: 1.5px solid rgba(214,167,66,0.5); box-shadow: 0 6px 22px -12px rgba(160,120,30,0.5); }
 /* ---------- End championship hype ---------- */
 
 /* ADMIN PAGE */
@@ -7047,7 +7062,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v641 · fight-card-shimmer";
+const APP_VERSION = "v642 · arena-flow";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -15406,13 +15421,19 @@ function renderChampionshipHero(ch, status, countdownTarget) {
     rosterHtml = `<div class="champ-arena-roster">${fighters.map((f, i) => {
       const avHtml = f.avatar && /^https?:/.test(f.avatar) ? `<img src="${escapeHtml(f.avatar)}" alt="">` : `<span>${escapeHtml(f.avatar || '🔥')}</span>`;
       const sub = (_defenderIn && f.id === _reign.userId) ? '👑 Defending' : champTitleLine(f.id);
-      return `${i > 0 ? '<div class="champ-arena-vs">VS</div>' : ''}<div class="champ-arena-fighter"><div class="champ-arena-av">${avHtml}</div><div class="champ-arena-name">${escapeHtml((f.name || '').toUpperCase())}</div><div class="champ-arena-sub">${escapeHtml(sub)}</div></div>`;
+      const _rec = (() => { const _u = (state.leaderboardData?.users || []).find(x => x.id === f.id); return _u && (_u.rolling30 || _u.rolling30Losses) ? `<div class="fighter-rec">${_u.rolling30}–${_u.rolling30Losses} this month</div>` : ''; })();
+      return `${i > 0 ? '<div class="champ-arena-vs">VS</div>' : ''}<div class="champ-arena-fighter"><div class="champ-arena-av">${avHtml}</div><div class="champ-arena-name">${escapeHtml((f.name || '').toUpperCase())}</div><div class="champ-arena-sub">${escapeHtml(sub)}</div>${_rec}</div>`;
     }).join('')}</div>
     <div class="champ-arena-tape">${emberFace(30, 'think')}<div><h5>EMBER'S TALE OF THE TAPE</h5><p>${escapeHtml(emberTapeLine(ch, fighters))}</p></div></div>`;
   }
 
+  const _n = (state.currentEntries || []).length;
+  const _sealedArena = typeof ballotsSealed === 'function' && ballotsSealed(ch, status);
+  const _sub = _sealedArena
+    ? `🔒 ${(state.currentVotes || []).length} BALLOT${(state.currentVotes || []).length === 1 ? '' : 'S'} SEALED`
+    : `${_n} ENTR${_n === 1 ? 'Y' : 'IES'} · TAP TO WATCH`;
   el.innerHTML = `
-    <div class="champ-arena">
+    <div class="champ-arena flow">
       <div class="champ-arena-topbar">
         <span class="champ-arena-status ${status}"><span class="dot"></span>${status === 'submitting' ? 'OPEN TO ENTER' : isVotingPhase(status) ? 'VOTING' : status === 'closed' ? 'DECIDED' : ''}</span>
         ${canDelete ? `<button class="cd-delete-btn" id="cdDeleteBtn">🗑 Delete</button>` : ''}
@@ -15424,6 +15445,7 @@ function renderChampionshipHero(ch, status, countdownTarget) {
       ${rosterHtml}
       <div class="champ-arena-phase">${phaseWord}</div>
     </div>
+    <div class="arena-apron"><div class="arena-contenders" onclick="openEntrantsSheet()">THE CONTENDERS<small>${_sub}</small></div></div>
   `;
   // (cdDeleteBtn is wired by the shared handler in renderChallengeDetail)
 }
@@ -15554,6 +15576,9 @@ function renderChallengeDetail() {
   // Entry count + grid
   const _sdSubmittingNow = ch.sd_phase === 'submitting';
   const _sealedNow = ballotsSealed(ch, status);
+  // Championships (v642): the arena's THE CONTENDERS header replaces the
+  // generic entries header (which would duplicate it and break the flow).
+  { const _eh = document.querySelector('.cd-entries-header'); if (_eh) _eh.style.display = ch.is_championship ? 'none' : ''; }
   document.getElementById('cdEntriesCount').textContent = _sdSubmittingNow
     ? '🔒 Entries hidden until voting'
     : _sealedNow
@@ -15709,7 +15734,7 @@ function renderChallengeDetail() {
     }
 
     return `
-      <div class="cd-entry${iVoted ? ' voted' : ''}${winnerClass}" data-entry-id="${entry.id}">
+      <div class="cd-entry${iVoted ? ' voted' : ''}${winnerClass}${state.currentChallenge?.is_championship ? ' champ-entry-trim' : ''}" data-entry-id="${entry.id}">
         ${medalBadge}${modBadge}
         <div class="cd-entry-media">${mediaHtml}</div>
         <div class="cd-entry-body">
