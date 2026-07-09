@@ -7025,7 +7025,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v636 · championship-arena";
+const APP_VERSION = "v637 · fight-card-load";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11592,18 +11592,21 @@ async function loadChampionshipData() {
       fromChampionship: true,
     }));
     // Fighters for active fight cards: invitees of this month's championship
-    // challenges, with profiles. Cached in state.champFighters[challengeId].
+    // Fighters for fight cards / arena. Load for EVERY active (non-closed)
+    // championship challenge we know about — not filtered by calendar month,
+    // which was dropping live championships whose launch-month didn't match
+    // today's month (v637). Source challenges from both champLaunches and the
+    // loaded challenges list so nothing active is missed.
     try {
-      const _nowM = new Date();
-      const _thisMonth = `${_nowM.getFullYear()}-${String(_nowM.getMonth()+1).padStart(2,'0')}`;
-      const _activeChIds = (state.champLaunches || [])
-        .filter(l => l.month === _thisMonth && l.challenge_id)
-        .map(l => l.challenge_id);
       state.champFighters = state.champFighters || {};
+      const _launchChIds = (state.champLaunches || []).filter(l => l.challenge_id).map(l => l.challenge_id);
+      const _liveChampIds = (state.challenges || []).filter(c => c.is_championship).map(c => c.id);
+      const _activeChIds = [...new Set([..._launchChIds, ..._liveChampIds])];
       if (_activeChIds.length) {
         const { data: _inv } = await db.from('challenge_invites')
           .select('challenge_id, invited_user_id, invitee:profiles!challenge_invites_invited_user_id_fkey(id, name, avatar)')
           .in('challenge_id', _activeChIds);
+        state.champFighters = {}; // rebuild fresh each load
         (_inv || []).forEach(r => {
           if (!state.champFighters[r.challenge_id]) state.champFighters[r.challenge_id] = [];
           state.champFighters[r.challenge_id].push({
