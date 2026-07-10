@@ -7096,7 +7096,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v653 · champ-submit-button-fix";
+const APP_VERSION = "v654 · view-reset-and-promote-gate";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -7587,6 +7587,9 @@ async function signOut() {
   // Optimistically swap views right away so the user gets immediate feedback
   state.session = null;
   state.profile = null;
+  // v654: reset the view so a different account signing in next doesn't land
+  // on whatever page THIS account happened to be on — Admin included.
+  state.currentView = 'feed';
   showAuth();
   // Then actually clear the session with Supabase
   try {
@@ -7662,6 +7665,11 @@ function hydrateApp() {
     try {
       await loadProfile();
       if (!state.profile) return; // banned or signed out — loadProfile handled redirect
+      // v654: a leftover state.currentView from a PREVIOUS account's session
+      // must never carry into a new sign-in — most importantly 'admin', which
+      // would otherwise render for a non-admin account since switchView()'s
+      // admin gate only runs on explicit navigation, not on this render path.
+      if (state.currentView === 'admin' && !isAdmin()) state.currentView = 'feed';
       showApp();
       showAdminNav();
       await loadAppData();
@@ -15509,7 +15517,17 @@ function renderChallengeDetail() {
     <div class="cd-status-row">
       <span class="ch-status ${status}"><span class="dot"></span>${statusLabel}</span>
       <div class="cd-actions-group">
-        ${ch.is_public && status !== 'closed' && status !== 'voided' ? `<button class="cd-share-btn" id="cdShareBtn">📣 Promote</button>` : ''}
+        ${(() => {
+          if (!(ch.is_public && status !== 'closed' && status !== 'voided')) return '';
+          // v654: don't let Promote amplify reach to a challenge while any of
+          // its entries are still under moderation review — pending/flagged/
+          // escalated. Approved/clear entries and rejected (already resolved,
+          // hidden) don't block it.
+          const _underReview = (state.currentEntries || []).some(e =>
+            e.moderation_status === 'pending' || e.moderation_status === 'flagged' || e.moderation_status === 'escalated');
+          if (_underReview) return `<button class="cd-share-btn" disabled title="Can't promote while content is under review" style="opacity:0.45;cursor:not-allowed;">📣 Promote</button>`;
+          return `<button class="cd-share-btn" id="cdShareBtn">📣 Promote</button>`;
+        })()}
         ${(state.profile && (isAdmin() || (ch.creator_id === state.profile.id && state.currentEntries.length === 0))) ? `<button class="cd-share-btn" id="cdDeleteBtn">🗑 Delete</button>` : ''}
       </div>
     </div>
