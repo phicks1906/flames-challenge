@@ -7096,7 +7096,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v655 · pii-detection";
+const APP_VERSION = "v656 · moderation-blocklist-report-icon";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -17900,7 +17900,7 @@ function renderPostCard(p) {
         <div class="post-card-meta">
           <div class="post-card-name" ${userClickAttr}>${escapeHtml(author.name)}${plusBadge}${renderLadderChip(author.id) ? `<div style="margin-top:3px">${renderLadderChip(author.id)}</div>` : ''}</div>
         </div>
-        ${isMine ? `<button class="post-card-menu" data-pid="${p.id}" aria-label="Delete post">⋯</button>` : `<button class="post-card-menu" data-report-type="post" data-report-id="${p.id}" data-report-text="${escapeHtml((p.content||'').slice(0,200))}" aria-label="Report post">⋯</button>`}
+        ${isMine ? `<button class="post-card-menu" data-pid="${p.id}" aria-label="Delete post">⋯</button>` : `<button class="post-card-menu" data-report-type="post" data-report-id="${p.id}" data-report-text="${escapeHtml((p.content||'').slice(0,200))}" aria-label="Report post">🚩</button>`}
       </div>
       <div class="post-card-content">${formatBody(p.content)}</div>
       ${mediaHtml}
@@ -17948,7 +17948,7 @@ function renderFlyerCard(p) {
       <div style="display:flex;align-items:center;gap:10px;padding:0 14px 10px;">
         <div style="width:32px;height:32px;border-radius:50%;overflow:hidden;flex-shrink:0;background:linear-gradient(135deg,var(--ember),var(--coral));display:grid;place-items:center;font-size:14px;" ${userClickAttr}>${avatarInner(author.avatar)}</div>
         <span style="font-size:13px;font-weight:600;color:var(--text);" ${userClickAttr}>${escapeHtml(author.name)}${plusBadge}</span>
-        ${isMine ? `<button class="post-card-menu" data-pid="${p.id}" style="margin-left:auto;" aria-label="Delete post">⋯</button>` : `<button class="post-card-menu" data-report-type="post" data-report-id="${p.id}" data-report-text="${escapeHtml((p.content||'flyer').slice(0,200))}" style="margin-left:auto;" aria-label="Report post">⋯</button>`}
+        ${isMine ? `<button class="post-card-menu" data-pid="${p.id}" style="margin-left:auto;" aria-label="Delete post">⋯</button>` : `<button class="post-card-menu" data-report-type="post" data-report-id="${p.id}" data-report-text="${escapeHtml((p.content||'flyer').slice(0,200))}" style="margin-left:auto;" aria-label="Report post">🚩</button>`}
       </div>
 
       <!-- Flyer media — image or video, full width -->
@@ -18868,6 +18868,21 @@ async function submitReport() {
 // low-false-positive. Phone numbers / addresses are NOT included — too many
 // legitimate reasons to share those (challenge logistics, contact info) and
 // far higher false-positive risk; revisit separately if needed.
+// Local blocklist (v656) — a second, dumb-but-fast layer alongside the AI
+// moderation call, for the specific blind spot AI text classifiers have:
+// abbreviations and non-literal slang ("smd", "rape that X" as trash-talk).
+// Not a replacement for the AI check or for reporting — just a net for the
+// most blatant, unambiguous terms. Word-boundary matched to avoid catching
+// innocent words that merely contain a substring.
+const BLOCKED_TERMS = [
+  /\bsmd\b/i,
+  /\brape\b/i,
+  /\brapist\b/i,
+];
+function containsBlockedTerm(text) {
+  const t = text || '';
+  return BLOCKED_TERMS.some(re => re.test(t));
+}
 function containsSensitivePII(text) {
   const t = text || '';
   // SSN: 3-2-4 digit groups with a separator (e.g. 123-45-6789 / 123 45 6789),
@@ -18884,6 +18899,10 @@ async function moderateText(text, contentType, contentId = null) {
   if (!text || !text.trim()) return true;
   if (containsSensitivePII(text)) {
     toast('That looks like it may contain a sensitive personal number (SSN/card). Please remove it before posting.');
+    return false;
+  }
+  if (containsBlockedTerm(text)) {
+    toast('That contains language that violates our community guidelines.');
     return false;
   }
   try {
