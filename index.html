@@ -7096,7 +7096,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v654 · view-reset-and-promote-gate";
+const APP_VERSION = "v655 · pii-detection";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -18861,10 +18861,31 @@ async function submitReport() {
 }
 
 // ---- Content moderation ----
+// Fast, local, no-network pre-check for PII the hate/violence/sexual-content
+// moderation API was never designed to catch (v655). Runs before the network
+// call so it's instant and costs nothing. Deliberately narrow scope for now:
+// SSN and credit-card NUMBER PATTERNS only, since those are unambiguous and
+// low-false-positive. Phone numbers / addresses are NOT included — too many
+// legitimate reasons to share those (challenge logistics, contact info) and
+// far higher false-positive risk; revisit separately if needed.
+function containsSensitivePII(text) {
+  const t = text || '';
+  // SSN: 3-2-4 digit groups with a separator (e.g. 123-45-6789 / 123 45 6789),
+  // or a bare 9-digit run directly next to "ssn"/"social security" wording.
+  if (/\b\d{3}[-\s]\d{2}[-\s]\d{4}\b/.test(t)) return true;
+  if (/\b(?:ssn|social security)\b[^0-9]{0,15}\d{9}\b/i.test(t)) return true;
+  // Credit card: 4 groups of 4 digits, the common way people type/share one.
+  if (/\b\d{4}[-\s]\d{4}[-\s]\d{4}[-\s]\d{4}\b/.test(t)) return true;
+  return false;
+}
 // Calls the moderate-content Edge Function before any user-generated text is saved.
 // Fails OPEN — if the API is down, content goes through. Never block legit users on outage.
 async function moderateText(text, contentType, contentId = null) {
   if (!text || !text.trim()) return true;
+  if (containsSensitivePII(text)) {
+    toast('That looks like it may contain a sensitive personal number (SSN/card). Please remove it before posting.');
+    return false;
+  }
   try {
     const resp = await fetch('https://sioalvawzayfphwzqctq.supabase.co/functions/v1/moderate-content', {
       method: 'POST',
