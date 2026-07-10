@@ -7096,7 +7096,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v652 · status-row-nowrap-fix";
+const APP_VERSION = "v653 · champ-submit-button-fix";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -15497,6 +15497,11 @@ function renderChallengeDetail() {
   // Hero
   const creatorClickable = ch.creator?.id && ch.creator.id !== state.profile?.id;
   const fmtD = (d) => d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—';
+  // v653: wrap hero rendering so a failure here (arena/fighters/tape data) can
+  // NEVER silently kill the rest of renderChallengeDetail — most importantly
+  // the submit-entry button below, which was reported missing after accepting
+  // a championship invite. A crash upstream must not hide the way to enter.
+  try {
   if (ch.is_championship) { document.getElementById('cdHero').classList.add('cd-hero-champ'); renderChampionshipHero(ch, status, countdownTarget); }
   else {
   document.getElementById('cdHero').classList.remove('cd-hero-champ');
@@ -15517,6 +15522,9 @@ function renderChallengeDetail() {
     ${emberJourneyHTML(ch, status, 'fvj-detail')}
     ${ch.rules ? `<div class="cd-rules"><strong>Rules:</strong> ${escapeHtml(ch.rules)}</div>` : ''}
   `;
+  }
+  } catch (heroErr) {
+    console.warn('hero render failed, continuing without it', heroErr);
   }
   const shareBtn = document.getElementById('cdShareBtn');
   if (shareBtn) shareBtn.addEventListener('click', e => { e.stopPropagation(); openPromote('challenge', ch); });
@@ -15584,7 +15592,7 @@ function renderChallengeDetail() {
   const canEnter = state.profile && !userHasEntered && (
     (status === 'submitting' && !challengeFull) ||
     (isSdSub && amTiedPlayer)
-  );
+  ) && (!ch.is_championship || state.myChampInvite?.invite_status === 'accepted');
   document.getElementById('cdAddEntryBtn').style.display = canEnter ? 'block' : 'none';
   const cdWrap = document.getElementById('cdSubmitBtnWrap');
   if (cdWrap) cdWrap.style.display = canEnter ? 'block' : 'none';
