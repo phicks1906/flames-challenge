@@ -7103,7 +7103,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v658 · champ-tab-declutter";
+const APP_VERSION = "v659 · challenges-page-fight-card";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -15076,6 +15076,57 @@ function renderChallenges() {
                             ch.computedStatus === 'sd_submitting' ? ch.sd_submit_end :
                             (ch.computedStatus === 'voting' || ch.computedStatus === 'sudden_death') ? ch.voting_end : null;
     const countdownText = countdownTarget ? `⏱ ${formatCountdown(countdownTarget)}` : '';
+
+    // v659: this listing never got the fight-card treatment the feed has had
+    // since v612 -- it only ever showed the plain gold-bordered fallback,
+    // even once fighters were loaded. Mirror the feed's exact branch here so
+    // both surfaces look identical once fighter data is available.
+    if (isChampionship) {
+      const _fighters = ((state.champFighters || {})[ch.id] || []).slice(0, 3);
+      if (_fighters.length >= 2) {
+        const _meta = getChampIds()[ch.id] || {};
+        const _monthLbl = _meta.month && typeof formatStoredMonth === 'function'
+          ? formatStoredMonth(_meta.month).toUpperCase() : '';
+        const _reignFC = reigningChampsByCat()[ch.category];
+        const _defenderIn = _reignFC && _fighters.some(f => f.id === _reignFC.userId);
+        const _fightersHtml = _fighters.map((f, i) => {
+          const _avHtml = f.avatar && /^https?:/.test(f.avatar)
+            ? `<img src="${escapeHtml(f.avatar)}" alt="">`
+            : `<span>${escapeHtml(f.avatar || '🔥')}</span>`;
+          const _subLine = (_defenderIn && f.id === _reignFC.userId) ? '👑 Defending champ' : champTitleLine(f.id);
+          const _rec = (() => { const _u = (state.leaderboardData?.users || []).find(x => x.id === f.id); return _u && (_u.rolling30 || _u.rolling30Losses) ? `<div class="fighter-rec">${_u.rolling30}–${_u.rolling30Losses} this month</div>` : ''; })();
+          return `${i > 0 ? '<div class="fight-vs">VS</div>' : ''}
+            <div class="fighter">
+              <div class="fighter-av">${_avHtml}</div>
+              <div class="fighter-name">${escapeHtml((f.name || '').toUpperCase())}</div>
+              <div class="fighter-sub">${escapeHtml(_subLine)}</div>
+              ${_rec}
+            </div>`;
+        }).join('');
+        const _subTitle = _defenderIn ? 'DETHRONE THE CHAMPION'
+          : _fighters.length === 3 ? 'THREE QUALIFY · ONE IS CROWNED' : 'HEAD TO HEAD · ONE IS CROWNED';
+        const _statusLine = ch.computedStatus === 'submitting'
+          ? `🎬 ENTRIES DUE · ${formatCountdown(countdownTarget)}`
+          : `🔒 SEALED VOTING · ENDS ${formatCountdown(countdownTarget).toUpperCase()}`;
+        return `<div class="fight-card" data-cid="${ch.id}" onclick="openChallenge((state.challenges||[]).find(c=>c.id==='${ch.id}'))">
+          <div class="fight-inner">
+            <div class="fight-eyebrow">${_monthLbl}${_monthLbl ? ' · ' : ''}${escapeHtml((ch.category || '').toUpperCase())}</div>
+            <div class="fight-title">CHAMPIONSHIP<br>NIGHT</div>
+            <div class="fight-sub">${_subTitle}</div>
+            <div class="fight-roster">${_fightersHtml}</div>
+            <div class="fight-tape">
+              ${emberFace(30, 'think')}
+              <div>
+                <h5>EMBER'S TALE OF THE TAPE</h5>
+                <p>${escapeHtml(emberTapeLine(ch, _fighters))}</p>
+              </div>
+            </div>
+            <div class="fight-status">${_statusLine}</div>
+            <button class="fight-cta">SEE THE MATCHUP →</button>
+          </div>
+        </div>`;
+      }
+    }
     const entryCount = state.entryCounts[ch.id] || 0;
     const entryWord = entryCount === 1 ? 'entry' : 'entries';
     const meta = ch.computedStatus === 'submitting'
