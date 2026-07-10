@@ -4897,6 +4897,13 @@ body.theme-light .ladder-chip-founder  { color: #bf360c; }
   position: relative; z-index: 5; background: var(--surface);
 }
 .fv-media-host { background: var(--surface-2) !important; }
+.cd-entry-blocked {
+  padding: 32px 20px; text-align: center; background: var(--surface-2);
+  border-radius: 12px;
+}
+.cd-entry-blocked-ico { font-size: 32px; margin-bottom: 10px; }
+.cd-entry-blocked-title { font-family: var(--font-anton), sans-serif; font-size: 16px; letter-spacing: 0.02em; color: #ff5a48; }
+.cd-entry-blocked-sub { font-size: 12.5px; color: var(--text-muted); margin-top: 6px; line-height: 1.5; max-width: 280px; margin-left: auto; margin-right: auto; }
 /* ---------- End championship hype ---------- */
 
 /* ADMIN PAGE */
@@ -7096,7 +7103,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v656 · moderation-blocklist-report-icon";
+const APP_VERSION = "v657 · block-rejected-media";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -13025,7 +13032,14 @@ function _renderEvEntry() {
   mediaContent.style.cssText = 'width:100%;';
   // Fall back to challenge media_type if entry's own is missing
   const entryMediaType = entry.media_type || _evChallenge?.media_type;
-  if (entryMediaType === 'photo' && entry.media_url) {
+  if (entry.moderation_status === 'rejected') {
+    // v657: matches the other two entry surfaces — rejected blocks the content itself.
+    mediaContent.innerHTML = `<div class="cd-entry-blocked" style="padding:40px 24px;">
+      <div class="cd-entry-blocked-ico">🚫</div>
+      <div class="cd-entry-blocked-title">Entry Not Approved</div>
+      <div class="cd-entry-blocked-sub">This entry was removed for violating community guidelines and is no longer visible, including to you.</div>
+    </div>`;
+  } else if (entryMediaType === 'photo' && entry.media_url) {
     mediaContent.innerHTML = `<img src="${escapeHtml(entry.media_url)}" alt="" style="width:100%;max-height:60vh;object-fit:contain;display:block;">`;
   } else if (entryMediaType === 'video' && entry.media_url) {
     // Free decoder slots — pause all other videos before autoplay with sound
@@ -15726,7 +15740,16 @@ function renderChallengeDetail() {
     }
 
     let mediaHtml = '';
-    if (entry.media_type === 'photo' && entry.media_url) {
+    if (entry.moderation_status === 'rejected') {
+      // v657: rejected means the CONTENT stops being shown, not just a badge
+      // next to it. Only the submitter (or admin) ever reaches this branch —
+      // everyone else was already filtered out by entryModVisible.
+      mediaHtml = `<div class="cd-entry-blocked">
+        <div class="cd-entry-blocked-ico">🚫</div>
+        <div class="cd-entry-blocked-title">Entry Not Approved</div>
+        <div class="cd-entry-blocked-sub">This entry was removed for violating community guidelines and is no longer visible, including to you.</div>
+      </div>`;
+    } else if (entry.media_type === 'photo' && entry.media_url) {
       mediaHtml = `<img src="${entry.media_url}" alt="" loading="lazy">`;
     } else if (entry.media_type === 'video' && entry.media_url) {
       // Use poster+overlay so external URLs don't break — same as feed card
@@ -19710,7 +19733,14 @@ function renderFvEntry(entry, ch, canVote, myVoteEntryId, status) {
   }
 
   let mediaHtml = '';
-  if (mediaType === 'photo' && entry.media_url) {
+  if (entry.moderation_status === 'rejected') {
+    // v657: matches challenge-detail — rejected blocks the content itself.
+    mediaHtml = `<div class="cd-entry-blocked">
+      <div class="cd-entry-blocked-ico">🚫</div>
+      <div class="cd-entry-blocked-title">Entry Not Approved</div>
+      <div class="cd-entry-blocked-sub">This entry was removed for violating community guidelines and is no longer visible, including to you.</div>
+    </div>`;
+  } else if (mediaType === 'photo' && entry.media_url) {
     mediaHtml = `<img src="${escapeHtml(entry.media_url)}" style="width:100%;max-height:55vmax;min-height:200px;object-fit:contain;display:block;background:var(--surface-2);" loading="lazy">`;
   } else if (mediaType === 'video' && entry.media_url) {
     // Viewer (not feed): show a STATIC poster + ▶, never a lazy/auto preview.
