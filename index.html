@@ -4904,6 +4904,13 @@ body.theme-light .ladder-chip-founder  { color: #bf360c; }
 .cd-entry-blocked-ico { font-size: 32px; margin-bottom: 10px; }
 .cd-entry-blocked-title { font-family: var(--font-anton), sans-serif; font-size: 16px; letter-spacing: 0.02em; color: #ff5a48; }
 .cd-entry-blocked-sub { font-size: 12.5px; color: var(--text-muted); margin-top: 6px; line-height: 1.5; max-width: 280px; margin-left: auto; margin-right: auto; }
+.fvj-voided {
+  padding: 20px 16px; text-align: center; background: var(--overlay-2);
+  border-radius: 14px; border: 1px solid var(--border);
+}
+.fvj-voided-ico { font-size: 26px; margin-bottom: 6px; }
+.fvj-voided-title { font-family: var(--font-anton), sans-serif; font-size: 15px; letter-spacing: 0.02em; color: var(--text-dim); }
+.fvj-voided-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
 /* ---------- End championship hype ---------- */
 
 /* ADMIN PAGE */
@@ -7103,7 +7110,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v659 · challenges-page-fight-card";
+const APP_VERSION = "v660 · voided-status-clarity";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -15477,6 +15484,17 @@ function cardPhaseBannerHTML(ch, status) {
 function emberJourneyHTML(ch, status, extraClass = '') {
   const ps = _phaseState(ch, status);
   if (!ps) return '';
+  if (ps.key === 'voided') {
+    // v660: voided isn't a step along Enter->Vote->Winner -- it's a dead end
+    // (not enough entries to hold a vote). Forcing it into the three-node
+    // tracker left everything gray with a tiny "Voided" caption easy to miss
+    // entirely -- exactly the "no challenge status" gap reported.
+    return `<div class="fvj-voided${extraClass ? ' ' + extraClass : ''}">
+      <div class="fvj-voided-ico">🚫</div>
+      <div class="fvj-voided-title">Challenge Voided</div>
+      <div class="fvj-voided-sub">Not enough entries were submitted to hold a vote.</div>
+    </div>`;
+  }
   let wrap, s1 = '', s2 = '', s3 = '', cd1 = '', cd2 = '', cd3 = '';
   let midIcon = '🗳️', midLabel = 'Vote';
   if (ps.isSD) { midIcon = '⚡'; midLabel = 'Sudden Death'; }
@@ -15489,7 +15507,7 @@ function emberJourneyHTML(ch, status, extraClass = '') {
     cd2 = t ? formatCountdown(t) : '';
   } else if (ps.key === 'closed') {
     wrap = 'closed'; s1 = 'done'; s2 = 'done'; s3 = 'live'; cd3 = 'Decided';
-  } else { // voided
+  } else { // fallback safety net, shouldn't normally reach here
     wrap = 'closed'; cd2 = 'Voided';
   }
   const node = (st, ic, t, cd) =>
