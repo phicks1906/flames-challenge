@@ -4094,6 +4094,33 @@ body.theme-light .ch-status.voided .dot { background: #c92a2a; box-shadow: none;
   flex-wrap: wrap;
   gap: 8px;
 }
+.fc-sug-btn {
+  float: right;
+  background: none;
+  border: 1px solid var(--ember);
+  color: var(--ember);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  line-height: 1.6;
+}
+.fc-sug-btn:disabled { opacity: 0.5; cursor: default; }
+.fc-sug-box { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.fc-sug-chip {
+  text-align: left;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.fc-sug-chip:active { border-color: var(--ember); }
+.fc-sug-note { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
 .cc-pill {
   padding: 9px 16px;
   border-radius: 100px;
@@ -5906,8 +5933,9 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
   <div class="cc-sheet-inner">
     <form id="createChallengeForm" class="cc-form">
       <div class="cc-field">
-        <label for="ccTitle">Title <span class="hint">(what's the challenge?)</span></label>
+        <label for="ccTitle">Title <span class="hint">(what's the challenge?)</span><button type="button" class="fc-sug-btn" onclick="suggestChallengeIdea(this)">✨ Suggest</button></label>
         <input id="ccTitle" type="text" maxlength="80" required placeholder="e.g. Best Sunset Photo This Week" />
+        <div class="fc-sug-box" id="ccTitleSugBox"></div>
       </div>
 
       <div class="cc-field">
@@ -5964,8 +5992,9 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       </div>
 
       <div class="cc-field" id="ccCaptionField">
-        <label for="ccCaption">Caption <span class="hint">(optional)</span></label>
+        <label for="ccCaption">Caption <span class="hint">(optional)</span><button type="button" class="fc-sug-btn" onclick="suggestCaption(this,'cc')">✨ Suggest</button></label>
         <input id="ccCaption" type="text" maxlength="120" placeholder="Add a caption to your entry..." />
+        <div class="fc-sug-box" id="ccCaptionSugBox"></div>
       </div>
 
       <div class="cc-field">
@@ -6396,8 +6425,9 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
         <textarea id="seTextEntry" maxlength="500" placeholder="Write your entry..."></textarea>
       </div>
       <div class="cc-field" id="seCaptionField">
-        <label for="seCaption">Caption <span class="hint">(optional)</span></label>
+        <label for="seCaption">Caption <span class="hint">(optional)</span><button type="button" class="fc-sug-btn" onclick="suggestCaption(this,'se')">✨ Suggest</button></label>
         <input id="seCaption" type="text" maxlength="120" placeholder="Add a caption..." />
+        <div class="fc-sug-box" id="seCaptionSugBox"></div>
       </div>
       <div id="seError" class="auth-error"></div>
       <div id="seSlowTip" style="display:none;background:var(--surface-2);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--gold);line-height:1.5;">⏳ Taking a while? Try stronger Wi‑Fi, or set <strong>Camera → Formats → Most Compatible</strong> for faster uploads. Keep this screen open.</div>
@@ -7110,7 +7140,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v660 · voided-status-clarity";
+const APP_VERSION = "v661 · ai-suggest";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -19071,6 +19101,79 @@ async function runEmber(input, ans, btn) {
     btn.disabled = false;
     input.value = '';
   }
+}
+
+// ---- Opt-in AI suggestions (caption / challenge idea) via Claude Haiku ----
+const SUGGEST_ENDPOINT = 'https://sioalvawzayfphwzqctq.supabase.co/functions/v1/suggest-content';
+
+async function _fcSuggest({ kind, category, context, targetId, boxId, btn }) {
+  const box = document.getElementById(boxId);
+  const target = document.getElementById(targetId);
+  if (!box || !target) return;
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '✨ …';
+  box.innerHTML = '';
+  try {
+    const resp = await fetch(SUGGEST_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind, category: category || '', context: context || '' })
+    });
+    const data = await resp.json().catch(() => ({}));
+    const ideas = Array.isArray(data.ideas) ? data.ideas.filter(Boolean).slice(0, 3) : [];
+    if (!ideas.length) {
+      box.innerHTML = '<div class="fc-sug-note">Couldn\'t reach the fire right now — try again in a sec. 🔥</div>';
+      return;
+    }
+    ideas.forEach(idea => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'fc-sug-chip';
+      chip.textContent = idea;
+      chip.onclick = () => {
+        target.value = idea.slice(0, target.maxLength > 0 ? target.maxLength : idea.length);
+        target.dispatchEvent(new Event('input', { bubbles: true }));
+        box.innerHTML = '';
+      };
+      box.appendChild(chip);
+    });
+    const tip = document.createElement('div');
+    tip.className = 'fc-sug-note';
+    tip.textContent = 'Tap one to use it — you can edit after.';
+    box.appendChild(tip);
+  } catch (e) {
+    box.innerHTML = '<div class="fc-sug-note">Couldn\'t reach the fire right now — try again in a sec. 🔥</div>';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+}
+
+function suggestChallengeIdea(btn) {
+  _fcSuggest({
+    kind: 'challenge',
+    category: ccState.category,
+    context: document.getElementById('ccTitle')?.value.trim() || '',
+    targetId: 'ccTitle',
+    boxId: 'ccTitleSugBox',
+    btn
+  });
+}
+
+function suggestCaption(btn, which) {
+  const ch = state.currentChallenge;
+  const isCc = which === 'cc';
+  _fcSuggest({
+    kind: 'caption',
+    category: isCc ? ccState.category : (ch?.category || ''),
+    context: isCc
+      ? (document.getElementById('ccTitle')?.value.trim() || '')
+      : (ch?.title || ''),
+    targetId: isCc ? 'ccCaption' : 'seCaption',
+    boxId: isCc ? 'ccCaptionSugBox' : 'seCaptionSugBox',
+    btn
+  });
 }
 
 // Tour bubble version
