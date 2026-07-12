@@ -7141,7 +7141,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v663 · reject-card-gate";
+const APP_VERSION = "v664 · account-switch-view-sync";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -7718,6 +7718,12 @@ function hydrateApp() {
       showApp();
       showAdminNav();
       await loadAppData();
+      // v664: showApp() only un-hides the app shell — the per-view section
+      // display flags were last set by the PREVIOUS account's switchView() and
+      // persist across an account switch (e.g. Admin stays visible for a new,
+      // non-admin account even though state.currentView was reset to 'feed').
+      // Re-run switchView so the VISIBLE page actually matches currentView.
+      switchView(state.currentView);
       applyDeepLink();
     } catch (err) {
       console.error('hydrateApp failed', err);
