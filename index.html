@@ -6706,13 +6706,13 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 <!-- FEED VIEWER SHEET -->
 <div class="modal-backdrop" id="feedViewerSheet" onclick="if(event.target===this)closeFeedViewer()" style="align-items:flex-end;background:rgba(0,0,0,0.5);">
-  <div id="feedViewerModal" style="background:var(--surface);border-radius:var(--radius) var(--radius) 0 0;width:100%;max-height:92vh;overflow-y:auto;position:relative;animation:slideUp 0.3s cubic-bezier(0.16,1,0.3,1);border-top:3px solid var(--ember);box-shadow:0 -8px 40px rgba(255,106,44,0.18);padding-bottom:0;">
+  <div id="feedViewerModal" style="background:var(--surface);border-radius:var(--radius) var(--radius) 0 0;width:100%;max-height:92vh;display:flex;flex-direction:column;position:relative;animation:slideUp 0.3s cubic-bezier(0.16,1,0.3,1);border-top:3px solid var(--ember);box-shadow:0 -8px 40px rgba(255,106,44,0.18);padding-bottom:0;">
     <!-- Drag handle -->
-    <div style="display:flex;justify-content:center;padding:10px 0 4px;">
+    <div style="display:flex;justify-content:center;padding:10px 0 4px;flex-shrink:0;">
       <div style="width:36px;height:4px;border-radius:2px;background:var(--border-bright);opacity:0.6;"></div>
     </div>
     <!-- Header -->
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:2;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface);z-index:2;">
       <div style="flex:1;min-width:0;margin-right:12px;">
         <div id="fvTitle" style="font-family:var(--font-display);font-size:16px;letter-spacing:0.04em;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
         <div id="fvMeta" style="font-size:11px;color:var(--text-muted);margin-top:1px;white-space:nowrap;"></div>
@@ -6720,24 +6720,35 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       <button onclick="closeFeedViewer()" style="background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.25);border-radius:50%;width:36px;height:36px;color:#fff;font-size:20px;cursor:pointer;display:grid;place-items:center;flex-shrink:0;line-height:1;">×</button>
     </div>
     <!-- Phase banner — full-width lifecycle bar (green=enter, ember=vote, gold=decided) -->
-    <div id="fvPhaseBanner" style="display:none;"></div>
-    <!-- Horizontal snap-scroll entries -->
-    <div style="position:relative;">
-      <div id="fvEntries" style="display:flex;flex-direction:row;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scroll-snap-stop:always;-webkit-overflow-scrolling:touch;scrollbar-width:none;gap:0;"></div>
-      <!-- Counter + dots -->
-      <div id="fvCounter" style="text-align:center;font-size:13px;font-weight:700;color:var(--ember);padding:8px 0 12px;letter-spacing:0.04em;"></div>
-      <div id="fvDots" style="display:none;"></div>
+    <div id="fvPhaseBanner" style="display:none;flex-shrink:0;"></div>
+    <!-- v670: everything below (entries/counter/standings) now lives in its OWN
+         scrollable region, separate from the sticky-bottom action bar. Real-CSS
+         Playwright measurement proved the OLD approach — action bar as
+         position:sticky nested INSIDE this same scroll box — got visually
+         painted OVER by the tall entry content on initial open (0 scroll),
+         hiding "Enter Challenge"/"Promote" until the user scrolled past a full
+         entry. Same root cause this codebase already fixed once for feed cards
+         (overflow:hidden traps scroll unless the scroll region is a distinct
+         box) — action bar is now a true flex sibling, always visible. -->
+    <div id="fvScrollRegion" style="flex:1;min-height:0;overflow-y:auto;">
+      <!-- Horizontal snap-scroll entries -->
+      <div style="position:relative;">
+        <div id="fvEntries" style="display:flex;flex-direction:row;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scroll-snap-stop:always;-webkit-overflow-scrolling:touch;scrollbar-width:none;gap:0;"></div>
+        <!-- Counter + dots -->
+        <div id="fvCounter" style="text-align:center;font-size:13px;font-weight:700;color:var(--ember);padding:8px 0 12px;letter-spacing:0.04em;"></div>
+        <div id="fvDots" style="display:none;"></div>
+      </div>
+      <!-- No entries state -->
+      <div id="fvEmpty" style="display:none;text-align:center;padding:48px 20px;color:var(--text-muted);">
+        <div style="font-size:40px;margin-bottom:12px;">🎬</div>
+        <div style="font-weight:600;margin-bottom:6px;">No entries yet</div>
+        <div style="font-size:14px;">Be the first to enter this challenge</div>
+      </div>
+      <!-- Vote standings — shown after casting a vote -->
+      <div id="fvStandings" style="display:none;padding:0 16px 8px;"></div>
     </div>
-    <!-- No entries state -->
-    <div id="fvEmpty" style="display:none;text-align:center;padding:48px 20px;color:var(--text-muted);">
-      <div style="font-size:40px;margin-bottom:12px;">🎬</div>
-      <div style="font-weight:600;margin-bottom:6px;">No entries yet</div>
-      <div style="font-size:14px;">Be the first to enter this challenge</div>
-    </div>
-    <!-- Vote standings — shown after casting a vote -->
-    <div id="fvStandings" style="display:none;padding:0 16px 8px;"></div>
-    <!-- Sticky action bar -->
-    <div style="position:sticky;bottom:0;display:flex;gap:10px;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--border);background:var(--surface);z-index:2;">
+    <!-- Action bar — true sibling of the scroll region, never nested inside it -->
+    <div style="flex-shrink:0;display:flex;gap:10px;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--border);background:var(--surface);z-index:2;">
       <button id="fvChallengeBtn" class="btn btn-primary" style="flex:1;padding:12px;font-size:14px;" onclick="openFeedViewerChallenge()"></button>
       <button id="fvPromoteBtn" class="btn btn-ghost" style="flex:0 0 auto;padding:12px 16px;font-size:14px;white-space:nowrap;" onclick="promoteFeedViewerChallenge()">📣 Promote</button>
     </div>
@@ -7146,7 +7157,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v669 · submit-cta-above-entries";
+const APP_VERSION = "v670 · fv-actionbar-sibling";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -19835,10 +19846,12 @@ function renderFvStandings(chId, votes) {
   '</div>';
 
   panel.style.display = 'block';
-  // Scroll to reveal standings
+  // Scroll to reveal standings — v670: the scrollable box is now #fvScrollRegion,
+  // not #feedViewerModal (which became a non-scrolling flex column so the
+  // action bar could be a true sibling instead of an overlappable sticky child).
   setTimeout(() => {
-    const modal = document.getElementById('feedViewerModal');
-    if (modal) modal.scrollTo({ top: modal.scrollHeight, behavior: 'smooth' });
+    const scrollRegion = document.getElementById('fvScrollRegion');
+    if (scrollRegion) scrollRegion.scrollTo({ top: scrollRegion.scrollHeight, behavior: 'smooth' });
   }, 100);
 }
 
