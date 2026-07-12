@@ -7141,7 +7141,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v666 · champ-status-wording";
+const APP_VERSION = "v668 · blocklist-expand";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -12673,7 +12673,10 @@ async function respondToChampInvite(response) {
       .eq('id', state.myChampInvite.id);
     state.myChampInvite.invite_status = response;
     if (response === 'accepted') {
-      toast('✅ You\'re in! Submit your entry to compete.');
+      const alreadyEntered = (state.currentEntries || []).some(e => e.user_id === state.profile.id);
+      toast(alreadyEntered
+        ? '✅ You\'re in! You\'ve already entered — tap ✏️ Edit on your entry to change it.'
+        : '✅ You\'re in! Submit your entry to compete.');
     } else {
       toast('You passed your spot to the next qualifier.');
       await promoteNextReserve(ch.id);
@@ -19013,8 +19016,9 @@ async function submitReport() {
 // innocent words that merely contain a substring.
 const BLOCKED_TERMS = [
   /\bsmd\b/i,
-  /\brape\b/i,
+  /\brape[sd]?\b/i,
   /\brapist\b/i,
+  /\bsuck\s+(?:my|his|her|their|a)\s+(?:d[i1!]ck|cock)\b/i,
 ];
 function containsBlockedTerm(text) {
   const t = text || '';
