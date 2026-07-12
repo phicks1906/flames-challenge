@@ -7141,7 +7141,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v664 · account-switch-view-sync";
+const APP_VERSION = "v665 · champ-invite-gate";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -18157,7 +18157,11 @@ function renderFeedChallengeCard(ch) {
   );
   const canEnter = ch.computedStatus === 'submitting'
     && state.profile
-    && !chEntries.some(e => e.user_id === state.profile.id);
+    && !chEntries.some(e => e.user_id === state.profile.id)
+    // Championships are invite-only for EVERYONE, admins included — only an
+    // invited contender (present in the fighter roster) may enter. Mirrors the
+    // DB trigger enforce_championship_invite so the UI and server agree.
+    && (!ch.is_championship || (state.champFighters?.[ch.id] || []).some(f => f.id === state.profile.id));
 
 
   let entriesHtml = '';
