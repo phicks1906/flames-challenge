@@ -7141,7 +7141,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v662 · suggest-btn-fill";
+const APP_VERSION = "v663 · reject-card-gate";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -15197,7 +15197,9 @@ function renderChallenges() {
         else if (/\.(mp4|mov|m4v|avi|webm|mkv)/.test(u)) eMt = 'video';
         else if (/\.(mp3|m4a|wav|aac|ogg|flac)/.test(u)) eMt = 'audio';
       }
-      if (eMt === 'photo' && e.media_url) {
+      if (e.moderation_status === 'rejected') {
+        mHtml = `<div class="fcc-entry-media fcc-entry-placeholder" style="flex-direction:column;gap:4px;color:var(--text-muted);text-align:center;padding:12px;"><div style="font-size:26px;">🚫</div><div style="font-size:11px;font-weight:700;">Not Approved</div></div>`;
+      } else if (eMt === 'photo' && e.media_url) {
         mHtml = `<img src="${escapeHtml(e.media_url)}" class="fcc-entry-media" loading="lazy" onerror="this.style.display='none'">`;
       } else if (eMt === 'video' && e.media_url) {
         mHtml = e.poster_url
@@ -18162,7 +18164,9 @@ function renderFeedChallengeCard(ch) {
       const isMyEntry = state.profile && e.user_id === state.profile.id;
       const iVoted = myVoteForCh?.entry_id === e.id;
       let mediaHtml = '';
-      if (e.media_type === 'photo' && e.media_url) {
+      if (e.moderation_status === 'rejected') {
+        mediaHtml = `<div class="fcc-entry-media fcc-entry-placeholder" style="flex-direction:column;gap:4px;color:var(--text-muted);text-align:center;padding:12px;"><div style="font-size:26px;">🚫</div><div style="font-size:11px;font-weight:700;">Not Approved</div></div>`;
+      } else if (e.media_type === 'photo' && e.media_url) {
         mediaHtml = `<img src="${escapeHtml(e.media_url)}" class="fcc-entry-media" loading="lazy">`;
       } else if (e.media_type === 'video' && e.media_url) {
         if (e.poster_url) {
