@@ -6133,7 +6133,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
             <div class="icon" style="font-size:20px">🎵</div>
             <div class="text" style="font-size:13px">Tap to add audio</div>
           </div>
-          <input type="file" id="cpAudioFile" class="cc-file-input" accept="audio/*" />
+          <input type="file" id="cpAudioFile" class="cc-file-input" accept="audio/*,.m4a,.mp3,.wav,.aac,.caf,audio/x-m4a,audio/mp4,audio/mpeg,audio/wav,audio/aac,audio/x-caf" />
           <div id="cpAudioPreview" style="display:none"></div>
         </div>
       </div>
@@ -7157,7 +7157,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v670 · fv-actionbar-sibling";
+const APP_VERSION = "v671 · audio-accept-fix";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -14438,9 +14438,14 @@ document.querySelectorAll('#ccMediaTypePills .cc-pill').forEach(p => {
     document.getElementById('ccTextField').style.display = isText ? 'block' : 'none';
     document.getElementById('ccCaptionField').style.display = isText ? 'none' : 'block';
     const fileInput = document.getElementById('ccFile');
+    // iOS quirk: accept="audio/*" alone often fails to map to formats like
+    // .m4a (default Voice Memos) in the native Files/Photos picker, leaving
+    // audio greyed out and only Photos selectable. Explicit MIME+extension
+    // list fixes it.
+    const AUDIO_ACCEPT = 'audio/*,.m4a,.mp3,.wav,.aac,.caf,audio/x-m4a,audio/mp4,audio/mpeg,audio/wav,audio/aac,audio/x-caf';
     if (ccState.mediaType === 'photo') fileInput.accept = 'image/*';
     else if (ccState.mediaType === 'video') fileInput.accept = 'video/*';
-    else if (ccState.mediaType === 'audio') fileInput.accept = 'audio/*';
+    else if (ccState.mediaType === 'audio') fileInput.accept = AUDIO_ACCEPT;
     clearMediaPreview();
   });
 });
@@ -16342,7 +16347,7 @@ function openSubmitEntry(entryToEdit = null) {
   const fileInput = document.getElementById('seFile');
   if (ch.media_type === 'photo') fileInput.accept = 'image/*';
   else if (ch.media_type === 'video') fileInput.accept = 'video/*';
-  else if (ch.media_type === 'audio') fileInput.accept = 'audio/*';
+  else if (ch.media_type === 'audio') fileInput.accept = 'audio/*,.m4a,.mp3,.wav,.aac,.caf,audio/x-m4a,audio/mp4,audio/mpeg,audio/wav,audio/aac,audio/x-caf';
   else fileInput.removeAttribute('accept'); // never inherit a prior challenge's type
   // Clarify the upload affordance per media type
   const seZoneText = document.querySelector('#seUploadZone .text');
@@ -20414,7 +20419,7 @@ function setCpMediaType(type) {
   const newInput = oldInput.cloneNode(false);
   newInput.id = 'cpFile';
   newInput.className = 'cc-file-input';
-  newInput.accept = type === 'audio' ? 'audio/*' : 'image/*,video/*';
+  newInput.accept = type === 'audio' ? 'audio/*,.m4a,.mp3,.wav,.aac,.caf,audio/x-m4a,audio/mp4,audio/mpeg,audio/wav,audio/aac,audio/x-caf' : 'image/*,video/*';
   newInput.value = '';
   oldInput.parentNode.replaceChild(newInput, oldInput);
   newInput.addEventListener('change', cpFileChangeHandler);
