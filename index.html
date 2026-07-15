@@ -7310,7 +7310,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v681 · poster-capture";
+const APP_VERSION = "v682 · post-diagnostic";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -20629,6 +20629,10 @@ function showCpError(msg) {
   if (!err) return;
   err.textContent = msg;
   err.classList.add('show');
+  // v682: the error div sits above the submit button, so if the sheet is
+  // scrolled it can appear off-screen and the failure reads as "I tapped Post
+  // and nothing happened". Pull it into view so an error is never silent.
+  try { err.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {}
 }
 
 function cpFileChangeHandler(e) {
@@ -20783,8 +20787,18 @@ document.getElementById('createPostForm').addEventListener('submit', async e => 
 
   const content = document.getElementById('cpContent').value.trim();
   const cpHasMedia = !!(cpState.file || cpState.audioFile);
-  if (!content && !cpHasMedia) return showCpError('Add some text or media.');
-  if (content.length > 1000) return showCpError('Max 1000 characters.');
+  // v682: this path logged everything with console.log, which is invisible on
+  // iPhone — so a failing Post could look like "nothing happens". Mirror the
+  // key steps into dlog so the on-screen panel shows what actually occurred.
+  dlog('post', 'submit', {
+    len: content.length,
+    file: !!cpState.file,
+    fileType: cpState.fileType || null,
+    audio: !!cpState.audioFile,
+    profile: !!state.profile?.id,
+  });
+  if (!content && !cpHasMedia) { dlog('post', 'blocked', { why: 'no-text-no-media' }); return showCpError('Add some text or media.'); }
+  if (content.length > 1000) { dlog('post', 'blocked', { why: 'too-long' }); return showCpError('Max 1000 characters.'); }
 
   const btn = e.target.querySelector('button[type="submit"]');
   btn.disabled = true;
@@ -20860,10 +20874,12 @@ document.getElementById('createPostForm').addEventListener('submit', async e => 
     loadPosts().then(renderFeed).catch(e => console.error('refresh failed', e));
   } catch (err) {
     console.error('[post] error:', err);
+    dlog('post', 'ERROR', { msg: String(err && err.message || err).slice(0, 120) });
     showCpError(err.message || 'Something went wrong. Try again.');
   } finally {
     btn.disabled = false;
     btn.textContent = orig;
+    dlog('post', 'done', {});
   }
 });
 
