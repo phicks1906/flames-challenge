@@ -7352,7 +7352,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v691 · one-delete-rule";
+const APP_VERSION = "v692 · delete-unless-others";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -22039,7 +22039,12 @@ const FEATURE_FLAGS = [
 function canDeleteChallenge(ch) {
   if (!ch || !state.profile) return false;
   if (isAdmin()) return true;
-  return ch.creator_id === state.profile.id && (state.currentEntries || []).length === 0;
+  if (ch.creator_id !== state.profile.id) return false;
+  // v692 — "no one ELSE has entered". Your own entry does not block deleting your
+  // own challenge: nothing of anyone else's is destroyed. Must stay in lockstep
+  // with the "delete own challenge" RLS policy, which applies the same exclusion.
+  const others = (state.currentEntries || []).filter(e => e.user_id !== state.profile.id);
+  return others.length === 0;
 }
 
 // v690 — the REAL admin check. Never consults the view-as flag. Anything that
