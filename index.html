@@ -7338,7 +7338,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v685 · entry-card-width";
+const APP_VERSION = "v686 · self-hosted-poster";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11582,7 +11582,14 @@ const _DARK_POSTER = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIA
 // Build the poster attribute for a video thumbnail. Always starts as the dark
 // placeholder; the real frame is carried in data-thumb for later upgrade.
 function _videoPosterAttr(mediaUrl, posterUrl) {
-  const real = _bunnyPreviewUrl(mediaUrl || '') || posterUrl || '';
+  // v686 — a SELF-HOSTED poster (see uploadToBunnyStream) wins over everything:
+  // it's the only still we control the aspect of. Bunny's preview.webp is always
+  // padded to 16:9, which is what actually put the bars on every surface taking
+  // this path, and why v681's thumbnail fix looked like it did nothing.
+  // Pre-v686 entries have a Bunny poster_url and no self-hosted frame — they keep
+  // the old webp-first order exactly, since webp loads where thumbnail.jpg 404s.
+  const mine = (posterUrl && !posterUrl.includes(BUNNY_CDN_HOST)) ? posterUrl : '';
+  const real = mine || _bunnyPreviewUrl(mediaUrl || '') || posterUrl || '';
   return `poster="${_DARK_POSTER}"${real ? ` data-thumb="${escapeHtml(real)}"` : ''}`;
 }
 
@@ -13814,33 +13821,38 @@ async function uploadToBunnyStream(file, titleHint, onProgress) {
     xhr.send(file);
   });
 
-  // v681: hand Bunny a correct thumbnail so thumbnail.jpg stops being a padded
-  // 16:9. Every surface already reads that URL, so fixing it here fixes cards,
-  // feed and detail at once — no schema change, no new storage, no Supabase
-  // egress, still served from Bunny's CDN.
-  // UNVERIFIED: Bunny's encoder handles portrait correctly but its thumbnail
-  // generator does not, so it's genuinely possible this upload path normalises
-  // to 16:9 too, or that Bunny overwrites our thumbnail when encoding finishes
-  // a minute later. The dlog line below reports the result — check it on the
-  // first upload. If it's overwritten, this has to move to the encode-complete
-  // poll instead. Wrapped so a failure never breaks a finished upload.
+  // v686 — SELF-HOSTED POSTER. Bunny is out of the poster path entirely.
+  // WHY: v681 POSTed this same captured frame to Bunny's /thumbnail endpoint and
+  // flagged ITSELF as UNVERIFIED — it depended on Bunny not overwriting the
+  // thumbnail when encoding finished a minute later. It also could never fix the
+  // surfaces that read preview.webp, which Bunny ALWAYS pads to 16:9 no matter
+  // what shape the source is. Both Bunny-generated stills are padded; neither is
+  // under our control; so stop using either. The poster is now the frame we
+  // captured from the ORIGINAL file, at the original's true aspect, in our own
+  // bucket. ~40-60KB per entry — egress is nowhere near a concern.
+  // Path uses the {userId}/ root prefix that every other entry upload uses, so
+  // it lands under the existing storage policy — no new prefix to authorise.
+  // FAILS SOFT: on any failure, fall back to Bunny's padded thumbnail. A poster
+  // with bars beats no poster, and neither is worth failing a finished upload.
+  let posterUrl = `https://${BUNNY_CDN_HOST}/${videoId}/thumbnail.jpg`;
   if (_posterBlob) {
     try {
-      const tRes = await fetch(`https://video.bunnycdn.com/library/${BUNNY_LIBRARY_ID}/videos/${videoId}/thumbnail`, {
-        method: 'POST',
-        headers: { 'AccessKey': BUNNY_API_KEY, 'Content-Type': 'application/octet-stream' },
-        body: _posterBlob,
-      });
-      dlog('poster', 'bunny-set', { ok: tRes.ok, status: tRes.status });
+      const pPath = `${state.profile.id}/poster-${videoId}.jpg`;
+      const { error: pErr } = await db.storage.from('challenge-media')
+        .upload(pPath, _posterBlob, { cacheControl: '31536000', upsert: true, contentType: 'image/jpeg' });
+      if (pErr) throw pErr;
+      const { data: pPub } = db.storage.from('challenge-media').getPublicUrl(pPath);
+      if (pPub && pPub.publicUrl) posterUrl = pPub.publicUrl;
+      dlog('poster', 'self-hosted', { kb: Math.round(_posterBlob.size / 1024) });
     } catch (e) {
-      dlog('poster', 'bunny-set-error', { e: String(e).slice(0, 60) });
+      dlog('poster', 'self-host-fail', { e: String((e && e.message) || e).slice(0, 60) });
     }
   }
 
   onProgress && onProgress(100);
   return {
     mediaUrl:  `https://${BUNNY_CDN_HOST}/${videoId}/playlist.m3u8`,
-    posterUrl: `https://${BUNNY_CDN_HOST}/${videoId}/thumbnail.jpg`,
+    posterUrl,
     videoId,
   };
 }
