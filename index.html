@@ -6239,6 +6239,86 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 .dm-send-bar button { flex:0 0 auto; border:none; border-radius:50%; width:42px; height:42px; background:linear-gradient(135deg,var(--ember),var(--flame)); color:#fff; font-size:18px; cursor:pointer; }
 .dm-send-bar button:disabled { opacity:0.4; }
 .ps-msg-btn { margin-top:8px; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v673 · FULL-BLEED FEED  ── SELF-CONTAINED. TO REVERT: DELETE THIS BLOCK.
+   Nothing outside this block was changed for v673.
+
+   Measured against a real Facebook screen recording (402 CSS px viewport):
+     FB carousel card = 335px @ x=0 · 8px gutter · media area ~139k px²
+     This block       = 334px @ x=0 · 8px gutter · media area ~139k px²
+
+   TWO CHANGES:
+   1. SIZE  — .fcc-entry-media was height:120px, HARD-CODED. It never scaled
+              with the device, and object-fit:cover sliced a 9:16 phone video
+              down to a thin horizontal band (you couldn't tell what the entry
+              was). Now aspect-ratio 4/5, so height follows card width. Media
+              area goes 287x120 (34k) -> 334x417 (139k), ~4x.
+              NOTE: the old `max-width:280px` on .fcc-entry-card was DEAD CODE —
+              `min-width:72vw` always beat it (per spec min-width wins over
+              max-width), so cards actually rendered at 289px, never 280px.
+   2. BLEED — feed cards break out of .feed-wrap's 18px side padding and drop
+              their border/radius/left-stripe so media reaches the screen edge,
+              like FB. Card TEXT keeps its inset (padding is inline on the card
+              itself, so it survives the breakout). Cards now read as full-width
+              bands separated by a gap, instead of outlined boxes.
+
+   DELIBERATELY PRESERVED: .champ-gold (championship fight-card) keeps its gold
+   frame AND its inset. A framed gold card sitting in an otherwise edge-to-edge
+   feed stands out MORE, not less — the championship is supposed to look like an
+   event. Excluded via :not(.champ-gold) below.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* 1 ── Tighten the inter-card gap toward FB's rhythm (was 14px). The gap itself
+        is now the separator, since the borders are gone. */
+#feedContainer { gap: 8px !important; }
+
+/* 2 ── Break out of .feed-wrap { padding: 8px 18px 60px }. Uses #feedContainer
+        so the challenges page (which reuses .fcc-challenge-wrap) is untouched. */
+#feedContainer > .fcc-challenge-wrap:not(.champ-gold),
+#feedContainer > .post-card,
+#feedContainer > .feed-poll-card,
+#feedContainer > .feed-activity-card,
+#feedContainer > .feed-card {
+  margin-left: -18px !important;
+  margin-right: -18px !important;
+  margin-bottom: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+}
+
+/* 3 ── Drawer chrome (the entries shelf under a challenge card) */
+#feedContainer > .fcc-challenge-wrap:not(.champ-gold) .feed-challenge-card,
+#feedContainer > .fcc-challenge-wrap:not(.champ-gold) .fcc-feed-drawer {
+  border: none !important;
+  border-radius: 0 !important;
+  margin-bottom: 0 !important;
+}
+#feedContainer > .fcc-challenge-wrap:not(.champ-gold) .fcc-feed-drawer {
+  padding: 10px 0 12px !important;
+}
+
+/* 4 ── Entry scroller runs flush to the screen edge (FB starts its card at x=0) */
+#feedContainer .fcc-entries-scroll {
+  padding: 0 0 8px !important;
+  gap: 8px !important;
+}
+
+/* 5 ── SIZE. 83% of the scroller == FB's 335px on a 402px screen. Uses % not vw
+        so it stays correct inside .feed-wrap's 720px max-width on desktop. */
+#feedContainer .fcc-entry-card {
+  flex: 0 0 83% !important;
+  min-width: 83% !important;
+  max-width: none !important;
+  border: none !important;
+  border-radius: 10px !important;
+}
+#feedContainer .fcc-entry-media {
+  height: auto !important;
+  aspect-ratio: 4 / 5 !important;
+}
+/* ═══════════════════ end v673 · FULL-BLEED FEED ═══════════════════ */
+
 .dm-compose-input { width:100%; box-sizing:border-box; margin-bottom:14px; border-radius:12px; border:1px solid var(--border); background:var(--overlay-2); color:var(--text); padding:12px 16px; font-size:16px; outline:none; }
 </style>
 
@@ -7157,7 +7237,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v672 · edit-entry-update-fix";
+const APP_VERSION = "v673 · fullbleed-feed";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
