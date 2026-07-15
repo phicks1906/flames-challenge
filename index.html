@@ -5480,6 +5480,13 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 </style>
 </head>
 <body>
+<!-- v690 — View-as-member banner. Deliberately loud and impossible to miss: the
+     one failure mode of this feature is forgetting it's on and concluding admin
+     is broken. Fixed, full-width, always on top. -->
+<div id="viewAsBanner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;background:#7a3d00;color:#ffd9a8;font-size:12px;font-weight:700;letter-spacing:0.04em;padding:6px 12px;text-align:center;box-shadow:0 1px 6px rgba(0,0,0,0.4)">
+  👤 VIEWING AS MEMBER — admin UI hidden
+  <button onclick="toggleViewAsMember()" style="margin-left:8px;background:#ffd9a8;color:#7a3d00;border:none;border-radius:10px;padding:2px 10px;font-size:11px;font-weight:800;cursor:pointer">EXIT</button>
+</div>
 
 <!-- Dedicated black background layer — guarantees no white shows through -->
 <div class="bg-layer"></div>
@@ -6657,6 +6664,13 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       </div>
       <div class="theme-toggle-state" id="tickerState">On</div>
     </div>
+    <div class="theme-toggle-row" id="viewAsRow" style="display:none" onclick="toggleViewAsMember()" role="button" tabindex="0">
+      <div class="theme-toggle-label">
+        <span class="theme-toggle-icon">👤</span>
+        <span>View as member</span>
+      </div>
+      <div class="theme-toggle-state" id="viewAsState">Off</div>
+    </div>
     <button class="btn btn-ghost" style="width:100%;margin-top:6px;color:#ff6a6a;border-color:#3a1f1a" onclick="signOut()">Sign out</button>
     <div id="appVersion" style="text-align:center;margin-top:12px;font-size:11px;color:var(--text-muted);letter-spacing:0.05em"></div>
   </div>
@@ -7338,7 +7352,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v688 · honest-delete";
+const APP_VERSION = "v691 · one-delete-rule";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -7832,6 +7846,12 @@ async function signOut() {
   // v654: reset the view so a different account signing in next doesn't land
   // on whatever page THIS account happened to be on — Admin included.
   state.currentView = 'feed';
+  // v690 — same reasoning: a view-as flag must never survive into another
+  // account's session, where it would silently suppress nothing and confuse.
+  state.viewAsMember = false;
+  const _vab = document.getElementById('viewAsBanner');
+  if (_vab) _vab.style.display = 'none';
+  document.body.style.paddingTop = '';
   showAuth();
   // Then actually clear the session with Supabase
   try {
@@ -10929,6 +10949,12 @@ function openProfile() {
   if (!state.profile) return;
   const tickerState = document.getElementById('tickerState');
   if (tickerState) tickerState.textContent = tickerDismissed() ? 'Off' : 'On';
+  // v690 — offer View as member to real admins only (isRealAdmin, not isAdmin —
+  // isAdmin is false while the toggle is ON, which would hide the way back).
+  const vaRow = document.getElementById('viewAsRow');
+  if (vaRow) vaRow.style.display = isRealAdmin() ? '' : 'none';
+  const vaState = document.getElementById('viewAsState');
+  if (vaState) vaState.textContent = state.viewAsMember ? 'On' : 'Off';
   const avatarPrefix = isAvatarUrl(state.profile.avatar) ? '🔥' : (state.profile.avatar || '🔥');
   document.getElementById('profileName').textContent = avatarPrefix + ' ' + state.profile.name;
   const voteCount = Object.keys(state.myVotes).length;
@@ -16000,7 +16026,7 @@ function renderChampionshipHero(ch, status, countdownTarget) {
     : status === 'closed' ? '👑 CHAMPION CROWNED'
     : formatCountdown(countdownTarget || ch.voting_end);
 
-  const canDelete = state.profile && (isAdmin() || (ch.creator_id === state.profile.id && (state.currentEntries || []).length === 0));
+  const canDelete = canDeleteChallenge(ch); // v691 — see canDeleteChallenge
 
   let rosterHtml = '';
   if (fighters.length >= 2) {
@@ -16072,7 +16098,7 @@ function renderChallengeDetail() {
           if (_underReview) return `<button class="cd-share-btn" disabled title="Can't promote while content is under review" style="opacity:0.45;cursor:not-allowed;">📣 Promote</button>`;
           return `<button class="cd-share-btn" id="cdShareBtn">📣 Promote</button>`;
         })()}
-        ${(state.profile && (isAdmin() || (ch.creator_id === state.profile.id && state.currentEntries.length === 0))) ? `<button class="cd-share-btn" id="cdDeleteBtn">🗑 Delete</button>` : ''}
+        ${canDeleteChallenge(ch) ? `<button class="cd-share-btn" id="cdDeleteBtn">🗑 Delete</button>` : ''}
       </div>
     </div>
     <div class="ch-category">${escapeHtml(ch.category)}${(ch.is_public || ch.is_championship) ? '' : ' · 🔒 Private'}</div>
@@ -16118,8 +16144,14 @@ function renderChallengeDetail() {
       // Delete entries first (FK safety), then challenge
       await db.from('entry_votes').delete().eq('challenge_id', ch.id);
       await db.from('entries').delete().eq('challenge_id', ch.id);
-      const { error } = await db.from('challenges').delete().eq('id', ch.id);
+      // v691 — row count, not error. RLS reports a blocked DELETE as success with
+      // zero rows, so `error === null` proves nothing. Same lie as v688/v689.
+      const { data: chRows, error } = await db.from('challenges').delete().eq('id', ch.id).select('id');
       if (error) throw error;
+      if (!chRows || !chRows.length) {
+        dlog('del', 'challenge-blocked', { ch: String(ch.id).slice(0, 8) });
+        throw new Error('no permission to delete this challenge');
+      }
       toast('Challenge deleted');
       closeChallengeDetail();
       state.challenges = (state.challenges || []).filter(c => c.id !== ch.id);
@@ -21997,8 +22029,60 @@ const FEATURE_FLAGS = [
   { key: 'fc_flag_signup',     label: 'New user signup enabled',   def: true  },
 ];
 
+// v691 — ONE definition of who may delete a challenge. This rule was written
+// out inline twice and had already drifted: one copy guarded state.currentEntries
+// with (|| []), the other didn't and would throw on a null, taking the rest of
+// that render down with it (submit button included). Same rule, one place.
+// The rule: admins may delete any challenge; a creator may delete their own ONLY
+// while nobody has entered it. Once an entry exists, deleting would destroy
+// someone else's work, so the escape hatch closes.
+function canDeleteChallenge(ch) {
+  if (!ch || !state.profile) return false;
+  if (isAdmin()) return true;
+  return ch.creator_id === state.profile.id && (state.currentEntries || []).length === 0;
+}
+
+// v690 — the REAL admin check. Never consults the view-as flag. Anything that
+// must know your actual privilege (whether to offer the toggle at all) uses this.
+function isRealAdmin() {
+  if (!state.profile) return false;
+  if (state.profile.is_admin === true) return true;
+  if (state.profile.is_admin === undefined && state.profile.id === ADMIN_BOOTSTRAP_UUID) return true;
+  return false;
+}
+
+// v690 — VIEW AS MEMBER. Flips every client-side admin gate off (all 18 call
+// sites route through here) so you can see the UI a normal member sees.
+//
+// WHAT THIS DOES NOT DO: it does not change your JWT, so it does NOT change RLS.
+// The database still sees an admin and will still honour "admins delete any
+// challenge", "admins update any entry", etc. This answers "would a member SEE
+// this button?" — it does NOT answer "could a member DO this?" or "can a member
+// read this data?". For those, sign in as a genuinely non-admin account.
+//
+// Memory-only on purpose: a refresh clears it. A persisted view-as flag that
+// outlives a reload is a trap — you'd eventually hit a real admin bug and spend
+// an hour on it before remembering the toggle was still on.
+function toggleViewAsMember() {
+  if (!isRealAdmin()) return;
+  state.viewAsMember = !state.viewAsMember;
+  const st = document.getElementById('viewAsState');
+  if (st) st.textContent = state.viewAsMember ? 'On' : 'Off';
+  const banner = document.getElementById('viewAsBanner');
+  if (banner) banner.style.display = state.viewAsMember ? 'block' : 'none';
+  document.body.style.paddingTop = state.viewAsMember ? '28px' : '';
+  showAdminNav();
+  // Admin gates are evaluated at render time, so re-render whatever's on screen.
+  // Bail off the admin page first — it's about to become unreachable.
+  if (state.viewAsMember && state.currentView === 'admin') state.currentView = 'feed';
+  closeModals();
+  switchView(state.currentView);
+  toast(state.viewAsMember ? '👤 Viewing as member (UI only — RLS unchanged)' : '🛡 Admin view restored');
+}
+
 function isAdmin() {
   if (!state.profile) return false;
+  if (state.viewAsMember) return false; // v690 — see toggleViewAsMember
   // Primary: check is_admin column (v33+)
   if (state.profile.is_admin === true) return true;
   // Fallback: hardcoded bootstrap UUID (works until is_admin column is added)
@@ -22400,7 +22484,18 @@ async function approveVideoEntry(entryId, urgent = false) {
   // Urgent (minor + serious content) entries require explicit confirmation —
   // never a single mis-tap away from publishing something that was escalated.
   if (urgent && !confirm('⚠️ This was flagged URGENT (possible minor + serious content). Are you sure you want to APPROVE and publish it?')) return;
-  await db.from('entries').update({ moderation_status: 'approved', moderation_checked_at: new Date().toISOString() }).eq('id', entryId);
+  // v689 — .select() and count rows. An admin action on someone ELSE's entry is
+  // an UPDATE the owner-scoped policy cannot permit, and RLS reports that as
+  // success-with-zero-rows. This used to toast 'now live' over an entry that
+  // stayed hidden forever. Never trust error alone on a cross-user write.
+  const { data: rows, error } = await db.from('entries')
+    .update({ moderation_status: 'approved', moderation_checked_at: new Date().toISOString() })
+    .eq('id', entryId).select('id');
+  if (error) { toast('Approve failed: ' + error.message); return; }
+  if (!rows || !rows.length) {
+    dlog('mod', 'approve-blocked', { entry: String(entryId).slice(0, 8) });
+    toast('Approve failed — no permission to update this entry'); return;
+  }
   toast('✅ Entry approved — now live');
   renderAdminFlags();
 }
@@ -22433,7 +22528,17 @@ async function notifyEntryModerated(entryId, action) {
   } catch (err) { console.warn('notifyEntryModerated', err); }
 }
 async function rejectVideoEntry(entryId) {
-  await db.from('entries').update({ moderation_status: 'rejected', moderation_checked_at: new Date().toISOString() }).eq('id', entryId);
+  // v689 — row count, not error. See approveVideoEntry. A silently-failed REJECT
+  // is the worse direction of this bug: it tells the admin bad content is gone
+  // while it stays live.
+  const { data: rows, error } = await db.from('entries')
+    .update({ moderation_status: 'rejected', moderation_checked_at: new Date().toISOString() })
+    .eq('id', entryId).select('id');
+  if (error) { toast('Reject failed: ' + error.message); return; }
+  if (!rows || !rows.length) {
+    dlog('mod', 'reject-blocked', { entry: String(entryId).slice(0, 8) });
+    toast('Reject failed — no permission to update this entry'); return;
+  }
   notifyEntryModerated(entryId, 'rejected');
   toast('🚫 Entry rejected — hidden from everyone, submitter notified');
   renderAdminFlags();
@@ -22441,7 +22546,15 @@ async function rejectVideoEntry(entryId) {
 async function removeVideoEntry(entryId) {
   if (!confirm('Permanently delete this entry?')) return;
   await notifyEntryModerated(entryId, 'deleted'); // must read the row before it's gone
-  await db.from('entries').delete().eq('id', entryId);
+  // v689 — row count, not error (see approveVideoEntry). This one has a real
+  // admin policy behind it, so it should pass — but a moderation tool must never
+  // report an action it did not perform.
+  const { data: rows, error } = await db.from('entries').delete().eq('id', entryId).select('id');
+  if (error) { toast('Delete failed: ' + error.message); return; }
+  if (!rows || !rows.length) {
+    dlog('mod', 'delete-blocked', { entry: String(entryId).slice(0, 8) });
+    toast('Delete failed — no permission to delete this entry'); return;
+  }
   toast('🗑️ Entry deleted — submitter notified');
   renderAdminFlags();
 }
