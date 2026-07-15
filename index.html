@@ -7340,7 +7340,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v683 · post-media-natural";
+const APP_VERSION = "v684 · fv-stage-fit";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -20032,6 +20032,37 @@ async function openFeedViewer(chId, startEntryId = null) {
       // and the blur hides the rest, so its black padding never shows.
       const _blurSrc = (target.querySelector('img') || {}).src || (target.querySelector('video') || {}).poster || '';
       if (_blurSrc) fvBlur.style.backgroundImage = `url("${_blurSrc}")`;
+      // v684 — size the stage to the video's ACTUAL aspect, so there is no
+      // leftover space and therefore nothing to fill. The v679 stage was
+      // hardcoded 9:16 (0.563), but iPhones record 9:19.5 (0.46) — taller — so
+      // the video could never fill the width and the blur was covering a gap
+      // that shouldn't have existed. Matching the container is what the native
+      // fullscreen player does, and it's why fullscreen never had bars.
+      // The blur stays purely as a fallback: it's only ever visible in the
+      // moment before dimensions arrive, or if a video's size can't be read.
+      // COST (accepted deliberately): entries now render at their true shape, so
+      // a 0.46 recording is ~790px tall, and the sheet height changes when
+      // swiping between entries of different aspects. There is no way to keep a
+      // fixed height AND have zero bars — any cap re-creates the gap.
+      const _fitStage = () => {
+        if (fvStage.dataset.fitted) return true;
+        const w = newVid.videoWidth, h = newVid.videoHeight;
+        if (!w || !h) return false;
+        fvStage.dataset.fitted = '1';
+        fvStage.style.aspectRatio = w + ' / ' + h;
+        fvStage.style.maxHeight = 'none';
+        dlog('stage', 'fit', { w, h, ar: +(w / h).toFixed(3) });
+        return true;
+      };
+      ['loadedmetadata', 'loadeddata', 'playing', 'resize'].forEach((ev) => {
+        newVid.addEventListener(ev, () => {
+          if (_fitStage()) return;
+          // iOS native HLS reports 0x0 until it has decoded — poll (same gotcha
+          // the v678 vdim diagnostic hit).
+          let n = 0;
+          const t = setInterval(() => { if (_fitStage() || ++n > 25) clearInterval(t); }, 200);
+        });
+      });
       newVid.addEventListener('ended', () => { dlog('audio', 'ended', { t: newVid.currentTime }); _userAudioActive = false; });
       newVid.addEventListener('pause', () => { dlog('audio', 'pause', { t: newVid.currentTime, ended: newVid.ended }); if (newVid.ended || newVid.currentTime === 0) _userAudioActive = false; });
       newVid.addEventListener('playing', () => dlog('audio', 'playing', { muted: newVid.muted, t: newVid.currentTime }));
