@@ -6321,18 +6321,16 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
   scroll-snap-stop: always !important;
 }
 
-/* 5 ── SIZE. 83vw == FB's 335px on a 402px screen.
-        MUST be vw, NOT %. iOS Safari does not resolve a percentage
-        flex-basis/min-width against the expected containing block inside a
-        flex container with overflow-x:auto — the value silently falls back and
-        the original `72vw` wins, so cards render at 289px and you see far too
-        much of card 2 ("showing 2 at once"). Chromium resolves % correctly,
-        which is why a headless test passed and the device didn't. The rest of
-        this block (aspect-ratio, bleed) applied fine — only % failed. */
+/* 5 ── SIZE. 83vw == FB's measured 335px card on a 402px screen.
+        NOTE: the WIDTH is NOT set here — it CANNOT be. renderFeedChallengeCard()
+        writes `flex:0 0 83vw!important; min-width:83vw!important` as an INLINE
+        style on each .fcc-entry-card, and inline !important sits at the very top
+        of the cascade, above stylesheet !important. Any width rule in here is
+        dead code. v673/v675 both tried and silently lost — the card stayed 72vw
+        (measured 289px) and I misdiagnosed it as an iOS unit-resolution bug.
+        To change the entry card width, edit the inline style in that renderer.
+        Everything below is safe because none of it is inline-locked. */
 #feedContainer .fcc-entry-card {
-  flex: 0 0 83vw !important;
-  min-width: 83vw !important;
-  max-width: none !important;
   border: none !important;
   border-radius: 10px !important;
 }
@@ -7340,7 +7338,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v684 · fv-stage-fit";
+const APP_VERSION = "v685 · entry-card-width";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -18582,7 +18580,7 @@ function renderFeedChallengeCard(ch) {
       const voteBtn = canVote && state.profile
         ? `<button class="fcc-vote-btn${iVoted ? ' voted' : ''}" data-fcc-vote="${e.id}" data-fcc-chid="${ch.id}">${iVoted ? '✓ Voted' : '🗳️ Vote'}</button>`
         : isMyEntry ? `<span class="fcc-your-entry">Your entry</span>` : '';
-      return `<div class="fcc-entry-card" style="flex:0 0 72vw!important;min-width:72vw!important;max-width:280px!important;cursor:pointer;" data-entry-open="${ch.id}" data-entry-id="${e.id}">
+      return `<div class="fcc-entry-card" style="flex:0 0 83vw!important;min-width:83vw!important;max-width:none!important;cursor:pointer;" data-entry-open="${ch.id}" data-entry-id="${e.id}">
         ${mediaHtml}
         <div class="fcc-entry-footer">
           <div class="fcc-entry-avatar">${honoredAvatarHTML(sub.id, avatarInner(sub.avatar), 36)}</div>
