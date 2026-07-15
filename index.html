@@ -7488,7 +7488,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v701 · decisions-clear-queue";
+const APP_VERSION = "v702 · one-champ-gate";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -12150,7 +12150,7 @@ async function loadChampionshipData() {
         // guessed FK name; if that FK doesn't exist the whole query silently
         // fails and fighters never load. Plain selects only — proven patterns.
         const { data: _inv, error: _invErr } = await db.from('challenge_invites')
-          .select('challenge_id, invited_user_id')
+          .select('challenge_id, invited_user_id, invite_status') // v702 — status needed by canEnterChampionship()
           .in('challenge_id', _activeChIds);
         if (_invErr) console.warn('fighter invites', _invErr);
         const _uids = [...new Set((_inv || []).map(r => r.invited_user_id).filter(Boolean))];
@@ -12168,6 +12168,7 @@ async function loadChampionshipData() {
             id: r.invited_user_id,
             name: p.name || 'Someone',
             avatar: p.avatar || '🔥',
+            invite_status: r.invite_status || 'pending', // v702 — roster still shows EVERY invitee (pending included); only entry is gated
           });
         });
       }
@@ -13072,6 +13073,26 @@ function renderChampionshipTab() {
 
 let _championshipLaunching = false;
 
+// v702 — ONE answer to "may this user enter this championship?".
+// There were THREE, and they disagreed:
+//   challenge detail   -> state.myChampInvite?.invite_status === 'accepted'
+//   challenges page    -> state.myChampInvite?.invite_status === 'accepted'
+//   feed card          -> champFighters roster membership, NO status check
+// The feed one let any INVITED user enter without ever accepting, because the
+// roster was built from challenge_invites with no invite_status filter. Three
+// copies of a rule is three chances to drift; this is the only copy now.
+// Source of truth: myChampInvite is a fresh per-challenge read and wins for the
+// open challenge; the roster (loaded in bulk) covers every other surface.
+function canEnterChampionship(ch) {
+  if (!ch || !ch.is_championship) return true; // not a championship — no invite gate
+  if (!state.profile) return false;
+  if (state.currentChallenge?.id === ch.id && state.myChampInvite) {
+    return state.myChampInvite.invite_status === 'accepted';
+  }
+  const mine = ((state.champFighters || {})[ch.id] || []).find(f => f.id === state.profile.id);
+  return !!mine && mine.invite_status === 'accepted';
+}
+
 /* ---------- CHAMPIONSHIP ACCEPT / DECLINE / RESERVE PROMOTION ---------- */
 async function respondToChampInvite(response) {
   const ch = state.currentChallenge;
@@ -13081,10 +13102,28 @@ async function respondToChampInvite(response) {
   if (acceptBtn) acceptBtn.disabled = true;
   if (declineBtn) declineBtn.disabled = true;
   try {
-    await db.from('challenge_invites')
+    // v702 — this used to not even destructure the result: no error check, no row
+    // count. It set local state to 'accepted' and toasted success no matter what
+    // the DB did. If RLS blocks the update (zero rows, error === null), you were
+    // told "You're in!", the submit button appeared, and then the next
+    // loadChallengeDetail() re-read the invite as 'pending' and it vanished —
+    // which is exactly how this was reported.
+    const { data: invRows, error: invErr } = await db.from('challenge_invites')
       .update({ invite_status: response, responded_at: new Date().toISOString() })
-      .eq('id', state.myChampInvite.id);
+      .eq('id', state.myChampInvite.id).select('id');
+    if (invErr) throw invErr;
+    if (!invRows || !invRows.length) {
+      dlog('champ', 'invite-write-blocked', { invite: String(state.myChampInvite.id).slice(0, 8) });
+      throw new Error('could not save your response');
+    }
     state.myChampInvite.invite_status = response;
+    // Keep the bulk roster in step, or canEnterChampionship() would still read
+    // 'pending' from it on the feed / challenges page until the next full load.
+    const _roster = (state.champFighters || {})[ch.id];
+    if (_roster) {
+      const _me = _roster.find(f => f.id === state.profile.id);
+      if (_me) _me.invite_status = response;
+    }
     if (response === 'accepted') {
       const alreadyEntered = (state.currentEntries || []).some(e => e.user_id === state.profile.id);
       toast(alreadyEntered
@@ -15811,7 +15850,7 @@ function renderChallenges() {
       // Championships (v635): entry restricted to accepted invitees, since
       // championships are now public (so everyone can watch) — the invite is
       // what gates entry, not the public flag.
-      && (!ch.is_championship || state.myChampInvite?.invite_status === 'accepted');
+      && canEnterChampionship(ch); // v702 — see canEnterChampionship
     const canVoteCh = isVotingPhase(ch.computedStatus);
 
     const entryCardsHtml = chEntries.map(e => {
@@ -16357,7 +16396,7 @@ function renderChallengeDetail() {
   const canEnter = state.profile && !userHasEntered && (
     (status === 'submitting' && !challengeFull) ||
     (isSdSub && amTiedPlayer)
-  ) && (!ch.is_championship || state.myChampInvite?.invite_status === 'accepted');
+  ) && canEnterChampionship(ch); // v702 — see canEnterChampionship
   document.getElementById('cdAddEntryBtn').style.display = canEnter ? 'block' : 'none';
   const cdWrap = document.getElementById('cdSubmitBtnWrap');
   if (cdWrap) cdWrap.style.display = canEnter ? 'block' : 'none';
@@ -18807,7 +18846,7 @@ function renderFeedChallengeCard(ch) {
     // Championships are invite-only for EVERYONE, admins included — only an
     // invited contender (present in the fighter roster) may enter. Mirrors the
     // DB trigger enforce_championship_invite so the UI and server agree.
-    && (!ch.is_championship || (state.champFighters?.[ch.id] || []).some(f => f.id === state.profile.id));
+    && canEnterChampionship(ch); // v702 — was roster membership with NO status check: an invited-but-not-accepted user could enter from the feed
 
 
   let entriesHtml = '';
