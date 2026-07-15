@@ -3585,16 +3585,21 @@ html[data-theme="light"] .ps-heat-card { background: #1a1008; }
 #seCompressCheck:checked + #seCompressSlider::after { transform: translateX(20px); }
 .fcc-entry-card {
   will-change: transform;
-  /* v693 — MEASURED, not guessed. At 402px (iPhone) the reference feed's tiles
-     are ~193 CSS px; ours were ~250, so we showed one card and a sliver and read
-     as a stuck carousel rather than a row.
-     46vw = 185px: two full cards + a real ~24px peek of the third. 48vw would
-     match the reference exactly at 193px, but 2x193+8 = 394 of 402 leaves the
-     third card fully offscreen and kills the scroll affordance the old 72vw was
-     built for. 8px shy of the reference is worth keeping the peek. */
-  flex: 0 0 46vw;
-  min-width: 46vw;
-  max-width: 200px; /* cap on large screens */
+  /* v700 REVERTS v693's narrowing (46vw / 185px) back to 72vw.
+     v693 measured a Facebook ad carousel at ~193px and matched it. The
+     measurement was right and the conclusion was wrong: an FB ad tile is built
+     to be glanced past, while an ENTRY is the product — people are here to judge
+     it and vote. At 185px a video entry is too small to evaluate, so every vote
+     costs a tap-through and the in-feed row stops earning its space.
+     It also made the row look broken: at 185px two entries fit on screen
+     (2x185+8 = 378 of 402), so with 2 entries nothing overflowed and the
+     horizontal scroll appeared to have been removed. At 72vw+ a second entry
+     always overflows, so the row always reads as scrollable.
+     Arena items are media-forward. Don't re-narrow this to match a feed whose
+     job is passive scrolling. */
+  flex: 0 0 72vw;
+  min-width: 72vw; /* always peek next card */
+  max-width: 280px; /* cap on large screens */
   background: var(--bg-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -6358,9 +6363,10 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
   scroll-snap-stop: always !important;
 }
 
-/* 5 ── SIZE. v696: the inline width is now 46vw (185px), not 83vw (334px) —
-        two cards per row plus a peek, measured against the reference feed's
-        ~193px tiles. The warning below still stands and is the whole point:
+/* 5 ── SIZE. 83vw == 335px on a 402px screen. v693 narrowed this to 46vw and
+        v700 put it back — see the note on .fcc-entry-card for why narrow was
+        wrong. The warning below is why v693's stylesheet edit silently did
+        nothing to the feed in the first place:
         NOTE: the WIDTH is NOT set here — it CANNOT be. renderFeedChallengeCard()
         writes `flex:0 0 83vw!important; min-width:83vw!important` as an INLINE
         style on each .fcc-entry-card, and inline !important sits at the very top
@@ -7482,7 +7488,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v699 · one-countdown";
+const APP_VERSION = "v700 · entry-width-restored";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -15866,7 +15872,7 @@ function renderChallenges() {
 
     const drawerHtml = (chEntries.length > 0 || canEnterCh || alreadyEntered) ? `
       <div class="fcc-feed-drawer">
-        ${chEntries.length > 0 ? `<div class="fcc-entries-scroll">${entryCardsHtml}<div style="flex:0 0 20vw;min-width:20vw;pointer-events:none;opacity:0;"></div></div>` : ''}
+        ${chEntries.length > 0 ? `<div class="fcc-entries-scroll">${entryCardsHtml}<div style="flex:0 0 28vw;min-width:28vw;pointer-events:none;opacity:0;"></div></div>` : ''}
         ${bottomBar}
       </div>` : '';
 
@@ -18843,7 +18849,7 @@ function renderFeedChallengeCard(ch) {
       const voteBtn = canVote && state.profile
         ? `<button class="fcc-vote-btn${iVoted ? ' voted' : ''}" data-fcc-vote="${e.id}" data-fcc-chid="${ch.id}">${iVoted ? '✓ Voted' : '🗳️ Vote'}</button>`
         : isMyEntry ? `<span class="fcc-your-entry">Your entry</span>` : '';
-      return `<div class="fcc-entry-card" style="flex:0 0 46vw!important;min-width:46vw!important;max-width:none!important;cursor:pointer;" data-entry-open="${ch.id}" data-entry-id="${e.id}">
+      return `<div class="fcc-entry-card" style="flex:0 0 83vw!important;min-width:83vw!important;max-width:none!important;cursor:pointer;" data-entry-open="${ch.id}" data-entry-id="${e.id}">
         ${mediaHtml}
         <div class="fcc-entry-footer">
           <div class="fcc-entry-avatar">${honoredAvatarHTML(sub.id, avatarInner(sub.avatar), 36)}</div>
@@ -18852,7 +18858,7 @@ function renderFeedChallengeCard(ch) {
           ${voteBtn}
         </div>
       </div>`;
-    }).join('') + `<div style="flex:0 0 20vw;min-width:20vw;pointer-events:none;opacity:0;"></div></div>`;
+    }).join('') + `<div style="flex:0 0 28vw;min-width:28vw;pointer-events:none;opacity:0;"></div></div>`;
   }
 
   // Bottom bar (v619): mirror the challenges-page states so the two surfaces
