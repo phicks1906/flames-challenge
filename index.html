@@ -7274,7 +7274,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v676 · video-dim-diagnostic";
+const APP_VERSION = "v677 · dbg-panel-collapse";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -13484,10 +13484,10 @@ function toggleDebugLog() {
   if (_debugLogOn && !panel) {
     panel = document.createElement('div');
     panel.id = 'debugLogPanel';
-    panel.style.cssText = 'position:fixed;left:0;right:0;top:0;height:38vh;z-index:99999;background:rgba(0,0,0,0.92);color:#0f0;font:10px/1.4 monospace;display:flex;flex-direction:column;border-bottom:2px solid #0f0;';
+    panel.style.cssText = 'position:fixed;left:0;right:0;top:0;height:30vh;z-index:99999;background:rgba(0,0,0,0.92);color:#0f0;font:10px/1.4 monospace;display:flex;flex-direction:column;border-bottom:2px solid #0f0;';
     panel.innerHTML = `<div style="display:flex;justify-content:space-between;padding:4px 8px;background:#0a0a0a;color:#fff;flex-shrink:0;">
       <span>🐛 Video Debug Log</span>
-      <span><button onclick="_debugLines.length=0;document.getElementById('debugLogBody').textContent='';" style="background:none;border:1px solid #555;color:#fff;margin-right:6px;border-radius:3px;">Clear</button><button onclick="copyDebugLog()" style="background:none;border:1px solid #555;color:#fff;margin-right:6px;border-radius:3px;">Copy</button><button onclick="toggleDebugLog()" style="background:none;border:1px solid #555;color:#fff;border-radius:3px;">✕</button></span>
+      <span><button onclick="_dbgCollapse()" id="dbgCollapseBtn" style="background:none;border:1px solid #555;color:#fff;margin-right:6px;border-radius:3px;">Hide ▲</button><button onclick="_debugLines.length=0;document.getElementById('debugLogBody').textContent='';" style="background:none;border:1px solid #555;color:#fff;margin-right:6px;border-radius:3px;">Clear</button><button onclick="copyDebugLog()" style="background:none;border:1px solid #555;color:#fff;margin-right:6px;border-radius:3px;">Copy</button><button onclick="toggleDebugLog()" style="background:none;border:1px solid #555;color:#fff;border-radius:3px;">✕</button></span>
     </div>
     <pre id="debugLogBody" style="margin:0;padding:6px 8px;overflow:auto;flex:1;white-space:pre-wrap;word-break:break-all;"></pre>`;
     document.body.appendChild(panel);
@@ -13498,6 +13498,19 @@ function toggleDebugLog() {
     panel.remove();
     toast('Debug log OFF');
   }
+}
+// v676 — collapse the debug panel to a thin bar so it stops covering the app
+// header/nav. The panel is position:fixed at top:0, so at full height it sits
+// right on the nav icons and makes the app unusable while logging.
+function _dbgCollapse() {
+  const p = document.getElementById('debugLogPanel');
+  const b = document.getElementById('dbgCollapseBtn');
+  const body = document.getElementById('debugLogBody');
+  if (!p || !body) return;
+  const collapsed = body.style.display === 'none';
+  body.style.display = collapsed ? '' : 'none';
+  p.style.height = collapsed ? '30vh' : 'auto';
+  if (b) b.textContent = collapsed ? 'Hide ▲' : 'Show ▼';
 }
 function copyDebugLog() {
   const text = _debugLines.join('\n');
