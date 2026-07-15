@@ -7488,7 +7488,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v700 · entry-width-restored";
+const APP_VERSION = "v701 · decisions-clear-queue";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -22592,6 +22592,7 @@ async function renderAdminFlags() {
   }).join('');
   panel.innerHTML =
     `<div id="videoModQueueSection" style="margin-bottom:8px"><div style="color:var(--text-dim);font-size:13px;padding:12px 0">Loading video review queue…</div></div>` +
+    `<div id="recentDecisionsSection" style="margin-bottom:8px"></div>` +
     `<div id="modQueueSection" style="margin-bottom:8px"><div style="color:var(--text-dim);font-size:13px;padding:12px 0">Loading moderation queue…</div></div>` +
     togglesHtml;
 
@@ -22600,7 +22601,12 @@ async function renderAdminFlags() {
   try {
     const { data: videoQueue } = await db.from('entries')
       .select('id, challenge_id, media_url, poster_url, caption, moderation_status, moderation_reason, moderation_checked_at, submitter:profiles!entries_user_id_fkey(id, name, avatar)')
-      .in('moderation_status', ['escalated', 'flagged', 'rejected'])
+      // v701 — 'rejected' REMOVED. A decided entry must leave the queue; keeping
+      // rejected in the active filter meant a reject decision changed the badge
+      // but never cleared the row, so the only way to empty the queue was Delete.
+      // Decided rows now live in the Recent Decisions section below, where they
+      // stay reversible.
+      .in('moderation_status', ['escalated', 'flagged'])
       .order('moderation_status', { ascending: true }) // 'escalated' sorts before 'flagged'/'rejected' alphabetically
       .order('moderation_checked_at', { ascending: false })
       .limit(50);
@@ -22639,6 +22645,39 @@ async function renderAdminFlags() {
     // moderation columns likely not migrated yet — fail quietly, don't block the rest of Admin
     console.warn('video mod queue load failed (migration may be pending):', e);
     if (vqs) vqs.innerHTML = '';
+  }
+
+  // ── v701: RECENT DECISIONS. Removing 'rejected' from the active queue fixes
+  // the "decision never clears" bug, but on its own it would strand a mis-tapped
+  // Reject: the entry's media is blocked for everyone including the submitter,
+  // and nothing in the UI could reach it again. A moderation tool must be
+  // reversible. Last 7 days, last 20, one tap back to the queue.
+  const rds = document.getElementById('recentDecisionsSection');
+  try {
+    const since = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+    const { data: decided } = await db.from('entries')
+      .select('id, moderation_status, moderation_checked_at, submitter:profiles!entries_user_id_fkey(id, name)')
+      .in('moderation_status', ['approved', 'rejected'])
+      .gte('moderation_checked_at', since)
+      .order('moderation_checked_at', { ascending: false })
+      .limit(20);
+    if (rds) {
+      const dl = decided || [];
+      rds.innerHTML = dl.length === 0 ? '' :
+        `<div style="font-size:15px;font-weight:700;margin-bottom:8px">🕘 Recent Decisions (${dl.length})</div>` +
+        `<div style="font-size:12px;color:var(--text-dim);padding-bottom:8px">Last 7 days. Undo puts an entry back in the review queue.</div>` +
+        dl.map(d => {
+          const rej = d.moderation_status === 'rejected';
+          return `<div style="display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px">
+            <span style="font-size:11px;font-weight:700;color:${rej ? '#ff2d1f' : '#4cd964'};text-transform:uppercase;flex:0 0 68px">${rej ? '🚫 Rejected' : '✅ Approved'}</span>
+            <span style="font-size:12px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(d.submitter?.name || 'Unknown')}</span>
+            <span style="font-size:11px;color:var(--text-dim)">${timeAgo(d.moderation_checked_at)}</span>
+            <button onclick="undoModeration('${d.id}')" style="padding:4px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-weight:600;cursor:pointer">Undo</button>
+          </div>`;
+        }).join('') + `<hr style="border:none;border-top:1px solid var(--border);margin:8px 0 16px">`;
+    }
+  } catch (e) {
+    if (rds) rds.innerHTML = '';
   }
 
   const { data: queue } = await db.from('moderation_queue').select('*').eq('status','pending').order('created_at',{ascending:false}).limit(50);
@@ -22682,19 +22721,55 @@ async function approveVideoEntry(entryId, urgent = false) {
     toast('Approve failed — no permission to update this entry'); return;
   }
   toast('✅ Entry approved — now live');
+  await _refreshAfterModeration(); // v701
   renderAdminFlags();
 }
+// v701 — put a decided entry back in the review queue. Sets 'flagged' rather
+// than the original status: we don't record what it was before the decision, and
+// 'flagged' is the safe direction — hidden from everyone but the submitter and
+// admin until someone decides again. Never guess back to a MORE permissive state.
+async function undoModeration(entryId) {
+  const { data: rows, error } = await db.from('entries')
+    .update({ moderation_status: 'flagged', moderation_checked_at: new Date().toISOString() })
+    .eq('id', entryId).select('id');
+  if (error) { toast('Undo failed: ' + error.message); return; }
+  if (!rows || !rows.length) { toast('Undo failed — no permission to update this entry'); return; }
+  toast('↩️ Back in the review queue');
+  await _refreshAfterModeration();
+  renderAdminFlags();
+}
+
 async function approveAllFlagged() {
   // Bulk-approve ONLY the non-urgent 'flagged' items. Escalated/urgent entries
   // are deliberately excluded — those always require individual review.
   if (!confirm('Approve all non-urgent flagged videos? Urgent ones are not included.')) return;
-  const { error } = await db.from('entries')
+  // v701 — row count, not error (v689 fixed the singles and missed this one).
+  const { data: rows, error } = await db.from('entries')
     .update({ moderation_status: 'approved', moderation_checked_at: new Date().toISOString() })
-    .eq('moderation_status', 'flagged');
-  if (error) { toast('Bulk approve failed'); return; }
-  toast('✅ All non-urgent flagged videos approved');
+    .eq('moderation_status', 'flagged').select('id');
+  if (error) { toast('Bulk approve failed: ' + error.message); return; }
+  if (!rows || !rows.length) { toast('Nothing approved — no permission, or none left'); return; }
+  toast(`✅ ${rows.length} video${rows.length === 1 ? '' : 's'} approved`);
+  await _refreshAfterModeration();
   renderAdminFlags();
 }
+// v701 — after ANY moderation decision, rebuild the caches the rest of the app
+// renders from. loadFeedActivity() filters non-approved entries out AT FETCH
+// TIME, so a flagged entry was never in state.feedEntries to begin with;
+// approving it changed the DB and nothing re-read it, so the entry stayed
+// invisible in the challenge until a hard reload. Admin actions must refresh
+// what the admin is about to go look at.
+async function _refreshAfterModeration() {
+  state.feedEntries = [];
+  state.currentEntries = [];
+  try { await loadFeedActivity(); } catch (e) { dlog('mod', 'refresh-feed-fail', { e: String(e).slice(0, 50) }); }
+  // If a challenge sheet is open behind Admin, re-read it too — it holds its own
+  // entry list and would otherwise still be showing the pre-decision set.
+  if (state.currentChallenge?.id) {
+    try { await loadChallengeDetail(state.currentChallenge.id); } catch (e) { dlog('mod', 'refresh-detail-fail', { e: String(e).slice(0, 50) }); }
+  }
+}
+
 // Tell the submitter their entry didn't pass review (v617). Fire-and-forget.
 async function notifyEntryModerated(entryId, action) {
   try {
@@ -22726,6 +22801,7 @@ async function rejectVideoEntry(entryId) {
   }
   notifyEntryModerated(entryId, 'rejected');
   toast('🚫 Entry rejected — hidden from everyone, submitter notified');
+  await _refreshAfterModeration(); // v701
   renderAdminFlags();
 }
 async function removeVideoEntry(entryId) {
@@ -22741,6 +22817,7 @@ async function removeVideoEntry(entryId) {
     toast('Delete failed — no permission to delete this entry'); return;
   }
   toast('🗑️ Entry deleted — submitter notified');
+  await _refreshAfterModeration(); // v701
   renderAdminFlags();
 }
 
