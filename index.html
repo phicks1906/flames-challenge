@@ -7274,7 +7274,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v677 · dbg-panel-collapse";
+const APP_VERSION = "v678 · vdim-poll-fix";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -13463,21 +13463,36 @@ function dlog(tag, msg, data) {
   if (body) { body.textContent = _debugLines.join('\n'); body.scrollTop = body.scrollHeight; }
 }
 
-// v676 DIAGNOSTIC — reports every video's TRUE intrinsic dimensions.
-// Screenshots can't answer whether black bars are baked into the file or added
-// by the player, because a <video> letterboxes by default to preserve aspect.
+// v678 DIAGNOSTIC — reports every video's TRUE intrinsic dimensions.
+// Screenshots can't tell whether black bars are baked into the file or added by
+// the player (a <video> letterboxes by default to preserve aspect), but
 // videoWidth/videoHeight are the decoded frame's real pixels, so they settle it:
-//   ar ~1.78 (e.g. 1280x720) on a PORTRAIT video  -> bars are BAKED INTO the file
-//   ar ~0.56 (e.g. 720x1280)                      -> file is fine, bars are the PLAYER
-// 'loadedmetadata' does not bubble, hence capture phase (true).
-document.addEventListener('loadedmetadata', (e) => {
-  const v = e.target;
-  if (!v || v.tagName !== 'VIDEO') return;
+//   portrait video reporting ar ~1.78 (1280x720) -> bars are BAKED IN
+//   portrait video reporting ar ~0.56 (720x1280) -> file is fine, PLAYER adds them
+// v677 tried this on 'loadedmetadata' alone and logged w:0,h:0 for Bunny: iOS's
+// native HLS player fires loadedmetadata BEFORE it has decoded dimensions. So we
+// listen on several events AND poll until the numbers are real, reporting once.
+function _vdimReport(v, why) {
+  const w = v.videoWidth, h = v.videoHeight;
+  if (!w || !h) return false;          // not known yet — keep waiting
+  if (v._vdimDone) return true;
+  v._vdimDone = true;
   const src = v.currentSrc || v.src || '';
   const host = src.includes('b-cdn.net') ? 'BUNNY' : src.includes('supabase') ? 'SUPABASE' : 'other';
-  const w = v.videoWidth, h = v.videoHeight;
-  dlog('vdim', host, { w, h, ar: h ? +(w / h).toFixed(3) : 0, shape: w > h ? 'LANDSCAPE' : 'portrait' });
-}, true);
+  dlog('vdim', host, { w, h, ar: +(w / h).toFixed(3), shape: w > h ? 'LANDSCAPE' : 'PORTRAIT', via: why });
+  return true;
+}
+['loadedmetadata', 'loadeddata', 'playing', 'resize'].forEach((ev) => {
+  document.addEventListener(ev, (e) => {
+    const v = e.target;
+    if (!v || v.tagName !== 'VIDEO' || v._vdimDone) return;
+    if (_vdimReport(v, ev)) return;
+    let n = 0;
+    const t = setInterval(() => {
+      if (_vdimReport(v, ev + '+poll') || ++n > 25) clearInterval(t);
+    }, 200);
+  }, true); // capture — these events don't bubble
+});
 function toggleDebugLog() {
   _debugLogOn = !_debugLogOn;
   let panel = document.getElementById('debugLogPanel');
