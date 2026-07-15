@@ -6356,6 +6356,42 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 }
 /* ═══════════════════ end v673 · FULL-BLEED FEED ═══════════════════ */
 
+/* ══════════════════════════════════════════════════════════════════════════
+   v679 · FEED-VIEWER STAGE + BLURRED BACKDROP   (revert = delete this block)
+
+   Kills the black bars around playing entries. They were NOT baked into the
+   file — the v678 vdim log proved Bunny's encode is a clean 720x1280 portrait
+   (ar 0.563). The bars were `background:#000` showing through the browser's
+   own letterboxing, which happens because a 0.563 video can't fill a wider box.
+
+   Stage is 9:16 (phone-video shape), so portrait entries — nearly all of them —
+   fill it with little or no blur. Off-aspect entries (landscape, square) get a
+   blurred blowup of their own poster instead of black. Nothing is ever cropped,
+   and every entry is the same height so the horizontal pager stays steady.
+   max-height caps it so the stage can't outgrow the sheet on tall screens.
+   ══════════════════════════════════════════════════════════════════════════ */
+.fv-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  max-height: 70vh;
+  background: #000;          /* only ever visible if the poster fails to load */
+  overflow: hidden;
+  border-radius: 4px;
+}
+.fv-stage-blur {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  /* scale past the edges so the blur has no soft/transparent border, and dim it
+     so it reads as a backdrop rather than competing with the real video */
+  transform: scale(1.18);
+  filter: blur(26px) saturate(1.35) brightness(0.68);
+  pointer-events: none;
+}
+/* ═══════════════════ end v679 ═══════════════════ */
+
 .dm-compose-input { width:100%; box-sizing:border-box; margin-bottom:14px; border-radius:12px; border:1px solid var(--border); background:var(--overlay-2); color:var(--text); padding:12px 16px; font-size:16px; outline:none; }
 </style>
 
@@ -7274,7 +7310,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v678 · vdim-poll-fix";
+const APP_VERSION = "v679 · fv-blur-stage";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -19826,7 +19862,30 @@ async function openFeedViewer(chId, startEntryId = null) {
       newVid.muted = false;   // explicit: this is a user-gesture play, sound allowed
       newVid.volume = 1;
       newVid.preload = 'auto';
-      newVid.style.cssText = 'width:100%;max-height:55vmax;display:block;background:#000;border-radius:4px;';
+      // v679 — 9:16 stage + blurred backdrop instead of black bars.
+      // The bars were never Bunny's fault: the v678 vdim log proved the encode is
+      // a clean 720x1280 PORTRAIT (ar 0.563). The bars came from THIS element —
+      // max-height:55vmax stops a 0.563 video from ever filling the width, the
+      // browser letterboxes to preserve aspect (correct, spec behaviour), and
+      // background:#000 painted the leftover gap black.
+      // Now: a fixed-height 9:16 stage (matches phone video, so portrait entries
+      // essentially fill it), a transparent video with object-fit:contain over a
+      // blurred blowup of the poster. Nothing is cropped, and the height is the
+      // same for every entry so the horizontal pager doesn't jump as you swipe.
+      // The blur backdrop is a STATIC poster image, not a second <video> — a
+      // second decoder per entry would fight iOS's decoder-slot limit, which this
+      // handler already works hard to protect (it pauses every other video above).
+      newVid.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block;background:transparent;';
+      const fvStage = document.createElement('div');
+      fvStage.className = 'fv-stage';
+      const fvBlur = document.createElement('div');
+      fvBlur.className = 'fv-stage-blur';
+      // Reuse whatever still is already on screen (preview.webp <img>, or the
+      // <video poster>) as the blur source. Bunny's thumbnail is a padded 16:9,
+      // but background-size:cover on a 9:16 stage crops to roughly the content
+      // and the blur hides the rest, so its black padding never shows.
+      const _blurSrc = (target.querySelector('img') || {}).src || (target.querySelector('video') || {}).poster || '';
+      if (_blurSrc) fvBlur.style.backgroundImage = `url("${_blurSrc}")`;
       newVid.addEventListener('ended', () => { dlog('audio', 'ended', { t: newVid.currentTime }); _userAudioActive = false; });
       newVid.addEventListener('pause', () => { dlog('audio', 'pause', { t: newVid.currentTime, ended: newVid.ended }); if (newVid.ended || newVid.currentTime === 0) _userAudioActive = false; });
       newVid.addEventListener('playing', () => dlog('audio', 'playing', { muted: newVid.muted, t: newVid.currentTime }));
@@ -19846,7 +19905,10 @@ async function openFeedViewer(chId, startEntryId = null) {
             <div style="font-size:30px;margin-bottom:8px">⏳</div>
             Still processing — tap to retry
           </div>`;
-        try { newVid.replaceWith(wrap); } catch(_) {}
+        // v679: replace the STAGE, not the bare video — the video now lives
+        // inside .fv-stage alongside the blur layer, so replacing only the video
+        // would leave an orphaned blurred backdrop behind the retry card.
+        try { (fvStage.parentNode ? fvStage : newVid).replaceWith(wrap); } catch(_) {}
         // If it's a Bunny video that isn't finished yet, poll and auto-restore.
         if (_fvEncGuid) {
           _mountProcessingPlaceholder(wrap, _fvEncGuid, () => {
@@ -19854,7 +19916,9 @@ async function openFeedViewer(chId, startEntryId = null) {
           });
         }
       }, { once: true });
-      target.replaceWith(newVid);
+      fvStage.appendChild(fvBlur);
+      fvStage.appendChild(newVid);
+      target.replaceWith(fvStage);
       newVid.play().catch(() => {});      // synchronous within the gesture
       attachHlsIfNeeded(newVid);          // no-op on iOS, non-blocking
     }, { once: false });
