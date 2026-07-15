@@ -6392,6 +6392,36 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 }
 /* ═══════════════════ end v679 ═══════════════════ */
 
+/* ══════════════════════════════════════════════════════════════════════════
+   v683 · POST MEDIA — natural aspect, no letterbox   (revert = delete block)
+
+   The v682 log proved post videos are pristine: [vdim] SUPABASE
+   {"w":1206,"h":2622,"ar":0.46,"PORTRAIT"} — the raw original, straight from
+   Supabase, never re-encoded, never near Bunny. The bars were .post-card-media's
+   own doing: max-height:500px means a 0.46 video can't fill 402px of width, so
+   the browser letterboxes (correct) and background:#000 painted the gap.
+
+   Unlike the feed viewer, posts are NOT a horizontal pager — they stack
+   vertically, so nothing jumps if heights differ. That means no fixed height is
+   needed and no blurred backdrop either: just let the video be its own shape.
+   Nothing cropped, no black, no second decoder.
+
+   TRADEOFF: a full-height phone recording now renders ~874px — about one
+   screen. That's honest to the content and matches how Reels/TikTok feel, but
+   it is taller than the old 500px cap. Any cap below 874 brings the bars back
+   for a 9:19.5 recording, so it's height or black — not both.
+   ══════════════════════════════════════════════════════════════════════════ */
+.post-card-media {
+  max-height: none;
+  background: transparent;
+}
+.post-card-media img,
+.post-card-media video {
+  max-height: none;
+  height: auto;
+}
+/* ═══════════════════ end v683 ═══════════════════ */
+
 .dm-compose-input { width:100%; box-sizing:border-box; margin-bottom:14px; border-radius:12px; border:1px solid var(--border); background:var(--overlay-2); color:var(--text); padding:12px 16px; font-size:16px; outline:none; }
 </style>
 
@@ -7310,7 +7340,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v682 · post-diagnostic";
+const APP_VERSION = "v683 · post-media-natural";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
