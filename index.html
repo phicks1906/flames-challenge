@@ -3585,9 +3585,16 @@ html[data-theme="light"] .ps-heat-card { background: #1a1008; }
 #seCompressCheck:checked + #seCompressSlider::after { transform: translateX(20px); }
 .fcc-entry-card {
   will-change: transform;
-  flex: 0 0 72vw;
-  min-width: 72vw; /* always peek next card */
-  max-width: 280px; /* cap on large screens */
+  /* v693 — MEASURED, not guessed. At 402px (iPhone) the reference feed's tiles
+     are ~193 CSS px; ours were ~250, so we showed one card and a sliver and read
+     as a stuck carousel rather than a row.
+     46vw = 185px: two full cards + a real ~24px peek of the third. 48vw would
+     match the reference exactly at 193px, but 2x193+8 = 394 of 402 leaves the
+     third card fully offscreen and kills the scroll affordance the old 72vw was
+     built for. 8px shy of the reference is worth keeping the peek. */
+  flex: 0 0 46vw;
+  min-width: 46vw;
+  max-width: 200px; /* cap on large screens */
   background: var(--bg-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -6398,6 +6405,40 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 /* ═══════════════════ end v679 ═══════════════════ */
 
 /* ══════════════════════════════════════════════════════════════════════════
+   v693 · AUDIO ENTRY TILE   (revert = delete block + _audioTileHtml/toggleFccAudio)
+   Fills the card edge-to-edge like a photo/video tile does — flame-palette
+   gradient, one big control. The old empty-cream tile with a native controls
+   bar is gone; the bar could not fit a 48vw card anyway.
+   ══════════════════════════════════════════════════════════════════════════ */
+.fcc-audio-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(255,200,87,0.25), transparent 55%),
+    radial-gradient(ellipse at 70% 85%, rgba(255,45,31,0.35), transparent 60%),
+    linear-gradient(160deg, #2a130a 0%, #4a1c0c 45%, #7a2d10 100%);
+}
+.fcc-audio-art {
+  font-size: 34px;
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.5));
+}
+.fcc-audio-btn {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 17px;
+  color: #fff;
+  background: rgba(255,106,44,0.92);
+  box-shadow: 0 3px 12px rgba(0,0,0,0.45);
+}
+/* ═══════════════════ end v693 ═══════════════════ */
+
+/* ══════════════════════════════════════════════════════════════════════════
    v683 · POST MEDIA — natural aspect, no letterbox   (revert = delete block)
 
    The v682 log proved post videos are pristine: [vdim] SUPABASE
@@ -7352,7 +7393,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v692 · delete-unless-others";
+const APP_VERSION = "v693 · two-up-cards-audio-tile";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11516,6 +11557,46 @@ function enableTicker() {
 let _lazyVideoObserver = null;
 let _activePreview = null;
 let _userAudioActive = false; // set synchronously on user tap; blocks lazy previews
+
+// v693 — AUDIO ENTRY TILE. The old tile was a tiny music note and a native
+// <audio controls> bar floating in an empty card — at feed size, two-thirds of
+// the tile was blank background, which is what made audio challenges read as
+// broken next to filled photo/video tiles (the reference feed never shows an
+// empty tile). This fills the whole card with a flame-palette gradient and one
+// big play control. The native bar also cannot fit a 48vw card; one button can.
+// Used by BOTH entry-card renderers (feed drawer + challenges page) — one
+// definition so they can never drift apart again.
+function _audioTileHtml(e) {
+  if (!e.media_url) return `<div class="fcc-entry-media fcc-entry-placeholder">🎵</div>`;
+  return `<div class="fcc-entry-media fcc-audio-tile" onclick="toggleFccAudio(this, event)" role="button" tabindex="0" aria-label="Play audio entry">
+      <audio src="${escapeHtml(e.media_url)}" preload="none"></audio>
+      <div class="fcc-audio-art">🎵</div>
+      <div class="fcc-audio-btn">▶</div>
+    </div>`;
+}
+
+// Tap anywhere on the tile toggles playback. Pauses every other audio/video
+// first — one sound at a time, same rule the video path enforces.
+function toggleFccAudio(tile, ev) {
+  if (ev) ev.stopPropagation();
+  const a = tile.querySelector('audio');
+  const btn = tile.querySelector('.fcc-audio-btn');
+  if (!a) return;
+  if (a.paused) {
+    _userAudioActive = true; // block lazy previews from stealing the session
+    document.querySelectorAll('audio, video').forEach(m => { if (m !== a) m.pause(); });
+    a.play().catch(() => {});
+    if (btn) btn.textContent = '⏸';
+    if (!a._fccWired) { // guard: tiles re-render, but never attach twice to one element
+      a._fccWired = true;
+      a.addEventListener('ended', () => { if (btn) btn.textContent = '▶'; });
+      a.addEventListener('pause', () => { if (btn) btn.textContent = '▶'; });
+    }
+  } else {
+    a.pause();
+    if (btn) btn.textContent = '▶';
+  }
+}
 let _lastFvTapTs = 0;         // tap de-dupe: timestamp of last fv-play activation
 let _lastFvTapSrc = null;     // tap de-dupe: src of last fv-play activation
 
@@ -15660,12 +15741,7 @@ function renderChallenges() {
           ? `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}" data-fcc-entry="${e.id}" data-fv-encguid="${_bunnyGuidFromUrl(e.media_url)||''}" data-fv-created="${e.created_at||''}"><video data-src="${escapeHtml(e.media_url)}" ${_videoPosterAttr(e.media_url, e.poster_url)} muted playsinline preload="none" data-lazy-video style="width:100%;height:100%;object-fit:cover;display:block;"></video><div class="fcc-play-overlay">▶</div></div>`
           : `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}" data-fcc-entry="${e.id}" data-fv-encguid="${_bunnyGuidFromUrl(e.media_url)||''}" data-fv-created="${e.created_at||''}" style="position:relative;"><video data-src="${escapeHtml(e.media_url)}" muted playsinline preload="none" data-lazy-video style="width:100%;height:100%;object-fit:cover;display:block;"></video><div class="fcc-play-overlay">▶</div></div>`;
       } else if (eMt === 'audio') {
-        mHtml = e.media_url
-          ? `<div class="fcc-entry-media" style="background:var(--surface-2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:12px;">
-              <div style="font-size:28px;">🎵</div>
-              <audio src="${escapeHtml(e.media_url)}" controls preload="metadata" style="width:100%;max-width:260px;accent-color:var(--ember);"></audio>
-            </div>`
-          : `<div class="fcc-entry-media fcc-entry-placeholder">🎵</div>`;
+        mHtml = _audioTileHtml(e); // v693 — shared tile, see _audioTileHtml
       } else if (e.media_type === 'text' && e.caption) {
         mHtml = `<div class="fcc-entry-media fcc-text-entry">${escapeHtml(e.caption.slice(0,80))}${e.caption.length>80?'…':''}</div>`;
       } else {
@@ -15701,7 +15777,7 @@ function renderChallenges() {
 
     const drawerHtml = (chEntries.length > 0 || canEnterCh || alreadyEntered) ? `
       <div class="fcc-feed-drawer">
-        ${chEntries.length > 0 ? `<div class="fcc-entries-scroll">${entryCardsHtml}<div style="flex:0 0 28vw;min-width:28vw;pointer-events:none;opacity:0;"></div></div>` : ''}
+        ${chEntries.length > 0 ? `<div class="fcc-entries-scroll">${entryCardsHtml}<div style="flex:0 0 20vw;min-width:20vw;pointer-events:none;opacity:0;"></div></div>` : ''}
         ${bottomBar}
       </div>` : '';
 
@@ -18654,12 +18730,7 @@ function renderFeedChallengeCard(ch) {
           </div>`;
         }
       } else if (e.media_type === 'audio') {
-        mediaHtml = e.media_url
-          ? `<div class="fcc-entry-media" style="background:var(--surface-2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:12px;">
-              <div style="font-size:28px;">🎵</div>
-              <audio src="${escapeHtml(e.media_url)}" controls preload="metadata" style="width:100%;max-width:240px;accent-color:var(--ember);"></audio>
-            </div>`
-          : `<div class="fcc-entry-media fcc-entry-placeholder">🎵</div>`;
+        mediaHtml = _audioTileHtml(e); // v693 — shared tile, see _audioTileHtml
       } else if (e.media_type === 'text' && e.caption) {
         mediaHtml = `<div class="fcc-entry-media fcc-text-entry">${escapeHtml(e.caption.slice(0, 80))}${e.caption.length > 80 ? '…' : ''}</div>`;
       } else {
@@ -18678,7 +18749,7 @@ function renderFeedChallengeCard(ch) {
           ${voteBtn}
         </div>
       </div>`;
-    }).join('') + `<div style="flex:0 0 28vw;min-width:28vw;pointer-events:none;opacity:0;"></div></div>`;
+    }).join('') + `<div style="flex:0 0 20vw;min-width:20vw;pointer-events:none;opacity:0;"></div></div>`;
   }
 
   // Bottom bar (v619): mirror the challenges-page states so the two surfaces
