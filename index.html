@@ -6283,22 +6283,35 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
    event. Excluded via :not(.champ-gold) below.
    ══════════════════════════════════════════════════════════════════════════ */
 
-/* 1 ── Tighten the inter-card gap toward FB's rhythm (was 14px). The gap itself
-        is now the separator, since the borders are gone. */
-#feedContainer { gap: 8px !important; }
+/* 1 ── v696: gap back up. With borders restored the gap is no longer the only
+        separator, but cards need room to read as separate objects. */
+#feedContainer { gap: 12px !important; }
 
-/* 2 ── Break out of .feed-wrap { padding: 8px 18px 60px }. Uses #feedContainer
-        so the challenges page (which reuses .fcc-challenge-wrap) is untouched. */
+/* 2 ── v696 REVERSES v673's BLEED.
+        v673 pushed every feed item edge-to-edge, borderless, to match a Facebook
+        recording — and deliberately exempted .champ-gold so the championship
+        would be the one framed card in the feed. That exemption is the tell: the
+        framed card was the one that read as designed. Everything else read as a
+        band of content lying on the page, with its own byline and action row
+        floating outside any container.
+        The championship is now the model rather than the exception, so every feed
+        item is a real card: inset, bordered, rounded, clipped.
+        COST, accepted: the championship no longer stands out by being the only
+        framed thing. It still stands out — gold frame, gold type, crown, roster —
+        but that distinction is now carried by its styling alone, not by contrast
+        with a borderless feed. If the championship ever stops feeling like an
+        event, this is the trade that did it. */
 #feedContainer > .fcc-challenge-wrap:not(.champ-gold),
 #feedContainer > .post-card,
 #feedContainer > .feed-poll-card,
 #feedContainer > .feed-activity-card,
 #feedContainer > .feed-card {
-  margin-left: -18px !important;
-  margin-right: -18px !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
   margin-bottom: 0 !important;
-  border: none !important;
-  border-radius: 0 !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 16px !important;
+  overflow: hidden !important;
 }
 
 /* 3 ── Drawer chrome (the entries shelf under a challenge card) */
@@ -6314,7 +6327,9 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 /* 4 ── Entry scroller runs flush to the screen edge (FB starts its card at x=0) */
 #feedContainer .fcc-entries-scroll {
-  padding: 0 0 8px !important;
+  /* v696 — was `0 0 8px` so entries ran to the screen edge under the bleed.
+     The card has a border again, so entries must sit inside it. */
+  padding: 0 10px 8px !important;
   gap: 8px !important;
 }
 
@@ -6328,14 +6343,16 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
          where center and start are the same thing anyway. */
 #feedContainer .fcc-entries-scroll {
   scroll-snap-type: x mandatory !important;
-  scroll-padding-left: 0 !important;
+  scroll-padding-left: 10px !important; /* v696 — match the inset above, or snap lands under the border */
 }
 #feedContainer .fcc-entry-card {
   scroll-snap-align: start !important;
   scroll-snap-stop: always !important;
 }
 
-/* 5 ── SIZE. 83vw == FB's measured 335px card on a 402px screen.
+/* 5 ── SIZE. v696: the inline width is now 46vw (185px), not 83vw (334px) —
+        two cards per row plus a peek, measured against the reference feed's
+        ~193px tiles. The warning below still stands and is the whole point:
         NOTE: the WIDTH is NOT set here — it CANNOT be. renderFeedChallengeCard()
         writes `flex:0 0 83vw!important; min-width:83vw!important` as an INLINE
         style on each .fcc-entry-card, and inline !important sits at the very top
@@ -7457,7 +7474,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v695 · flyer-preview-card";
+const APP_VERSION = "v696 · cards-not-bands";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -18817,7 +18834,7 @@ function renderFeedChallengeCard(ch) {
       const voteBtn = canVote && state.profile
         ? `<button class="fcc-vote-btn${iVoted ? ' voted' : ''}" data-fcc-vote="${e.id}" data-fcc-chid="${ch.id}">${iVoted ? '✓ Voted' : '🗳️ Vote'}</button>`
         : isMyEntry ? `<span class="fcc-your-entry">Your entry</span>` : '';
-      return `<div class="fcc-entry-card" style="flex:0 0 83vw!important;min-width:83vw!important;max-width:none!important;cursor:pointer;" data-entry-open="${ch.id}" data-entry-id="${e.id}">
+      return `<div class="fcc-entry-card" style="flex:0 0 46vw!important;min-width:46vw!important;max-width:none!important;cursor:pointer;" data-entry-open="${ch.id}" data-entry-id="${e.id}">
         ${mediaHtml}
         <div class="fcc-entry-footer">
           <div class="fcc-entry-avatar">${honoredAvatarHTML(sub.id, avatarInner(sub.avatar), 36)}</div>
