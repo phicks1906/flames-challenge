@@ -6321,11 +6321,17 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
   scroll-snap-stop: always !important;
 }
 
-/* 5 ── SIZE. 83% of the scroller == FB's 335px on a 402px screen. Uses % not vw
-        so it stays correct inside .feed-wrap's 720px max-width on desktop. */
+/* 5 ── SIZE. 83vw == FB's 335px on a 402px screen.
+        MUST be vw, NOT %. iOS Safari does not resolve a percentage
+        flex-basis/min-width against the expected containing block inside a
+        flex container with overflow-x:auto — the value silently falls back and
+        the original `72vw` wins, so cards render at 289px and you see far too
+        much of card 2 ("showing 2 at once"). Chromium resolves % correctly,
+        which is why a headless test passed and the device didn't. The rest of
+        this block (aspect-ratio, bleed) applied fine — only % failed. */
 #feedContainer .fcc-entry-card {
-  flex: 0 0 83% !important;
-  min-width: 83% !important;
+  flex: 0 0 83vw !important;
+  min-width: 83vw !important;
   max-width: none !important;
   border: none !important;
   border-radius: 10px !important;
@@ -6333,6 +6339,20 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 #feedContainer .fcc-entry-media {
   height: auto !important;
   aspect-ratio: 4 / 5 !important;
+}
+
+/* 6 ── FLYER POSTERS. The flyer <img> is inline-styled
+        `max-height:420px; object-fit:cover`, which CROPS it. A flyer is a
+        generated poster — its whole point is the title, deadline and
+        "Enter now on FLAMESCHALLENGE" footer. At the old 364px card width a
+        9:16 poster wanted 647px and got cut to 420px; going full-bleed made the
+        card 402px wide, so it wanted 715px and lost ~41%, slicing the top badge
+        and the footer clean off. Show the poster whole at its natural aspect.
+        Only the IMAGE is uncapped — a video flyer keeps its 420px cover crop,
+        since that's a preview thumbnail, not a poster. */
+#feedContainer .post-card img[alt="Challenge flyer"] {
+  max-height: none !important;
+  object-fit: contain !important;
 }
 /* ═══════════════════ end v673 · FULL-BLEED FEED ═══════════════════ */
 
@@ -7254,7 +7274,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v674 · fullbleed-snap";
+const APP_VERSION = "v675 · vw-fix-flyer-uncrop";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
