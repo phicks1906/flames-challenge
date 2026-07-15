@@ -7338,7 +7338,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v687 · encoding-state-evidence";
+const APP_VERSION = "v688 · honest-delete";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -13384,10 +13384,25 @@ function _renderEvEntry() {
     delBtn.onclick = async () => {
       if (!confirm('Delete your entry? This cannot be undone.')) return;
       delBtn.disabled = true; delBtn.textContent = 'Deleting…';
-      const { error } = await db.from('entries').delete().eq('id', entry.id).eq('user_id', state.profile.id);
+      // v688 — .select() so we get the deleted rows back and can COUNT them.
+      // A DELETE blocked by RLS returns error === null and zero rows: Postgres
+      // considers "deleted nothing you were allowed to see" a success. Trusting
+      // error alone made the app toast 'Entry deleted' over a row that is still
+      // there. Row count is the only honest signal.
+      const { data: delRows, error } = await db.from('entries').delete()
+        .eq('id', entry.id).eq('user_id', state.profile.id).select('id');
       if (error) { toast('Delete failed: ' + error.message); delBtn.disabled = false; delBtn.textContent = '🗑 Delete'; return; }
+      if (!delRows || !delRows.length) {
+        dlog('del', 'rls-blocked', { entry: String(entry.id).slice(0, 8) });
+        toast("Couldn't delete — you may not have permission");
+        delBtn.disabled = false; delBtn.textContent = '🗑 Delete'; return;
+      }
       // Purge from local caches immediately — incremental fetch never removes deleted rows
       state.feedEntries = (state.feedEntries || []).filter(e => e.id !== entry.id);
+      // v688 — the challenge-detail sheet renders from state.currentEntries, NOT
+      // state.feedEntries. Purging only the feed left a deleted entry visible on
+      // the detail page, which looks exactly like the delete silently failing.
+      state.currentEntries = (state.currentEntries || []).filter(e => e.id !== entry.id);
       if (state.entryCounts[entry.challenge_id] > 0) state.entryCounts[entry.challenge_id]--;
       toast('Entry deleted');
       closeEntryViewer();
@@ -20225,10 +20240,19 @@ async function openFeedViewer(chId, startEntryId = null) {
         }
 
         btn.textContent = 'Deleting…'; btn.disabled = true;
-        const { error } = await db.from('entries').delete().eq('id', entryId).eq('user_id', state.profile.id);
-        if (error) { toast('Delete failed'); btn.disabled = false; btn.textContent = '🗑 Delete'; return; }
+        // v688 — see note on the entry-viewer delete: row count, not error, is
+        // the only honest signal that a DELETE actually removed anything.
+        const { data: delRows, error } = await db.from('entries').delete()
+          .eq('id', entryId).eq('user_id', state.profile.id).select('id');
+        if (error) { toast('Delete failed: ' + error.message); btn.disabled = false; btn.textContent = '🗑 Delete'; return; }
+        if (!delRows || !delRows.length) {
+          dlog('del', 'rls-blocked', { entry: String(entryId).slice(0, 8) });
+          toast("Couldn't delete — you may not have permission");
+          btn.disabled = false; btn.textContent = '🗑 Delete'; return;
+        }
         // Purge from local caches — incremental fetch never removes deleted rows
         state.feedEntries = (state.feedEntries || []).filter(e => e.id !== entryId);
+        state.currentEntries = (state.currentEntries || []).filter(e => e.id !== entryId);
         if (state.entryCounts[chId] > 0) state.entryCounts[chId]--;
         toast('Entry deleted');
         renderFeed();
