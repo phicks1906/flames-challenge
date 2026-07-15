@@ -7338,7 +7338,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v686 · self-hosted-poster";
+const APP_VERSION = "v687 · encoding-state-evidence";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11600,7 +11600,14 @@ function _validateVideoPosters(container) {
     if (!real) return;
     const probe = new Image();
     probe.onload  = () => { v.setAttribute('poster', real); };
-    probe.onerror = () => { dlog('poster', 'bad-thumb', { url: real.slice(-40) }); };
+    probe.onerror = () => {
+      dlog('poster', 'bad-thumb', { url: real.slice(-40) });
+      // v687 — the still 404ing is DIRECT evidence this video isn't ready, and it
+      // is true no matter what created_at says. This is what catches re-uploads
+      // via Edit Entry, which the age gate structurally cannot see.
+      const host = v.closest('[data-fv-encguid]');
+      if (host) _checkEncodingForHost(host);
+    };
     probe.src = real;
   });
 }
@@ -13861,6 +13868,48 @@ async function uploadToBunnyStream(file, titleHint, onProgress) {
 // ~5 min) and may still be encoding on Bunny. For each not-yet-ready one, replaces
 // the poster/▶ with a processing placeholder and polls until ready, then restores
 // the original tappable thumbnail. Old videos are skipped entirely (no API calls).
+// v687 — check ONE host, with no age gate. Split out of _checkFreshVideoEncoding
+// so the poster-probe path (see _validateVideoPosters) can reach it: a 404ing
+// still is direct evidence a video isn't ready, and evidence beats a timestamp.
+// Guarded per-host so the scanner and the probe can't both mount a placeholder.
+function _checkEncodingForHost(host) {
+  if (!host) return;
+  const guid = host.dataset.fvEncguid;
+  if (!guid) return;
+  if (host.dataset.encChecking) return;
+  if (_bunnyReadyCache.has(guid)) { dlog('enc', 'skip-cached-ready', { guid: guid.slice(0, 8) }); return; }
+  host.dataset.encChecking = '1';
+  // Preserve the original thumbnail so we can restore it once ready
+  const originalHtml = host.innerHTML;
+  const originalCursor = host.style.cursor;
+  const playUrl = host.dataset.fvPlay || '';
+  _bunnyVideoReady(guid).then(ready => {
+    dlog('enc', 'ready-result', { guid: guid.slice(0, 8), ready: String(ready) });
+    if (ready === true) { delete host.dataset.encChecking; return; } // finished — leave thumbnail as-is
+    // Not ready: show placeholder + poll, restore thumbnail when done
+    host.style.cursor = 'default';
+    host.removeAttribute('data-fv-play'); // disable tap-to-play while processing
+    _mountProcessingPlaceholder(host, guid, () => {
+      host.innerHTML = originalHtml;
+      host.style.cursor = originalCursor;
+      host.setAttribute('data-fv-play', playUrl);
+      delete host.dataset.encChecking;
+      // Re-arm lazy loading for the restored <video> (feed card thumbnails)
+      const restoredVid = host.querySelector('video[data-lazy-video][data-src]');
+      if (restoredVid && _lazyVideoObserver) _lazyVideoObserver.observe(restoredVid);
+    });
+  }).catch(() => { delete host.dataset.encChecking; });
+}
+
+// Scans rendered entries for videos that MIGHT still be encoding. The age gate
+// is a cheap fast-path only — it keeps us from asking Bunny about all 172 old
+// videos on every render. It is NOT sufficient on its own:
+//   v687 — entries.created_at is the age of the ENTRY ROW, not of the video.
+//   Edit Entry does an UPDATE, so a 3-hour-old entry can carry a 90-second-old
+//   video, get skipped as 'too-old', and render a play button over something
+//   that cannot play. That exact case is what put a black box in the feed.
+// The real safety net is _validateVideoPosters: if the still 404s, we ask Bunny
+// regardless of how old the row claims to be.
 function _checkFreshVideoEncoding(container) {
   if (!container) return;
   const FRESH_MS = 30 * 60 * 1000; // check videos posted within 30 min (covers large/slow encodes)
@@ -13870,28 +13919,9 @@ function _checkFreshVideoEncoding(container) {
     if (!guid) { dlog('enc', 'skip-no-guid', { html: host.className }); return; } // not a Bunny HLS video
     const created = host.dataset.fvCreated ? new Date(host.dataset.fvCreated).getTime() : 0;
     const ageMin = created ? Math.round((now - created) / 60000) : -1;
-    if (!created || (now - created) > FRESH_MS) { dlog('enc', 'skip-too-old', { guid: guid.slice(0,8), ageMin }); return; }
-    if (_bunnyReadyCache.has(guid)) { dlog('enc', 'skip-cached-ready', { guid: guid.slice(0,8) }); return; }
-    dlog('enc', 'checking', { guid: guid.slice(0,8), ageMin });
-    // Preserve the original thumbnail so we can restore it once ready
-    const originalHtml = host.innerHTML;
-    const originalCursor = host.style.cursor;
-    const playUrl = host.dataset.fvPlay || '';
-    _bunnyVideoReady(guid).then(ready => {
-      dlog('enc', 'ready-result', { guid: guid.slice(0,8), ready: String(ready) });
-      if (ready === true) return; // already finished — leave thumbnail as-is
-      // Not ready: show placeholder + poll, restore thumbnail when done
-      host.style.cursor = 'default';
-      host.removeAttribute('data-fv-play'); // disable tap-to-play while processing
-      _mountProcessingPlaceholder(host, guid, () => {
-        host.innerHTML = originalHtml;
-        host.style.cursor = originalCursor;
-        host.setAttribute('data-fv-play', playUrl);
-        // Re-arm lazy loading for the restored <video> (feed card thumbnails)
-        const restoredVid = host.querySelector('video[data-lazy-video][data-src]');
-        if (restoredVid && _lazyVideoObserver) _lazyVideoObserver.observe(restoredVid);
-      });
-    });
+    if (!created || (now - created) > FRESH_MS) { dlog('enc', 'skip-too-old', { guid: guid.slice(0, 8), ageMin }); return; }
+    dlog('enc', 'checking', { guid: guid.slice(0, 8), ageMin });
+    _checkEncodingForHost(host);
   });
 }
 
