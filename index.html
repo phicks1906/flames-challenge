@@ -7310,7 +7310,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v679 · fv-blur-stage";
+const APP_VERSION = "v681 · poster-capture";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -13508,6 +13508,30 @@ function dlog(tag, msg, data) {
 // v677 tried this on 'loadedmetadata' alone and logged w:0,h:0 for Bunny: iOS's
 // native HLS player fires loadedmetadata BEFORE it has decoded dimensions. So we
 // listen on several events AND poll until the numbers are real, reporting once.
+// v680 — pause playing video when the page is backgrounded.
+// The app had THREE visibilitychange handlers (ember particles, live updates,
+// toast correction) and not one of them touched <video>, so switching Safari
+// tabs or apps left entry audio playing over whatever you did next. iOS keeps
+// inline media alive in the background by design (it's how music sites work),
+// so it has to be paused explicitly.
+// Deliberately does NOT auto-resume on return: unexpected audio starting again
+// when you come back is worse than tapping play. Also clears _userAudioActive so
+// the lazy-preview system isn't left thinking a user-initiated sound is active.
+function _fcPauseAllVideo() {
+  document.querySelectorAll('video').forEach((v) => {
+    try { if (!v.paused) v.pause(); } catch (_) {}
+  });
+  _userAudioActive = false;
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') _fcPauseAllVideo();
+});
+window.addEventListener('pagehide', _fcPauseAllVideo);
+// Safari fires blur (not always visibilitychange) when another window takes focus.
+window.addEventListener('blur', () => {
+  if (document.visibilityState !== 'visible') _fcPauseAllVideo();
+});
+
 function _vdimReport(v, why) {
   const w = v.videoWidth, h = v.videoHeight;
   if (!w || !h) return false;          // not known yet — keep waiting
@@ -13668,6 +13692,69 @@ function triggerVideoModeration(entryId, videoUrl) {
   // Return immediately — no await, no blocking toast.
 }
 
+// v681 — capture a poster frame from the ORIGINAL file, client-side.
+// WHY: Bunny's ENCODER is correct (the v678 vdim log showed a clean 720x1280
+// portrait), but its THUMBNAIL generator pads to 16:9 — measured at exactly
+// aspect 1.779 with 52% black pixels. Every entry card renders that padded
+// thumbnail as its poster, because preview.webp 404s and _videoPosterAttr falls
+// back to poster_url (= Bunny's thumbnail.jpg). That's BOTH the black bars in
+// the cards AND the fuzz: only ~a third of that image is real content, and we
+// upscale that third across the card. Cropping around it in CSS makes the fuzz
+// worse (tighter crop of the same small source), so the source must be fixed.
+// Fails soft at every step — a poster is a nice-to-have, never a reason to fail
+// an upload the user has already waited minutes for.
+async function _captureVideoPoster(file, maxW = 720) {
+  return new Promise((resolve) => {
+    let url = null, done = false, timer = null, poll = null;
+    const finish = (blob, why) => {
+      if (done) return; done = true;
+      clearTimeout(timer); clearInterval(poll);
+      try { if (url) URL.revokeObjectURL(url); } catch (_) {}
+      if (!blob) dlog('poster', 'capture-fail', { why });
+      resolve(blob || null);
+    };
+    try {
+      const v = document.createElement('video');
+      v.muted = true; v.playsInline = true; v.preload = 'auto';
+      timer = setTimeout(() => finish(null, 'timeout'), 15000);
+      const grab = () => {
+        try {
+          const w = v.videoWidth, h = v.videoHeight;
+          if (!w || !h) return finish(null, 'no-dimensions');
+          const scale = Math.min(1, maxW / w);
+          const cw = Math.max(2, Math.round(w * scale)), ch = Math.max(2, Math.round(h * scale));
+          const c = document.createElement('canvas');
+          c.width = cw; c.height = ch;
+          c.getContext('2d').drawImage(v, 0, 0, cw, ch);
+          c.toBlob((blob) => {
+            dlog('poster', 'captured', { w: cw, h: ch, kb: blob ? Math.round(blob.size / 1024) : 0 });
+            finish(blob, 'toBlob-null');
+          }, 'image/jpeg', 0.85);
+        } catch (_) { finish(null, 'draw-error'); }
+      };
+      v.addEventListener('error', () => finish(null, 'load-error'), { once: true });
+      v.addEventListener('seeked', grab, { once: true });
+      v.addEventListener('loadeddata', () => {
+        // iOS can report 0x0 right after metadata (the same gotcha the v678
+        // vdim diagnostic hit), so wait for real dimensions before seeking.
+        let n = 0;
+        poll = setInterval(() => {
+          if (done) { clearInterval(poll); return; }
+          if (v.videoWidth && v.videoHeight) {
+            clearInterval(poll);
+            // 1s in avoids a black/blurry opening frame; 0 for very short clips.
+            const target = (v.duration && v.duration > 1.2) ? 1 : 0;
+            if (Math.abs(v.currentTime - target) < 0.05) grab();
+            else { try { v.currentTime = target; } catch (_) { grab(); } }
+          } else if (++n > 30) { clearInterval(poll); finish(null, 'no-dimensions'); }
+        }, 200);
+      }, { once: true });
+      url = URL.createObjectURL(file);
+      v.src = url;
+    } catch (_) { finish(null, 'exception'); }
+  });
+}
+
 async function uploadToBunnyStream(file, titleHint, onProgress) {
   // 1. Create a video slot in the library
   onProgress && onProgress(5);
@@ -13678,6 +13765,12 @@ async function uploadToBunnyStream(file, titleHint, onProgress) {
   });
   if (!createRes.ok) throw new Error(`Bunny create failed (${createRes.status})`);
   const { guid: videoId } = await createRes.json();
+
+  // v681: grab the poster from the ORIGINAL file now, while we still have it
+  // locally. Doing it here (not after the PUT) means the bytes are ready to
+  // hand over the moment the upload lands. Adds ~1-2s; never throws.
+  onProgress && onProgress(8);
+  const _posterBlob = await _captureVideoPoster(file);
 
   // 2. Upload the file — use XMLHttpRequest for progress reporting
   await new Promise((resolve, reject) => {
@@ -13692,6 +13785,29 @@ async function uploadToBunnyStream(file, titleHint, onProgress) {
     xhr.onerror = () => reject(new Error('Bunny upload network error'));
     xhr.send(file);
   });
+
+  // v681: hand Bunny a correct thumbnail so thumbnail.jpg stops being a padded
+  // 16:9. Every surface already reads that URL, so fixing it here fixes cards,
+  // feed and detail at once — no schema change, no new storage, no Supabase
+  // egress, still served from Bunny's CDN.
+  // UNVERIFIED: Bunny's encoder handles portrait correctly but its thumbnail
+  // generator does not, so it's genuinely possible this upload path normalises
+  // to 16:9 too, or that Bunny overwrites our thumbnail when encoding finishes
+  // a minute later. The dlog line below reports the result — check it on the
+  // first upload. If it's overwritten, this has to move to the encode-complete
+  // poll instead. Wrapped so a failure never breaks a finished upload.
+  if (_posterBlob) {
+    try {
+      const tRes = await fetch(`https://video.bunnycdn.com/library/${BUNNY_LIBRARY_ID}/videos/${videoId}/thumbnail`, {
+        method: 'POST',
+        headers: { 'AccessKey': BUNNY_API_KEY, 'Content-Type': 'application/octet-stream' },
+        body: _posterBlob,
+      });
+      dlog('poster', 'bunny-set', { ok: tRes.ok, status: tRes.status });
+    } catch (e) {
+      dlog('poster', 'bunny-set-error', { e: String(e).slice(0, 60) });
+    }
+  }
 
   onProgress && onProgress(100);
   return {
