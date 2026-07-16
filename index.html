@@ -7488,7 +7488,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v702 · one-champ-gate";
+const APP_VERSION = "v703 · rejected-not-counted";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -15646,7 +15646,20 @@ async function loadChallenges(opts = {}) {
   if (state.challenges.length) state._challengesLastTs = state.challenges[0].created_at;
 
   // Entries: on full load fetch all; on tick only fetch new entries (for count updates)
-  let entryQ = db.from('entries').select('challenge_id, user_id, media_url, media_type, caption, poster_url');
+  // v703 — EXCLUDE REJECTED. This query had no moderation filter at all, so a
+  // rejected entry still counted in "3 entries". Worse than a wrong label:
+  // computeChallengeStatusFromCh() voids a challenge on `entryCount <= 1`, so one
+  // real entry plus one rejected one read as two and the challenge never voided.
+  // Only 'rejected' is excluded, deliberately. pending/flagged/escalated may yet
+  // be approved, and this count decides the PHASE — which must be the same for
+  // everyone. Filtering it per-viewer would make one person see 'voting' and
+  // another 'voided' on the same challenge.
+  // The .or() is not decoration: `moderation_status <> 'rejected'` evaluates to
+  // NULL (not true) for legacy rows where the column is null, so a plain .neq()
+  // would silently drop every pre-moderation entry from the counts.
+  let entryQ = db.from('entries')
+    .select('challenge_id, user_id, media_url, media_type, caption, poster_url')
+    .or('moderation_status.is.null,moderation_status.neq.rejected');
   if (opts.incremental && state._challengeEntriesLastTs) {
     entryQ = entryQ.gte('created_at', state._challengeEntriesLastTs).limit(50);
   }
@@ -16057,8 +16070,13 @@ async function loadChallengeDetail(challengeId) {
     state.currentEntries = allFetched.filter(e => {
       const st = e.moderation_status;
       if (!st || st === 'clear' || st === 'approved') return true;
-      if (e.user_id === myId) return true;   // you always see your own
-      if (amAdmin) return true;               // admins see everything
+      // v703 — 'rejected' is a FINAL removal, not a review state: the media is
+      // already blocked from rendering for everyone including the submitter, so
+      // keeping the row here only produced a phantom card and an inflated count.
+      // Admins review from the Admin queue, which reads the table directly.
+      if (st === 'rejected') return false;
+      if (e.user_id === myId) return true;   // you always see your own (pending/flagged/escalated)
+      if (amAdmin) return true;               // admins see everything still under review
       return false;                            // hidden from everyone else
     });
   }
