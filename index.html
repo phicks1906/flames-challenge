@@ -3622,7 +3622,14 @@ html[data-theme="light"] .ps-heat-card { background: #1a1008; }
   overflow: hidden;
 }
 .fcc-entry-media {
-  width: 100%; height: 120px;
+  /* v709 — was `height: 120px`, hard-coded. v673 replaced it with a 4/5 aspect
+     ratio but scoped that to #feedContainer, so the Challenges page kept the
+     120px letterbox: the same entry rendered 334x418 in the feed and 334x120
+     here. v673's own note called height:120px the bug it was fixing — it just
+     fixed one of the two surfaces. Base rule now; both get it. */
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 5;
   object-fit: cover; display: block;
   background: var(--bg-2);
 }
@@ -6394,10 +6401,9 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
   border: none !important;
   border-radius: 10px !important;
 }
-#feedContainer .fcc-entry-media {
-  height: auto !important;
-  aspect-ratio: 4 / 5 !important;
-}
+/* v709 — redundant: the 4/5 ratio is on the base .fcc-entry-media rule now, so
+   the feed and the Challenges page can't drift apart again. Kept as a marker so
+   the numbered sections below still line up with their comments. */
 
 /* 6 ── FLYER POSTERS. The flyer <img> is inline-styled
         `max-height:420px; object-fit:cover`, which CROPS it. A flyer is a
@@ -7503,7 +7509,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v708 · one-scroller";
+const APP_VERSION = "v709 · challenges-media-wired";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -15989,6 +15995,17 @@ function renderChallenges() {
   grid.style.display = 'flex';
   grid.style.flexDirection = 'column';
   grid.style.gap = '0';
+
+  // v709 — renderChallenges() has never wired its own media. The only call for
+  // this grid lives inside wireFeedEvents(), which runs when the FEED renders —
+  // so it fires against a challengesGrid that is empty or stale, and the content
+  // this function just wrote is never touched. Three symptoms, one cause:
+  //   • posters stay _DARK_POSTER forever  -> the black previews on this page
+  //   • _startPreview never runs           -> no motion here, unlike the feed
+  //   • _checkFreshVideoEncoding never runs -> no "Processing video…" placeholder
+  // A render function must wire the DOM it just created; wiring it from a
+  // different render function is how it got missed for this long.
+  requestAnimationFrame(() => wireLazyVideoThumbnails(grid));
 
   // Wire card clicks → open challenge detail
   grid.querySelectorAll('.feed-challenge-card[data-chid]').forEach(card => {
