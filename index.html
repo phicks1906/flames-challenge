@@ -7518,7 +7518,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v710 · vertical-scroll-fix";
+const APP_VERSION = "v711 · reviewable-queue";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -22721,6 +22721,26 @@ async function renderAdminFlags() {
     `<div id="modQueueSection" style="margin-bottom:8px"><div style="color:var(--text-dim);font-size:13px;padding:12px 0">Loading moderation queue…</div></div>` +
     togglesHtml;
 
+  // v711 — REVIEW MEDIA. The queue used to render
+  //   <video src="{media_url}" poster="{poster_url}" controls muted playsinline>
+  // and it showed a black rectangle, which is a bad way to decide whether
+  // something breaks your rules. Three faults, all fixed by these two helpers:
+  //  1. src was the HLS .m3u8. Native on iOS, but nothing without hls.js
+  //     elsewhere — and admin review is exactly when you might be on a laptop.
+  //     Every entry has /play_720p.mp4 (the moderation pipeline downloads it),
+  //     so use that: it plays everywhere with no extra library.
+  //  2. poster was Bunny's thumbnail.jpg, which 404s constantly — and per the
+  //     note on _videoPosterAttr, iOS will NOT re-render a poster after one
+  //     failed load. One 404 and the tile is black forever.
+  //  3. no preload, so nothing rendered until you tapped.
+  const _modReviewSrc = (u) => (u && u.includes('/playlist.m3u8')) ? u.replace('/playlist.m3u8', '/play_720p.mp4') : (u || '');
+  const _modReviewPoster = (it) => {
+    if (it.poster_url && !it.poster_url.includes(BUNNY_CDN_HOST)) return it.poster_url; // v686 self-hosted: portrait, sharp
+    return _bunnyPreviewUrl(it.media_url || '') || it.poster_url || '';                 // else the webp — low-res, but it loads
+  };
+  let _modChMap = {};
+  const _modChTitle = (it) => (_modChMap[it.challenge_id] || {}).title || '';
+
   // ── Video moderation queue (escalated + flagged + rejected entries) ─────────
   const vqs = document.getElementById('videoModQueueSection');
   try {
@@ -22735,6 +22755,19 @@ async function renderAdminFlags() {
       .order('moderation_status', { ascending: true }) // 'escalated' sorts before 'flagged'/'rejected' alphabetically
       .order('moderation_checked_at', { ascending: false })
       .limit(50);
+
+    // v711 — challenge titles, fetched separately ON PURPOSE. Embedding
+    // challenge:challenges(...) in the query above would mean one PostgREST
+    // relationship hiccup drops the ENTIRE review queue into the catch below,
+    // which fails quietly — a moderation queue that silently shows nothing is
+    // the worst possible failure here. A separate query can only cost titles.
+    try {
+      const _chIds = [...new Set((videoQueue || []).map(v => v.challenge_id).filter(Boolean))];
+      if (_chIds.length) {
+        const { data: _chRows } = await db.from('challenges').select('id, title').in('id', _chIds);
+        (_chRows || []).forEach(c => { _modChMap[c.id] = c; });
+      }
+    } catch (_) { /* titles are a nicety; never block review on them */ }
 
     if (vqs) {
       const vq = videoQueue || [];
@@ -22754,9 +22787,11 @@ async function renderAdminFlags() {
                 <span style="font-size:11px;font-weight:700;color:${urgent ? '#ff2d1f' : '#ffc857'};text-transform:uppercase">${urgent ? '🚨 URGENT' : '🔍 FLAGGED'}</span>
                 <span style="font-size:11px;color:var(--text-dim)">${timeAgo(item.moderation_checked_at)}</span>
               </div>
-              <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px">By ${escapeHtml(item.submitter?.name || 'Unknown')}</div>
-              ${item.media_url ? `<video src="${escapeHtml(item.media_url)}" ${item.poster_url ? `poster="${escapeHtml(item.poster_url)}"` : ''} controls muted playsinline style="width:100%;border-radius:8px;margin-bottom:8px;max-height:280px;object-fit:contain;background:#000"></video>` : ''}
+              <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px">By ${escapeHtml(item.submitter?.name || 'Unknown')}${_modChTitle(item) ? ` · in <strong style="color:var(--text)">${escapeHtml(_modChTitle(item))}</strong>` : ''}</div>
+              ${item.media_url ? `<video src="${escapeHtml(_modReviewSrc(item.media_url))}" ${_modReviewPoster(item) ? `poster="${escapeHtml(_modReviewPoster(item))}"` : ''} controls muted playsinline preload="metadata" style="width:100%;border-radius:8px;margin-bottom:8px;max-height:280px;object-fit:contain;background:#000"></video>` : ''}
+              ${item.caption ? `<div style="font-size:12px;color:var(--text);margin-bottom:4px"><strong>Caption:</strong> ${escapeHtml(item.caption)}</div>` : ''}
               <div style="font-size:12px;color:var(--text);margin-bottom:4px"><strong>Reason:</strong> ${escapeHtml(item.moderation_reason || 'unspecified')}</div>
+              ${item.challenge_id ? `<button onclick="openFlaggedInChallenge('${item.challenge_id}')" style="width:100%;margin-top:6px;padding:7px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:600;cursor:pointer">👁 See it in the challenge →</button>` : ''}
               <div style="display:flex;gap:8px;margin-top:10px">
                 <button onclick="approveVideoEntry('${item.id}', ${urgent})" style="flex:1;padding:7px;background:rgba(76,217,100,0.12);border:1px solid rgba(76,217,100,0.3);border-radius:8px;color:#4cd964;font-size:12px;cursor:pointer">✅ Approve</button>
                 <button onclick="rejectVideoEntry('${item.id}')" style="flex:1;padding:7px;background:rgba(255,45,31,0.12);border:1px solid rgba(255,45,31,0.3);border-radius:8px;color:#ff2d1f;font-size:12px;cursor:pointer">🚫 Reject</button>
@@ -22827,6 +22862,24 @@ async function renderAdminFlags() {
         </div>
       </div>
     `).join('') + `<hr style="border:none;border-top:1px solid var(--border);margin:8px 0 16px">`;
+}
+
+// v711 — take the admin to the entry in its real context. Reviewing a clip in a
+// vacuum hides what usually decides the call: what the challenge asked for, and
+// what everyone else submitted to it.
+// Uses openChallenge (the detail sheet), NOT openFeedViewer: the feed cache
+// deliberately filters flagged/escalated entries out for admins too (see the
+// note in loadFeedActivity), so the feed viewer literally cannot show the entry
+// under review. The challenge detail DOES bypass for admins.
+async function openFlaggedInChallenge(challengeId) {
+  if (!challengeId) { toast('This entry has no challenge'); return; }
+  let ch = (state.challenges || []).find(c => c.id === challengeId);
+  if (!ch) {
+    const { data, error } = await db.from('challenges').select('*').eq('id', challengeId).maybeSingle();
+    if (error || !data) { toast("Couldn't open that challenge"); return; }
+    ch = data;
+  }
+  openChallenge(ch);
 }
 
 async function approveVideoEntry(entryId, urgent = false) {
