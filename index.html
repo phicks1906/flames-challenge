@@ -7488,7 +7488,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v705 · webp-dim-probe";
+const APP_VERSION = "v707 · mp4-previews";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11725,35 +11725,38 @@ function _startPreview(vid) {
   if (_userAudioActive) return;
   const src = vid.dataset.src || vid.src || '';
 
-  // HLS (Bunny) — overlay the animated preview.webp as an <img>. No streaming, no decoder.
-  const webp = _bunnyPreviewUrl(src);
-  if (webp) {
-    dlog('preview', 'webp-start', { webp: webp.slice(-40) });
-    if (_activePreview) _stopPreview(_activePreview);
-    _activePreview = vid;
-    const host = vid.parentElement;
-    if (host && !host.querySelector('.fc-anim-preview')) {
-      const img = document.createElement('img');
-      img.className = 'fc-anim-preview';
-      img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;pointer-events:none;';
-      // Bunny's preview.webp 404s for some videos (same as thumbnail.jpg). With
-      // no handler the <img> paints a broken "?" glyph over the card — so on
-      // error just remove the overlay and leave the clean dark poster + ▶.
-      img.onerror = () => { dlog('preview', 'webp-404', { webp: webp.slice(-40) }); img.remove(); };
-      // v705 — the ONE unknown in the blur question. This webp covers the poster
-      // entirely (inset:0, object-fit:cover, z-index:1), so whatever its real
-      // resolution is, that IS the sharpness of a feed card. Card = 334 CSS px =
-      // 1002 device px on a 3x phone; anything under that is being upscaled.
-      img.onload = () => dlog('preview', 'webp-dim', {
-        w: img.naturalWidth, h: img.naturalHeight,
-        cardDevicePx: Math.round(img.getBoundingClientRect().width * (window.devicePixelRatio || 1)),
-        upscale: +(img.getBoundingClientRect().width * (window.devicePixelRatio || 1) / (img.naturalWidth || 1)).toFixed(2),
-      });
-      img.src = webp;
-      if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
-      host.appendChild(img);
-    }
-    return;
+  // v707 — MOVING PREVIEWS, SHARP THIS TIME. History in one breath: previews were
+  // Bunny's animated preview.webp overlaid on the card; v705 measured it at
+  // 320x180 stretched 3.13x across a 1001-device-px card — the webp WAS the blur;
+  // v706 removed it and lost all motion. Both were solving the wrong constraint:
+  // the "HLS too heavy to preview" rule (v414) predates Bunny's MP4 fallback
+  // being ON. Every entry has a real /play_720p.mp4 — the moderation pipeline
+  // depends on it — and the direct-mp4 preview branch below already knows how to
+  // loop a muted video. So: rewrite the HLS src to the 720p MP4 and fall through.
+  // 720p in a 1001px card is a 1.4x upscale vs the webp's 3.13x.
+  //
+  // Costs, so nobody trips on them later:
+  // - Egress: a few MB per card scrolled past vs ~100KB of webp. At 0.4/250 GB
+  //   this is nowhere near mattering; revisit if the feed ever has real traffic.
+  // - Fresh entries: MP4 encodes AFTER HLS (the moderation gotcha), so for the
+  //   first minute or two the preview 404s — onerror below quietly falls back to
+  //   the poster, which is exactly right for a still-encoding entry.
+  // - iOS autoplay: muted+playsinline inline video is allowed; this is the same
+  //   branch direct mp4/mov uploads have used since v414.
+  const _hlsMp4 = _bunnyPreviewUrl(src) ? src.replace('/playlist.m3u8', '/play_720p.mp4') : null;
+  if (_hlsMp4 && !vid.dataset.fcMp4Preview) {
+    vid.dataset.fcMp4Preview = '1';
+    vid.dataset.src = _hlsMp4;      // the tap-to-play path reads data-fcc-play/fv-play, not this — full HLS playback is untouched
+    vid.removeAttribute('src');     // force the (re)load below to pick up the mp4
+    vid.addEventListener('error', () => {
+      // 404 = MP4 not encoded yet (or fallback disabled). Stop trying; the
+      // poster stays, which is the correct face for a still-encoding entry.
+      dlog('preview', 'mp4-404', { src: _hlsMp4.slice(-44) });
+      vid.removeAttribute('src'); vid.load();
+      delete vid.dataset.fcMp4Preview;
+      if (_activePreview === vid) _activePreview = null;
+    }, { once: true });
+    dlog('preview', 'mp4-start', { src: _hlsMp4.slice(-44) });
   }
 
   // Non-HLS (direct mp4/mov) — cheap muted video loop
