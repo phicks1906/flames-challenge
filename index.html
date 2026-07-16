@@ -7488,7 +7488,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v704 · sharp-posters";
+const APP_VERSION = "v705 · webp-dim-probe";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11740,6 +11740,15 @@ function _startPreview(vid) {
       // no handler the <img> paints a broken "?" glyph over the card — so on
       // error just remove the overlay and leave the clean dark poster + ▶.
       img.onerror = () => { dlog('preview', 'webp-404', { webp: webp.slice(-40) }); img.remove(); };
+      // v705 — the ONE unknown in the blur question. This webp covers the poster
+      // entirely (inset:0, object-fit:cover, z-index:1), so whatever its real
+      // resolution is, that IS the sharpness of a feed card. Card = 334 CSS px =
+      // 1002 device px on a 3x phone; anything under that is being upscaled.
+      img.onload = () => dlog('preview', 'webp-dim', {
+        w: img.naturalWidth, h: img.naturalHeight,
+        cardDevicePx: Math.round(img.getBoundingClientRect().width * (window.devicePixelRatio || 1)),
+        upscale: +(img.getBoundingClientRect().width * (window.devicePixelRatio || 1) / (img.naturalWidth || 1)).toFixed(2),
+      });
       img.src = webp;
       if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
       host.appendChild(img);
