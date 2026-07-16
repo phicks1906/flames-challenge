@@ -7488,7 +7488,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v703 · rejected-not-counted";
+const APP_VERSION = "v704 · sharp-posters";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -14001,7 +14001,17 @@ function triggerVideoModeration(entryId, videoUrl) {
 // worse (tighter crop of the same small source), so the source must be fixed.
 // Fails soft at every step — a poster is a nice-to-have, never a reason to fail
 // an upload the user has already waited minutes for.
-async function _captureVideoPoster(file, maxW = 720) {
+// v704 — maxW was 720. MEASURE THE TARGET, not the source: the poster's largest
+// on-screen size is the feed viewer at 402 CSS px on a 3x phone = 1206 DEVICE px,
+// and the feed entry card is 334 CSS px = 1002 device px. A 720px capture was
+// therefore upscaled ~1.39x in the card and ~1.68x in the viewer — soft before
+// anything else happened, exactly the way Bunny's 720p encode was soft against a
+// 1206px screen. Capturing at 720 to save bytes was a false economy: it threw
+// away the sharpness that self-hosting the poster existed to buy.
+// 1080 covers the card outright and is within 10% of the viewer. Cost is ~150KB ->
+// ~350KB per entry, against a 250 GB egress allowance sitting near zero.
+// DO NOT lower this to save space without measuring the device pixels first.
+async function _captureVideoPoster(file, maxW = 1080) {
   return new Promise((resolve) => {
     let url = null, done = false, timer = null, poll = null;
     const finish = (blob, why) => {
@@ -14027,7 +14037,7 @@ async function _captureVideoPoster(file, maxW = 720) {
           c.toBlob((blob) => {
             dlog('poster', 'captured', { w: cw, h: ch, kb: blob ? Math.round(blob.size / 1024) : 0 });
             finish(blob, 'toBlob-null');
-          }, 'image/jpeg', 0.85);
+          }, 'image/jpeg', 0.92); // v704 — 0.85 added JPEG mush on top of the upscale; the poster is a still, it can afford the bytes
         } catch (_) { finish(null, 'draw-error'); }
       };
       v.addEventListener('error', () => finish(null, 'load-error'), { once: true });
