@@ -3534,6 +3534,14 @@ html[data-theme="light"] .ps-heat-card { background: #1a1008; }
 .fcc-entries-wrap { padding: 10px 12px 12px; }
 .fcc-no-entries { text-align: center; padding: 12px; color: var(--text-muted); font-size: 13px; }
 .fcc-entries-scroll {
+  /* v708 — snap lives HERE now, not under #feedContainer. v673 added snap to fix
+     the feed and scoped it to #feedContainer, leaving the Challenges page — the
+     same component — with none, so it coasted to a stop mid-card. v673's own
+     comment said "every other horizontal pager in the app snaps"; it just never
+     fixed its twin. One rule, both surfaces. */
+  scroll-snap-type: x mandatory;
+  scroll-padding-left: 12px; /* matches the 12px padding below */
+  scroll-behavior: smooth;
   display: flex;
   flex-wrap: nowrap; /* critical — prevent wrapping to grid */
   gap: 8px;
@@ -3584,8 +3592,16 @@ html[data-theme="light"] .ps-heat-card { background: #1a1008; }
 #ccCompressCheck:checked + #ccCompressSlider::after,
 #seCompressCheck:checked + #seCompressSlider::after { transform: translateX(20px); }
 .fcc-entry-card {
+  scroll-snap-align: start; /* v708 — was #feedContainer-only; the card is the snap target everywhere */
+  scroll-snap-stop: always;
   will-change: transform;
-  /* v700 REVERTS v693's narrowing (46vw / 185px) back to 72vw.
+  /* v708 — ONE WIDTH FOR BOTH SURFACES. This said 72vw while the feed renderer
+     wrote `flex:0 0 83vw!important` INLINE, so the same component measured 334px
+     in the feed and 280px on the Challenges page. The inline rule is gone; this
+     is the only place entry width is set now. That also removes the trap the
+     v673 block warns about — an inline !important that silently beat every
+     stylesheet edit (v673, v675 and v693 all lost to it).
+     v700 REVERTED v693's narrowing (46vw / 185px) back to 72vw.
      v693 measured a Facebook ad carousel at ~193px and matched it. The
      measurement was right and the conclusion was wrong: an FB ad tile is built
      to be glanced past, while an ENTRY is the product — people are here to judge
@@ -3597,9 +3613,9 @@ html[data-theme="light"] .ps-heat-card { background: #1a1008; }
      always overflows, so the row always reads as scrollable.
      Arena items are media-forward. Don't re-narrow this to match a feed whose
      job is passive scrolling. */
-  flex: 0 0 72vw;
-  min-width: 72vw; /* always peek next card */
-  max-width: 280px; /* cap on large screens */
+  flex: 0 0 83vw;
+  min-width: 83vw; /* always peek next card */
+  max-width: none;
   background: var(--bg-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -6354,19 +6370,18 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
          start == FB's behaviour of snapping each card to the left edge. The
          other two scrollers use `center` because their cards are 100% width,
          where center and start are the same thing anyway. */
+/* v708 — snap moved to the base rules so BOTH surfaces get it; scoping it here
+   is exactly how the Challenges page ended up without any. Only the feed's zero
+   scroll-padding remains, matching its zero horizontal padding. */
 #feedContainer .fcc-entries-scroll {
-  scroll-snap-type: x mandatory !important;
   scroll-padding-left: 0 !important;
 }
-#feedContainer .fcc-entry-card {
-  scroll-snap-align: start !important;
-  scroll-snap-stop: always !important;
-}
 
-/* 5 ── SIZE. 83vw == 335px on a 402px screen. v693 narrowed this to 46vw and
-        v700 put it back — see the note on .fcc-entry-card for why narrow was
-        wrong. The warning below is why v693's stylesheet edit silently did
-        nothing to the feed in the first place:
+/* 5 ── SIZE. 83vw == 335px on a 402px screen, set once in the base
+        .fcc-entry-card rule. HISTORICAL WARNING, now resolved — v708 deleted the
+        inline width, so the note below describes what USED to be true and why
+        three separate versions silently lost to it. Do not reintroduce an inline
+        width here; the stylesheet is the single source now.
         NOTE: the WIDTH is NOT set here — it CANNOT be. renderFeedChallengeCard()
         writes `flex:0 0 83vw!important; min-width:83vw!important` as an INLINE
         style on each .fcc-entry-card, and inline !important sits at the very top
@@ -7488,7 +7503,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v707 · mp4-previews";
+const APP_VERSION = "v708 · one-scroller";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -15872,9 +15887,10 @@ function renderChallenges() {
     const entryCount = state.entryCounts[ch.id] || 0;
     const entryWord = entryCount === 1 ? 'entry' : 'entries';
     const meta = ch.computedStatus === 'submitting'
-      ? `${entryCount} ${entryWord} · enter by ${formatCountdown(ch.submission_deadline)}`
-      : ch.computedStatus === 'voting'
-      ? `${entryCount} ${entryWord} · voting ends ${formatCountdown(ch.voting_end)}`
+      // v708 — same de-dup v699 gave the feed: the phase banner already carries
+      // phase + progress + the next deadline, so this was the third copy of the
+      // same countdown on one card.
+      ? `${entryCount} ${entryWord}`
       : `${entryCount} ${entryWord}`;
     const phase = challengePhase(ch.computedStatus);
 
@@ -15906,9 +15922,13 @@ function renderChallenges() {
       } else if (eMt === 'photo' && e.media_url) {
         mHtml = `<img src="${escapeHtml(e.media_url)}" class="fcc-entry-media" loading="lazy" onerror="this.style.display='none'">`;
       } else if (eMt === 'video' && e.media_url) {
-        mHtml = e.poster_url
-          ? `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}" data-fcc-entry="${e.id}" data-fv-encguid="${_bunnyGuidFromUrl(e.media_url)||''}" data-fv-created="${e.created_at||''}"><video data-src="${escapeHtml(e.media_url)}" ${_videoPosterAttr(e.media_url, e.poster_url)} muted playsinline preload="none" data-lazy-video style="width:100%;height:100%;object-fit:cover;display:block;"></video><div class="fcc-play-overlay">▶</div></div>`
-          : `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}" data-fcc-entry="${e.id}" data-fv-encguid="${_bunnyGuidFromUrl(e.media_url)||''}" data-fv-created="${e.created_at||''}" style="position:relative;"><video data-src="${escapeHtml(e.media_url)}" muted playsinline preload="none" data-lazy-video style="width:100%;height:100%;object-fit:cover;display:block;"></video><div class="fcc-play-overlay">▶</div></div>`;
+        // v708 — was a ternary: WITH poster_url it called _videoPosterAttr; WITHOUT
+        // it rendered a <video> carrying no poster at all — a black box until the
+        // stream loaded. Those are the black previews on this page. The ternary was
+        // pointless: _videoPosterAttr already handles a null posterUrl by falling
+        // back to Bunny's still. The feed calls it unconditionally, which is why
+        // the SAME entry showed an image there and black here. One branch now.
+        mHtml = `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}" data-fcc-entry="${e.id}" data-fv-encguid="${_bunnyGuidFromUrl(e.media_url)||''}" data-fv-created="${e.created_at||''}" style="position:relative;"><video data-src="${escapeHtml(e.media_url)}" ${_videoPosterAttr(e.media_url, e.poster_url)} muted playsinline preload="none" data-lazy-video style="width:100%;height:100%;object-fit:cover;display:block;"></video><div class="fcc-play-overlay">▶</div></div>`;
       } else if (eMt === 'audio') {
         mHtml = _audioTileHtml(e); // v693 — shared tile, see _audioTileHtml
       } else if (e.media_type === 'text' && e.caption) {
@@ -18928,7 +18948,7 @@ function renderFeedChallengeCard(ch) {
       const voteBtn = canVote && state.profile
         ? `<button class="fcc-vote-btn${iVoted ? ' voted' : ''}" data-fcc-vote="${e.id}" data-fcc-chid="${ch.id}">${iVoted ? '✓ Voted' : '🗳️ Vote'}</button>`
         : isMyEntry ? `<span class="fcc-your-entry">Your entry</span>` : '';
-      return `<div class="fcc-entry-card" style="flex:0 0 83vw!important;min-width:83vw!important;max-width:none!important;cursor:pointer;" data-entry-open="${ch.id}" data-entry-id="${e.id}">
+      return `<div class="fcc-entry-card" style="cursor:pointer;" data-entry-open="${ch.id}" data-entry-id="${e.id}">
         ${mediaHtml}
         <div class="fcc-entry-footer">
           <div class="fcc-entry-avatar">${honoredAvatarHTML(sub.id, avatarInner(sub.avatar), 36)}</div>
