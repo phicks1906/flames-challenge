@@ -7518,7 +7518,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v713 · post-upload-progress";
+const APP_VERSION = "v714 · preview-3s-cap";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11793,11 +11793,34 @@ function _startPreview(vid) {
   if (_activePreview) { try { _stopPreview(_activePreview); } catch(_) {} }
   _activePreview = vid;
   if (!vid.src && vid.dataset.src) {
-    vid.preload = 'auto';
+    // v714 — preload 'metadata', not 'auto': with a 3s cap we need the first
+    // seconds, not the browser's guess at buffering the whole file.
+    vid.preload = 'metadata';
     vid.src = vid.dataset.src;
   }
   vid.muted = true;
-  vid.loop = true;
+  // v714 — PREVIEW MEANS PREVIEW: first 3 seconds, then freeze on that frame.
+  // This is the pattern the big feeds use (short silent snippet, not the whole
+  // clip on repeat) and it's Paul's explicit call: "If they want to see the full
+  // video, they should click on the video to play it."
+  // It also cuts the v707 egress cost roughly 5-10x — at ~1k users that's the
+  // difference between ~$30/mo and a few dollars — because the element stops
+  // requesting media once paused; browsers only buffer a little past the pause.
+  // Wired ONCE per element (timeupdate re-fires forever; the guard prevents a
+  // stacked-listener repeat of the v430 bug). Restarting a preview after a stop
+  // resets currentTime so a re-scroll replays the 3s from the top.
+  vid.loop = false;
+  const CAP_S = 3;
+  if (!vid._fcCapWired) {
+    vid._fcCapWired = true;
+    vid.addEventListener('timeupdate', () => {
+      if (_activePreview === vid && vid.currentTime >= CAP_S && !vid.paused) {
+        vid.pause(); // freeze on the frame; poster face stays for offscreen cards
+        dlog('preview', 'cap-3s', {});
+      }
+    });
+  }
+  if (vid.currentTime >= CAP_S) { try { vid.currentTime = 0; } catch(_) {} }
   vid.play().catch(() => {});
 }
 
