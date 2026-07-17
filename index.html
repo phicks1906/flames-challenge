@@ -7518,7 +7518,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v714 · preview-3s-cap";
+const APP_VERSION = "v715 · rejected-not-entered";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -15934,7 +15934,7 @@ function renderChallenges() {
 
     const chEntries = (state.feedEntries || []).filter(e => e.challenge_id === ch.id);
     const canEnterCh = ch.computedStatus === 'submitting'
-      && state.profile && !chEntries.some(e => e.user_id === state.profile.id)
+      && state.profile && !myLiveEntry(chEntries) // v715 — rejected doesn't count as entered
       && chEntries.length < MAX_ENTRIES_PER_CHALLENGE
       // Championships (v635): entry restricted to accepted invitees, since
       // championships are now public (so everyone can watch) — the invite is
@@ -16161,11 +16161,14 @@ async function loadChallengeDetail(challengeId) {
     state.currentEntries = allFetched.filter(e => {
       const st = e.moderation_status;
       if (!st || st === 'clear' || st === 'approved') return true;
-      // v703 — 'rejected' is a FINAL removal, not a review state: the media is
-      // already blocked from rendering for everyone including the submitter, so
-      // keeping the row here only produced a phantom card and an inflated count.
-      // Admins review from the Admin queue, which reads the table directly.
-      if (st === 'rejected') return false;
+      // v715 REVERTS v703's blanket hide of rejected. v703 dropped rejected rows
+      // for EVERYONE, which also hid your own rejection from you — but the feed
+      // kept showing it, so the same entry read "Not Approved" on one surface and
+      // didn't exist on the other. Showing the submitter their own rejection is
+      // the intended design: without it, an entry silently disappears and the
+      // resubmit prompt makes no sense. The MEDIA is still blocked from rendering
+      // (that gate is separate); this only decides whether the row is listed.
+      if (st === 'rejected') return e.user_id === myId || amAdmin;
       if (e.user_id === myId) return true;   // you always see your own (pending/flagged/escalated)
       if (amAdmin) return true;               // admins see everything still under review
       return false;                            // hidden from everyone else
@@ -16497,9 +16500,11 @@ function renderChallengeDetail() {
   const myId = state.profile?.id;
   const isSdSub = status === 'sd_submitting';
   const sdRound = ch.sd_round || 0;
+  // v715 — was .some(e => e.user_id === myId && ...) with no moderation check, so
+  // a rejected entry counted as entered and hid the submit button forever.
   const enteredThisRound = state.profile && state.currentEntries.some(e =>
-    e.user_id === myId && (isSdSub ? (e.sd_round || 0) === sdRound : true));
-  const userHasEntered = enteredThisRound;
+    e.user_id === myId && e.moderation_status !== 'rejected' && (isSdSub ? (e.sd_round || 0) === sdRound : true));
+  const userHasEntered = enteredThisRound; // v715 — enteredThisRound now excludes rejected; see below
   const challengeFull = state.currentEntries.length >= MAX_ENTRIES_PER_CHALLENGE;
   const amTiedPlayer = isSdSub && Array.isArray(ch.sd_user_ids) && ch.sd_user_ids.includes(myId);
   const canEnter = state.profile && !userHasEntered && (
@@ -16524,7 +16529,11 @@ function renderChallengeDetail() {
     sdVisibleEntries = [];
   } else if (ch.sd_phase === 'voting') {
     const _r = ch.sd_round || 0;
-    sdVisibleEntries = state.currentEntries.filter(e => (e.sd_round || 0) === _r);
+    // v715 — the LIST may include your own rejected entry (so you can see what
+    // happened), but the COUNT must not: a rejected entry isn't competing, and
+    // "3 entries" has to mean the same number to everyone. v703's point stands —
+    // it just shouldn't have been enforced by deleting the row from the list.
+    sdVisibleEntries = state.currentEntries.filter(e => (e.sd_round || 0) === _r && e.moderation_status !== 'rejected');
   } else {
     sdVisibleEntries = state.currentEntries;
   }
@@ -18951,7 +18960,7 @@ function renderFeedChallengeCard(ch) {
   );
   const canEnter = ch.computedStatus === 'submitting'
     && state.profile
-    && !chEntries.some(e => e.user_id === state.profile.id)
+    && !myLiveEntry(chEntries) // v715 — a rejected entry must not block re-entry
     // Championships are invite-only for EVERYONE, admins included — only an
     // invited contender (present in the fighter roster) may enter. Mirrors the
     // DB trigger enforce_championship_invite so the UI and server agree.
@@ -19011,9 +19020,18 @@ function renderFeedChallengeCard(ch) {
 
   // Bottom bar (v619): mirror the challenges-page states so the two surfaces
   // never disagree — submit / "You're in!"+Edit / "in the running".
-  const _feedMyEntry = state.profile && chEntries.some(e => e.user_id === state.profile.id);
+  const _feedMyEntry = myLiveEntry(chEntries); // v715
+  const _feedMyRejected = myRejectedEntry(chEntries); // v715
   let submitBtn = '';
-  if (canEnter) {
+  if (canEnter && _feedMyRejected) {
+    // v715 — entered, got rejected, can still fix it. Don't just show a bare
+    // "+ Submit your entry" as though nothing happened: say what happened, then
+    // offer the way forward.
+    submitBtn = `<div style="padding:6px 12px;background:rgba(255,45,31,0.07);border-top:1px solid rgba(255,45,31,0.35);">
+      <div style="font-size:13px;color:#ff6a6a;font-weight:700;margin-bottom:6px;">🚫 Your entry wasn't approved</div>
+      <button class="fcc-submit-btn" data-fcc-submit="${ch.id}">+ Submit another entry</button>
+    </div>`;
+  } else if (canEnter) {
     submitBtn = `<div style="padding:0 0 8px"><button class="fcc-submit-btn" data-fcc-submit="${ch.id}">+ Submit your entry</button></div>`;
   } else if (_feedMyEntry && ch.computedStatus === 'submitting') {
     const _fdl = ch.submission_deadline ? formatCountdown(ch.submission_deadline) : null;
@@ -20350,7 +20368,7 @@ async function openFeedViewer(chId, startEntryId = null) {
     _checkFreshVideoEncoding(list);
 
     const total = visibleEntries.length;
-    const userHasEntered = entries.some(e => e.user_id === state.profile?.id);
+    const userHasEntered = !!myLiveEntry(entries); // v715
     if (status === 'submitting' && !userHasEntered) {
       btn.textContent = '🔥 Enter Challenge';
       btn.style.display = 'block';
@@ -22372,6 +22390,26 @@ const FEATURE_FLAGS = [
 // The rule: admins may delete any challenge; a creator may delete their own ONLY
 // while nobody has entered it. Once an entry exists, deleting would destroy
 // someone else's work, so the escape hatch closes.
+// v715 — ONE answer to "am I in this challenge?".
+// A REJECTED entry does not count you as in. Its media is blocked from rendering
+// for everyone including you, so it is not competing — you are OUT, with a
+// chance to fix it. Five separate copies of this check existed (feed card, feed
+// bottom bar, challenges page, challenge detail, feed viewer sheet) and not one
+// of them excluded rejected, so a rejected entry showed "✓ You're in!" and an
+// Edit button over a video nobody can see, while blocking a fresh submission.
+// Pass the entry list for the surface you're on; they all hold the same shape.
+function myLiveEntry(entries) {
+  if (!state.profile) return null;
+  return (entries || []).find(e => e.user_id === state.profile.id && e.moderation_status !== 'rejected') || null;
+}
+// A rejected entry of mine, if any. Used to tell "never entered" (plain submit
+// prompt) apart from "entered and it was rejected" (which needs an explanation,
+// or the resubmit prompt reads as if the first attempt vanished).
+function myRejectedEntry(entries) {
+  if (!state.profile) return null;
+  return (entries || []).find(e => e.user_id === state.profile.id && e.moderation_status === 'rejected') || null;
+}
+
 function canDeleteChallenge(ch) {
   if (!ch || !state.profile) return false;
   if (isAdmin()) return true;
