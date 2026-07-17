@@ -7536,7 +7536,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v717 · flyer-full-width";
+const APP_VERSION = "v718 · audio-post-fix";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -21416,8 +21416,25 @@ document.getElementById('createPostForm').addEventListener('submit', async e => 
       const filename = `posts/${state.profile.id}/${Date.now()}.${ext}`;
       const up = await uploadWithProgress('challenge-media', filename, cpState.file,
         pct => { btn.textContent = `Uploading... ${pct}%`; });
-      mediaUrl = up.publicUrl;
-      mediaType = cpState.fileType;
+      // v718 — AUDIO IS NOT A media_type ON posts. The table has a dedicated
+      // audio_url column, and media_type only ever meant 'photo' or 'video' —
+      // which is what posts_media_type_check enforces. But there are TWO file
+      // inputs: the Audio tab (cpAudioFile -> audioFile -> audio_url, correct)
+      // and Photo/Video (cpFileInput), which ALSO accepts audio/* and labelled it
+      // cpState.fileType = 'audio'. That path then wrote media_type:'audio' and
+      // the DB rejected the row: "violates check constraint posts_media_type_check".
+      // Same file, two inputs, two different shapes — pick an mp3 from the wrong
+      // one and posting was impossible. Route audio to the column that exists for
+      // it, whichever input it arrived through.
+      if (cpState.fileType === 'audio') {
+        audioUrl = up.publicUrl;
+        mediaUrl = null;
+        mediaType = null;
+        dlog('post', 'audio-via-file-input', {}); // shouldn't be common; worth seeing if it is
+      } else {
+        mediaUrl = up.publicUrl;
+        mediaType = cpState.fileType;
+      }
       // Moderate photos before the post is created. Video isn't scanned yet.
       if (mediaType === 'photo') {
         btn.textContent = 'Checking...';
