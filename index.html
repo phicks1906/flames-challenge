@@ -7518,7 +7518,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v712 · decision-thumbs";
+const APP_VERSION = "v713 · post-upload-progress";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -21279,16 +21279,25 @@ document.getElementById('createPostForm').addEventListener('submit', async e => 
     let mediaType = null;
     let audioUrl = null;
     if (cpState.file) {
-      btn.textContent = 'Uploading...';
+      // v713 — was db.storage.upload() wrapped in a 60s withTimeout(), and it
+      // failed on real videos. Three faults:
+      //  1. 60s is not enough. Client compression is off (v436, deliberate), so
+      //     this is the ORIGINAL file — a 1080x1920 iPhone clip is 30-80MB, which
+      //     is 40-90s of cellular upload. The timeout was a coin flip, not a limit.
+      //  2. No progress. It said "Uploading..." and then failed, with no way to
+      //     tell it was at 95%. Entry uploads have had a progress bar for months.
+      //  3. Promise.race does NOT cancel the request it loses to. The upload kept
+      //     running after the reject, sometimes SUCCEEDING — leaving an orphaned
+      //     file in the bucket that no post ever referenced.
+      // uploadWithProgress is the XHR path entry uploads already use: real
+      // progress, real errors, and no arbitrary wall-clock limit. A stalled
+      // upload now surfaces as a network error instead of a fake timeout.
+      btn.textContent = 'Uploading... 0%';
       const ext = ((cpState.file.name || 'photo.jpg').split('.').pop() || 'jpg').toLowerCase();
       const filename = `posts/${state.profile.id}/${Date.now()}.${ext}`;
-      const uploadResp = await withTimeout(
-        db.storage.from('challenge-media').upload(filename, cpState.file, { cacheControl: '3600', upsert: false }),
-        60000, 'Upload'
-      );
-      if (uploadResp.error) throw new Error('Upload failed: ' + uploadResp.error.message);
-      const { data: pub } = db.storage.from('challenge-media').getPublicUrl(filename);
-      mediaUrl = pub.publicUrl;
+      const up = await uploadWithProgress('challenge-media', filename, cpState.file,
+        pct => { btn.textContent = `Uploading... ${pct}%`; });
+      mediaUrl = up.publicUrl;
       mediaType = cpState.fileType;
       // Moderate photos before the post is created. Video isn't scanned yet.
       if (mediaType === 'photo') {
@@ -21301,16 +21310,15 @@ document.getElementById('createPostForm').addEventListener('submit', async e => 
       }
     }
     if (cpState.audioFile) {
+      // v713 — same fix as the media upload above. Audio files are smaller but a
+      // long track on bad signal hit the same 60s wall, and the button already
+      // claimed to show a percentage it never had.
       btn.textContent = 'Uploading... 0%';
       const ext = (cpState.audioFile.name.split('.').pop() || 'mp3').toLowerCase();
       const filename = `posts/${state.profile.id}/audio_${Date.now()}.${ext}`;
-      const uploadResp = await withTimeout(
-        db.storage.from('challenge-media').upload(filename, cpState.audioFile, { cacheControl: '3600', upsert: false }),
-        60000, 'Audio upload'
-      );
-      if (uploadResp.error) throw new Error('Audio upload failed: ' + uploadResp.error.message);
-      const { data: pub } = db.storage.from('challenge-media').getPublicUrl(filename);
-      audioUrl = pub.publicUrl;
+      const upA = await uploadWithProgress('challenge-media', filename, cpState.audioFile,
+        pct => { btn.textContent = `Uploading... ${pct}%`; });
+      audioUrl = upA.publicUrl;
     }
 
     btn.textContent = 'Posting...';
