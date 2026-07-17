@@ -6720,6 +6720,15 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     <p class="promote-sub">Your challenge is live! Share your flyer to get entries — post it to your followers or a group.</p>
     <div class="promote-preview" id="promotePreview"></div>
     <input type="file" id="promoteFileInput" accept="image/*" style="display:none" onchange="onPromoteFileSelected(this)" />
+    <div style="margin-top:10px">
+      <input id="promoteHype" type="text" maxlength="60" placeholder="Add a line to the flyer (optional)"
+        oninput="document.getElementById('promoteHypeCount').textContent = (60 - this.value.length)"
+        style="width:100%;box-sizing:border-box;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg-2);color:var(--text);font-size:14px">
+      <div style="display:flex;justify-content:space-between;margin-top:4px">
+        <span style="font-size:11px;color:var(--text-muted)">Your own words — the title alone rarely stops a scroll.</span>
+        <span style="font-size:11px;color:var(--text-muted)"><span id="promoteHypeCount">60</span> left</span>
+      </div>
+    </div>
     <div class="promote-media-row" id="promoteMediaRow">
       <button class="btn btn-ghost btn-sm" id="promoteAddPhotoBtn" onclick="document.getElementById('promoteFileInput').click()">📷 Add photo</button>
       <button class="btn btn-ghost btn-sm" id="promoteRemovePhotoBtn" onclick="clearPromoteHero()" style="display:none">Remove photo</button>
@@ -7518,7 +7527,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v715 · rejected-not-entered";
+const APP_VERSION = "v716 · flyer-hero-and-text";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -10308,7 +10317,16 @@ async function generateFlyer(opts) {
   const titleLineH = hasHero ? 86 : 108;
   let y = _wrapCentered(ctx, opts.title, W / 2, textTopY, W - 200, titleLineH, titleFontSize, 'Anton');
 
-  let metaY = y + (hasHero ? 50 : 70);
+  // v716 — the user's own line, under the title and above the byline. Ember, so
+  // it reads as the human voice on the flyer rather than more system metadata.
+  // Wrapped, because a 60-char line at this size does not fit on one row.
+  let y2 = y;
+  if (opts.hype) {
+    ctx.fillStyle = '#ff8a4c';
+    y2 = _wrapCentered(ctx, opts.hype, W / 2, y + (hasHero ? 34 : 46), W - 240,
+                       hasHero ? 44 : 50, hasHero ? 36 : 40, '"DM Sans"');
+  }
+  let metaY = y2 + (hasHero ? 50 : 70);
   if (opts.sub) {
     ctx.font = '500 30px "DM Sans", sans-serif';
     ctx.fillStyle = '#9a8d80';
@@ -10344,6 +10362,9 @@ async function openPromote(type, item) {
   if (!item || !item.id) return;
   state.promoteItem = item; // store for postFlyerToFeed/postFlyerToGroup
   document.getElementById('flyerGroupPicker').style.display = 'none'; // reset picker
+  // v716 — clear the hype line per open, or it leaks onto the next challenge's flyer
+  { const _h = document.getElementById('promoteHype'); if (_h) _h.value = '';
+    const _hc = document.getElementById('promoteHypeCount'); if (_hc) _hc.textContent = '60'; }
   const link = flyerLink(type, item.id);
   let opts, modalTitle, shareText;
 
@@ -10391,13 +10412,29 @@ async function openPromote(type, item) {
   // into state so that IF the user generates a flyer, it already has the best image.
   if (type === 'challenge') {
     try {
+      // v716 — was `.eq('media_type','image')`, so it only ever found a hero on
+      // photo challenges. Every video challenge fell through to the text-only
+      // layout — that's the "flyer is 60% empty black" problem, and it was a
+      // query filter, not a design flaw. Video entries carry a poster (v686:
+      // portrait, 1080px, self-hosted), which is exactly the image we want.
+      // MODERATION: only clear/approved/legacy entries may be a hero. A flyer is
+      // the one artifact that LEAVES the platform — once it's on someone's
+      // story it can't be recalled — so it must never carry content that hasn't
+      // passed review. Nothing here filtered that before.
       const { data } = await db.from('entries')
-        .select('id, media_url, media_type')
+        .select('id, media_url, media_type, poster_url, moderation_status')
         .eq('challenge_id', item.id)
-        .eq('media_type', 'image')
+        .in('media_type', ['image', 'video'])
+        .or('moderation_status.is.null,moderation_status.eq.clear,moderation_status.eq.approved')
         .limit(20);
-      if (data && data.length && promoteState && promoteState.id === item.id) {
-        // Pick highest-voted image entry if we have votes, else first
+      // v716 — an image entry's hero is its media; a video entry's is its poster.
+      // Drop anything with neither rather than handing generateFlyer a bad URL.
+      const _heroable = (data || [])
+        .map(e => ({ ...e, _heroUrl: e.media_type === 'image' ? e.media_url : e.poster_url }))
+        .filter(e => !!e._heroUrl);
+      if (_heroable.length && promoteState && promoteState.id === item.id) {
+        const data = _heroable; // eslint-disable-line no-shadow
+        // Pick highest-voted entry if we have votes, else first
         let chosen = data[0];
         try {
           const voteRes = await db.from('entry_votes')
@@ -10410,8 +10447,8 @@ async function openPromote(type, item) {
             chosen = data[0];
           }
         } catch (e) {}
-        if (chosen && chosen.media_url && promoteState && !promoteState.heroUserUrl) {
-          promoteState.heroAutoUrl = chosen.media_url;
+        if (chosen && chosen._heroUrl && promoteState && !promoteState.heroUserUrl) {
+          promoteState.heroAutoUrl = chosen._heroUrl; // v716 — poster for video, media for image
           // Only re-render if the user has ALREADY generated a flyer (so we swap the
           // hero in). If they haven't generated yet, just stash it for later.
           if (promoteState.flyerGenerated) { await renderPromoteFlyer(); }
@@ -10426,6 +10463,18 @@ async function generatePromoteFlyer() { return renderPromoteFlyer(); }
 // Explicit user action: generate the flyer on demand from the promote modal.
 async function userGeneratePromoteFlyer() {
   if (!promoteState) return;
+  // v716 — moderate the hype line BEFORE the PNG is baked, and fail CLOSED.
+  // Once those pixels exist the text is no longer text — it's an image the user
+  // can save and post anywhere, with our brand on it. There is no after-the-fact
+  // moderation for a flyer sitting in someone's camera roll.
+  const hype = (document.getElementById('promoteHype')?.value || '').trim();
+  if (hype) {
+    const btnHost = document.getElementById('promotePreview');
+    if (btnHost) btnHost.innerHTML = '<div class="promote-loading">Checking your text…</div>';
+    const ok = await moderateText(hype, 'flyer_text', promoteState.id, true); // failClosed
+    if (!ok) { updatePromoteMediaButtons(); return; }  // moderateText already toasted why
+  }
+  promoteState.hype = hype;
   promoteState.flyerGenerated = true;
   document.getElementById('promotePreview').innerHTML = '<div class="promote-loading">Designing your flyer…</div>';
   await renderPromoteFlyer();
@@ -10434,7 +10483,7 @@ async function userGeneratePromoteFlyer() {
 
 async function renderPromoteFlyer() {
   if (!promoteState) return;
-  const opts = { ...promoteState.opts };
+  const opts = { ...promoteState.opts, hype: promoteState.hype || '' }; // v716
   const heroSrc = promoteState.heroUserUrl || promoteState.heroAutoUrl;
   if (heroSrc) {
     try {
@@ -16539,6 +16588,12 @@ function renderChallengeDetail() {
   }
 
   // Entry count + grid
+  // v715 — LIST vs COUNT are different questions, and conflating them is what
+  // v703 got wrong. The list may include YOUR OWN rejected entry, so you can see
+  // what happened to it. The count must never include it: a rejected entry isn't
+  // competing, and "3 entries" has to mean the same number for every viewer —
+  // otherwise the submitter sees a different total from everyone else.
+  const _countableEntries = sdVisibleEntries.filter(e => e.moderation_status !== 'rejected');
   const _sdSubmittingNow = ch.sd_phase === 'submitting';
   const _sealedNow = ballotsSealed(ch, status);
   // Championships (v642): the arena's THE CONTENDERS header replaces the
@@ -16547,8 +16602,8 @@ function renderChallengeDetail() {
   document.getElementById('cdEntriesCount').textContent = _sdSubmittingNow
     ? '🔒 Entries hidden until voting'
     : _sealedNow
-    ? `${sdVisibleEntries.length} ${sdVisibleEntries.length === 1 ? 'entry' : 'entries'} · 🔒 ${state.currentVotes.length} ballot${state.currentVotes.length === 1 ? '' : 's'} sealed`
-    : `${sdVisibleEntries.length} ${sdVisibleEntries.length === 1 ? 'entry' : 'entries'}`;
+    ? `${_countableEntries.length} ${_countableEntries.length === 1 ? 'entry' : 'entries'} · 🔒 ${state.currentVotes.length} ballot${state.currentVotes.length === 1 ? '' : 's'} sealed`
+    : `${_countableEntries.length} ${_countableEntries.length === 1 ? 'entry' : 'entries'}`;
 
   const voteCountByEntry = {};
   state.currentVotes.forEach(v => { voteCountByEntry[v.entry_id] = (voteCountByEntry[v.entry_id] || 0) + 1; });
@@ -19840,7 +19895,15 @@ function containsSensitivePII(text) {
 }
 // Calls the moderate-content Edge Function before any user-generated text is saved.
 // Fails OPEN — if the API is down, content goes through. Never block legit users on outage.
-async function moderateText(text, contentType, contentId = null) {
+// v716 — `failClosed` is opt-in and defaults to FALSE, deliberately. For a
+// comment or a caption, failing open is right: an OpenAI outage must not block
+// legitimate users, and anything that slips through is deletable in one tap.
+// FLYER TEXT INVERTS THAT. A flyer is baked into a PNG, carries FLAMESCHALLENGE
+// across the bottom, and is built to be shared to Instagram — once it's in
+// someone's story you cannot recall it, delete it, or moderate it after the
+// fact. There, an outage must mean "try again in a minute", never "ship it".
+// Do not flip this default. The two behaviours are correct for their surfaces.
+async function moderateText(text, contentType, contentId = null, failClosed = false) {
   if (!text || !text.trim()) return true;
   if (containsSensitivePII(text)) {
     toast('That looks like it may contain a sensitive personal number (SSN/card). Please remove it before posting.');
@@ -19856,7 +19919,10 @@ async function moderateText(text, contentType, contentId = null) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: text.trim().slice(0, 1000), contentType, userId: state.profile?.id, contentId })
     });
-    if (!resp.ok) return true; // fail open
+    if (!resp.ok) {
+      if (failClosed) { toast("Couldn't check that text right now — try again in a moment."); return false; }
+      return true; // fail open
+    }
     const data = await resp.json().catch(() => ({}));
     if (data.blocked) {
       toast('Your content was flagged and could not be posted. Please review our community guidelines.');
@@ -19864,6 +19930,7 @@ async function moderateText(text, contentType, contentId = null) {
     }
     return true;
   } catch (e) {
+    if (failClosed) { toast("Couldn't check that text right now — try again in a moment."); return false; }
     return true; // fail open
   }
 }
