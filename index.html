@@ -7518,7 +7518,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v711 · reviewable-queue";
+const APP_VERSION = "v712 · decision-thumbs";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -22816,11 +22816,21 @@ async function renderAdminFlags() {
   try {
     const since = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
     const { data: decided } = await db.from('entries')
-      .select('id, moderation_status, moderation_checked_at, submitter:profiles!entries_user_id_fkey(id, name)')
+      .select('id, challenge_id, media_url, poster_url, moderation_status, moderation_checked_at, submitter:profiles!entries_user_id_fkey(id, name)') // v712 — media for the thumb
       .in('moderation_status', ['approved', 'rejected'])
       .gte('moderation_checked_at', since)
       .order('moderation_checked_at', { ascending: false })
       .limit(20);
+    // v712 — titles for the decision rows, same separate-query reasoning as the
+    // review queue above: never let a relationship hiccup take the list down.
+    try {
+      const _dIds = [...new Set((decided || []).map(d => d.challenge_id).filter(Boolean))].filter(id => !_modChMap[id]);
+      if (_dIds.length) {
+        const { data: _dRows } = await db.from('challenges').select('id, title').in('id', _dIds);
+        (_dRows || []).forEach(c => { _modChMap[c.id] = c; });
+      }
+    } catch (_) { /* nicety only */ }
+
     if (rds) {
       const dl = decided || [];
       rds.innerHTML = dl.length === 0 ? '' :
@@ -22828,11 +22838,27 @@ async function renderAdminFlags() {
         `<div style="font-size:12px;color:var(--text-dim);padding-bottom:8px">Last 7 days. Undo puts an entry back in the review queue.</div>` +
         dl.map(d => {
           const rej = d.moderation_status === 'rejected';
+          // v712 — a THUMBNAIL, not a player. This list is an audit log ("did I
+          // mis-tap?"), not a review surface: 20 embedded videos would be ~5600px
+          // of scrolling and several MB pulled before you decided anything. You
+          // need to RECOGNISE the entry; Undo returns it to the queue where the
+          // full player lives.
+          // Source is Bunny's preview.webp (320x180, ~20KB) on purpose — the one
+          // place its low resolution is a virtue. Our own v686 poster is 1080px
+          // and ~350KB; twenty of those is ~7MB to render 56px squares.
+          const thumb = _bunnyPreviewUrl(d.media_url || '') || d.poster_url || '';
+          const chT = _modChTitle(d);
           return `<div style="display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px">
-            <span style="font-size:11px;font-weight:700;color:${rej ? '#ff2d1f' : '#4cd964'};text-transform:uppercase;flex:0 0 68px">${rej ? '🚫 Rejected' : '✅ Approved'}</span>
-            <span style="font-size:12px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(d.submitter?.name || 'Unknown')}</span>
-            <span style="font-size:11px;color:var(--text-dim)">${timeAgo(d.moderation_checked_at)}</span>
-            <button onclick="undoModeration('${d.id}')" style="padding:4px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-weight:600;cursor:pointer">Undo</button>
+            ${thumb ? `<img src="${escapeHtml(thumb)}" alt="" loading="lazy" style="flex:0 0 44px;width:44px;height:56px;border-radius:5px;object-fit:cover;background:#140a06" onerror="this.style.visibility='hidden'">` : ''}
+            <div style="flex:1;min-width:0">
+              <div style="font-size:11px;font-weight:700;color:${rej ? '#ff2d1f' : '#4cd964'};text-transform:uppercase">${rej ? '🚫 Rejected' : '✅ Approved'}</div>
+              <div style="font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(d.submitter?.name || 'Unknown')}</div>
+              ${chT ? `<div style="font-size:11px;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">in ${escapeHtml(chT)}</div>` : ''}
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+              <span style="font-size:11px;color:var(--text-dim)">${timeAgo(d.moderation_checked_at)}</span>
+              <button onclick="undoModeration('${d.id}')" style="padding:4px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-weight:600;cursor:pointer">Undo</button>
+            </div>
           </div>`;
         }).join('') + `<hr style="border:none;border-top:1px solid var(--border);margin:8px 0 16px">`;
     }
