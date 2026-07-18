@@ -6553,41 +6553,46 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     linear-gradient(160deg, #2a130a 0%, #4a1c0c 45%, #7a2d10 100%);
 }
 /* ══════════════════════════════════════════════════════════════════════════
-   v727 · FLAME-FILLED BARS  (revert = v726 gradient bars; both use _feqStart)
-   Fire IMAGE (Assets/fire.jpeg) fills the tile with a slow drift; each of 13
-   columns holds a BLACK COVER anchored top whose height is the inverse of the
-   bar — fire shows through the uncovered bottom. Columns get thin black side
-   borders (POND5's black gaps); .feq-segs draws the stacked-block lines.
-   If fire.jpg 404s the <img> hides and the flame-gradient background below
-   restores the v726 look — never a black tile.
+   v730 · FIRE BEHIND, FROSTED EQ IN FRONT  (variant C; revert = v727 block)
+   fire.jpeg is a drifting backdrop; a dark scrim keeps bars legible; 13
+   translucent frosted-glass bars sit on top and the fire glows through them.
+   Bars set their OWN height (analyser-driven when playing, static skyline idle).
+   fire.jpeg 404 → img hides → flame-gradient background shows. Never black.
    ══════════════════════════════════════════════════════════════════════════ */
 .fcc-fire-eq { position: relative; overflow: hidden; cursor: pointer;
   background: linear-gradient(to top, #ff2d1f 0%, #ff6a2c 45%, #ffc857 100%); }
-.feq-fireimg { position: absolute; width: 116%; height: 116%; left: -8%; top: -8%;
+.feq-fireimg { position: absolute; width: 112%; height: 112%; left: -6%; top: -6%;
   object-fit: cover; object-position: center bottom; z-index: 0;
   animation: feqDrift 14s ease-in-out infinite alternate; }
 @keyframes feqDrift {
-  from { transform: translate(0, 0) scale(1); filter: brightness(1); }
-  50%  { filter: brightness(1.12); }
-  to   { transform: translate(3.5%, -3%) scale(1.05); filter: brightness(1); }
+  from { transform: translateY(0) scale(1); filter: brightness(1); }
+  50%  { filter: brightness(1.1); }
+  to   { transform: translateY(-3%) scale(1.07); filter: brightness(1); }
 }
-.feq-bars { position: absolute; inset: 0; display: flex; z-index: 1; }
-.feq-bars .feqcol { flex: 1; position: relative;
-  border-left: 3px solid #060302; border-right: 3px solid #060302; }
-/* the black TOP COVER — its height is 100 - barHeight. Idle skyline below. */
-.feq-bars .feqb { position: absolute; top: 0; left: 0; right: 0;
-  background: #060302; height: 70%; transition: height 0.08s linear; }
-.feq-bars .feqb-0 { height: 74%; } .feq-bars .feqb-1 { height: 48%; }
-.feq-bars .feqb-2 { height: 66%; } .feq-bars .feqb-3 { height: 32%; }
-.feq-bars .feqb-4 { height: 56%; } .feq-bars .feqb-5 { height: 42%; }
-.feq-bars .feqb-6 { height: 70%; } .feq-bars .feqb-7 { height: 38%; }
-.feq-bars .feqb-8 { height: 60%; } .feq-bars .feqb-9 { height: 46%; }
-.feq-bars .feqb-10 { height: 72%; } .feq-bars .feqb-11 { height: 52%; }
-.feq-bars .feqb-12 { height: 64%; }
-/* stacked-block separators */
-.feq-segs { position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: 0.95;
-  background-image: repeating-linear-gradient(0deg, #060302 0 3px, transparent 3px 16px); }
-/* fallback dance (analyser mute) — animates the COVERS, inverse heights */
+.feq-scrim { position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0.22)); }
+.feq-bars { position: absolute; inset: 0; display: flex; align-items: flex-end;
+  gap: 6px; padding: 26px 16px; z-index: 2; }
+.feq-bars .feqb {
+  flex: 1;
+  background: rgba(255,255,255,0.16);
+  border: 1px solid rgba(255,255,255,0.30);
+  border-radius: 3px 3px 0 0;
+  box-shadow: 0 0 10px rgba(255,180,90,0.25);
+  transform-origin: bottom;
+  transition: height 0.08s linear;
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+/* idle skyline so it reads as an EQ before any tap */
+.feq-bars .feqb-0 { height: 30%; } .feq-bars .feqb-1 { height: 58%; }
+.feq-bars .feqb-2 { height: 40%; } .feq-bars .feqb-3 { height: 72%; }
+.feq-bars .feqb-4 { height: 48%; } .feq-bars .feqb-5 { height: 64%; }
+.feq-bars .feqb-6 { height: 34%; } .feq-bars .feqb-7 { height: 68%; }
+.feq-bars .feqb-8 { height: 44%; } .feq-bars .feqb-9 { height: 56%; }
+.feq-bars .feqb-10 { height: 32%; } .feq-bars .feqb-11 { height: 52%; }
+.feq-bars .feqb-12 { height: 42%; }
+/* fallback dance if the analyser is mute */
 .fcc-fire-eq.feq-fallback .feqb { animation: feqDance 0.9s ease-in-out infinite alternate; }
 .fcc-fire-eq.feq-fallback .feqb-1 { animation-duration: 1.05s; animation-delay: -.2s; }
 .fcc-fire-eq.feq-fallback .feqb-3 { animation-duration: 1.15s; animation-delay: -.35s; }
@@ -6595,11 +6600,11 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 .fcc-fire-eq.feq-fallback .feqb-7 { animation-duration: 1.1s; animation-delay: -.3s; }
 .fcc-fire-eq.feq-fallback .feqb-9 { animation-duration: 1.0s; animation-delay: -.15s; }
 .fcc-fire-eq.feq-fallback .feqb-11 { animation-duration: .68s; animation-delay: -.78s; }
-@keyframes feqDance { from { height: 80%; } to { height: 22%; } }
+@keyframes feqDance { from { height: 22%; } to { height: 80%; } }
 .fcc-fire-eq .fcc-audio-btn {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); z-index: 4;
-  width: 60px; height: 60px; border-radius: 50%;
-  background: rgba(0,0,0,0.38); box-shadow: none;
+  width: 58px; height: 58px; border-radius: 50%;
+  background: rgba(0,0,0,0.40); box-shadow: none;
   color: #fff; font-size: 20px;
   display: flex; align-items: center; justify-content: center;
 }
@@ -7600,7 +7605,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v729 · honor-post-crop";
+const APP_VERSION = "v730 · fire-behind-eq";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11821,24 +11826,20 @@ function _audioTileHtml(e) {
   // in sync. The tile is 'idle' (bars low, slow, dimmed) until playback starts,
   // when toggleFccAudio adds .playing — so the motion actually MEANS something:
   // still = paused, dancing = playing. respects prefers-reduced-motion in CSS.
-  // v727 — POND5 BARS FILLED WITH REAL FLAME. Paul: "keep the flames without
-  // the curtains animation" — so the fill is the AdobeStock fire IMAGE (with a
-  // slow CSS drift so it breathes), not the curtain footage, and not a flat
-  // gradient. Technique: fire image at z0; 13 columns on top, each containing a
-  // BLACK COVER anchored to the TOP whose height is the INVERSE of the bar —
-  // fire shows through the uncovered bottom = the bar. Plain black divs over a
-  // plain <img>: no CSS mask (mask-on-media renders black on iOS), no video.
-  // The image lives at Assets/fire.jpeg in Storage; if it 404s, the img hides
-  // itself and the tile's flame-gradient background gives the v726 look back.
-  // JS (_feqStart) drives the COVERS: cover height = 100 - barHeight.
+  // v730 — FIRE BEHIND, FROSTED EQ IN FRONT. Paul picked variant C: the fire
+  // (fire.jpeg, drifting) is a full backdrop; 13 translucent frosted-glass bars
+  // sit ON TOP and the fire glows through them. The bars are their OWN height
+  // now (not inverse covers like v727) — analyser sets bar height directly. A
+  // dark scrim over the fire keeps the bars legible. If fire.jpeg 404s the img
+  // hides and the tile's flame-gradient background shows instead — never black.
   const NB = 13;
-  const cols = Array.from({length: NB}, (_, i) => `<div class="feqcol"><div class="feqb feqb-${i}"></div></div>`).join('');
+  const bars = Array.from({length: NB}, (_, i) => `<div class="feqb feqb-${i}"></div>`).join('');
   return `<div class="fcc-entry-media fcc-fire-eq" onclick="toggleFccAudio(this, event)" role="button" tabindex="0" aria-label="Play audio entry">
       <audio src="${escapeHtml(e.media_url)}" preload="none" crossorigin="anonymous"></audio>
       <img class="feq-fireimg" alt="" aria-hidden="true" loading="lazy" onerror="this.style.display='none'"
            src="https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/Assets/fire.jpeg">
-      <div class="feq-bars">${cols}</div>
-      <div class="feq-segs" aria-hidden="true"></div>
+      <div class="feq-scrim" aria-hidden="true"></div>
+      <div class="feq-bars">${bars}</div>
       <div class="fcc-audio-btn">▶</div>
     </div>`;
 }
@@ -11905,7 +11906,7 @@ function _feqStart(tile, a) {
         const v = data[bin] / 255; sum += v;
         // v727 — .feqb is now the black TOP COVER, so its height is the INVERSE
         // of the bar: loud bin -> short cover -> tall column of fire.
-        bars[i].style.height = (88 - v * 80) + '%';
+        bars[i].style.height = (10 + v * 82) + '%'; // v730 — direct height; bars are the bars, not covers
       }
       if (sum === 0 && ++zeroFrames > 60) {
         dlog('feq', 'analyser-silent-fallback', {});
