@@ -7536,7 +7536,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v720 · dlog-always-buffers";
+const APP_VERSION = "v721 · flyer-template-fix";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -18942,6 +18942,29 @@ function renderPostCard(p) {
     </div>`;
 }
 
+// v721 — THIS NOTE IS OUT HERE, NOT INSIDE THE TEMPLATE, AND THAT IS THE POINT.
+// v717 put this explanation in an <!-- HTML comment --> inside the RETURNED
+// TEMPLATE LITERAL, and the text quoted a code snippet in backticks. Inside a
+// template literal an HTML comment is DATA, not a comment — and a backtick is a
+// DELIMITER, not punctuation. So the template ended early and the snippet parsed
+// as a method call on the resulting string:   `...`.eq('media_type','image')`...`
+// The backticks were balanced, so the file stayed syntactically VALID: node --check
+// passed, Chromium parsed it, every review read fine. It only threw when CALLED —
+// killing every flyer card, and with them the entire feed, because renderFeed had
+// no per-card containment (v719 added it, which is how we finally caught this).
+// RULE: never put a backtick inside a comment inside a template literal. Prose that
+// needs code samples belongs in a // comment outside the template, like this one.
+//
+// WHAT THIS CARD IS: full-width flyer at post size — a 4/5 stage matching every
+// other card's media, flyer CONTAINED so nothing is cropped (its title, deadline
+// and footer are the whole point), gap filled by a blurred blow-up of the flyer
+// itself rather than black bars. Facts + CTA below, so it reads as a card with a
+// hero rather than a poster pretending to be a card.
+// History: v673 rendered the poster uncapped (~755px); v694 contained it in a 4/5
+// stage (502px); v695 shrank it to a 78x130 thumbnail because flyers were ~60%
+// empty black by design; v716 found the hero query was filtering to
+// media_type = image, so video challenges never got a hero — which removed the
+// only reason to shrink it.
 function renderFlyerCard(p) {
   const author = p.author || { name: 'Unknown', avatar: '🔥', id: null };
   const isMine = p.user_id === state.profile?.id;
@@ -18975,20 +18998,7 @@ function renderFlyerCard(p) {
         ${isMine ? `<button class="post-card-menu" data-pid="${p.id}" style="margin-left:auto;" aria-label="Delete post">⋯</button>` : `<button class="post-card-menu" data-report-type="post" data-report-id="${p.id}" data-report-text="${escapeHtml((p.content||'flyer').slice(0,200))}" style="margin-left:auto;" aria-label="Report post">🚩</button>`}
       </div>
 
-      <!-- v717 — FULL-WIDTH FLYER, at post size.
-           History: v673 rendered the raw poster uncapped (~755px); v694 contained
-           it in a 4/5 stage (502px); v695 shrank it to a 78x130 thumbnail because
-           the poster was ~60% empty black and shrinking a poster only yields a
-           smaller poster. v716 removed that premise — the hero-image query was
-           filtering `.eq('media_type','image')`, so video challenges never got a
-           hero. Flyers are full now, so there is nothing left to hide, and a
-           thumbnail undersells the one asset built to be looked at.
-           Layout is v694's, which was right all along: a fixed 4/5 stage matching
-           every other card's media, the flyer CONTAINED (never cropped — the
-           title, deadline and footer are the point), and the gap filled with a
-           blurred blow-up of the flyer itself rather than black bars. Same trick
-           as the v679 viewer stage. The facts + CTA sit below it, so this is a
-           card with a hero, not a poster pretending to be a card. -->
+      <!-- Flyer hero + facts + CTA. See the note above renderFlyerCard. -->
       ${ch ? `
       <div class="flyer-stage" data-flyer-viewer="${ch.id}">
         ${p.media_url && p.media_type !== 'video'
