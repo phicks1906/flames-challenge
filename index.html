@@ -3540,7 +3540,11 @@ html[data-theme="light"] .ps-heat-card { background: #1a1008; }
      comment said "every other horizontal pager in the app snaps"; it just never
      fixed its twin. One rule, both surfaces. */
   scroll-snap-type: x mandatory;
-  scroll-padding-left: 12px; /* matches the 12px padding below */
+  /* v722 — 16px, matching the `padding:16px` BOTH challenge-card renderers write
+     inline (feed 19169, challenges page 16084). The entry row is the only thing
+     in the card that isn't the card's own text, and it has to start on the same
+     line as the title or the card reads as off-centre. */
+  scroll-padding-left: 16px;
   scroll-behavior: smooth;
   display: flex;
   flex-wrap: nowrap; /* critical — prevent wrapping to grid */
@@ -3560,7 +3564,7 @@ html[data-theme="light"] .ps-heat-card { background: #1a1008; }
   touch-action: pan-x pan-y;
   overscroll-behavior-x: contain;
   will-change: scroll-position;
-  padding: 0 12px 8px;
+  padding: 0 16px 8px; /* v722 — matches the card's 16px content padding */
   scrollbar-width: none;
   margin-bottom: 8px;
   width: 100%;
@@ -6373,8 +6377,15 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 }
 
 /* 4 ── Entry scroller runs flush to the screen edge (FB starts its card at x=0) */
+/* v722 — the horizontal padding override is GONE. It set 0, so feed entry cards
+   started flush at x=0 while the card's own title sat at 16px, and the Challenges
+   page (which never got the override) inset them 12px. Measured on device: the
+   only vertical edges in the feed row were at 333/341 — nothing at the left,
+   i.e. card one hard against the screen. Three surfaces, three alignments, from a
+   rule scoped to #feedContainer for no reason. Sixth time this session.
+   Bottom padding only now; the base rule owns the inset. */
 #feedContainer .fcc-entries-scroll {
-  padding: 0 0 8px !important;
+  padding-bottom: 8px !important;
   gap: 8px !important;
 }
 
@@ -6389,9 +6400,8 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 /* v708 — snap moved to the base rules so BOTH surfaces get it; scoping it here
    is exactly how the Challenges page ended up without any. Only the feed's zero
    scroll-padding remains, matching its zero horizontal padding. */
-#feedContainer .fcc-entries-scroll {
-  scroll-padding-left: 0 !important;
-}
+/* v722 — removed: scroll-padding-left is 16px in the base rule for every surface,
+   or snap lands the card under the inset instead of on it. */
 
 /* 5 ── SIZE. 83vw == 335px on a 402px screen, set once in the base
         .fcc-entry-card rule. HISTORICAL WARNING, now resolved — v708 deleted the
@@ -7536,7 +7546,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v721 · flyer-template-fix";
+const APP_VERSION = "v722 · entry-row-aligned";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
