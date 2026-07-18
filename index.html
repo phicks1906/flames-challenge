@@ -2734,12 +2734,12 @@ body.theme-light .skeleton {
   border-radius: 12px;
   overflow: hidden;
   background: #000;
-  max-height: 500px;
+  max-height: 620px; /* v729 — matches the override below so they don't conflict */
 }
 .post-card-media img,
 .post-card-media video {
   width: 100%;
-  max-height: 500px;
+  max-height: 620px;
   object-fit: contain;
   display: block;
 }
@@ -6645,19 +6645,26 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
    showing every pixel of a 19.5:9 phone recording in a scroll list.
    FLYERS ARE EXEMPT — see the flyer stage below. A flyer is text; cropping it
    destroys the thing it exists to say. */
+/* v729 — HONOR THE USER'S CROP. v694 forced every post into aspect-ratio:4/5
+   with object-fit:cover, which RE-CROPS a photo the user already cropped in the
+   editor — zooming in and clipping the sides (Eric's 4-person family photo lost
+   the outer two people). A post photo is not a fixed-frame thumbnail; it's the
+   user's composition. Show it whole: contain, at its own aspect ratio, capped so
+   a very tall image can't run away. The cropper's output ratio is now the ratio
+   on screen — what you cropped is what posts. */
 .post-card-media {
-  max-height: none;
+  max-height: 620px;
   background: var(--bg-2);
-  aspect-ratio: 4 / 5;
 }
 .post-card-media img,
 .post-card-media video {
-  max-height: none;
   width: 100%;
-  height: 100%;
-  object-fit: cover;
+  max-height: 620px;
+  height: auto;
+  object-fit: contain;
+  display: block;
 }
-/* ═══════════════════ end v683 / v694 ═══════════════════ */
+/* ═══════════════════ end v729 (was v683 / v694) ═══════════════════ */
 
 .dm-compose-input { width:100%; box-sizing:border-box; margin-bottom:14px; border-radius:12px; border:1px solid var(--border); background:var(--overlay-2); color:var(--text); padding:12px 16px; font-size:16px; outline:none; }
 </style>
@@ -7593,7 +7600,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v728 · fire-jpeg-path";
+const APP_VERSION = "v729 · honor-post-crop";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
