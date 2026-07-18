@@ -7536,7 +7536,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v719 · feed-containment";
+const APP_VERSION = "v720 · dlog-always-buffers";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -13910,12 +13910,25 @@ function avatarInner(avatar) {
 // dlog('video', 'tap-play', { entry: id }) → timestamped line in the overlay.
 let _debugLogOn = false;
 const _debugLines = [];
+// v720 — ALWAYS BUFFER; the flag only controls the PANEL.
+// This used to `return` when the log was off, which made it useless for the one
+// class of bug it exists to catch: anything that happens during page load. You
+// can't enable the log before load, and by the time you tap the stamp 5x the
+// render is long done — so a render error was discarded every single time, and
+// no amount of scrolling or refreshing could bring it back (scrolling re-fires
+// previews, it doesn't re-render). Buffering costs a string and an array push.
+// Turning the panel on now REVEALS history instead of starting a new recording.
 function dlog(tag, msg, data) {
-  if (!_debugLogOn) return;
   const t = new Date().toISOString().slice(11, 23);
-  const line = `${t} [${tag}] ${msg}` + (data ? ' ' + JSON.stringify(data) : '');
+  let line;
+  try {
+    line = `${t} [${tag}] ${msg}` + (data ? ' ' + JSON.stringify(data) : '');
+  } catch (_) {
+    line = `${t} [${tag}] ${msg} <unserializable>`; // never let logging throw
+  }
   _debugLines.push(line);
-  if (_debugLines.length > 200) _debugLines.shift();
+  if (_debugLines.length > 400) _debugLines.shift(); // was 200 — load-time lines were rolling off under preview spam
+  if (!_debugLogOn) return; // buffered; just don't paint
   const body = document.getElementById('debugLogBody');
   if (body) { body.textContent = _debugLines.join('\n'); body.scrollTop = body.scrollHeight; }
 }
