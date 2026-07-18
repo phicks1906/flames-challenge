@@ -6561,13 +6561,13 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
    already in Storage, already autoplaying reliably as the winner-reveal fire —
    same attributes reused. One shared cached file (~1 cent/mo at 1k users). */
 .fcc-fire-eq { position: relative; overflow: hidden; cursor: pointer; background: #000; }
-.feq-fire { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+.feq-fire { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center bottom; z-index: 0; } /* v725: flames live at the bottom of fire footage — aim there */
 .feq-bars { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: center; gap: 5px; padding: 10px 12px; z-index: 1; }
-.feq-bars .feqb { flex: 1; background: #000; height: 78%; transform-origin: bottom; transition: height 0.14s ease; }
-.feq-bars::before, .feq-bars::after { content: ""; position: absolute; left: 0; right: 0; height: 12%; z-index: 2; background: #000; }
+.feq-bars .feqb { flex: 1; background: #000; height: 38%; transform-origin: bottom; transition: height 0.14s ease; } /* v725b: majority of the band is fire */
+.feq-bars::before, .feq-bars::after { content: ""; position: absolute; left: 0; right: 0; height: 8%; z-index: 2; background: #000; }
 .feq-bars::before { top: 0; } .feq-bars::after { bottom: 0; }
-.feq-segs { position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: 0.9;
-  background-image: repeating-linear-gradient(0deg, #000 0 3px, transparent 3px 15px); }
+.feq-segs { position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: 0.85;
+  background-image: repeating-linear-gradient(0deg, #000 0 2px, transparent 2px 17px); }
 .fcc-fire-eq.playing .feqb { animation: feqDance 0.9s ease-in-out infinite alternate; }
 .fcc-fire-eq.playing .feqb-0 { animation-duration: .70s; animation-delay: -.90s; }
 .fcc-fire-eq.playing .feqb-1 { animation-duration: 1.05s; animation-delay: -.20s; }
@@ -6582,9 +6582,14 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 .fcc-fire-eq.playing .feqb-10 { animation-duration: .88s; animation-delay: -.48s; }
 .fcc-fire-eq.playing .feqb-11 { animation-duration: .68s; animation-delay: -.78s; }
 .fcc-fire-eq.playing .feqb-12 { animation-duration: 1.08s; animation-delay: -.25s; }
-@keyframes feqDance { from { height: 72%; } to { height: 18%; } }
+@keyframes feqDance { from { height: 55%; } to { height: 8%; } }
 @media (prefers-reduced-motion: reduce) { .fcc-fire-eq.playing .feqb { animation: none; height: 45%; } }
-.fcc-fire-eq .fcc-audio-btn { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); z-index: 4; }
+.fcc-fire-eq .fcc-audio-btn {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); z-index: 4;
+  width: 60px; height: 60px; border-radius: 50%;
+  background: rgba(0,0,0,0.38); box-shadow: none;
+  color: #fff; font-size: 20px;
+}
 .fcc-audio-btn {
   width: 44px; height: 44px;
   border-radius: 50%;
@@ -7575,7 +7580,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v724 · fire-eq-tile";
+const APP_VERSION = "v725 · fire-eq-unblocked";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11802,17 +11807,21 @@ function _audioTileHtml(e) {
   // video — mask-on-video is the exact thing that renders black on iOS Safari.
   // Instead it's plain black divs over a plain video: robust, boring, works.
   // The video is Assets/curtain.mp4, already in Storage and already autoplaying
-  // reliably on this device as the winner-reveal fire — same attributes reused
-  // verbatim (autoplay loop playsinline muted). It's one shared, cached file:
-  // ~1 cent/mo at 1k users, not per-entry streaming.
+  // reliably on this device as the winner-reveal fire. v725: DIRECT src with
+  // preload=auto — v724 shipped it as data-src with nothing promoting it to src,
+  // so the element was empty and the tile rendered pure black. Do NOT route this
+  // through the preview machinery (data-lazy-video): its rules — one at a time,
+  // pause on others, blocked after audio taps, 3s cap — are each wrong for an
+  // ambient loop. The single-playback watcher ignores muted media, so this never
+  // fights real audio. One shared cached file: ~1 cent/mo at 1k users.
   // 13 bars; horizontal black separators give the stacked-block POND5 texture.
   // Bars animate via .playing (idle = short & still, playing = tall & dancing).
   const NB = 13;
   const bars = Array.from({length: NB}, (_, i) => `<div class="feqb feqb-${i}"></div>`).join('');
   return `<div class="fcc-entry-media fcc-fire-eq" onclick="toggleFccAudio(this, event)" role="button" tabindex="0" aria-label="Play audio entry">
       <audio src="${escapeHtml(e.media_url)}" preload="none"></audio>
-      <video class="feq-fire" data-src="https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/Assets/curtain.mp4"
-             autoplay loop playsinline muted preload="none"></video>
+      <video class="feq-fire" src="https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/Assets/curtain.mp4"
+             autoplay loop playsinline muted preload="auto"></video>
       <div class="feq-bars">${bars}</div>
       <div class="feq-segs" aria-hidden="true"></div>
       <div class="fcc-audio-btn">▶</div>
