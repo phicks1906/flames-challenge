@@ -6553,42 +6553,49 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     linear-gradient(160deg, #2a130a 0%, #4a1c0c 45%, #7a2d10 100%);
 }
 /* ══════════════════════════════════════════════════════════════════════════
-   v724 · FIRE EQ TILE  (revert = restore this block to the v723 CSS equalizer)
-   Real fire video fills the tile; opaque black EQ bars sit ON TOP and the gaps
-   between/above them reveal the fire. NOT a CSS mask on the video — mask-on-video
-   is exactly what renders black on iOS Safari. Plain black divs over a plain
-   autoplaying muted video: robust and boring. Video is Assets/curtain.mp4,
-   already in Storage, already autoplaying reliably as the winner-reveal fire —
-   same attributes reused. One shared cached file (~1 cent/mo at 1k users). */
-.fcc-fire-eq { position: relative; overflow: hidden; cursor: pointer; background: #000; }
-.feq-fire { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center bottom; z-index: 0; } /* v725: flames live at the bottom of fire footage — aim there */
-.feq-bars { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: center; gap: 5px; padding: 10px 12px; z-index: 1; }
-.feq-bars .feqb { flex: 1; background: #000; height: 38%; transform-origin: bottom; transition: height 0.14s ease; } /* v725b: majority of the band is fire */
-.feq-bars::before, .feq-bars::after { content: ""; position: absolute; left: 0; right: 0; height: 8%; z-index: 2; background: #000; }
-.feq-bars::before { top: 0; } .feq-bars::after { bottom: 0; }
-.feq-segs { position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: 0.85;
-  background-image: repeating-linear-gradient(0deg, #000 0 2px, transparent 2px 17px); }
-.fcc-fire-eq.playing .feqb { animation: feqDance 0.9s ease-in-out infinite alternate; }
-.fcc-fire-eq.playing .feqb-0 { animation-duration: .70s; animation-delay: -.90s; }
-.fcc-fire-eq.playing .feqb-1 { animation-duration: 1.05s; animation-delay: -.20s; }
-.fcc-fire-eq.playing .feqb-2 { animation-duration: .80s; animation-delay: -.55s; }
-.fcc-fire-eq.playing .feqb-3 { animation-duration: 1.15s; animation-delay: -.35s; }
-.fcc-fire-eq.playing .feqb-4 { animation-duration: .65s; animation-delay: -.70s; }
-.fcc-fire-eq.playing .feqb-5 { animation-duration: .95s; animation-delay: -.10s; }
-.fcc-fire-eq.playing .feqb-6 { animation-duration: .85s; animation-delay: -.50s; }
-.fcc-fire-eq.playing .feqb-7 { animation-duration: 1.10s; animation-delay: -.30s; }
-.fcc-fire-eq.playing .feqb-8 { animation-duration: .72s; animation-delay: -.62s; }
-.fcc-fire-eq.playing .feqb-9 { animation-duration: 1.0s; animation-delay: -.15s; }
-.fcc-fire-eq.playing .feqb-10 { animation-duration: .88s; animation-delay: -.48s; }
-.fcc-fire-eq.playing .feqb-11 { animation-duration: .68s; animation-delay: -.78s; }
-.fcc-fire-eq.playing .feqb-12 { animation-duration: 1.08s; animation-delay: -.25s; }
-@keyframes feqDance { from { height: 55%; } to { height: 8%; } }
-@media (prefers-reduced-motion: reduce) { .fcc-fire-eq.playing .feqb { animation: none; height: 45%; } }
+   v726 · POND5 FIRE BARS  (revert = v723 CSS equalizer + old _audioTileHtml)
+   No footage — the curtain fill is gone. The bars ARE the fire: flame-gradient
+   blocks on black, horizontal black separators for the stacked-block texture.
+   Heights are set INLINE by _feqStart from the track's real frequency bins when
+   playing; idle uses the static per-bar heights below. .feq-fallback restores
+   the CSS keyframe dance only if the analyser turns out to be mute.
+   ══════════════════════════════════════════════════════════════════════════ */
+.fcc-fire-eq { position: relative; overflow: hidden; cursor: pointer; background: #060302; }
+.feq-bars { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: center; gap: 6px; padding: 26px 14px; z-index: 1; }
+.feq-bars .feqb {
+  flex: 1;
+  background: linear-gradient(to top, #ff2d1f 0%, #ff6a2c 45%, #ffc857 85%, #ffe9a8 100%);
+  box-shadow: 0 0 10px rgba(255,110,30,0.55);
+  border-radius: 2px;
+  transform-origin: bottom;
+  transition: height 0.08s linear;
+}
+/* idle: a static staggered skyline so the tile reads as an EQ before any tap */
+.feq-bars .feqb-0 { height: 26%; } .feq-bars .feqb-1 { height: 52%; }
+.feq-bars .feqb-2 { height: 34%; } .feq-bars .feqb-3 { height: 68%; }
+.feq-bars .feqb-4 { height: 44%; } .feq-bars .feqb-5 { height: 58%; }
+.feq-bars .feqb-6 { height: 30%; } .feq-bars .feqb-7 { height: 62%; }
+.feq-bars .feqb-8 { height: 40%; } .feq-bars .feqb-9 { height: 54%; }
+.feq-bars .feqb-10 { height: 28%; } .feq-bars .feqb-11 { height: 48%; }
+.feq-bars .feqb-12 { height: 36%; }
+/* stacked-block separators over the bars only */
+.feq-segs { position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: 0.95;
+  background-image: repeating-linear-gradient(0deg, #060302 0 3px, transparent 3px 16px); }
+/* fallback dance if the analyser is mute — JS adds .feq-fallback */
+.fcc-fire-eq.feq-fallback .feqb { animation: feqDance 0.9s ease-in-out infinite alternate; }
+.fcc-fire-eq.feq-fallback .feqb-1 { animation-duration: 1.05s; animation-delay: -.2s; }
+.fcc-fire-eq.feq-fallback .feqb-3 { animation-duration: 1.15s; animation-delay: -.35s; }
+.fcc-fire-eq.feq-fallback .feqb-5 { animation-duration: .95s; animation-delay: -.1s; }
+.fcc-fire-eq.feq-fallback .feqb-7 { animation-duration: 1.1s; animation-delay: -.3s; }
+.fcc-fire-eq.feq-fallback .feqb-9 { animation-duration: 1.0s; animation-delay: -.15s; }
+.fcc-fire-eq.feq-fallback .feqb-11 { animation-duration: .68s; animation-delay: -.78s; }
+@keyframes feqDance { from { height: 20%; } to { height: 78%; } }
 .fcc-fire-eq .fcc-audio-btn {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); z-index: 4;
   width: 60px; height: 60px; border-radius: 50%;
   background: rgba(0,0,0,0.38); box-shadow: none;
   color: #fff; font-size: 20px;
+  display: flex; align-items: center; justify-content: center;
 }
 .fcc-audio-btn {
   width: 44px; height: 44px;
@@ -7580,7 +7587,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v725 · fire-eq-unblocked";
+const APP_VERSION = "v726 · real-eq-bars";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11801,27 +11808,20 @@ function _audioTileHtml(e) {
   // in sync. The tile is 'idle' (bars low, slow, dimmed) until playback starts,
   // when toggleFccAudio adds .playing — so the motion actually MEANS something:
   // still = paused, dancing = playing. respects prefers-reduced-motion in CSS.
-  // v724 — POND5-STYLE FIRE EQ. Real fire video fills the tile; black EQ bars
-  // sit ON TOP and the GAPS between them let the fire through (the bars are
-  // opaque black; the spaces are transparent). This is NOT a CSS mask on the
-  // video — mask-on-video is the exact thing that renders black on iOS Safari.
-  // Instead it's plain black divs over a plain video: robust, boring, works.
-  // The video is Assets/curtain.mp4, already in Storage and already autoplaying
-  // reliably on this device as the winner-reveal fire. v725: DIRECT src with
-  // preload=auto — v724 shipped it as data-src with nothing promoting it to src,
-  // so the element was empty and the tile rendered pure black. Do NOT route this
-  // through the preview machinery (data-lazy-video): its rules — one at a time,
-  // pause on others, blocked after audio taps, 3s cap — are each wrong for an
-  // ambient loop. The single-playback watcher ignores muted media, so this never
-  // fights real audio. One shared cached file: ~1 cent/mo at 1k users.
-  // 13 bars; horizontal black separators give the stacked-block POND5 texture.
-  // Bars animate via .playing (idle = short & still, playing = tall & dancing).
+  // v726 — POND5 BARS, NO FOOTAGE. The curtain.mp4 fill is gone (it read as
+  // drapes, not an equalizer). The bars themselves are now the fire: flame-
+  // gradient blocks on black, horizontal separators for the stacked-block look.
+  // MOTION IS REAL: when playing, a Web Audio analyser drives each bar's height
+  // from the track's actual frequency bins (see _feqStart). JS-set inline
+  // heights also mean iOS Reduce Motion cannot freeze them — which is the
+  // likeliest reason v725's CSS keyframe dance sat static on this device.
+  // crossorigin="anonymous" is REQUIRED: without it, MediaElementSource on a
+  // cross-origin (Supabase) file yields silent all-zero data — bars would sit
+  // still with no error. Supabase public storage sends ACAO:* so this works.
   const NB = 13;
   const bars = Array.from({length: NB}, (_, i) => `<div class="feqb feqb-${i}"></div>`).join('');
   return `<div class="fcc-entry-media fcc-fire-eq" onclick="toggleFccAudio(this, event)" role="button" tabindex="0" aria-label="Play audio entry">
-      <audio src="${escapeHtml(e.media_url)}" preload="none"></audio>
-      <video class="feq-fire" src="https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/Assets/curtain.mp4"
-             autoplay loop playsinline muted preload="auto"></video>
+      <audio src="${escapeHtml(e.media_url)}" preload="none" crossorigin="anonymous"></audio>
       <div class="feq-bars">${bars}</div>
       <div class="feq-segs" aria-hidden="true"></div>
       <div class="fcc-audio-btn">▶</div>
@@ -11840,7 +11840,8 @@ function toggleFccAudio(tile, ev) {
     document.querySelectorAll('audio, video').forEach(m => { if (m !== a) m.pause(); });
     a.play().catch(() => {});
     if (btn) btn.textContent = '⏸';
-    tile.classList.add('playing'); // v723 — wakes the equalizer
+    tile.classList.add('playing');
+    _feqStart(tile, a); // v726 — bars driven by the track's real frequencies
     if (!a._fccWired) { // guard: tiles re-render, but never attach twice to one element
       a._fccWired = true;
       const idle = () => { if (btn) btn.textContent = '▶'; tile.classList.remove('playing'); };
@@ -11850,8 +11851,63 @@ function toggleFccAudio(tile, ev) {
   } else {
     a.pause();
     if (btn) btn.textContent = '▶';
-    tile.classList.remove('playing'); // v723
+    tile.classList.remove('playing');
+    _feqStop(tile); // v726
   }
+}
+
+// ── v726: REAL frequency-driven bars ────────────────────────────────────────
+// One shared AudioContext (iOS allows creation inside a tap handler, which
+// toggleFccAudio is). One MediaElementSource per <audio> — creating a second
+// for the same element THROWS, hence the a._feqSrc guard. The rAF loop maps 13
+// log-spaced frequency bins onto the 13 bars. FALLBACK: if the analyser reads
+// all zeros for ~1s (CORS blocked, or a quirk), switch to the CSS keyframe
+// dance so the bars are never simply frozen.
+let _feqCtx = null;
+function _feqStart(tile, a) {
+  try {
+    if (!_feqCtx) _feqCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (_feqCtx.state === 'suspended') _feqCtx.resume();
+    if (!a._feqSrc) {
+      a._feqSrc = _feqCtx.createMediaElementSource(a);
+      a._feqAn = _feqCtx.createAnalyser();
+      a._feqAn.fftSize = 128;
+      a._feqSrc.connect(a._feqAn);
+      a._feqAn.connect(_feqCtx.destination);
+    }
+    const an = a._feqAn;
+    const data = new Uint8Array(an.frequencyBinCount);
+    const bars = tile.querySelectorAll('.feqb');
+    const NB = bars.length;
+    let zeroFrames = 0;
+    if (tile._feqRaf) cancelAnimationFrame(tile._feqRaf);
+    const loop = () => {
+      if (!tile.classList.contains('playing')) return;
+      an.getByteFrequencyData(data);
+      let sum = 0;
+      for (let i = 0; i < NB; i++) {
+        const bin = Math.min(data.length - 1, Math.floor(Math.pow(i / NB, 1.6) * data.length * 0.8) + 1);
+        const v = data[bin] / 255; sum += v;
+        bars[i].style.height = (12 + v * 80) + '%';
+      }
+      if (sum === 0 && ++zeroFrames > 60) {
+        dlog('feq', 'analyser-silent-fallback', {});
+        bars.forEach(b => { b.style.height = ''; });
+        tile.classList.add('feq-fallback');
+        return;
+      }
+      tile._feqRaf = requestAnimationFrame(loop);
+    };
+    tile._feqRaf = requestAnimationFrame(loop);
+  } catch (err) {
+    dlog('feq', 'webaudio-fail', { e: String(err && err.message || err).slice(0, 60) });
+    tile.classList.add('feq-fallback');
+  }
+}
+function _feqStop(tile) {
+  if (tile._feqRaf) { cancelAnimationFrame(tile._feqRaf); tile._feqRaf = null; }
+  tile.classList.remove('feq-fallback');
+  tile.querySelectorAll('.feqb').forEach(b => { b.style.height = ''; });
 }
 let _lastFvTapTs = 0;         // tap de-dupe: timestamp of last fv-play activation
 let _lastFvTapSrc = null;     // tap de-dupe: src of last fv-play activation
