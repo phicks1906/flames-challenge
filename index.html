@@ -7638,7 +7638,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v732 · eq-style-choice";
+const APP_VERSION = "v733 · flame-analyser-fix";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11975,6 +11975,14 @@ function _feqStart(tile, a) {
     const data = new Uint8Array(an.frequencyBinCount);
     const bars = tile.querySelectorAll('.feqb');
     const NB = bars.length;
+    // v733 — Flame's .feqb are black TOP COVERS (fire shows below them), so their
+    // height is the INVERSE of loudness: loud -> SHORT cover -> tall fire column.
+    // Fire/Gradient bars grow up from the bottom: loud -> TALL bar. One formula
+    // can't serve both — v730 used the direct one for all, which made Flame's
+    // covers COLLAPSE on quiet audio and expose the whole fire frame (the bug
+    // in Paul's screenshot: full fire + only the segment lines, no bars). Clamp
+    // the cover so it never fully uncovers, and never fully covers.
+    const isFlame = tile.classList.contains('eq-flame');
     let zeroFrames = 0;
     if (tile._feqRaf) cancelAnimationFrame(tile._feqRaf);
     const loop = () => {
@@ -11984,9 +11992,9 @@ function _feqStart(tile, a) {
       for (let i = 0; i < NB; i++) {
         const bin = Math.min(data.length - 1, Math.floor(Math.pow(i / NB, 1.6) * data.length * 0.8) + 1);
         const v = data[bin] / 255; sum += v;
-        // v727 — .feqb is now the black TOP COVER, so its height is the INVERSE
-        // of the bar: loud bin -> short cover -> tall column of fire.
-        bars[i].style.height = (10 + v * 82) + '%'; // v730 — direct height; bars are the bars, not covers
+        bars[i].style.height = isFlame
+          ? (85 - v * 70) + '%'   // cover: quiet -> 85% covered, loud -> 15% covered
+          : (10 + v * 82) + '%';  // bar: quiet -> 10% tall, loud -> 92% tall
       }
       if (sum === 0 && ++zeroFrames > 60) {
         dlog('feq', 'analyser-silent-fallback', {});
