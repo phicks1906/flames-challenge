@@ -6614,7 +6614,13 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 .eq-flame .feq-fireimg { position: absolute; width: 116%; height: 116%; left: -8%; top: -8%;
   object-fit: cover; object-position: center bottom; z-index: 0;
   animation: feqDrift 14s ease-in-out infinite alternate; }
-.eq-flame .feq-bars { position: absolute; inset: 0; display: flex; z-index: 1; }
+/* v734 — align-items MUST be stretch here. The base .feq-bars rule (Fire style)
+   sets align-items:flex-end; Flame's columns have no height of their own and
+   need flex's default stretch to fill the tile. Inheriting flex-end collapsed
+   every column to 0px, so the black covers inside (heights in % of the column)
+   were invisible — full-frame fire with only the segs, twice now on device. */
+.eq-flame .feq-bars { position: absolute; inset: 0; display: flex; z-index: 1;
+  align-items: stretch; gap: 0; padding: 0; }
 .eq-flame .feqcol { flex: 1; position: relative; border-left: 3px solid #060302; border-right: 3px solid #060302; }
 .eq-flame .feqb { position: absolute; top: 0; left: 0; right: 0; background: #060302; height: 70%; transition: height 0.08s linear; }
 .eq-flame .feqb-0{height:74%}.eq-flame .feqb-1{height:48%}.eq-flame .feqb-2{height:66%}.eq-flame .feqb-3{height:32%}
@@ -7638,7 +7644,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v733 · flame-analyser-fix";
+const APP_VERSION = "v734 · flame-columns-fix";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
