@@ -7644,7 +7644,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v734 · flame-columns-fix";
+const APP_VERSION = "v735 · crop-edge-clamp";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -19775,14 +19775,21 @@ function confirmCrop() {
   const s = cropState;
   if (!s.img) return;
 
-  // Scale from display coords back to original image coords
+  // Scale from display coords back to original image coords.
+  // v735 — CLAMP to the image. Rounding x and w independently let
+  // srcX + srcW overrun the image edge by 1-2px whenever the crop box hugged
+  // a border (the fractional 364.6666-style box sizes made this near-certain).
+  // drawImage leaves the overrun strip undrawn, and JPEG export renders it as
+  // a white line baked into the posted photo — Eric's "crop frame in the pic".
   const scaleX = s.img.width  / s.canvasW;
   const scaleY = s.img.height / s.canvasH;
 
-  const srcX = Math.round(s.boxX * scaleX);
-  const srcY = Math.round(s.boxY * scaleY);
-  const srcW = Math.round(s.boxW * scaleX);
-  const srcH = Math.round(s.boxH * scaleY);
+  let srcX = Math.max(0, Math.round(s.boxX * scaleX));
+  let srcY = Math.max(0, Math.round(s.boxY * scaleY));
+  let srcW = Math.round(s.boxW * scaleX);
+  let srcH = Math.round(s.boxH * scaleY);
+  srcW = Math.max(1, Math.min(srcW, s.img.width  - srcX));
+  srcH = Math.max(1, Math.min(srcH, s.img.height - srcY));
 
   const out = document.createElement('canvas');
   out.width  = srcW;
