@@ -6573,7 +6573,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
   background: linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0.22)); }
 .feq-bars { position: absolute; inset: 0; display: flex; align-items: flex-end;
   gap: 6px; padding: 26px 16px; z-index: 2; }
-.feq-bars .feqb {
+.eq-fire .feq-bars .feqb {
   flex: 1;
   background: rgba(255,255,255,0.16);
   border: 1px solid rgba(255,255,255,0.30);
@@ -6608,6 +6608,32 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
   color: #fff; font-size: 20px;
   display: flex; align-items: center; justify-content: center;
 }
+
+/* ── v732 · EQ STYLE: FLAME (v727) — bars filled with the fire IMAGE ──────── */
+.eq-flame { background: linear-gradient(to top,#ff2d1f 0%,#ff6a2c 45%,#ffc857 100%); }
+.eq-flame .feq-fireimg { position: absolute; width: 116%; height: 116%; left: -8%; top: -8%;
+  object-fit: cover; object-position: center bottom; z-index: 0;
+  animation: feqDrift 14s ease-in-out infinite alternate; }
+.eq-flame .feq-bars { position: absolute; inset: 0; display: flex; z-index: 1; }
+.eq-flame .feqcol { flex: 1; position: relative; border-left: 3px solid #060302; border-right: 3px solid #060302; }
+.eq-flame .feqb { position: absolute; top: 0; left: 0; right: 0; background: #060302; height: 70%; transition: height 0.08s linear; }
+.eq-flame .feqb-0{height:74%}.eq-flame .feqb-1{height:48%}.eq-flame .feqb-2{height:66%}.eq-flame .feqb-3{height:32%}
+.eq-flame .feqb-4{height:56%}.eq-flame .feqb-5{height:42%}.eq-flame .feqb-6{height:70%}.eq-flame .feqb-7{height:38%}
+.eq-flame .feqb-8{height:60%}.eq-flame .feqb-9{height:46%}.eq-flame .feqb-10{height:72%}.eq-flame .feqb-11{height:52%}.eq-flame .feqb-12{height:64%}
+.eq-flame .feq-segs { position:absolute; inset:0; z-index:2; pointer-events:none; opacity:.95;
+  background-image: repeating-linear-gradient(0deg,#060302 0 3px,transparent 3px 16px); }
+
+/* ── v732 · EQ STYLE: GRADIENT (v726) — flat flame-gradient bars on black ─── */
+.eq-gradient { background: #060302; }
+.eq-gradient .feq-bars { position:absolute; inset:0; display:flex; align-items:flex-end; justify-content:center; gap:6px; padding:26px 14px; z-index:1; }
+.eq-gradient .feqb { flex:1; background: linear-gradient(to top,#ff2d1f 0%,#ff6a2c 45%,#ffc857 85%,#ffe9a8 100%);
+  box-shadow: 0 0 10px rgba(255,110,30,.55); border-radius:2px; transform-origin:bottom; transition: height 0.08s linear; }
+.eq-gradient .feqb-0{height:26%}.eq-gradient .feqb-1{height:52%}.eq-gradient .feqb-2{height:34%}.eq-gradient .feqb-3{height:68%}
+.eq-gradient .feqb-4{height:44%}.eq-gradient .feqb-5{height:58%}.eq-gradient .feqb-6{height:30%}.eq-gradient .feqb-7{height:62%}
+.eq-gradient .feqb-8{height:40%}.eq-gradient .feqb-9{height:54%}.eq-gradient .feqb-10{height:28%}.eq-gradient .feqb-11{height:48%}.eq-gradient .feqb-12{height:36%}
+.eq-gradient .feq-segs { position:absolute; inset:0; z-index:2; pointer-events:none; opacity:.85;
+  background-image: repeating-linear-gradient(0deg,#060302 0 2px,transparent 2px 17px); }
+/* flame + gradient reuse the shared feqDance fallback keyframe already defined */
 .fcc-audio-btn {
   width: 44px; height: 44px;
   border-radius: 50%;
@@ -6916,6 +6942,13 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
         <span>Ticker</span>
       </div>
       <div class="theme-toggle-state" id="tickerState">On</div>
+    </div>
+    <div class="theme-toggle-row" id="eqStyleRow" onclick="cycleEqStyle()" role="button" tabindex="0">
+      <div class="theme-toggle-label">
+        <span class="theme-toggle-icon">🎚️</span>
+        <span>Audio EQ</span>
+      </div>
+      <div class="theme-toggle-state" id="eqStyleState">Fire</div>
     </div>
     <div class="theme-toggle-row" id="viewAsRow" style="display:none" onclick="toggleViewAsMember()" role="button" tabindex="0">
       <div class="theme-toggle-label">
@@ -7605,7 +7638,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v731 · fire-video-behind";
+const APP_VERSION = "v732 · eq-style-choice";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -7628,6 +7661,26 @@ function toggleTheme() {
   const next = cur === 'light' ? 'dark' : 'light';
   try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
   applyTheme(next);
+}
+
+// v732 — audio EQ style preference (per-browser, mirrors the theme toggle).
+const EQ_KEY = 'fc_eq_style';
+const EQ_STYLES = ['fire', 'flame', 'gradient'];
+const EQ_LABELS = { fire: 'Fire', flame: 'Flame', gradient: 'Bars' };
+function getEqStyle() {
+  try { const v = localStorage.getItem(EQ_KEY); return EQ_STYLES.includes(v) ? v : 'fire'; }
+  catch (e) { return 'fire'; }
+}
+function cycleEqStyle() {
+  const i = EQ_STYLES.indexOf(getEqStyle());
+  const next = EQ_STYLES[(i + 1) % EQ_STYLES.length];
+  try { localStorage.setItem(EQ_KEY, next); } catch (e) {}
+  const st = document.getElementById('eqStyleState');
+  if (st) st.textContent = EQ_LABELS[next];
+  // re-render whatever audio tiles are on screen so the change is immediate
+  try { if (typeof loadFeedActivity === 'function' && state.currentView === 'feed') renderFeed();
+        if (state.currentView === 'challenges') renderChallenges();
+        if (state.currentChallenge) openChallenge(state.currentChallenge.id); } catch (e) {}
 }
 // Apply immediately (before any layout shows)
 applyTheme(getTheme());
@@ -11832,16 +11885,42 @@ function _audioTileHtml(e) {
   // now (not inverse covers like v727) — analyser sets bar height directly. A
   // dark scrim over the fire keeps the bars legible. If fire.mp4 404s the video
   // hides and the tile's flame-gradient background shows instead — never black.
+  // v732 — THREE EQ STYLES, user-selectable (settings → Audio EQ, cycles them).
+  // Paul and Eric disagreed on the look, so instead of one winning, each picks
+  // their own. Stored in localStorage (fc_eq_style) exactly like the theme
+  // toggle — per-browser, no backend, no schema. Every style is analyser-driven
+  // by the SAME toggleFccAudio + _feqStart; only the markup/CSS class differs.
+  //   'fire'     — v731 moving fire video behind frosted glass bars (Paul's)
+  //   'flame'    — v727 bars filled with flame image
+  //   'gradient' — v726 flat flame-gradient bars on black (simplest, Eric option)
   const NB = 13;
+  const style = getEqStyle();
+  const FIRE_URL = 'https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/Assets/fire.mp4';
+  const IMG_URL  = 'https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/Assets/fire.jpeg';
+  const audio = `<audio src="${escapeHtml(e.media_url)}" preload="none" crossorigin="anonymous"></audio>`;
+  const btn = `<div class="fcc-audio-btn">▶</div>`;
+
+  if (style === 'gradient') {
+    const bars = Array.from({length: NB}, (_, i) => `<div class="feqb feqb-${i}"></div>`).join('');
+    return `<div class="fcc-entry-media fcc-fire-eq eq-gradient" onclick="toggleFccAudio(this, event)" role="button" tabindex="0" aria-label="Play audio entry">
+      ${audio}<div class="feq-bars">${bars}</div><div class="feq-segs" aria-hidden="true"></div>${btn}
+    </div>`;
+  }
+  if (style === 'flame') {
+    const cols = Array.from({length: NB}, (_, i) => `<div class="feqcol"><div class="feqb feqb-${i}"></div></div>`).join('');
+    return `<div class="fcc-entry-media fcc-fire-eq eq-flame" onclick="toggleFccAudio(this, event)" role="button" tabindex="0" aria-label="Play audio entry">
+      ${audio}
+      <img class="feq-fireimg" alt="" aria-hidden="true" loading="lazy" onerror="this.style.display='none'" src="${IMG_URL}">
+      <div class="feq-bars">${cols}</div><div class="feq-segs" aria-hidden="true"></div>${btn}
+    </div>`;
+  }
+  // default: 'fire' (Paul's) — moving fire video behind frosted glass bars
   const bars = Array.from({length: NB}, (_, i) => `<div class="feqb feqb-${i}"></div>`).join('');
-  return `<div class="fcc-entry-media fcc-fire-eq" onclick="toggleFccAudio(this, event)" role="button" tabindex="0" aria-label="Play audio entry">
-      <audio src="${escapeHtml(e.media_url)}" preload="none" crossorigin="anonymous"></audio>
-      <video class="feq-fireimg" aria-hidden="true" autoplay loop muted playsinline preload="auto"
-             onerror="this.style.display='none'"
-             src="https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/Assets/fire.mp4"></video>
+  return `<div class="fcc-entry-media fcc-fire-eq eq-fire" onclick="toggleFccAudio(this, event)" role="button" tabindex="0" aria-label="Play audio entry">
+      ${audio}
+      <video class="feq-fireimg" aria-hidden="true" autoplay loop muted playsinline preload="auto" onerror="this.style.display='none'" src="${FIRE_URL}"></video>
       <div class="feq-scrim" aria-hidden="true"></div>
-      <div class="feq-bars">${bars}</div>
-      <div class="fcc-audio-btn">▶</div>
+      <div class="feq-bars">${bars}</div>${btn}
     </div>`;
 }
 
@@ -22595,6 +22674,7 @@ db.from('users').select('id').limit(1).then(() => {}, () => {});
   // Stamp the running version so it's easy to confirm what's live
   const vEl = document.getElementById('appVersion');
   if (vEl) { vEl.textContent = 'FlamesChallenge · ' + APP_VERSION; vEl.style.cursor = 'pointer'; vEl.addEventListener('click', _onVersionTap); }
+  { const eqSt = document.getElementById('eqStyleState'); if (eqSt) eqSt.textContent = EQ_LABELS[getEqStyle()]; } // v732
   // Get initial session
   const { data: { session } } = await db.auth.getSession();
   state.session = session;
