@@ -6629,6 +6629,36 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 .eq-gradient .feq-segs { position:absolute; inset:0; z-index:2; pointer-events:none; opacity:.85;
   background-image: repeating-linear-gradient(0deg,#060302 0 2px,transparent 2px 17px); }
 /* flame + gradient reuse the shared feqDance fallback keyframe already defined */
+
+/* ── v737 · EQ STYLE: CURVE — glowing line through 13 nodes (concept art #3) ── */
+.eq-curve {
+  background:
+    /* fire haze rising from the base */
+    radial-gradient(ellipse 120% 45% at 50% 108%, rgba(255,80,20,0.55), rgba(160,40,10,0.25) 55%, transparent 75%),
+    /* faint grid */
+    repeating-linear-gradient(0deg, rgba(255,120,40,0.07) 0 1px, transparent 1px 24px),
+    repeating-linear-gradient(90deg, rgba(255,120,40,0.07) 0 1px, transparent 1px 24px),
+    #0a0503;
+}
+.eq-curve .feq-svg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1;
+  filter: drop-shadow(0 0 6px rgba(255,110,30,0.9)); }
+.eq-curve .feq-path { fill: none; stroke: #ff8a2e; stroke-width: 1.4;
+  stroke-linejoin: round; stroke-linecap: round;
+  transition: d 0.08s linear; }
+.eq-curve .feq-node { fill: #fff3c0; stroke: #ff6a2c; stroke-width: 0.8; }
+/* fallback pulse if the analyser is mute */
+.eq-curve.feq-fallback .feq-node { animation: feqNodePulse 0.9s ease-in-out infinite alternate; }
+@keyframes feqNodePulse { from { r: 1.4; } to { r: 2.4; } }
+
+/* ── v737 · WATER REFLECTIONS on the Bars style (concept art #1/#2) ────────
+   Each bar mirrors below itself, fading out — the flame-pillars-over-water
+   look. Extra bottom padding gives the reflection room INSIDE the tile
+   (overflow:hidden clips anything past the edge). iOS supports
+   -webkit-box-reflect; browsers without it just show the bars as before. */
+.eq-gradient .feq-bars { padding-bottom: 110px; }
+.eq-gradient .feqb {
+  -webkit-box-reflect: below 4px linear-gradient(to bottom, rgba(0,0,0,0.45), transparent 65%);
+}
 .fcc-audio-btn {
   width: 44px; height: 44px;
   border-radius: 50%;
@@ -7633,7 +7663,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v736 · footer-removed";
+const APP_VERSION = "v737 · curve-and-reflections";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -7660,8 +7690,8 @@ function toggleTheme() {
 
 // v732 — audio EQ style preference (per-browser, mirrors the theme toggle).
 const EQ_KEY = 'fc_eq_style';
-const EQ_STYLES = ['fire', 'flame', 'gradient'];
-const EQ_LABELS = { fire: 'Fire', flame: 'Flame', gradient: 'Bars' };
+const EQ_STYLES = ['fire', 'flame', 'gradient', 'curve'];
+const EQ_LABELS = { fire: 'Fire', flame: 'Flame', gradient: 'Bars', curve: 'Curve' };
 function getEqStyle() {
   try { const v = localStorage.getItem(EQ_KEY); return EQ_STYLES.includes(v) ? v : 'fire'; }
   catch (e) { return 'fire'; }
@@ -11895,6 +11925,24 @@ function _audioTileHtml(e) {
   const audio = `<audio src="${escapeHtml(e.media_url)}" preload="none" crossorigin="anonymous"></audio>`;
   const btn = `<div class="fcc-audio-btn">▶</div>`;
 
+  if (style === 'curve') {
+    // v737 — CURVE style (from Paul's concept art): a glowing orange EQ line
+    // snaking through 13 nodes over a dark grid, fire haze at the base. Inline
+    // SVG so the idle state renders with zero JS; _feqStart rewrites the path d
+    // and node cy values from the analyser when playing. viewBox is 100x100
+    // preserveAspectRatio=none so percent-ish coords scale to any tile.
+    const idle = [55,32,42,52,47,58,50,45,30,48,52,62,57]; // y-coords, 0=top
+    const xs = Array.from({length: 13}, (_, i) => 6 + i * (88 / 12));
+    const d = idle.map((y, i) => `${i ? 'L' : 'M'}${xs[i].toFixed(1)},${y}`).join(' ');
+    const nodes = idle.map((y, i) => `<circle class="feq-node" cx="${xs[i].toFixed(1)}" cy="${y}" r="1.8"/>`).join('');
+    return `<div class="fcc-entry-media fcc-fire-eq eq-curve" onclick="toggleFccAudio(this, event)" role="button" tabindex="0" aria-label="Play audio entry">
+      ${audio}
+      <svg class="feq-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        <path class="feq-path" d="${d}" data-idle="${d}"/>
+        ${nodes}
+      </svg>${btn}
+    </div>`;
+  }
   if (style === 'gradient') {
     const bars = Array.from({length: NB}, (_, i) => `<div class="feqb feqb-${i}"></div>`).join('');
     return `<div class="fcc-entry-media fcc-fire-eq eq-gradient" onclick="toggleFccAudio(this, event)" role="button" tabindex="0" aria-label="Play audio entry">
@@ -11978,13 +12026,30 @@ function _feqStart(tile, a) {
     // in Paul's screenshot: full fire + only the segment lines, no bars). Clamp
     // the cover so it never fully uncovers, and never fully covers.
     const isFlame = tile.classList.contains('eq-flame');
+    // v737 — Curve style has no .feqb bars; it has an SVG path + 13 nodes.
+    const svgPath = tile.querySelector('.feq-path');
+    const svgNodes = tile.querySelectorAll('.feq-node');
+    const isCurve = !!svgPath;
     let zeroFrames = 0;
     if (tile._feqRaf) cancelAnimationFrame(tile._feqRaf);
     const loop = () => {
       if (!tile.classList.contains('playing')) return;
       an.getByteFrequencyData(data);
       let sum = 0;
-      for (let i = 0; i < NB; i++) {
+      if (isCurve) {
+        // v737 — 13 nodes across viewBox x=6..94; y: quiet -> 70 (low), loud -> 12 (high)
+        const N = svgNodes.length || 13;
+        let dstr = '';
+        for (let i = 0; i < N; i++) {
+          const bin = Math.min(data.length - 1, Math.floor(Math.pow(i / N, 1.6) * data.length * 0.8) + 1);
+          const v = data[bin] / 255; sum += v;
+          const x = 6 + i * (88 / (N - 1));
+          const y = 70 - v * 58;
+          dstr += (i ? ' L' : 'M') + x.toFixed(1) + ',' + y.toFixed(1);
+          if (svgNodes[i]) { svgNodes[i].setAttribute('cx', x.toFixed(1)); svgNodes[i].setAttribute('cy', y.toFixed(1)); }
+        }
+        svgPath.setAttribute('d', dstr);
+      } else for (let i = 0; i < NB; i++) {
         const bin = Math.min(data.length - 1, Math.floor(Math.pow(i / NB, 1.6) * data.length * 0.8) + 1);
         const v = data[bin] / 255; sum += v;
         bars[i].style.height = isFlame
@@ -12009,6 +12074,14 @@ function _feqStop(tile) {
   if (tile._feqRaf) { cancelAnimationFrame(tile._feqRaf); tile._feqRaf = null; }
   tile.classList.remove('feq-fallback');
   tile.querySelectorAll('.feqb').forEach(b => { b.style.height = ''; });
+  const p = tile.querySelector('.feq-path'); // v737 — curve back to its idle shape
+  if (p && p.dataset.idle) {
+    p.setAttribute('d', p.dataset.idle);
+    const idle = p.dataset.idle.match(/[\d.]+,[\d.]+/g) || [];
+    tile.querySelectorAll('.feq-node').forEach((n, i) => {
+      if (idle[i]) { const xy = idle[i].split(','); n.setAttribute('cx', xy[0]); n.setAttribute('cy', xy[1]); }
+    });
+  }
 }
 let _lastFvTapTs = 0;         // tap de-dupe: timestamp of last fv-play activation
 let _lastFvTapSrc = null;     // tap de-dupe: src of last fv-play activation
