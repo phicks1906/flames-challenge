@@ -6548,8 +6548,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
    Bars set their OWN height (analyser-driven when playing, static skyline idle).
    fire.jpeg 404 → img hides → flame-gradient background shows. Never black.
    ══════════════════════════════════════════════════════════════════════════ */
-.fcc-fire-eq { position: relative; overflow: hidden; cursor: pointer;
-  background: linear-gradient(to top, #ff2d1f 0%, #ff6a2c 45%, #ffc857 100%); }
+.fcc-fire-eq { position: relative; overflow: hidden; cursor: pointer; background: #0a0503; }
 .feq-fireimg { position: absolute; width: 112%; height: 112%; left: -6%; top: -6%;
   object-fit: cover; object-position: center bottom; z-index: 0;
   animation: feqDrift 14s ease-in-out infinite alternate; }
@@ -6558,23 +6557,24 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
   50%  { filter: brightness(1.1); }
   to   { transform: translateY(-3%) scale(1.07); filter: brightness(1); }
 }
-.feq-scrim { position: absolute; inset: 0; z-index: 1; pointer-events: none;
-  background: linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0.22)); }
+/* v740 — .feq-scrim removed with the Fire style */
 .feq-bars { position: absolute; inset: 0; display: flex; align-items: flex-end;
   gap: 6px; padding: 26px 16px; z-index: 2; }
-.eq-fire .feq-bars .feqb {
-  flex: 1;
-  background: rgba(255,255,255,0.16);
-  border: 1px solid rgba(255,255,255,0.30);
-  border-radius: 3px 3px 0 0;
-  box-shadow: 0 0 10px rgba(255,180,90,0.25);
-  transform-origin: bottom;
-  transition: height 0.08s linear;
-  -webkit-backdrop-filter: blur(3px);
-  backdrop-filter: blur(3px);
+/* ── v740 · EQ STYLE: SCENE — the lake frame with fire pillars (concept #1) ─ */
+.eq-scene {
+  background: #050302 url("https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/Assets/9E5A42E2-C68E-40DA-8CDD-03A7663211FF.png") center / 100% 100% no-repeat;
 }
-/* idle skyline so it reads as an EQ before any tap */
-.feq-bars .feqb-0 { height: 30%; } .feq-bars .feqb-1 { height: 58%; }
+/* the frame's empty plot box, measured from the asset: L10 R7 T33.5 B15 (%) */
+.eq-scene .feq-plot { position: absolute; left: 10%; right: 7%; top: 33.5%; bottom: 15%;
+  overflow: hidden; background: linear-gradient(to top, #3a1206, #000 55%); }
+.eq-scene .feq-plotfire { position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; object-position: center bottom; }
+.eq-scene .feq-bars { position: absolute; inset: 0; display: flex; align-items: stretch; gap: 0; padding: 0; }
+.eq-scene .feqcol { flex: 1; position: relative; border-left: 2px solid #000; border-right: 2px solid #000; }
+.eq-scene .feqb { position: absolute; top: 0; left: 0; right: 0; background: #000; height: 72%; transition: height 0.08s linear; }
+.eq-scene .feqb-0{height:78%}.eq-scene .feqb-1{height:52%}.eq-scene .feqb-2{height:68%}.eq-scene .feqb-3{height:38%}
+.eq-scene .feqb-4{height:60%}.eq-scene .feqb-5{height:46%}.eq-scene .feqb-6{height:72%}.eq-scene .feqb-7{height:42%}
+.eq-scene .feqb-8{height:64%}.eq-scene .feqb-9{height:50%}.eq-scene .feqb-10{height:74%}.eq-scene .feqb-11{height:56%}.eq-scene .feqb-12{height:66%}
 .feq-bars .feqb-2 { height: 40%; } .feq-bars .feqb-3 { height: 72%; }
 .feq-bars .feqb-4 { height: 48%; } .feq-bars .feqb-5 { height: 64%; }
 .feq-bars .feqb-6 { height: 34%; } .feq-bars .feqb-7 { height: 68%; }
@@ -7663,7 +7663,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v737 · curve-and-reflections";
+const APP_VERSION = "v740 · scene-style";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -7690,11 +7690,11 @@ function toggleTheme() {
 
 // v732 — audio EQ style preference (per-browser, mirrors the theme toggle).
 const EQ_KEY = 'fc_eq_style';
-const EQ_STYLES = ['fire', 'flame', 'gradient', 'curve'];
-const EQ_LABELS = { fire: 'Fire', flame: 'Flame', gradient: 'Bars', curve: 'Curve' };
+const EQ_STYLES = ['scene', 'flame', 'gradient', 'curve'];
+const EQ_LABELS = { scene: 'Scene', flame: 'Flame', gradient: 'Bars', curve: 'Curve' };
 function getEqStyle() {
-  try { const v = localStorage.getItem(EQ_KEY); return EQ_STYLES.includes(v) ? v : 'fire'; }
-  catch (e) { return 'fire'; }
+  try { const v = localStorage.getItem(EQ_KEY); return EQ_STYLES.includes(v) ? v : 'scene'; }
+  catch (e) { return 'scene'; } // v740 — 'fire' removed; stored 'fire' prefs fall through to scene
 }
 function cycleEqStyle() {
   const i = EQ_STYLES.indexOf(getEqStyle());
@@ -11957,13 +11957,23 @@ function _audioTileHtml(e) {
       <div class="feq-bars">${cols}</div><div class="feq-segs" aria-hidden="true"></div>${btn}
     </div>`;
   }
-  // default: 'fire' (Paul's) — moving fire video behind frosted glass bars
-  const bars = Array.from({length: NB}, (_, i) => `<div class="feqb feqb-${i}"></div>`).join('');
-  return `<div class="fcc-entry-media fcc-fire-eq eq-fire" onclick="toggleFccAudio(this, event)" role="button" tabindex="0" aria-label="Play audio entry">
+  // v740 — default: 'scene' (concept image #1 made live). The AI-generated lake
+  // frame (Paul's asset, uploaded under its iOS filename — referenced verbatim,
+  // we are NOT paying the rename tax again) is the tile background. Inside its
+  // measured plot box (left 10% / right 7% / top 33.5% / bottom 15%), fire.jpeg
+  // fills the area and per-column BLACK covers shape it into flame pillars —
+  // the plot is #000 and the covers are #000, so they read as one surface and
+  // only the fire columns show. Same cover model as Flame (proven post-v734),
+  // so _feqStart's inverse branch drives it. Frame 404 -> tile falls back to
+  // near-black; fire 404 -> pillars fall back to ember gradient on the covers'
+  // sibling background.
+  const cols = Array.from({length: NB}, (_, i) => `<div class="feqcol"><div class="feqb feqb-${i}"></div></div>`).join('');
+  return `<div class="fcc-entry-media fcc-fire-eq eq-scene" onclick="toggleFccAudio(this, event)" role="button" tabindex="0" aria-label="Play audio entry">
       ${audio}
-      <video class="feq-fireimg" aria-hidden="true" autoplay loop muted playsinline preload="auto" onerror="this.style.display='none'" src="${FIRE_URL}"></video>
-      <div class="feq-scrim" aria-hidden="true"></div>
-      <div class="feq-bars">${bars}</div>${btn}
+      <div class="feq-plot" aria-hidden="true">
+        <img class="feq-plotfire" alt="" loading="lazy" onerror="this.style.display='none'" src="${IMG_URL}">
+        <div class="feq-bars">${cols}</div>
+      </div>${btn}
     </div>`;
 }
 
@@ -12025,7 +12035,7 @@ function _feqStart(tile, a) {
     // covers COLLAPSE on quiet audio and expose the whole fire frame (the bug
     // in Paul's screenshot: full fire + only the segment lines, no bars). Clamp
     // the cover so it never fully uncovers, and never fully covers.
-    const isFlame = tile.classList.contains('eq-flame');
+    const isFlame = tile.classList.contains('eq-flame') || tile.classList.contains('eq-scene'); // v740 — scene uses the same inverse-cover model
     // v737 — Curve style has no .feqb bars; it has an SVG path + 13 nodes.
     const svgPath = tile.querySelector('.feq-path');
     const svgNodes = tile.querySelectorAll('.feq-node');
@@ -12057,7 +12067,29 @@ function _feqStart(tile, a) {
           : (10 + v * 82) + '%';  // bar: quiet -> 10% tall, loud -> 92% tall
       }
       if (sum === 0 && ++zeroFrames > 60) {
-        dlog('feq', 'analyser-silent-fallback', {});
+        dlog('feq', 'analyser-silent-fallback', { curve: isCurve });
+        if (isCurve) {
+          // v738 — animate the curve with a travelling sine so a mute analyser
+          // never leaves it a dead flat line (the bug in Paul's screenshot).
+          tile._feqFakeRaf && cancelAnimationFrame(tile._feqFakeRaf);
+          const N = svgNodes.length || 13;
+          const fake = () => {
+            if (!tile.classList.contains('playing')) return;
+            const t = performance.now() / 1000;
+            let dstr = '';
+            for (let i = 0; i < N; i++) {
+              const x = 6 + i * (88 / (N - 1));
+              const v = 0.5 + 0.42 * Math.sin(i * 0.7 + t * 3) * Math.sin(t * 1.6 + i);
+              const y = 70 - v * 58;
+              dstr += (i ? ' L' : 'M') + x.toFixed(1) + ',' + y.toFixed(1);
+              if (svgNodes[i]) { svgNodes[i].setAttribute('cx', x.toFixed(1)); svgNodes[i].setAttribute('cy', y.toFixed(1)); }
+            }
+            svgPath.setAttribute('d', dstr);
+            tile._feqFakeRaf = requestAnimationFrame(fake);
+          };
+          tile._feqFakeRaf = requestAnimationFrame(fake);
+          return;
+        }
         bars.forEach(b => { b.style.height = ''; });
         tile.classList.add('feq-fallback');
         return;
@@ -12072,6 +12104,7 @@ function _feqStart(tile, a) {
 }
 function _feqStop(tile) {
   if (tile._feqRaf) { cancelAnimationFrame(tile._feqRaf); tile._feqRaf = null; }
+  if (tile._feqFakeRaf) { cancelAnimationFrame(tile._feqFakeRaf); tile._feqFakeRaf = null; } // v738
   tile.classList.remove('feq-fallback');
   tile.querySelectorAll('.feqb').forEach(b => { b.style.height = ''; });
   const p = tile.querySelector('.feq-path'); // v737 — curve back to its idle shape
@@ -19202,16 +19235,17 @@ function renderPostCard(p) {
     if (p.media_type === 'video') {
       mediaHtml = `<div class="post-card-media"><video src="${escapeHtml(p.media_url)}#t=0.1" controls playsinline preload="metadata"></video></div>`;
     } else if (p.media_type === 'audio') {
-      mediaHtml = `<div class="post-card-media" style="background:var(--surface);border-radius:12px;padding:14px;display:flex;align-items:center;gap:10px">
-        <span style="font-size:28px">🎙️</span>
-        <audio src="${escapeHtml(p.media_url)}" controls preload="metadata" style="flex:1;height:36px"></audio>
-      </div>`;
+      // v739 — audio posts get the SAME fire EQ tile as challenge entries (all
+      // four styles, analyser-driven) instead of the plain grey iOS player.
+      // _audioTileHtml keys off .media_url, which is what this branch has.
+      mediaHtml = `<div class="post-card-media" style="padding:0;background:transparent">${_audioTileHtml({ media_url: p.media_url })}</div>`;
     } else {
       mediaHtml = `<div class="post-card-media"><img src="${escapeHtml(p.media_url)}" alt="post media" loading="lazy"></div>`;
     }
   }
   if (p.audio_url) {
-    mediaHtml += `<div style="padding:0 14px 10px"><audio src="${escapeHtml(p.audio_url)}" controls preload="metadata" style="width:100%;height:36px;border-radius:8px"></audio></div>`;
+    // v739 — same EQ tile for the audio_url attachment path
+    mediaHtml += `<div class="post-card-media" style="padding:0;background:transparent;margin:0 0 8px">${_audioTileHtml({ media_url: p.audio_url })}</div>`;
   }
   const likeCount = state.postLikeCounts[p.id] || 0;
   const iLiked = state.myPostLikes.has(p.id);
