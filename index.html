@@ -6566,21 +6566,20 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 }
 /* the frame's empty plot box, measured from the asset: L10 R7 T33.5 B15 (%) */
 .eq-scene .feq-plot { position: absolute; left: 10%; right: 7%; top: 33.5%; bottom: 15%;
-  overflow: hidden; background: linear-gradient(to top, #3a1206, #000 55%); }
-.eq-scene .feq-plotfire { position: absolute; inset: 0; width: 100%; height: 100%;
-  object-fit: cover; object-position: center bottom;
-  filter: brightness(1.18) saturate(1.25) contrast(1.05); /* v741 — hotter, glowier */ }
-.eq-scene .feq-bars { position: absolute; inset: 0; display: flex; align-items: stretch; gap: 0; padding: 0; }
-.eq-scene .feqcol { flex: 1; position: relative; border-left: 6px solid #000; border-right: 6px solid #000; }
-/* v741 — cover fades out at its bottom edge so each pillar ends in a soft
-   flame TIP instead of a hard photo-slice cut (Paul: "bars don't look like
-   the concept" — concept has thin glowing pillars, not sliced rectangles) */
-.eq-scene .feqb { position: absolute; top: 0; left: 0; right: 0;
-  background: linear-gradient(to bottom, #000 0%, #000 calc(100% - 34px), rgba(0,0,0,0) 100%);
-  height: 72%; transition: height 0.08s linear; }
-.eq-scene .feqb-0{height:78%}.eq-scene .feqb-1{height:52%}.eq-scene .feqb-2{height:68%}.eq-scene .feqb-3{height:38%}
-.eq-scene .feqb-4{height:60%}.eq-scene .feqb-5{height:46%}.eq-scene .feqb-6{height:72%}.eq-scene .feqb-7{height:42%}
-.eq-scene .feqb-8{height:64%}.eq-scene .feqb-9{height:50%}.eq-scene .feqb-10{height:74%}.eq-scene .feqb-11{height:56%}.eq-scene .feqb-12{height:66%}
+  overflow: hidden; background: linear-gradient(to top, #2a0d04, #000 60%); }
+.eq-scene .feq-bars { position: absolute; inset: 0; display: flex; align-items: flex-end; gap: 0; padding: 0 2px; }
+.eq-scene .feqcol { flex: 1; position: relative; height: 100%; display: flex; align-items: flex-end; padding: 0 5px; }
+/* v742 — each pillar is ONE vertical flame tongue stretched to its height:
+   the concept's candle look. Glow halo + faded water reflection below. */
+.eq-scene .feqb { width: 100%; height: 46%;
+  background: url("https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/Assets/tongue.png") center bottom / 100% 100% no-repeat,
+              linear-gradient(to top, #ff2d1f 0%, #ff6a2c 50%, #ffc857 100%);
+  filter: drop-shadow(0 0 9px rgba(255,140,40,0.65));
+  -webkit-box-reflect: below 2px linear-gradient(to bottom, rgba(0,0,0,0.4), transparent 55%);
+  transition: height 0.08s linear; }
+.eq-scene .feqb-0{height:34%}.eq-scene .feqb-1{height:58%}.eq-scene .feqb-2{height:44%}.eq-scene .feqb-3{height:72%}
+.eq-scene .feqb-4{height:50%}.eq-scene .feqb-5{height:64%}.eq-scene .feqb-6{height:40%}.eq-scene .feqb-7{height:68%}
+.eq-scene .feqb-8{height:47%}.eq-scene .feqb-9{height:60%}.eq-scene .feqb-10{height:36%}.eq-scene .feqb-11{height:55%}.eq-scene .feqb-12{height:63%}
 .feq-bars .feqb-2 { height: 40%; } .feq-bars .feqb-3 { height: 72%; }
 .feq-bars .feqb-4 { height: 48%; } .feq-bars .feqb-5 { height: 64%; }
 .feq-bars .feqb-6 { height: 34%; } .feq-bars .feqb-7 { height: 68%; }
@@ -7669,7 +7668,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v741 · scene-pillars";
+const APP_VERSION = "v742 · scene-candles";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11963,23 +11962,17 @@ function _audioTileHtml(e) {
       <div class="feq-bars">${cols}</div><div class="feq-segs" aria-hidden="true"></div>${btn}
     </div>`;
   }
-  // v740 — default: 'scene' (concept image #1 made live). The AI-generated lake
-  // frame (Paul's asset, uploaded under its iOS filename — referenced verbatim,
-  // we are NOT paying the rename tax again) is the tile background. Inside its
-  // measured plot box (left 10% / right 7% / top 33.5% / bottom 15%), fire.jpeg
-  // fills the area and per-column BLACK covers shape it into flame pillars —
-  // the plot is #000 and the covers are #000, so they read as one surface and
-  // only the fire columns show. Same cover model as Flame (proven post-v734),
-  // so _feqStart's inverse branch drives it. Frame 404 -> tile falls back to
-  // near-black; fire 404 -> pillars fall back to ember gradient on the covers'
-  // sibling background.
+  // v742 — default: 'scene', rebuilt as CANDLE PILLARS (Paul: v741 slices
+  // "not the same" as concept). Each bar is now a single vertical flame-tongue
+  // image (tongue.png, cropped+edge-faded from the AdobeStock fire), bottom-
+  // anchored and stretched to the bar's height — so every pillar is one flame
+  // with a tip, not a slice of a fire wall. Normal bar model (taller = louder),
+  // NOT the inverse-cover model. Tongue 404s fall back to an ember gradient
+  // (CSS background layer stack). Frame stays the lake asset.
   const cols = Array.from({length: NB}, (_, i) => `<div class="feqcol"><div class="feqb feqb-${i}"></div></div>`).join('');
   return `<div class="fcc-entry-media fcc-fire-eq eq-scene" onclick="toggleFccAudio(this, event)" role="button" tabindex="0" aria-label="Play audio entry">
       ${audio}
-      <div class="feq-plot" aria-hidden="true">
-        <img class="feq-plotfire" alt="" loading="lazy" onerror="this.style.display='none'" src="${IMG_URL}">
-        <div class="feq-bars">${cols}</div>
-      </div>${btn}
+      <div class="feq-plot" aria-hidden="true"><div class="feq-bars">${cols}</div></div>${btn}
     </div>`;
 }
 
@@ -12041,7 +12034,7 @@ function _feqStart(tile, a) {
     // covers COLLAPSE on quiet audio and expose the whole fire frame (the bug
     // in Paul's screenshot: full fire + only the segment lines, no bars). Clamp
     // the cover so it never fully uncovers, and never fully covers.
-    const isFlame = tile.classList.contains('eq-flame') || tile.classList.contains('eq-scene'); // v740 — scene uses the same inverse-cover model
+    const isFlame = tile.classList.contains('eq-flame'); // v742 — scene pillars are normal bars again (tongue-textured)
     // v737 — Curve style has no .feqb bars; it has an SVG path + 13 nodes.
     const svgPath = tile.querySelector('.feq-path');
     const svgNodes = tile.querySelectorAll('.feq-node');
