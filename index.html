@@ -7667,7 +7667,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v744 · flame-bars";
+const APP_VERSION = "v746 · entered-gate-fix";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -8722,7 +8722,7 @@ async function loadFeedActivity(opts = {}) {
     const withTimeout = (p, ms, label) => Promise.race([
       p, new Promise((_, rej) => setTimeout(() => rej(new Error(label + ' timeout')), ms))
     ]);
-    const [entriesRes, votesRes] = await Promise.all([
+    const [entriesRes, votesRes, mineRes] = await Promise.all([
       withTimeout(db.from('entries')
         .select('id, challenge_id, user_id, created_at, media_url, media_type, poster_url, caption, moderation_status, sd_round, submitter:profiles!entries_user_id_fkey(id, name, avatar)')
         .gte('created_at', entryCutoff)
@@ -8732,7 +8732,19 @@ async function loadFeedActivity(opts = {}) {
         .select('entry_id, created_at')
         .gte('created_at', voteCutoff)
         .limit(opts.incremental ? 200 : 5000), 12000, 'Feed votes'),
+      // v746 — authoritative "which challenges have I entered" map: MY rows only,
+      // no window, no cap. The submit-button gate was trusting the windowed feed
+      // query above; if my entry fell outside it (timing/limit/window), the card
+      // showed "+ Submit your entry" on a challenge I'd already entered.
+      state.profile ? withTimeout(db.from('entries')
+        .select('challenge_id, moderation_status')
+        .eq('user_id', state.profile.id), 12000, 'My entries') : Promise.resolve({ data: [] }),
     ]);
+    const myMap = {};
+    (mineRes.data || []).forEach(e => {
+      if (e.moderation_status !== 'rejected') myMap[e.challenge_id] = true;
+    });
+    state.myEnteredCh = myMap; // full replace: deletes/rejections drop out naturally
 
     // Feed visibility: hide videos still pending/rejected/escalated/flagged
     // from everyone except the submitter themself. Feed is a public surface,
@@ -12020,7 +12032,20 @@ function _feqStart(tile, a) {
       a._feqAn.connect(_feqCtx.destination);
     }
     const an = a._feqAn;
+    an.smoothingTimeConstant = 0.5; // v745 — default 0.8 crawls; 0.5 snaps to the beat
     const data = new Uint8Array(an.frequencyBinCount);
+    // v745 — per-bar auto-gain: raw spectra slope bass-high/treble-low, so
+    // right-side bars barely moved (Paul: "heights remain pretty much the
+    // same"). Track each bar's own running min/max and normalize into it, so
+    // every band dances across its full range like a real EQ display.
+    const lo = tile._feqLo || (tile._feqLo = []);
+    const hi = tile._feqHi || (tile._feqHi = []);
+    const norm = (i, v) => {
+      hi[i] = Math.max(v, (hi[i] === undefined ? v : hi[i]) * 0.995);
+      lo[i] = Math.min(v, (lo[i] === undefined ? v : lo[i]) * 1.005 + 0.002);
+      const d = hi[i] - lo[i];
+      return d > 0.03 ? Math.pow((v - lo[i]) / d, 0.85) : v;
+    };
     const bars = tile.querySelectorAll('.feqb');
     const NB = bars.length;
     // v733 — Flame's .feqb are black TOP COVERS (fire shows below them), so their
@@ -12047,7 +12072,7 @@ function _feqStart(tile, a) {
         let dstr = '';
         for (let i = 0; i < N; i++) {
           const bin = Math.min(data.length - 1, Math.floor(Math.pow(i / N, 1.6) * data.length * 0.8) + 1);
-          const v = data[bin] / 255; sum += v;
+          const v = norm(i, data[bin] / 255); sum += data[bin] / 255;
           const x = 6 + i * (88 / (N - 1));
           const y = 70 - v * 58;
           dstr += (i ? ' L' : 'M') + x.toFixed(1) + ',' + y.toFixed(1);
@@ -12056,7 +12081,7 @@ function _feqStart(tile, a) {
         svgPath.setAttribute('d', dstr);
       } else for (let i = 0; i < NB; i++) {
         const bin = Math.min(data.length - 1, Math.floor(Math.pow(i / NB, 1.6) * data.length * 0.8) + 1);
-        const v = data[bin] / 255; sum += v;
+        const v = norm(i, data[bin] / 255); sum += data[bin] / 255;
         bars[i].style.height = isFlame
           ? (85 - v * 70) + '%'   // cover: quiet -> 85% covered, loud -> 15% covered
           : (10 + v * 82) + '%';  // bar: quiet -> 10% tall, loud -> 92% tall
@@ -16336,7 +16361,7 @@ function renderChallenges() {
 
     const chEntries = (state.feedEntries || []).filter(e => e.challenge_id === ch.id);
     const canEnterCh = ch.computedStatus === 'submitting'
-      && state.profile && !myLiveEntry(chEntries) // v715 — rejected doesn't count as entered
+      && state.profile && !myLiveEntry(chEntries, ch.id) // v715/v746 — windowed-list miss can't unhide the button
       && chEntries.length < MAX_ENTRIES_PER_CHALLENGE
       // Championships (v635): entry restricted to accepted invitees, since
       // championships are now public (so everyone can watch) — the invite is
@@ -19408,7 +19433,7 @@ function renderFeedChallengeCard(ch) {
   );
   const canEnter = ch.computedStatus === 'submitting'
     && state.profile
-    && !myLiveEntry(chEntries) // v715 — a rejected entry must not block re-entry
+    && !myLiveEntry(chEntries, ch.id) // v715/v746
     // Championships are invite-only for EVERYONE, admins included — only an
     // invited contender (present in the fighter roster) may enter. Mirrors the
     // DB trigger enforce_championship_invite so the UI and server agree.
@@ -19468,7 +19493,7 @@ function renderFeedChallengeCard(ch) {
 
   // Bottom bar (v619): mirror the challenges-page states so the two surfaces
   // never disagree — submit / "You're in!"+Edit / "in the running".
-  const _feedMyEntry = myLiveEntry(chEntries); // v715
+  const _feedMyEntry = myLiveEntry(chEntries, ch.id); // v715/v746
   const _feedMyRejected = myRejectedEntry(chEntries); // v715
   let submitBtn = '';
   if (canEnter && _feedMyRejected) {
@@ -22883,9 +22908,14 @@ const FEATURE_FLAGS = [
 // of them excluded rejected, so a rejected entry showed "✓ You're in!" and an
 // Edit button over a video nobody can see, while blocking a fresh submission.
 // Pass the entry list for the surface you're on; they all hold the same shape.
-function myLiveEntry(entries) {
+function myLiveEntry(entries, chId) {
   if (!state.profile) return null;
-  return (entries || []).find(e => e.user_id === state.profile.id && e.moderation_status !== 'rejected') || null;
+  const found = (entries || []).find(e => e.user_id === state.profile.id && e.moderation_status !== 'rejected') || null;
+  // v746 — backstop: if the (windowed) entries list missed my row, the
+  // authoritative map still knows I entered. Returns a truthy stub; callers
+  // only use it as a boolean gate except the feed, which handles null fields.
+  if (!found && chId && state.myEnteredCh && state.myEnteredCh[chId]) return { user_id: state.profile.id, _fromMap: true };
+  return found;
 }
 // A rejected entry of mine, if any. Used to tell "never entered" (plain submit
 // prompt) apart from "entered and it was rejected" (which needs an explanation,
