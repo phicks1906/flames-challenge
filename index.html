@@ -6567,14 +6567,18 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 /* the frame's empty plot box, measured from the asset: L10 R7 T33.5 B15 (%) */
 .eq-scene .feq-plot { position: absolute; left: 10%; right: 7%; top: 33.5%; bottom: 15%;
   overflow: hidden; background: #000; }
-.eq-scene .feq-plotfire { position: absolute; inset: 0; width: 100%; height: 100%;
-  object-fit: cover; object-position: center bottom;
-  filter: brightness(1.15) saturate(1.2); }
-/* v743 - one black cover from the top; height = inverse loudness. Soft
-   gradient bottom edge keeps the fire top line organic, not a ruler. */
-.eq-scene .feq-cover { position: absolute; top: 0; left: 0; right: 0; height: 55%;
-  background: linear-gradient(to bottom, #000 0%, #000 calc(100% - 46px), rgba(0,0,0,0) 100%);
-  transition: height 0.1s linear; }
+.eq-scene .feq-bars { position: absolute; inset: 0; display: flex; align-items: flex-end; padding: 0 2px; }
+.eq-scene .feqcol { flex: 1; position: relative; height: 100%; display: flex; align-items: flex-end; padding: 0 4px; }
+/* v744 - the flame IS the bar: transparent-PNG tongue, no box. drop-shadow
+   follows the flame's alpha, so the glow hugs fire, not a rectangle. */
+.eq-scene .feqb { width: 100%; height: 46%;
+  background: url("https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/Assets/tongue2.png") center bottom / 100% 100% no-repeat;
+  filter: drop-shadow(0 0 10px rgba(255,140,40,0.55));
+  -webkit-box-reflect: below 2px linear-gradient(to bottom, rgba(0,0,0,0.35), transparent 55%);
+  transition: height 0.08s linear; }
+.eq-scene .feqb-0{height:34%}.eq-scene .feqb-1{height:58%}.eq-scene .feqb-2{height:44%}.eq-scene .feqb-3{height:72%}
+.eq-scene .feqb-4{height:50%}.eq-scene .feqb-5{height:64%}.eq-scene .feqb-6{height:40%}.eq-scene .feqb-7{height:68%}
+.eq-scene .feqb-8{height:47%}.eq-scene .feqb-9{height:60%}.eq-scene .feqb-10{height:36%}.eq-scene .feqb-11{height:55%}.eq-scene .feqb-12{height:63%}
 .feq-bars .feqb-2 { height: 40%; } .feq-bars .feqb-3 { height: 72%; }
 .feq-bars .feqb-4 { height: 48%; } .feq-bars .feqb-5 { height: 64%; }
 .feq-bars .feqb-6 { height: 34%; } .feq-bars .feqb-7 { height: 68%; }
@@ -7663,7 +7667,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v743 · scene-firewall";
+const APP_VERSION = "v744 · flame-bars";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11957,18 +11961,14 @@ function _audioTileHtml(e) {
       <div class="feq-bars">${cols}</div><div class="feq-segs" aria-hidden="true"></div>${btn}
     </div>`;
   }
-  // v743 — default: 'scene'. Paul: "remove the bars, just have the fire."
-  // The lake frame with ONE living fire mass inside the plot — fire.jpeg
-  // (already in Storage, no new asset needed) bottom-anchored, with a single
-  // black cover from the top whose height moves inversely to the track's
-  // average loudness. Quiet = low embers, loud = the plot fills with flame.
-  // Cover bottom edge is a soft gradient so the fire's top edge looks organic.
+  // v744 — default: 'scene'. Flame IS the bar: 13 transparent flame-tongue
+  // pillars (tongue2.png, alpha PNG — black removed so no visible rectangle),
+  // bottom-anchored, stretched to bar height, dancing per-frequency. Paul:
+  // "flames look like a bar, without the visible black bars."
+  const cols = Array.from({length: NB}, (_, i) => `<div class="feqcol"><div class="feqb feqb-${i}"></div></div>`).join('');
   return `<div class="fcc-entry-media fcc-fire-eq eq-scene" onclick="toggleFccAudio(this, event)" role="button" tabindex="0" aria-label="Play audio entry">
       ${audio}
-      <div class="feq-plot" aria-hidden="true">
-        <img class="feq-plotfire" alt="" loading="lazy" onerror="this.style.display='none'" src="${IMG_URL}">
-        <div class="feqb feq-cover"></div>
-      </div>${btn}
+      <div class="feq-plot" aria-hidden="true"><div class="feq-bars">${cols}</div></div>${btn}
     </div>`;
 }
 
@@ -12031,7 +12031,6 @@ function _feqStart(tile, a) {
     // in Paul's screenshot: full fire + only the segment lines, no bars). Clamp
     // the cover so it never fully uncovers, and never fully covers.
     const isFlame = tile.classList.contains('eq-flame');
-    const isScene = tile.classList.contains('eq-scene'); // v743 - one fire mass, avg-driven
     // v737 — Curve style has no .feqb bars; it has an SVG path + 13 nodes.
     const svgPath = tile.querySelector('.feq-path');
     const svgNodes = tile.querySelectorAll('.feq-node');
@@ -12042,13 +12041,7 @@ function _feqStart(tile, a) {
       if (!tile.classList.contains('playing')) return;
       an.getByteFrequencyData(data);
       let sum = 0;
-      if (isScene && bars.length === 1) {
-        // v743 - average the whole spectrum; cover shrinks as it gets loud
-        let t = 0;
-        for (let i = 0; i < data.length; i++) t += data[i];
-        const avg = t / (data.length * 255); sum += t;
-        bars[0].style.height = (72 - avg * 58) + '%';
-      } else if (isCurve) {
+      if (isCurve) {
         // v737 — 13 nodes across viewBox x=6..94; y: quiet -> 70 (low), loud -> 12 (high)
         const N = svgNodes.length || 13;
         let dstr = '';
