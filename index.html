@@ -7684,7 +7684,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v747 · one-entry-dots";
+const APP_VERSION = "v748 · offscreen-audio";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -12334,6 +12334,97 @@ function wireLazyVideoThumbnails(container) {
 
   targets.forEach(vid => _lazyVideoObserver.observe(vid));
 }
+
+// ─── v748 — OFF-SCREEN AUDIO RELEASE ────────────────────────────────────────
+// Inline media that lives in a SCROLLING page (post-card <video>, audio EQ
+// tiles) had no teardown at all: tap play, scroll the card away, and the sound
+// kept going with nothing on screen to stop it. The two full-screen viewers
+// already release correctly on close (closeFeedViewer / closeEntryViewer) —
+// they're excluded here so this never fights their own teardown.
+//
+// Why not just pause(): on iOS pause() alone does not reliably hand the audio
+// session back — that's exactly why the viewers null the src and load(). For
+// <video> we do the same full recipe, stashing src + currentTime so scrolling
+// back restores the frame and the user can resume where they were. For <audio>
+// we ONLY pause: those elements are bound to a Web Audio MediaElementSource in
+// _feqStart, and a second source node can never be created for the same
+// element, so blanking the src would permanently kill that tile's EQ bars.
+//
+// Trigger is `isIntersecting === false` (element COMPLETELY off screen), not a
+// ratio threshold — a ratio test misfires on any element taller than the
+// viewport, whose ratio can never reach the threshold in the first place.
+let _offscreenMediaObs = null;
+const _osMediaByTarget = new WeakMap();
+
+function _releaseOffscreenMedia(m, target) {
+  if (!m.isConnected) { try { _offscreenMediaObs.unobserve(target); } catch (_) {} return; }
+  if (m.paused) return;
+  if (m.tagName === 'AUDIO') {
+    try { m.pause(); } catch (_) {}          // 'pause' listener resets the tile UI
+    dlog('audio', 'offscreen-pause', { tag: 'AUDIO' });
+    return;
+  }
+  try {
+    m.dataset.osSrc  = m.currentSrc || m.src || '';
+    m.dataset.osTime = String(m.currentTime || 0);
+    m.pause();
+    m.removeAttribute('src');
+    m.load();                                 // this is what frees the iOS session
+  } catch (_) {}
+  _userAudioActive = false;                   // nothing playing → previews may resume
+  dlog('audio', 'offscreen-release', { t: m.dataset.osTime });
+}
+
+function _restoreOffscreenMedia(m) {
+  const src = m.dataset.osSrc;
+  if (!src || m.getAttribute('src')) return;
+  const t = parseFloat(m.dataset.osTime || '0') || 0;
+  delete m.dataset.osSrc;
+  delete m.dataset.osTime;
+  try {
+    m.src = src;
+    m.load();
+    // Seek only once metadata is in — setting currentTime before that is a no-op.
+    if (t > 0.2) m.addEventListener('loadedmetadata', () => {
+      try { m.currentTime = t; } catch (_) {}
+    }, { once: true });
+  } catch (_) {}
+}
+
+function _watchOffscreenMedia(m) {
+  if (!m || m.muted || m.dataset.osWatched) return;
+  if (!('IntersectionObserver' in window)) return;
+  // The full-screen viewers manage their own teardown on close and on swipe.
+  if (m.closest('#feedViewerSheet, #entryViewerSheet')) return;
+  if (!_offscreenMediaObs) {
+    _offscreenMediaObs = new IntersectionObserver((entries) => {
+      entries.forEach(en => {
+        const media = _osMediaByTarget.get(en.target);
+        if (!media) return;
+        if (en.isIntersecting) _restoreOffscreenMedia(media);
+        else _releaseOffscreenMedia(media, en.target);
+      });
+    }, { threshold: 0 });
+  }
+  // An <audio> element has NO layout box, so observing it directly reads as
+  // permanently off-screen and would pause the EQ tile the instant it started.
+  // Observe the visible tile/card wrapper instead and map back to the element.
+  let target = m;
+  if (!m.offsetWidth || !m.offsetHeight) {
+    target = m.closest('.fcc-fire-eq, .fcc-entry-media, .post-card-media') || m.parentElement || m;
+  }
+  m.dataset.osWatched = '1';
+  _osMediaByTarget.set(target, m);
+  _offscreenMediaObs.observe(target);
+}
+
+// 'play' does not bubble, so listen in the CAPTURE phase at the document root.
+// One listener catches every path — native <video controls>, toggleFccAudio,
+// and the programmatic players — with no wiring needed at each render site.
+document.addEventListener('play', (e) => {
+  const m = e.target;
+  if (m && (m.tagName === 'VIDEO' || m.tagName === 'AUDIO')) _watchOffscreenMedia(m);
+}, true);
 
 function mediaTypeLabel(mt) {
   return { photo: '📷 PHOTO', video: '📹 VIDEO', audio: '🎙️ AUDIO', text: '✍️ TEXT' }[mt] || '';
