@@ -3572,6 +3572,17 @@ html[data-theme="light"] .ps-heat-card { background: #1a1008; }
 }
 .fcc-entries-scroll::-webkit-scrollbar { display: none; }
 
+/* v747 — dot pager under the entry row. Active dot stretches to a pill (the
+   iOS/Instagram convention) so position is readable at a glance. The ::after
+   inset gives each 6px dot a ~24px tap target without changing the visual. */
+.fcc-dots { display: flex; justify-content: center; align-items: center; gap: 6px;
+  padding: 2px 0 10px; }
+.fcc-dot { position: relative; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--border); cursor: pointer;
+  transition: width 0.18s ease, background 0.18s ease, border-radius 0.18s ease; }
+.fcc-dot::after { content: ''; position: absolute; inset: -9px; }
+.fcc-dot.active { width: 18px; border-radius: 3px; background: var(--ember); }
+
 /* Crop modal */
 #cropModal.open { display:flex !important; }
 .crop-ratio-btn {
@@ -3626,8 +3637,14 @@ html[data-theme="light"] .ps-heat-card { background: #1a1008; }
      always overflows, so the row always reads as scrollable.
      Arena items are media-forward. Don't re-narrow this to match a feed whose
      job is passive scrolling. */
-  flex: 0 0 83vw;
-  min-width: 83vw; /* always peek next card */
+  /* v747 — ONE ENTRY PER SCREEN. The 83vw peek above was a deliberate carousel
+     affordance, but it read as a rendering glitch (a sliver of the next photo
+     inside the current frame) rather than as "there's more". Replaced with the
+     conventional pattern: full-width card + a dot pager underneath, which says
+     the same thing explicitly. The v700 concern that drove 83vw — a row that
+     doesn't LOOK scrollable — is answered by the dots, not by the sliver. */
+  flex: 0 0 100%;
+  min-width: 100%;
   max-width: none;
   background: var(--bg-2);
   border: 1px solid var(--border);
@@ -7667,7 +7684,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v746 · entered-gate-fix";
+const APP_VERSION = "v747 · one-entry-dots";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -16431,7 +16448,7 @@ function renderChallenges() {
 
     const drawerHtml = (chEntries.length > 0 || canEnterCh || alreadyEntered) ? `
       <div class="fcc-feed-drawer">
-        ${chEntries.length > 0 ? `<div class="fcc-entries-scroll">${entryCardsHtml}<div style="flex:0 0 28vw;min-width:28vw;pointer-events:none;opacity:0;"></div></div>` : ''}
+        ${chEntries.length > 0 ? `<div class="fcc-entries-scroll">${entryCardsHtml}</div>${_entryDotsHtml(chEntries.length)}` : ''}
         ${bottomBar}
       </div>` : '';
 
@@ -16465,6 +16482,7 @@ function renderChallenges() {
   // A render function must wire the DOM it just created; wiring it from a
   // different render function is how it got missed for this long.
   requestAnimationFrame(() => wireLazyVideoThumbnails(grid));
+  _wireEntryDots(grid); // v747
 
   // Wire card clicks → open challenge detail
   grid.querySelectorAll('.feed-challenge-card[data-chid]').forEach(card => {
@@ -19103,6 +19121,7 @@ function renderFeed() {
   // ── Double-tap to like — post media and entry media ───────────────────────
   wireDoubleTapLike(c);
   wireLazyVideoThumbnails(c);
+  _wireEntryDots(c); // v747
 
 
   // Wire feed drawers — vote and submit buttons
@@ -19488,7 +19507,7 @@ function renderFeedChallengeCard(ch) {
           ${voteBtn}
         </div>
       </div>`;
-    }).join('') + `<div style="flex:0 0 28vw;min-width:28vw;pointer-events:none;opacity:0;"></div></div>`;
+    }).join('') + `</div>` + _entryDotsHtml(chEntries.length); // v747 — ghost spacer gone (full-width cards), dots added
   }
 
   // Bottom bar (v619): mirror the challenges-page states so the two surfaces
@@ -22908,6 +22927,53 @@ const FEATURE_FLAGS = [
 // of them excluded rejected, so a rejected entry showed "✓ You're in!" and an
 // Edit button over a video nobody can see, while blocking a fresh submission.
 // Pass the entry list for the surface you're on; they all hold the same shape.
+// v747 — dot pager for the entry row. Rendered only for 2+ entries: a single
+// dot communicates nothing and just adds furniture under a card.
+function _entryDotsHtml(n) {
+  if (!n || n < 2) return '';
+  let d = '';
+  for (let i = 0; i < n; i++) d += `<span class="fcc-dot${i === 0 ? ' active' : ''}" data-i="${i}"></span>`;
+  return `<div class="fcc-dots">${d}</div>`;
+}
+
+// Wires scroll -> active dot, and dot tap -> scroll. Scrollers are rebuilt on
+// every render, so these are fresh elements; the dataset flag still guards
+// against double-wiring if a render path calls this twice (v430's rule).
+function _wireEntryDots(root) {
+  if (!root) return;
+  root.querySelectorAll('.fcc-entries-scroll').forEach(sc => {
+    if (sc.dataset.dotsWired) return;
+    sc.dataset.dotsWired = '1';
+    const dots = sc.parentElement ? sc.parentElement.querySelector('.fcc-dots') : null;
+    if (!dots) return;
+    // Measure the real step from the DOM (card width + gap) rather than
+    // assuming 8px: the two surfaces have different padding, and a hard-coded
+    // step is exactly how these two renderers drifted apart before.
+    const step = () => {
+      const cards = sc.querySelectorAll('.fcc-entry-card');
+      if (cards.length > 1) return cards[1].offsetLeft - cards[0].offsetLeft;
+      return cards.length ? cards[0].getBoundingClientRect().width + 8 : 0;
+    };
+    const update = () => {
+      const st = step(); if (!st) return;
+      const list = dots.querySelectorAll('.fcc-dot');
+      const i = Math.max(0, Math.min(list.length - 1, Math.round(sc.scrollLeft / st)));
+      list.forEach((d, n) => d.classList.toggle('active', n === i));
+    };
+    sc.addEventListener('scroll', () => {
+      if (sc._dotRaf) return;
+      sc._dotRaf = requestAnimationFrame(() => { sc._dotRaf = null; update(); });
+    }, { passive: true });
+    dots.addEventListener('click', e => {
+      const d = e.target.closest('.fcc-dot');
+      if (!d) return;
+      const st = step();
+      if (st) sc.scrollTo({ left: (+d.dataset.i || 0) * st, behavior: 'smooth' });
+    });
+    update();
+  });
+}
+
 function myLiveEntry(entries, chId) {
   if (!state.profile) return null;
   const found = (entries || []).find(e => e.user_id === state.profile.id && e.moderation_status !== 'rejected') || null;
