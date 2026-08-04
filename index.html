@@ -7749,7 +7749,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v755 · server-side-champ-launch";
+const APP_VERSION = "v756 · poll-close-guard";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -10661,12 +10661,15 @@ async function openPromote(type, item) {
   let opts, modalTitle, shareText;
 
   if (type === 'poll') {
+    // v756 — was printing raw hours_remaining, so a flyer for an ended poll
+    // shipped "48h left to vote" out to other platforms permanently.
+    const _pollLbl = pollTimeLabel(item);
     opts = {
-      kicker: 'Live Poll',
+      kicker: pollEnded(item) ? 'Poll Results' : 'Live Poll',
       title: item.question,
       sub: '',
-      deadlineText: item.hours_remaining ? `⏱ ${item.hours_remaining}h left to vote` : '',
-      ctaText: 'Vote now on',
+      deadlineText: _pollLbl ? (pollEnded(item) ? _pollLbl : _pollLbl + ' to vote') : '',
+      ctaText: pollEnded(item) ? 'See results on' : 'Vote now on',
     };
     modalTitle = 'Promote this poll';
     shareText = `🔥 "${item.question}" — vote on FlamesChallenge`;
@@ -11632,6 +11635,20 @@ function pollEnded(p) {
   return Date.parse(p.created_at) + p.hours_remaining * 3600000 <= Date.now();
 }
 
+// v756 — `hours_remaining` is the duration set at creation, NOT a live counter.
+// Rendering it raw meant an ended poll could sit in the feed reading "48h left"
+// forever, which is what invited votes into a poll the DB had already sealed
+// (RLS policy votes_block_after_close). Always render through this.
+function pollTimeLabel(p) {
+  if (!p || !p.created_at || !p.hours_remaining) return '';
+  const msLeft = Date.parse(p.created_at) + p.hours_remaining * 3600000 - Date.now();
+  if (msLeft <= 0) return '🏁 Ended';
+  const hrs = msLeft / 3600000;
+  if (hrs >= 24) { const d = Math.floor(hrs / 24); return `⏱ ${d}d left`; }
+  if (hrs >= 1) return `⏱ ${Math.floor(hrs)}h left`;
+  return `⏱ ${Math.max(1, Math.round(msLeft / 60000))}m left`;
+}
+
 function renderPolls() {
   const grid = document.getElementById('pollsGrid');
   if (state.loading) {
@@ -11662,7 +11679,7 @@ function renderPolls() {
     card.dataset.pid = poll.id;
     card.innerHTML = `
       <div class="poll-meta">
-        <span class="poll-time">${ended ? '🏁 Ended' : '⏱ ' + poll.hours_remaining + 'h left'}</span>
+        <span class="poll-time">${pollTimeLabel(poll)}</span>
         ${voted ? '<span class="poll-voted-tag">✓ Voted</span>' : ''}
       </div>
       <h3 class="poll-question">${escapeHtml(poll.question)}</h3>
@@ -11698,6 +11715,20 @@ function renderPolls() {
 async function castVote(pollId, optionIdx) {
   if (!state.profile) return;
   if (state.myVotes[pollId] !== undefined) return;
+
+  // v756 — refuse before touching optimistic state. The DB already blocks this
+  // (RLS policy votes_block_after_close), but with no client guard the user got
+  // a full "voted" animation and then a raw Postgres error 1.2s later. Check
+  // live rather than trusting the render: a poll can end while the card sits
+  // on screen.
+  const pollForGuard = (state.polls || []).find(p => p.id === pollId);
+  if (pollForGuard && pollEnded(pollForGuard)) {
+    toast('🏁 This poll has ended');
+    updateFeedPollCardInPlace(pollId);
+    renderPolls();
+    return;
+  }
+
   try { navigator.vibrate && navigator.vibrate(10); } catch(e) {}
 
   // Optimistic — mark voted but don't reveal results yet
@@ -11729,7 +11760,16 @@ async function castVote(pollId, optionIdx) {
     delete state.myVotes[pollId];
     state.voteCountsByPoll[pollId][optionIdx] = Math.max(0, state.voteCountsByPoll[pollId][optionIdx] - 1);
     renderPolls();
-    toast('Vote failed: ' + voteError.message);
+    // Don't show raw Postgres/RLS text to users. The close-window policy is the
+    // expected rejection here (poll ended between render and tap), so name it.
+    const _msg = voteError.message || '';
+    if (/votes_block_after_close|row-level security/i.test(_msg)) {
+      toast('🏁 This poll closed before your vote landed');
+      updateFeedPollCardInPlace(pollId);
+    } else {
+      toast('Vote failed — try again');
+      console.warn('castVote', voteError);
+    }
     return;
   }
 
@@ -21792,6 +21832,8 @@ function renderFeedPollCard(poll) {
   const counts = state.voteCountsByPoll[poll.id] || {};
   const userVote = state.myVotes[poll.id];
   const voted = userVote !== undefined;
+  const ended = pollEnded(poll); // v756 — was never checked here; ended polls rendered tappable
+  const locked = voted || ended;  // show results + disable options in both cases
   const options = (poll.options || []).map((opt, i) => {
     const votes = (opt.seed_votes || 0) + (counts[i] || 0);
     return { label: opt.label, votes, i };
@@ -21801,10 +21843,10 @@ function renderFeedPollCard(poll) {
   const optionsHtml = options.map(o => {
     const pct = total ? Math.round((o.votes / total) * 100) : 0;
     const isVoted = userVote === o.i;
-    return `<button class="feed-poll-opt${isVoted ? ' voted' : ''}" ${voted ? 'disabled' : `data-feed-poll-vote="${poll.id}:${o.i}"`}>
-      <span class="feed-poll-fill" style="width:${voted ? pct : 0}%"></span>
+    return `<button class="feed-poll-opt${isVoted ? ' voted' : ''}" ${locked ? 'disabled' : `data-feed-poll-vote="${poll.id}:${o.i}"`}>
+      <span class="feed-poll-fill" style="width:${locked ? pct : 0}%"></span>
       <span class="feed-poll-label">${escapeHtml(o.label)}</span>
-      ${voted ? `<span class="feed-poll-pct">${pct}%</span>` : ''}
+      ${locked ? `<span class="feed-poll-pct">${pct}%</span>` : ''}
     </button>`;
   }).join('');
 
@@ -21813,12 +21855,14 @@ function renderFeedPollCard(poll) {
       <span class="feed-poll-tag">🗳️ POLL</span>
       <span style="display:flex;align-items:center;gap:8px;">
         ${voted ? '<span class="poll-voted-tag">✓ Voted</span>' : ''}
-        <span class="feed-poll-time">⏱ ${poll.hours_remaining}h left</span>
+        <span class="feed-poll-time">${pollTimeLabel(poll)}</span>
       </span>
     </div>
     <div class="feed-poll-question">${escapeHtml(poll.question)}</div>
     <div class="feed-poll-options">${optionsHtml}</div>
-    ${voted ? `<div class="feed-poll-footer">👥 ${formatNum(total)} votes · tap to see all polls</div>` : '<div class="feed-poll-footer">Tap an option to vote</div>'}
+    ${locked
+      ? `<div class="feed-poll-footer">👥 ${formatNum(total)} votes${ended && !voted ? ' · voting closed' : ''} · tap to see all polls</div>`
+      : '<div class="feed-poll-footer">Tap an option to vote</div>'}
   </div>`;
 }
 
