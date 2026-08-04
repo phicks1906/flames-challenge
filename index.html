@@ -7749,7 +7749,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v753 · interests-sheet-fix";
+const APP_VERSION = "v754 · champ-category-chips";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -13495,13 +13495,24 @@ function getUserChampionTitle(userId) {
 const PAST_CHAMPS_PREVIEW = 3;
 let _lbcShowAllPast = false;
 let _lbcShowAllCats = false;
+let _lbcCat = 'All'; // v754 — chip strip selection; 'All' = overview
+let _lbcAutoExpandDone = false;
 const _lbcOpenRows = new Set(); // survives re-renders: 'cat:Music' / 'past:<launchId>'
 
-function renderPastChampsSection() {
+function renderPastChampsSection(filterCat) {
   const launches = (state.champLaunches || [])
     .filter(l => !l.is_sponsored)
+    .filter(l => !filterCat || filterCat === 'All' || l.category === filterCat)
     .sort((a, b) => (b.month || '').localeCompare(a.month || '') || (b.category || '').localeCompare(a.category || ''));
-  if (!launches.length) return '';
+  const scoped = filterCat && filterCat !== 'All';
+  if (!launches.length) {
+    // Under a category chip, silence is confusing — say it plainly. Under All,
+    // an empty archive just means no championship has ever run; stay quiet.
+    return scoped
+      ? `<div class="lbc-sec"><span class="lbc-sec-title">📜 Past ${escapeHtml(filterCat)} Championships</span></div>
+         <div class="lbc-rows"><div style="padding:14px;font-size:13px;color:var(--text-muted);text-align:center">No ${escapeHtml(filterCat)} championship has run yet.</div></div>`
+      : '';
+  }
 
   const shown = _lbcShowAllPast ? launches : launches.slice(0, PAST_CHAMPS_PREVIEW);
   const catIcons = { Art: '🎨', Photography: '📷', Music: '🎵', Writing: '✍️', Cooking: '🍳', Style: '👗', Sports: '🏆', Fitness: '💪', Comedy: '😂', Other: '✨' };
@@ -13550,7 +13561,7 @@ function renderPastChampsSection() {
     ? `<button class="lbc-more" data-lbc-showall-past>${_lbcShowAllPast ? 'Show fewer ▴' : `Show older ▾ (${launches.length - PAST_CHAMPS_PREVIEW} more)`}</button>`
     : '';
 
-  return `<div class="lbc-sec"><span class="lbc-sec-title">📜 Past Championships</span><span class="lbc-sec-note">${launches.length} total</span></div>
+  return `<div class="lbc-sec"><span class="lbc-sec-title">📜 Past ${scoped ? escapeHtml(filterCat) + ' ' : ''}Championships</span><span class="lbc-sec-note">${launches.length} total</span></div>
     <div class="lbc-rows">${rows}${moreBtn}</div>`;
 }
 
@@ -13604,6 +13615,16 @@ function renderChampionshipTab() {
 
   const ordinal = n => n === 1 ? '1ST' : n === 2 ? '2ND' : n === 3 ? '3RD' : n + 'TH';
   const winsTxt = n => `${n} win${n === 1 ? '' : 's'}`;
+
+  // v754 — All opens collapsed: the row line ("X leads · YOU'RE 2ND") already
+  // answers the first question, and any auto-expand heuristic guesses wrong
+  // often enough to cost more than it saves. ONE exception: with exactly one
+  // category there is nothing to guess between, and a lone collapsed row reads
+  // as an empty page. Runs once per session, then the user's taps own the state.
+  if (!_lbcAutoExpandDone) {
+    _lbcAutoExpandDone = true;
+    if (mine.length === 1) _lbcOpenRows.add(`cat:${mine[0].cat}`);
+  }
 
   // ── Expanded panel (shared by both sections) ──
   const catPanel = (s) => {
@@ -13716,28 +13737,56 @@ function renderChampionshipTab() {
     </div>${isOpen ? catPanel(s) : ''}`;
   };
 
-  // ── Assemble ──
-  const ALL_PREVIEW = 6;
-  const othersShown = _lbcShowAllCats ? others : others.slice(0, ALL_PREVIEW);
+  // ── Chip strip ──
+  // Order: All, then your categories, then the rest most-active first. Stable
+  // per user (it only moves when interests change), so the strip stays learnable.
+  const chipCats = ['All', ...mine.map(s => s.cat), ...others.map(s => s.cat)];
+  if (!chipCats.includes(_lbcCat)) _lbcCat = 'All'; // guard: interests changed under us
+  const chipStrip = `<div class="ch-tabs" id="lbcChips" style="margin-bottom:14px">${
+    chipCats.map(c => `<button class="ch-tab${c === _lbcCat ? ' active' : ''}" data-lbc-chip="${escapeHtml(c)}">${c === 'All' ? 'All' : escapeHtml(c)}</button>`).join('')
+  }</div>`;
 
-  const mineHtml = mine.length
-    ? `<div class="lbc-sec"><span class="lbc-sec-title">🔥 Your Categories</span><span class="lbc-sec-note">interests + entered</span></div>
-       <div class="lbc-rows mine">${mine.map(fullRow).join('')}</div>`
-    : (myId ? `<div class="lbc-sec"><span class="lbc-sec-title">🔥 Your Categories</span></div>
-       <div class="lbc-rows mine"><div class="lbc-row" data-lbc-interests style="justify-content:center;gap:8px">
-         <span style="font-size:13px;color:var(--text-muted)">Pick your interests to pin categories here</span>
-         <span style="font-size:12.5px;font-weight:700;color:var(--ember)">Choose →</span>
-       </div></div>` : '');
+  let bodyHtml;
+  if (_lbcCat !== 'All') {
+    // ── Single category: no rows to pick from, just the detail. ──
+    const s = stats.find(x => x.cat === _lbcCat);
+    bodyHtml = s
+      ? `<div class="lbc-rows" style="padding:2px 0">${catPanel(s).replace('class="lbc-panel"', 'class="lbc-panel" style="border-bottom:none;background:transparent;padding-left:14px;padding-right:14px"')}</div>`
+      : '';
+  } else {
+    // ── All: pinned rows for yours, compact rows for the rest. ──
+    const ALL_PREVIEW = 6;
+    const othersShown = _lbcShowAllCats ? others : others.slice(0, ALL_PREVIEW);
 
-  const othersHtml = others.length
-    ? `<div class="lbc-sec"><span class="lbc-sec-title">All Categories</span><span class="lbc-sec-note">most active first</span></div>
-       <div class="lbc-rows">${othersShown.map(compactRow).join('')}
-       ${others.length > ALL_PREVIEW ? `<button class="lbc-more" data-lbc-showall-cats>${_lbcShowAllCats ? 'Show fewer ▴' : `Show all ${others.length} ▾`}</button>` : ''}</div>`
-    : '';
+    const mineHtml = mine.length
+      ? `<div class="lbc-sec"><span class="lbc-sec-title">🔥 Your Categories</span><span class="lbc-sec-note">interests + entered</span></div>
+         <div class="lbc-rows mine">${mine.map(fullRow).join('')}</div>`
+      : (myId ? `<div class="lbc-sec"><span class="lbc-sec-title">🔥 Your Categories</span></div>
+         <div class="lbc-rows mine"><div class="lbc-row" data-lbc-interests style="justify-content:center;gap:8px">
+           <span style="font-size:13px;color:var(--text-muted)">Pick your interests to pin categories here</span>
+           <span style="font-size:12.5px;font-weight:700;color:var(--ember)">Choose →</span>
+         </div></div>` : '');
 
-  el.innerHTML = mineHtml + othersHtml + renderPastChampsSection();
+    const othersHtml = others.length
+      ? `<div class="lbc-sec"><span class="lbc-sec-title">${mine.length ? 'All Categories' : 'Qualifying now'}</span><span class="lbc-sec-note">most active first</span></div>
+         <div class="lbc-rows">${othersShown.map(compactRow).join('')}
+         ${others.length > ALL_PREVIEW ? `<button class="lbc-more" data-lbc-showall-cats>${_lbcShowAllCats ? 'Show fewer ▴' : `Show all ${others.length} ▾`}</button>` : ''}</div>`
+      : '';
+
+    bodyHtml = mineHtml + othersHtml;
+  }
+
+  el.innerHTML = chipStrip + bodyHtml + renderPastChampsSection(_lbcCat);
 
   // ── Wiring (innerHTML replaced every render, so re-wire is correct here) ──
+  el.querySelectorAll('[data-lbc-chip]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _lbcCat = btn.dataset.lbcChip;
+      _lbcShowAllPast = false; // scope changed — restart the archive preview
+      renderChampionshipTab();
+      document.getElementById('lbChampContent')?.scrollIntoView({ block: 'nearest' });
+    });
+  });
   el.querySelectorAll('[data-lbc-toggle]').forEach(row => {
     row.addEventListener('click', () => {
       const k = row.dataset.lbcToggle;
