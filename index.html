@@ -7684,7 +7684,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v748 · theme-repaint";
+const APP_VERSION = "v749 · champ-month-fix";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -8844,12 +8844,19 @@ async function loadFeedActivity(opts = {}) {
 async function loadLeaderboard() {
   const now = new Date();
   const MONTH_START = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  // v749 — also bound the PREVIOUS calendar month, so a championship launched
+  // early in a new month (after the board reset to zero) can still qualify off
+  // the month that just ended. This is the fix for "I was top 3 but got no
+  // invite": qualification was reading the reset current month.
+  const PREV_MONTH_START = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
+  const PREV_MONTH_END = MONTH_START; // [prevStart, monthStart)
 
   // ── Step 1a: ALL closed challenges (lifetime wins / rank chips) ───────────────
   // ── Step 1b: This month only (monthly leaderboard ranking) ───────────────────
-  const [allChRes, monthChRes] = await Promise.all([
+  const [allChRes, monthChRes, prevMonthChRes] = await Promise.all([
     db.from('challenges').select('id, category, voting_end, sd_round, sd_phase, is_championship, is_public').lte('voting_end', now.toISOString()).limit(2000),
     db.from('challenges').select('id').gte('voting_end', MONTH_START).lte('voting_end', now.toISOString()).limit(500),
+    db.from('challenges').select('id').gte('voting_end', PREV_MONTH_START).lt('voting_end', PREV_MONTH_END).limit(500), // v749
   ]);
 
   const allChs = allChRes.data || [];
@@ -8862,6 +8869,7 @@ async function loadLeaderboard() {
 
   // Monthly subset — rolling30 / leaderboard ranking only
   const thisMonthChIds = new Set((monthChRes.data || []).map(c => c.id));
+  const prevMonthChIds = new Set((prevMonthChRes.data || []).map(c => c.id)); // v749
 
   // No challenges at all → empty leaderboard
   if (!chIds.length) {
@@ -8922,7 +8930,7 @@ async function loadLeaderboard() {
   const lossesByUser = {};
   const scoreByUser = {};   // weighted competitive score
   const ensureUser = id => {
-    if (!winsByUser[id]) winsByUser[id] = { allTime: 0, rolling30: 0, byCategory: {}, rolling30ByCategory: {} };
+    if (!winsByUser[id]) winsByUser[id] = { allTime: 0, rolling30: 0, byCategory: {}, rolling30ByCategory: {}, prevMonthByCategory: {} }; // v749 prevMonth
     if (!lossesByUser[id]) lossesByUser[id] = { allTime: 0, rolling30: 0 };
     if (!scoreByUser[id]) scoreByUser[id] = 0;
   };
@@ -8964,6 +8972,7 @@ async function loadLeaderboard() {
       if (thisMonthChIds.has(chId)) {
         winsByUser[uid].rolling30++;
         winsByUser[uid].rolling30ByCategory[cat] = (winsByUser[uid].rolling30ByCategory[cat] || 0) + 1;
+        if (prevMonthChIds.has(chId)) winsByUser[uid].prevMonthByCategory[cat] = (winsByUser[uid].prevMonthByCategory[cat] || 0) + 1; // v749
       }
       return;
     }
@@ -9021,6 +9030,7 @@ async function loadLeaderboard() {
       if (thisMonthChIds.has(chId)) {
         winsByUser[uid].rolling30++;
         winsByUser[uid].rolling30ByCategory[cat] = (winsByUser[uid].rolling30ByCategory[cat] || 0) + 1;
+        if (prevMonthChIds.has(chId)) winsByUser[uid].prevMonthByCategory[cat] = (winsByUser[uid].prevMonthByCategory[cat] || 0) + 1; // v749
         entries.filter(e => e.user_id !== uid).forEach(e => {
           ensureUser(e.user_id); lossesByUser[e.user_id].rolling30++;
         });
@@ -9038,6 +9048,7 @@ async function loadLeaderboard() {
           winsByUser[uid].rolling30++;
           winsByUser[uid].rolling30ByCategory[cat] = (winsByUser[uid].rolling30ByCategory[cat] || 0) + 1;
         }
+        if (prevMonthChIds.has(chId)) winsByUser[uid].prevMonthByCategory[cat] = (winsByUser[uid].prevMonthByCategory[cat] || 0) + 1; // v749
       });
       // Non-tied entrants take a loss
       entries.filter(e => !tiedUids.includes(e.user_id)).forEach(e => {
@@ -9138,6 +9149,7 @@ async function loadLeaderboard() {
     rolling30Losses: lossesByUser[p.id]?.rolling30 || 0,
     byCategory: winsByUser[p.id]?.byCategory || {},
     rolling30ByCategory: winsByUser[p.id]?.rolling30ByCategory || {},
+    prevMonthByCategory: winsByUser[p.id]?.prevMonthByCategory || {}, // v749
     weightedScore: scoreByUser[p.id] || 0,
     boostAllTime: boostByUser[p.id]?.allTime || 0,
     boostMonth: boostByUser[p.id]?.month || 0,
@@ -13694,14 +13706,40 @@ async function launchChampionshipChallenge(category) {
   });
   if (alreadyLaunched) { toast(`${category} Championship already launched this month`); return; }
 
+  // v749 — qualify off the CORRECT month. If the current calendar month barely
+  // has data yet (board just reset on the 1st), crown the month that just
+  // ended instead, using prevMonthByCategory. This is the fix for a top-3
+  // finisher getting no invite because the launch read the reset month.
+  const curKey = (u) => (u.rolling30ByCategory[category] || 0);
+  const prevKey = (u) => (u.prevMonthByCategory[category] || 0);
+  const curField = (data.users || []).reduce((s, u) => s + curKey(u), 0);
+  const prevField = (data.users || []).reduce((s, u) => s + prevKey(u), 0);
+  // Use previous month when the current month has clearly less to go on
+  // (typical right after a reset). Ties/ample current data -> current month.
+  const usedMonth = (curField === 0 || (prevField > curField)) ? 'prev' : 'cur';
+  const keyFn = usedMonth === 'prev' ? prevKey : curKey;
+
   const ranked = [...(data.users || [])]
-    .filter(u => (u.rolling30ByCategory[category] || 0) > 0)
-    .sort((a, b) => (b.rolling30ByCategory[category] || 0) - (a.rolling30ByCategory[category] || 0));
+    .filter(u => keyFn(u) > 0)
+    .sort((a, b) => keyFn(b) - keyFn(a));
 
   const contenders = ranked.slice(0, 3);
   const reserves = ranked.slice(3, 8); // players 4–8 wait in the wings
 
   if (contenders.length < 2) { toast('Need at least 2 qualifiers'); return; }
+
+  // v749 — SNAPSHOT: freeze exactly who qualified, their win counts, and which
+  // month was used, so "why wasn't I invited?" is answerable forever. Written
+  // onto the championship_launches row below.
+  const qualSnapshot = {
+    month_used: usedMonth,
+    computed_at: new Date().toISOString(),
+    category,
+    ranked: ranked.slice(0, 8).map((u, i) => ({
+      rank: i + 1, id: u.id, name: u.name, wins: keyFn(u),
+      role: i < 3 ? 'contender' : 'reserve',
+    })),
+  };
 
   if (!confirm(`Launch ${category} Championship Challenge and invite top ${contenders.length}? (${reserves.length} reserves on standby)`)) return;
 
@@ -13757,6 +13795,7 @@ async function launchChampionshipChallenge(category) {
       challenge_id: ch.id,
       launched_by: state.profile.id,
       is_sponsored: false,
+      qual_snapshot: qualSnapshot, // v749 — frozen qualifier list (jsonb column)
     }, { onConflict: 'category,month' });
     if (launchErr) throw launchErr;
     // Update in-memory state — replace any stale record for this category+month
