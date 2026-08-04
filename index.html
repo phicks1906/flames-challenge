@@ -7749,7 +7749,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v754 · champ-category-chips";
+const APP_VERSION = "v755 · server-side-champ-launch";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -8551,14 +8551,14 @@ function switchView(view) {
     // `regular-sudden-death` (auto_detect_regular_sudden_death, every minute),
     // so it fires reliably without an admin's app open. Client path retired (v487).
     // detectRegularSuddenDeath().catch(e => console.warn('regular sudden death detect', e));
-    if (isAdmin() && state.profile) {
-      const now = new Date();
-      const month = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-      const alreadyLaunched = (state.champLaunches || []).some(l => l.month === month && !l.is_sponsored);
-      const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-      const isLastDay = now.getDate() === daysInMonth;
-      if (isLastDay && !alreadyLaunched) autoLaunchMonthlyChampionships(month);
-    }
+    // Monthly championship launching is now handled server-side by the pg_cron
+    // job `championship-auto-launch` (auto_launch_monthly_championships, every
+    // minute, acts only on the last day of the month). Client path retired
+    // (v755) — it required an admin to have the app open on exactly the right
+    // day, and when it was missed the manual button got used mid-month instead,
+    // which froze an incomplete standing. July 2026: Photography's real top 2
+    // (Ready E 3W, Hicks Inc 2W) were never invited because the manual launch
+    // fired on the 7th. The admin ⚡ Launch button remains for beta testing.
   }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -14033,66 +14033,12 @@ async function launchChampionshipChallenge(category) {
   }
 }
 
-/* ---------- AUTO-LAUNCH MONTHLY CHAMPIONSHIPS ---------- */
-async function autoLaunchMonthlyChampionships(month) {
-  if (!isAdmin() || !state.profile || !state.leaderboardData) return;
-  const data = state.leaderboardData;
-  // Uses global CATEGORIES array — do not redeclare locally
-  let launched = 0;
-  for (const cat of CATEGORIES) {
-    const alreadyThisMonth = (state.champLaunches || []).some(l => l.month === month && l.category === cat);
-    if (alreadyThisMonth) continue;
-    const contenders = [...(data.users || [])]
-      .filter(u => (u.monthlyByCategory?.[cat] || 0) > 0)
-      .sort((a, b) => (b.monthlyByCategory?.[cat] || 0) - (a.monthlyByCategory?.[cat] || 0))
-      .slice(0, 3);
-    if (contenders.length < 2) continue;
-    // Silently launch — same logic as manual button
-    try {
-      const now = new Date();
-      const monthLabel = now.toLocaleString('default', { month: 'long', year: 'numeric' });
-      const subDeadline = new Date(now.getTime() + 7 * 86400000).toISOString();
-      const voteEnd = new Date(now.getTime() + 14 * 86400000).toISOString();
-      const { data: ch, error: chErr } = await db.from('challenges').insert({
-        creator_id: state.profile.id,
-        title: `⚡ ${cat} Championship — ${formatStoredMonth(getChampMonth(cat))}`,
-        category: cat,
-        media_type: 'photo',
-        rules: `Official ${cat} Championship Challenge for ${formatStoredMonth(getChampMonth(cat))}. Top performers from that month are invited to compete for the Champion title.`,
-        submission_deadline: subDeadline,
-        voting_end: voteEnd,
-        is_public: true,   // championships are public spectacles; entry gated by invite
-        is_championship: true,
-        status: 'submitting',
-      }).select().single();
-      if (chErr) throw chErr;
-      await db.from('challenge_invites').insert(contenders.map(u => ({ challenge_id: ch.id, invited_user_id: u.id })));
-      // Prediction poll (v616) — same as the manual launch path
-      try {
-        const _pollHours = Math.max(1, Math.round((new Date(voteEnd).getTime() - Date.now()) / 3600000));
-        await db.from('polls').insert({
-          id: crypto.randomUUID(),
-          question: `👑 Who takes the ${cat} crown?`,
-          options: contenders.map(u => ({ label: u.name, seed_votes: 0 })),
-          hours_remaining: _pollHours,
-          category: 'general',
-          creator_id: state.profile.id,
-        });
-      } catch (pe) { console.warn('prediction poll', pe); }
-      const { error: le } = await db.from('championship_launches').insert({ category: cat, month, challenge_id: ch.id, launched_by: state.profile.id, is_sponsored: false });
-      if (le && le.code !== '23505') throw le;
-      state.champLaunches = state.champLaunches || [];
-      state.champLaunches.unshift({ category: cat, month, challenge_id: ch.id, launched_by: state.profile.id, launched_at: now.toISOString(), is_sponsored: false });
-      launched++;
-    } catch(e) { console.warn(`[auto-launch] ${cat}`, e); }
-  }
-  if (launched) {
-    toast(`⚡ ${launched} championship${launched > 1 ? 's' : ''} auto-launched for ${month}`);
-    await loadChallenges();
-    renderLeaderboard();
-    renderFeed();
-  }
-}
+/* ---------- AUTO-LAUNCH MONTHLY CHAMPIONSHIPS ----------
+   Handled server-side by the pg_cron job `championship-auto-launch`
+   (auto_launch_monthly_championships, every minute, acts only on the last day
+   of the month). Client function removed in v755 — see the retirement note in
+   switchView(). Qualifier maths lives in the SQL function fc_monthly_qualifiers.
+   Failures are recorded in the champ_launch_log table, never swallowed. */
 
 /* ---------- FOLLOWING AVATAR ROW ---------- */
 async function loadFollowingAvatarRow() {
