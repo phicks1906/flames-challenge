@@ -5775,6 +5775,19 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
   </div>
 </div>
 
+<!-- INTERESTS SHEET (v752) — standalone. The signup-flow #interestPicker lives
+     inside #authView, which is hidden once signed in, so openInterestEditor()
+     could never show anything post-login (dead from the avatar menu too). -->
+<div class="modal-backdrop" id="interestsSheet" onclick="if(event.target===this)closeInterestsSheet()">
+  <div class="modal" style="max-width:360px">
+    <button class="modal-close-x" onclick="closeInterestsSheet()">×</button>
+    <h2 style="margin-bottom:6px;padding-right:36px">🎯 Your interests</h2>
+    <p style="color:var(--text-muted);font-size:14px;margin-bottom:18px">Pins these categories to the top of the Championship tab and tunes your feed.</p>
+    <div class="interest-grid" id="interestsSheetGrid" style="margin-bottom:18px"></div>
+    <button class="btn btn-primary" style="width:100%" onclick="saveInterestsSheet()">Save</button>
+  </div>
+</div>
+
 <nav class="bottom-nav" id="bottomNav">
   <button class="bnav-btn active" data-view="feed" onclick="switchView('feed')">
     <span class="bnav-icon">🏠</span>
@@ -7021,7 +7034,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       <button class="pm-tile" onclick="openEditProfile()"><span class="pm-ic">✏️</span>Edit Profile</button>
       <button class="pm-tile" onclick="openFollowingSheet()"><span class="pm-ic">👥</span>Following</button>
       <button class="pm-tile" onclick="openFindPeople()"><span class="pm-ic">🔍</span>Find People</button>
-      <button class="pm-tile" onclick="openInterestEditor()"><span class="pm-ic">🎯</span>Interests</button>
+      <button class="pm-tile" onclick="document.getElementById('profileModal').classList.remove('open'); openInterestEditor()"><span class="pm-ic">🎯</span>Interests</button>
       <button class="pm-tile" onclick="document.getElementById('profileModal').classList.remove('open'); openGroupsModal()"><span class="pm-ic">👥</span>My Groups</button>
       <button class="pm-tile" onclick="document.getElementById('profileModal').classList.remove('open'); openDmList()"><span class="pm-ic">💬</span>Messages</button>
       <button class="pm-tile" onclick="document.getElementById('profileModal').classList.remove('open'); openGuidelines()"><span class="pm-ic">📜</span>Guidelines</button>
@@ -7736,7 +7749,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v752 · champ-tab-redesign";
+const APP_VERSION = "v753 · interests-sheet-fix";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -8195,39 +8208,50 @@ function showVerifyScreen() {
   document.getElementById("verifySuccess").style.display = "block";
 }
 
-async function openInterestEditor() {
-  closeModals();
-  // Reuse the interest picker inside a simple modal overlay
-  const current = new Set(state.profile?.interests || []);
-  _pickedInterests = new Set(current);
-  const grid = document.getElementById("interestGrid");
+// v752 — was pointing at #interestPicker, which lives inside #authView and is
+// hidden after login: setting display on it did nothing for a signed-in user.
+// Now drives a standalone sheet. The signup flow still uses #interestPicker.
+let _sheetPickedInterests = new Set();
+
+function openInterestEditor() {
+  const grid = document.getElementById('interestsSheetGrid');
+  const sheet = document.getElementById('interestsSheet');
+  if (!grid || !sheet) return;
+  _sheetPickedInterests = new Set(state.profile?.interests || []);
   grid.innerHTML = INTEREST_DEFS.map(d =>
-    `<button type="button" class="interest-opt${current.has(d.key) ? " selected" : ""}" data-ikey="${d.key}">`+
-    `<span class="iopt-icon">${d.icon}</span>${d.key}</button>`
-  ).join("");
-  grid.querySelectorAll(".interest-opt").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const k = btn.dataset.ikey;
-      if (_pickedInterests.has(k)) { _pickedInterests.delete(k); btn.classList.remove("selected"); }
-      else { _pickedInterests.add(k); btn.classList.add("selected"); }
+    `<button type="button" class="interest-opt${_sheetPickedInterests.has(d.key) ? ' selected' : ''}" data-isheet="${escapeHtml(d.key)}">` +
+    `<span class="iopt-icon">${d.icon}</span>${escapeHtml(d.key)}</button>`
+  ).join('');
+  grid.querySelectorAll('[data-isheet]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const k = btn.dataset.isheet;
+      if (_sheetPickedInterests.has(k)) { _sheetPickedInterests.delete(k); btn.classList.remove('selected'); }
+      else { _sheetPickedInterests.add(k); btn.classList.add('selected'); }
     });
   });
-  // Swap the picker buttons to a Save mode
-  const picker = document.getElementById("interestPicker");
-  picker.querySelector(".interest-skip").textContent = "Cancel";
-  picker.querySelector(".interest-skip").onclick = () => { picker.style.display = "none"; };
-  picker.querySelector(".btn-primary").textContent = "Save interests";
-  picker.querySelector(".btn-primary").onclick = async () => {
-    const interests = Array.from(_pickedInterests);
-    picker.style.display = "none";
-    try {
-      await db.from("profiles").update({ interests }).eq("id", state.profile.id);
-      state.profile.interests = interests;
-      toast("Interests saved");
-      if (state.currentView === "feed") renderFeed();
-    } catch(e) { toast("Save failed"); }
-  };
-  picker.style.display = "block";
+  sheet.classList.add('open');
+}
+
+function closeInterestsSheet() {
+  document.getElementById('interestsSheet')?.classList.remove('open');
+}
+
+async function saveInterestsSheet() {
+  const interests = Array.from(_sheetPickedInterests);
+  if (!state.profile?.id) { closeInterestsSheet(); return; }
+  try {
+    const { error } = await db.from('profiles').update({ interests }).eq('id', state.profile.id);
+    if (error) throw error;
+    state.profile.interests = interests;
+    closeInterestsSheet();
+    toast('Interests saved');
+    // Repaint whatever surface is showing — Championship pins off interests.
+    if (state.currentView === 'feed') renderFeed();
+    if (state.currentView === 'leaderboard' && _lbTab === 'championship') renderChampionshipTab();
+  } catch (e) {
+    console.warn('save interests', e);
+    toast('Save failed');
+  }
 }
 /* ---------- FORGOT PASSWORD ---------- */
 async function signInWithGoogle() {
