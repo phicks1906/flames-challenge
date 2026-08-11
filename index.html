@@ -1162,6 +1162,19 @@ body.theme-light .nav { background: rgba(255, 255, 255, 0.88); border-bottom-col
   .celeb-spark, .celeb-confetti { animation: none; display: none; }
 }
 
+/* ── v758 push enable banner (top of notifications sheet) ── */
+.push-banner { display: flex; align-items: center; gap: 10px; margin: 4px 0 12px;
+  padding: 12px 13px; border-radius: 14px; position: relative;
+  background: linear-gradient(135deg, rgba(255,106,44,.14), rgba(255,200,87,.08));
+  border: 1px solid rgba(255,106,44,.35); }
+.push-banner-txt { flex: 1; font-size: 12.5px; line-height: 1.4; color: var(--text-muted); padding-right: 14px; }
+.push-banner-txt b { display: block; color: var(--text); font-size: 13.5px; margin-bottom: 2px; }
+.push-banner-btn { border: none; border-radius: 999px; padding: 9px 16px; font-family: inherit;
+  font-weight: 700; font-size: 13px; cursor: pointer; flex-shrink: 0;
+  background: linear-gradient(135deg, var(--gold), var(--ember)); color: #1a0c05; }
+.push-banner-x { position: absolute; top: 6px; right: 9px; background: none; border: none;
+  color: var(--text-muted); font-size: 16px; cursor: pointer; padding: 2px 5px; }
+
 /* Championship challenge card badge */
 .ch-champ-tag {
   display: inline-block;
@@ -7836,7 +7849,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v757 · celebration-overlays";
+const APP_VERSION = "v758 · web-push";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -8711,6 +8724,8 @@ async function loadAppData() {
   // fight the initial paint. hofData/ladder must be loaded (renderLeaderboard
   // above kicks that off) before the champ_won → stage math runs.
   setTimeout(() => { try { maybeShowCelebration(); } catch(e) {} }, 1600);
+  // v758 — keep an already-granted push subscription alive (endpoints rotate)
+  setTimeout(() => { try { ensurePushSubscription(); } catch(e) {} }, 2500);
   _lastNotifPoll = Date.now();
   startLiveUpdates();
   // Build ticker after data is ready
@@ -10218,14 +10233,15 @@ function renderNotifs() {
   }
 
   const shown = tab === 'requests' ? requests : main;
+  const pushBanner = tab === 'all' ? pushBannerHtml() : ''; // v758
   if (!shown.length) {
-    list.innerHTML = tab === 'requests'
+    list.innerHTML = pushBanner + (tab === 'requests'
       ? `<div class="notif-empty"><div class="icon">📥</div>No requests right now.<br>Invites from people you don't follow show up here.</div>`
-      : `<div class="notif-empty"><div class="icon">🔔</div>No notifications yet.<br>When people like, follow, vote, or join your challenges, it'll show up here.</div>`;
+      : `<div class="notif-empty"><div class="icon">🔔</div>No notifications yet.<br>When people like, follow, vote, or join your challenges, it'll show up here.</div>`);
     return;
   }
   const kindIcon = { post_like: '🔥', entry_like: '🔥', follow: '👤', vote: '🗳️', entry: '🎬', comment: '💬', reply: '↩️', mention: '@', challenge_closed: '🏁', entry_rejected: '🚫', new_challenge: '🏆', new_poll: '🗳️', poll_ended: '📊', champ_qualified: '⚡', champ_race: '🔥', upset: '🔥', champ_won: '👑', champ_friend_qualified: '⚡', champ_friend_won: '👑', challenge_invite: '🔒', group_invite: '👥' };
-  list.innerHTML = shown.map((n, i) => {
+  list.innerHTML = pushBanner + shown.map((n, i) => {
     const unread = isNotifUnread(n);
     const av = n.actor ? honoredAvatarHTML(n.actor.id, avatarInner(n.actor.avatar), 42) : '🏁';
     const _others = (n.groupCount || 1) - 1;
@@ -23296,6 +23312,106 @@ document.getElementById('fpSearchInput').addEventListener('input', e => {
   const q = e.target.value.trim();
   fpSearchTimer = setTimeout(() => renderFindPeopleResults(q), 250);
 });
+
+/* ---------- WEB PUSH (v758) ----------
+   Real OS push for the installed PWA (iOS 16.4+, Android, desktop). Flow:
+   user gesture → permission → pushManager.subscribe(VAPID) → subscription
+   saved to push_subscriptions → the push-dispatch Edge Function (cron, every
+   minute) sends unpushed notifications to every subscription the user has.
+   The sw.js push/notificationclick handlers display and route them.
+   iOS constraint: Push API only exists inside an installed (Add to Home
+   Screen) PWA — plain Safari shows an install hint instead. */
+const PUSH_VAPID_PUBLIC = 'BJUM6MNAbfTKPLGxPOR5xdvpqblC59FkP7LiYhXrpGd5olEgfkTM_1p6knzP2FA7nsAFCH5X2qePcuH2BRFN9VE';
+
+function _b64uToU8(s) {
+  const pad = '='.repeat((4 - s.length % 4) % 4);
+  const raw = atob((s + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(raw, c => c.charCodeAt(0));
+}
+function pushSupported() {
+  return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+}
+function _isStandalonePWA() {
+  return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+}
+const _isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+async function _savePushSub(sub) {
+  if (!state.profile?.id || !sub) return;
+  const j = sub.toJSON();
+  await db.from('push_subscriptions').upsert({
+    user_id: state.profile.id,
+    endpoint: sub.endpoint,
+    p256dh: j.keys?.p256dh || '',
+    auth: j.keys?.auth || '',
+    ua: navigator.userAgent.slice(0, 200),
+  }, { onConflict: 'endpoint' });
+}
+
+// Keep an already-granted subscription fresh (endpoints rotate). Safe no-op
+// everywhere else. Called from hydrate.
+async function ensurePushSubscription() {
+  try {
+    if (!pushSupported() || Notification.permission !== 'granted' || !state.profile?.id) return;
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: _b64uToU8(PUSH_VAPID_PUBLIC),
+      });
+    }
+    await _savePushSub(sub);
+  } catch(e) { console.warn('push refresh', e); }
+}
+
+// Must run inside a user gesture (tap) — both iOS and Chrome require it.
+async function enablePushNotifications() {
+  try {
+    if (!pushSupported()) { toast('Push isn\'t available in this browser'); return; }
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { toast('Notifications not enabled'); renderNotifs(); return; }
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: _b64uToU8(PUSH_VAPID_PUBLIC),
+    });
+    await _savePushSub(sub);
+    toast('🔔 Push notifications on');
+    renderNotifs();
+  } catch(e) {
+    console.warn('push enable', e);
+    toast('Couldn\'t enable push');
+  }
+}
+
+function dismissPushBanner() {
+  try { localStorage.setItem('fc_push_banner_dismissed', '1'); } catch(e) {}
+  renderNotifs();
+}
+
+// Banner for the top of the notifications sheet. Two states: ready-to-enable,
+// or (iOS in plain Safari) install-first hint. Hidden once granted/denied/dismissed.
+function pushBannerHtml() {
+  try {
+    if (localStorage.getItem('fc_push_banner_dismissed')) return '';
+  } catch(e) {}
+  if (pushSupported()) {
+    if (Notification.permission !== 'default') return '';
+    return `<div class="push-banner">
+      <div class="push-banner-txt"><b>🔔 Turn on push</b>Get championship news the moment it happens — even with the app closed.</div>
+      <button class="push-banner-btn" onclick="enablePushNotifications()">Enable</button>
+      <button class="push-banner-x" onclick="dismissPushBanner()" aria-label="Dismiss">×</button>
+    </div>`;
+  }
+  if (_isIOS && !_isStandalonePWA()) {
+    return `<div class="push-banner">
+      <div class="push-banner-txt"><b>🔔 Want push notifications?</b>Add FlamesChallenge to your Home Screen first: Share button → "Add to Home Screen". Then enable push here.</div>
+      <button class="push-banner-x" onclick="dismissPushBanner()" aria-label="Dismiss">×</button>
+    </div>`;
+  }
+  return '';
+}
 
 /* ---------- BOOT ---------- */
 // Register the service worker so new deploys show up on a normal reload
