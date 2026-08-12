@@ -7866,7 +7866,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v759 · install-prompt-card";
+const APP_VERSION = "v760 · celeb-open-fix";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -15339,9 +15339,21 @@ async function maybeShowCelebration() {
     _celebMark(pick.id);
 
     el.querySelector('[data-celeb-later]')?.addEventListener('click', closeCelebration);
-    el.querySelector('[data-celeb-open]')?.addEventListener('click', () => {
+    el.querySelector('[data-celeb-open]')?.addEventListener('click', async () => {
       closeCelebration();
-      if (ch) openChallenge(ch);
+      // v760 — was `if (ch) openChallenge(ch)`: a silent no-op whenever the
+      // challenge wasn't in state yet (overlay can fire before challenges
+      // finish loading). Now: use state if present, fetch by id if not, and
+      // land on the Challenges page as a worst case instead of nowhere.
+      try {
+        let target = ch;
+        if (!target && pick.challenge_id) {
+          const { data } = await db.from('challenges').select('*').eq('id', pick.challenge_id).single();
+          target = data || null;
+        }
+        if (target) { openChallenge(target); return; }
+      } catch(e) { console.warn('celebration open', e); }
+      switchView('challenges');
     });
     el.querySelector('[data-celeb-hall]')?.addEventListener('click', () => {
       closeCelebration();
