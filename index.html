@@ -1181,22 +1181,26 @@ body.theme-light .nav { background: rgba(255, 255, 255, 0.88); border-bottom-col
 .push-banner-x { position: absolute; top: 6px; right: 9px; background: none; border: none;
   color: var(--text-muted); font-size: 16px; cursor: pointer; padding: 2px 5px; }
 
-/* ── v759 feed install/push card ── */
-.install-card { position: relative; border-radius: 16px; padding: 15px 16px; margin-bottom: 4px;
-  background: linear-gradient(135deg, rgba(255,106,44,.16), rgba(255,200,87,.07));
-  border: 1px solid rgba(255,106,44,.4); }
-.install-card-title { font-family: var(--font-anton), sans-serif; font-size: 16px;
-  letter-spacing: .02em; margin-bottom: 5px; padding-right: 22px; }
-.install-card-body { font-size: 13px; color: var(--text-muted); line-height: 1.45; margin-bottom: 11px; }
-.install-card-btn { width: 100%; border: none; border-radius: 999px; padding: 12px;
-  font-family: inherit; font-weight: 700; font-size: 14px; cursor: pointer;
-  background: linear-gradient(135deg, var(--gold), var(--ember)); color: #1a0c05; }
-.install-card-steps { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px;
-  color: var(--text-muted); }
-.install-card-steps b { color: var(--text); }
-.install-card-steps span > b:first-child { display: inline-grid; place-items: center;
-  width: 18px; height: 18px; border-radius: 50%; background: rgba(255,106,44,.2);
-  color: var(--ember); font-size: 11px; margin-right: 6px; }
+/* ── v762 Get the App sheet (replaces the v759 feed card) ── */
+.ga-lead { font-size: 14px; color: var(--text-muted); line-height: 1.5; margin-bottom: 16px; }
+.ga-steps { list-style: none; padding: 0; margin: 0 0 16px; display: flex; flex-direction: column; gap: 11px; }
+.ga-steps li { display: flex; align-items: flex-start; gap: 10px; font-size: 13.5px;
+  color: var(--text); line-height: 1.45; }
+.ga-steps li em { font-style: normal; flex: 1; min-width: 0; }
+.ga-steps li span { flex-shrink: 0; display: grid; place-items: center; width: 22px; height: 22px;
+  border-radius: 50%; background: rgba(255,106,44,.18); color: var(--ember);
+  font-size: 12px; font-weight: 700; margin-top: 1px; }
+.ga-why { font-size: 12.5px; color: var(--text-muted); line-height: 1.45; padding: 11px 13px;
+  border-radius: 12px; background: rgba(255,106,44,.08); border: 1px solid rgba(255,106,44,.25);
+  margin-bottom: 16px; }
+.ga-done { text-align: center; padding: 8px 0 4px; }
+.ga-done-ico { font-size: 44px; margin-bottom: 10px; }
+.ga-done-title { font-family: var(--font-anton), sans-serif; font-size: 20px; margin-bottom: 8px; }
+.ga-done-sub { font-size: 13.5px; color: var(--text-muted); line-height: 1.5; }
+.ga-prompt-ico { font-size: 40px; text-align: center; margin-bottom: 6px; }
+.ga-later { display: block; width: 100%; margin-top: 10px; background: none; border: none;
+  color: var(--text-muted); font-family: inherit; font-size: 13.5px; font-weight: 600;
+  padding: 8px; cursor: pointer; }
 
 /* Championship challenge card badge */
 .ch-champ-tag {
@@ -5911,6 +5915,24 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
      injected by maybeShowCelebration(); shown at most once per event. -->
 <div id="celebrationOverlay" role="dialog" aria-modal="true"></div>
 
+<!-- ONE-TIME GET-THE-APP PROMPT (v763) — existing users only, shown once. -->
+<div class="modal-backdrop" id="getAppPrompt" onclick="if(event.target===this)dismissGetAppPrompt()">
+  <div class="modal" style="max-width:340px">
+    <div class="ga-prompt-ico">📲</div>
+    <h2 style="text-align:center;margin-bottom:12px">Don't miss your shot</h2>
+    <div id="getAppPromptBody"></div>
+  </div>
+</div>
+
+<!-- GET THE APP SHEET (v762) — permanent entry point from the avatar menu. -->
+<div class="modal-backdrop" id="getAppSheet" onclick="if(event.target===this)closeGetAppSheet()">
+  <div class="modal" style="max-width:360px">
+    <button class="modal-close-x" onclick="closeGetAppSheet()">×</button>
+    <h2 style="margin-bottom:14px;padding-right:36px">📲 Get the App</h2>
+    <div id="getAppBody"></div>
+  </div>
+</div>
+
 <nav class="bottom-nav" id="bottomNav">
   <button class="bnav-btn active" data-view="feed" onclick="switchView('feed')">
     <span class="bnav-icon">🏠</span>
@@ -7157,6 +7179,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       <button class="pm-tile" onclick="openEditProfile()"><span class="pm-ic">✏️</span>Edit Profile</button>
       <button class="pm-tile" onclick="openFollowingSheet()"><span class="pm-ic">👥</span>Following</button>
       <button class="pm-tile" onclick="openFindPeople()"><span class="pm-ic">🔍</span>Find People</button>
+      <button class="pm-tile" onclick="openGetAppSheet()"><span class="pm-ic">📲</span>Get the App</button>
       <button class="pm-tile" onclick="document.getElementById('profileModal').classList.remove('open'); openInterestEditor()"><span class="pm-ic">🎯</span>Interests</button>
       <button class="pm-tile" onclick="document.getElementById('profileModal').classList.remove('open'); openGroupsModal()"><span class="pm-ic">👥</span>My Groups</button>
       <button class="pm-tile" onclick="document.getElementById('profileModal').classList.remove('open'); openDmList()"><span class="pm-ic">💬</span>Messages</button>
@@ -7872,7 +7895,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v761 · pwa-safe-area";
+const APP_VERSION = "v763 · getapp-prompt";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -8749,6 +8772,9 @@ async function loadAppData() {
   setTimeout(() => { try { maybeShowCelebration(); } catch(e) {} }, 1600);
   // v758 — keep an already-granted push subscription alive (endpoints rotate)
   setTimeout(() => { try { ensurePushSubscription(); } catch(e) {} }, 2500);
+  // v763 — one-time install/push nudge for existing users. Last in the queue:
+  // a celebration or the tour takes precedence, and both are checked for.
+  setTimeout(() => { try { maybeShowGetAppPrompt(); } catch(e) {} }, 4200);
   _lastNotifPoll = Date.now();
   startLiveUpdates();
   // Build ticker after data is ready
@@ -19536,11 +19562,11 @@ function renderFeed() {
   let _safeChamp = '';
   try { _safeChamp = champHtml; }
   catch (err) { dlog('feed', 'champ-card-error', { e: String(err && err.message || err).slice(0, 90) }); }
-  // v759 — one-time install/push card. Bell-banner only reaches people who open
-  // the bell; this catches everyone else. Two states, both dismissible forever.
-  let _installCard = '';
-  try { _installCard = installPromptCardHtml(); } catch(e) {}
-  c.innerHTML = _installCard + _safeChamp + mixed.map(item => {
+  // v762 — the install prompt used to render here as a feed card. Removed: an
+  // install ad wedged between challenge cards reads as growth-hack clutter, and
+  // once scrolled past it was gone forever. Replaced by a tour step (new users)
+  // and a permanent "Get the App" tile in the avatar menu (always reachable).
+  c.innerHTML = _safeChamp + mixed.map(item => {
     try {
       return _renderOne(item);
     } catch (err) {
@@ -20697,6 +20723,18 @@ const TOUR_STEPS = [
     position: 'below',
   },
   {
+    // v762 — the install step. New users are the only ones who reliably pass
+    // through here, and it's the one moment where being taught something is
+    // expected rather than intrusive. Skipped entirely for anyone already
+    // running the installed app, so it never wastes a step.
+    target: () => null,
+    title: 'Put me on your Home Screen',
+    body: "One last thing — tap Share, then \"Add to Home Screen.\" You'll get the full screen, and I can buzz your phone the second you qualify for a Championship or get crowned. Find it any time under your avatar → Get the App. 📲",
+    position: 'center',
+    pose: 'wave',
+    skipIf: () => _isStandalonePWA(),
+  },
+  {
     target: () => null,
     title: "You're set!",
     body: "That's the tour. Now get out there and bring the heat. 🔥 Fresh challenges drop all the time — come back before they cool off.",
@@ -20707,6 +20745,15 @@ const TOUR_STEPS = [
 
 let _tourStep = 0;
 
+// v762 — steps can opt out via skipIf(). Filtered once per render so the
+// "X of N" counter and the Done button land on the real last step rather than
+// counting a step the user will never see.
+function activeTourSteps() {
+  return TOUR_STEPS.filter(s => {
+    try { return !(s.skipIf && s.skipIf()); } catch(e) { return true; }
+  });
+}
+
 function startTour() {
   _tourStep = 0;
   document.getElementById('tourOverlay').style.display = 'block';
@@ -20715,7 +20762,7 @@ function startTour() {
 }
 
 function renderTourStep() {
-  const steps = TOUR_STEPS;
+  const steps = activeTourSteps();
   const step = steps[_tourStep];
   if (!step) { endTour(); return; }
 
@@ -21074,7 +21121,7 @@ function closeEmber() {
 
 function tourNext() {
   _tourStep++;
-  if (_tourStep >= TOUR_STEPS.length) { endTour(); return; }
+  if (_tourStep >= activeTourSteps().length) { endTour(); return; }
   renderTourStep();
 }
 
@@ -23431,39 +23478,99 @@ function dismissPushBanner() {
   renderNotifs();
 }
 
-// v759 — one-time feed card steering users onto the install → push path.
-// State A (browser tab): how to Add to Home Screen. State B (installed, push
-// not yet decided): one-tap enable. Gone forever once dismissed, installed+
-// enabled, or permission already resolved.
-function dismissInstallCard() {
-  try { localStorage.setItem('fc_install_card_dismissed', '1'); } catch(e) {}
-  renderFeed();
+// v762 — permanent, always-reachable entry point (avatar menu → Get the App).
+// Replaces the dismissible feed card: "Not now" must never mean "never, and
+// good luck finding it again". Three states, so the tile is honest about what
+// (if anything) is left to do.
+function getAppState() {
+  if (!_isStandalonePWA()) return 'not-installed';
+  if (pushSupported() && Notification.permission === 'granted') return 'all-set';
+  return 'installed-no-push';
 }
-function installPromptCardHtml() {
-  try { if (localStorage.getItem('fc_install_card_dismissed')) return ''; } catch(e) {}
-  if (!state.profile) return '';
-  if (_isStandalonePWA()) {
-    if (!pushSupported() || Notification.permission !== 'default') return '';
-    return `<div class="install-card">
-      <button class="push-banner-x" onclick="dismissInstallCard()" aria-label="Dismiss">×</button>
-      <div class="install-card-title">🔔 One tap from the good stuff</div>
-      <div class="install-card-body">Turn on push and your phone buzzes the moment you qualify, win, or get challenged — even with the app closed.</div>
-      <button class="install-card-btn" onclick="enablePushNotifications(); dismissInstallCard()">Enable push notifications</button>
+
+function openGetAppSheet() {
+  document.getElementById('profileModal')?.classList.remove('open');
+  const sheet = document.getElementById('getAppSheet');
+  const body = document.getElementById('getAppBody');
+  if (!sheet || !body) return;
+  const st = getAppState();
+
+  if (st === 'all-set') {
+    body.innerHTML = `<div class="ga-done">
+      <div class="ga-done-ico">🔔</div>
+      <div class="ga-done-title">You're all set</div>
+      <div class="ga-done-sub">FlamesChallenge is installed and push notifications are on. You'll know the moment you qualify, win, or get challenged — even with the app closed.</div>
     </div>`;
+  } else if (st === 'installed-no-push') {
+    body.innerHTML = `<p class="ga-lead">You're running the installed app. One thing left:</p>
+      <div class="ga-why">Turn on push and your phone buzzes the moment you qualify, win, or get challenged — even with the app closed.</div>
+      <button class="btn btn-primary" style="width:100%" onclick="enablePushNotifications(); closeGetAppSheet()">🔔 Enable push notifications</button>`;
+  } else {
+    // Not installed. On iOS this is the only path to push — Apple exposes the
+    // Push API to installed PWAs only, and gives sites no way to trigger the
+    // install, so instructions are genuinely the best available option.
+    body.innerHTML = `<p class="ga-lead">Install FlamesChallenge on your Home Screen — full screen, no browser bar, and push notifications.</p>
+      <ol class="ga-steps">
+        <li><span>1</span><em>Tap the <b>Share</b> button ${_isIOS ? '(the square with an arrow ↑)' : 'in your browser menu'}</em></li>
+        <li><span>2</span><em>Scroll and choose <b>Add to Home Screen</b></em></li>
+        <li><span>3</span><em>Open FlamesChallenge from your new icon</em></li>
+        <li><span>4</span><em>Come back here and turn on push</em></li>
+      </ol>
+      <div class="ga-why">Push is why it's worth it: championship qualification, results, and challenges reach you even with the app closed.</div>`;
   }
-  if (_isIOS) {
-    return `<div class="install-card">
-      <button class="push-banner-x" onclick="dismissInstallCard()" aria-label="Dismiss">×</button>
-      <div class="install-card-title">🔥 Get the full app</div>
-      <div class="install-card-body">Install FlamesChallenge for full-screen and push notifications — know the moment you qualify or win.</div>
-      <div class="install-card-steps">
-        <span><b>1</b> Tap the <b>Share</b> button below</span>
-        <span><b>2</b> Scroll → <b>Add to Home Screen</b></span>
-        <span><b>3</b> Open from your Home Screen</span>
-      </div>
-    </div>`;
-  }
-  return '';
+  sheet.classList.add('open');
+}
+function closeGetAppSheet() {
+  document.getElementById('getAppSheet')?.classList.remove('open');
+}
+
+// v763 — one-time nudge for EXISTING users. New signups get the tour step;
+// anyone already signed up before the feature shipped would otherwise never
+// hear about install/push unless they went digging in the avatar menu. Shows
+// once, ever, and only when there's genuinely something to set up. Dismissing
+// is safe because the avatar-menu tile is permanent.
+const GETAPP_PROMPT_KEY = 'fc_getapp_prompted_v1';
+
+function dismissGetAppPrompt() {
+  try { localStorage.setItem(GETAPP_PROMPT_KEY, '1'); } catch(e) {}
+  document.getElementById('getAppPrompt')?.classList.remove('open');
+}
+
+function getAppPromptToSheet() {
+  dismissGetAppPrompt();
+  openGetAppSheet();
+}
+
+function maybeShowGetAppPrompt() {
+  try {
+    if (!state.profile?.id) return;
+    try { if (localStorage.getItem(GETAPP_PROMPT_KEY)) return; } catch(e) {}
+    // Nothing to ask for → mark as done silently so it never fires later.
+    if (getAppState() === 'all-set') { try { localStorage.setItem(GETAPP_PROMPT_KEY, '1'); } catch(e) {} return; }
+    // Don't stack on top of a celebration — that moment wins.
+    if (document.getElementById('celebrationOverlay')?.classList.contains('open')) return;
+    // Mid-tour? The tour has its own step; let it do the job.
+    if (document.getElementById('tourOverlay')?.style.display === 'block') return;
+
+    const el = document.getElementById('getAppPrompt');
+    const body = document.getElementById('getAppPromptBody');
+    if (!el || !body) return;
+
+    body.innerHTML = (getAppState() === 'installed-no-push')
+      ? `<p class="ga-lead" style="margin-bottom:14px">You're running the installed app — one thing left.</p>
+         <div class="ga-why">Turn on push and your phone buzzes the moment you qualify for a Championship, win one, or get challenged — even with the app closed.</div>
+         <button class="btn btn-primary" style="width:100%" onclick="dismissGetAppPrompt(); enablePushNotifications()">🔔 Turn on push notifications</button>
+         <button class="ga-later" onclick="dismissGetAppPrompt()">Not now</button>`
+      : `<p class="ga-lead" style="margin-bottom:14px">Add FlamesChallenge to your Home Screen and I can reach you the moment it matters.</p>
+         <div class="ga-why">Championship qualification, results, and challenges — pushed to your phone even with the app closed. Takes about 20 seconds.</div>
+         <button class="btn btn-primary" style="width:100%" onclick="getAppPromptToSheet()">Show me how →</button>
+         <button class="ga-later" onclick="dismissGetAppPrompt()">Not now</button>`;
+
+    el.classList.add('open');
+    // Mark on show, not on dismiss: if they force-quit mid-prompt it still
+    // counts as shown. One nudge is a nudge; a recurring one is nagging.
+    try { localStorage.setItem(GETAPP_PROMPT_KEY, '1'); } catch(e) {}
+  } catch(e) { console.warn('getapp prompt', e); }
 }
 
 // Banner for the top of the notifications sheet. Two states: ready-to-enable,
