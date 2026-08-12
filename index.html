@@ -1175,6 +1175,23 @@ body.theme-light .nav { background: rgba(255, 255, 255, 0.88); border-bottom-col
 .push-banner-x { position: absolute; top: 6px; right: 9px; background: none; border: none;
   color: var(--text-muted); font-size: 16px; cursor: pointer; padding: 2px 5px; }
 
+/* ── v759 feed install/push card ── */
+.install-card { position: relative; border-radius: 16px; padding: 15px 16px; margin-bottom: 4px;
+  background: linear-gradient(135deg, rgba(255,106,44,.16), rgba(255,200,87,.07));
+  border: 1px solid rgba(255,106,44,.4); }
+.install-card-title { font-family: var(--font-anton), sans-serif; font-size: 16px;
+  letter-spacing: .02em; margin-bottom: 5px; padding-right: 22px; }
+.install-card-body { font-size: 13px; color: var(--text-muted); line-height: 1.45; margin-bottom: 11px; }
+.install-card-btn { width: 100%; border: none; border-radius: 999px; padding: 12px;
+  font-family: inherit; font-weight: 700; font-size: 14px; cursor: pointer;
+  background: linear-gradient(135deg, var(--gold), var(--ember)); color: #1a0c05; }
+.install-card-steps { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px;
+  color: var(--text-muted); }
+.install-card-steps b { color: var(--text); }
+.install-card-steps span > b:first-child { display: inline-grid; place-items: center;
+  width: 18px; height: 18px; border-radius: 50%; background: rgba(255,106,44,.2);
+  color: var(--ember); font-size: 11px; margin-right: 6px; }
+
 /* Championship challenge card badge */
 .ch-champ-tag {
   display: inline-block;
@@ -7849,7 +7866,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v758 · web-push";
+const APP_VERSION = "v759 · install-prompt-card";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -19501,7 +19518,11 @@ function renderFeed() {
   let _safeChamp = '';
   try { _safeChamp = champHtml; }
   catch (err) { dlog('feed', 'champ-card-error', { e: String(err && err.message || err).slice(0, 90) }); }
-  c.innerHTML = _safeChamp + mixed.map(item => {
+  // v759 — one-time install/push card. Bell-banner only reaches people who open
+  // the bell; this catches everyone else. Two states, both dismissible forever.
+  let _installCard = '';
+  try { _installCard = installPromptCardHtml(); } catch(e) {}
+  c.innerHTML = _installCard + _safeChamp + mixed.map(item => {
     try {
       return _renderOne(item);
     } catch (err) {
@@ -23337,15 +23358,17 @@ function _isStandalonePWA() {
 const _isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
 async function _savePushSub(sub) {
-  if (!state.profile?.id || !sub) return;
+  if (!state.profile?.id || !sub) return false;
   const j = sub.toJSON();
-  await db.from('push_subscriptions').upsert({
+  const { error } = await db.from('push_subscriptions').upsert({
     user_id: state.profile.id,
     endpoint: sub.endpoint,
     p256dh: j.keys?.p256dh || '',
     auth: j.keys?.auth || '',
     ua: navigator.userAgent.slice(0, 200),
   }, { onConflict: 'endpoint' });
+  if (error) { console.warn('push sub save', error); return false; }
+  return true;
 }
 
 // Keep an already-granted subscription fresh (endpoints rotate). Safe no-op
@@ -23376,8 +23399,8 @@ async function enablePushNotifications() {
       userVisibleOnly: true,
       applicationServerKey: _b64uToU8(PUSH_VAPID_PUBLIC),
     });
-    await _savePushSub(sub);
-    toast('🔔 Push notifications on');
+    const saved = await _savePushSub(sub);
+    toast(saved ? '🔔 Push notifications on' : 'Push setup incomplete — try again');
     renderNotifs();
   } catch(e) {
     console.warn('push enable', e);
@@ -23388,6 +23411,41 @@ async function enablePushNotifications() {
 function dismissPushBanner() {
   try { localStorage.setItem('fc_push_banner_dismissed', '1'); } catch(e) {}
   renderNotifs();
+}
+
+// v759 — one-time feed card steering users onto the install → push path.
+// State A (browser tab): how to Add to Home Screen. State B (installed, push
+// not yet decided): one-tap enable. Gone forever once dismissed, installed+
+// enabled, or permission already resolved.
+function dismissInstallCard() {
+  try { localStorage.setItem('fc_install_card_dismissed', '1'); } catch(e) {}
+  renderFeed();
+}
+function installPromptCardHtml() {
+  try { if (localStorage.getItem('fc_install_card_dismissed')) return ''; } catch(e) {}
+  if (!state.profile) return '';
+  if (_isStandalonePWA()) {
+    if (!pushSupported() || Notification.permission !== 'default') return '';
+    return `<div class="install-card">
+      <button class="push-banner-x" onclick="dismissInstallCard()" aria-label="Dismiss">×</button>
+      <div class="install-card-title">🔔 One tap from the good stuff</div>
+      <div class="install-card-body">Turn on push and your phone buzzes the moment you qualify, win, or get challenged — even with the app closed.</div>
+      <button class="install-card-btn" onclick="enablePushNotifications(); dismissInstallCard()">Enable push notifications</button>
+    </div>`;
+  }
+  if (_isIOS) {
+    return `<div class="install-card">
+      <button class="push-banner-x" onclick="dismissInstallCard()" aria-label="Dismiss">×</button>
+      <div class="install-card-title">🔥 Get the full app</div>
+      <div class="install-card-body">Install FlamesChallenge for full-screen and push notifications — know the moment you qualify or win.</div>
+      <div class="install-card-steps">
+        <span><b>1</b> Tap the <b>Share</b> button below</span>
+        <span><b>2</b> Scroll → <b>Add to Home Screen</b></span>
+        <span><b>3</b> Open from your Home Screen</span>
+      </div>
+    </div>`;
+  }
+  return '';
 }
 
 // Banner for the top of the notifications sheet. Two states: ready-to-enable,
