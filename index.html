@@ -196,6 +196,12 @@ main, header, footer, section { position: relative; z-index: 2; }
 /* ============ NAV ============ */
 .nav {
   position: sticky; top: 0; z-index: 100;
+  /* v761 — viewport-fit=cover means the page runs under the status bar /
+     Dynamic Island. In Safari the browser chrome absorbed that, so nothing
+     needed this; installed as a PWA the app owns the full screen and the
+     nav buttons ended up UNDER the island — drawn, but not tappable (taps
+     go to the system). The inset is 0 in Safari, so this is a no-op there. */
+  padding-top: env(safe-area-inset-top);
   backdrop-filter: blur(24px) saturate(140%);
   -webkit-backdrop-filter: blur(24px) saturate(140%);
   background: rgba(0, 0, 0, 0.75);
@@ -4618,7 +4624,7 @@ body.theme-light .ch-status.voided .dot { background: #c92a2a; box-shadow: none;
   background: rgba(10,7,5,0.95);
   backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border);
-  padding: 14px 22px;
+  padding: calc(14px + env(safe-area-inset-top)) 22px 14px; /* v761 — clear the island */
   display: flex; align-items: center; gap: 12px;
   z-index: 1;
 }
@@ -4638,7 +4644,7 @@ body.theme-light .ch-status.voided .dot { background: #c92a2a; box-shadow: none;
   display: grid; place-items: center;
   cursor: pointer;
 }
-.cd-sheet-inner { max-width: 720px; margin: 0 auto; padding: 78px 18px 60px; }
+.cd-sheet-inner { max-width: 720px; margin: 0 auto; padding: calc(78px + env(safe-area-inset-top)) 18px 60px; }
 .cd-hero {
   margin-bottom: 24px;
   padding: 22px;
@@ -5711,7 +5717,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 <!-- v690 — View-as-member banner. Deliberately loud and impossible to miss: the
      one failure mode of this feature is forgetting it's on and concluding admin
      is broken. Fixed, full-width, always on top. -->
-<div id="viewAsBanner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;background:#7a3d00;color:#ffd9a8;font-size:12px;font-weight:700;letter-spacing:0.04em;padding:6px 12px;text-align:center;box-shadow:0 1px 6px rgba(0,0,0,0.4)">
+<div id="viewAsBanner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;padding-top:env(safe-area-inset-top);background:#7a3d00;color:#ffd9a8;font-size:12px;font-weight:700;letter-spacing:0.04em;padding:6px 12px;text-align:center;box-shadow:0 1px 6px rgba(0,0,0,0.4)">
   👤 VIEWING AS MEMBER — admin UI hidden
   <button onclick="toggleViewAsMember()" style="margin-left:8px;background:#ffd9a8;color:#7a3d00;border:none;border-radius:10px;padding:2px 10px;font-size:11px;font-weight:800;cursor:pointer">EXIT</button>
 </div>
@@ -7866,7 +7872,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v760 · celeb-open-fix";
+const APP_VERSION = "v761 · pwa-safe-area";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
