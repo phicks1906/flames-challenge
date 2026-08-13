@@ -7914,7 +7914,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v769 · pull-to-refresh";
+const APP_VERSION = "v770 · roster-notifications";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -13965,6 +13965,20 @@ async function respondToChampInvite(response) {
         : '✅ You\'re in! Submit your entry to compete.');
     } else {
       toast('You passed your spot to the next qualifier.');
+      // v770 — roster events now notify. Declining is real news to the field
+      // and (via promotion) the biggest moment of the promoted player's month;
+      // previously NOBODY was told anything on either path.
+      try {
+        const others = ((state.champFighters || {})[ch.id] || [])
+          .filter(f => f.id !== state.profile.id && f.invite_status !== 'declined' && f.invite_status !== 'no_show');
+        if (others.length) {
+          await db.from('notifications').insert(others.map(f => ({
+            user_id: f.id, type: 'champ_launched', challenge_id: ch.id,
+            message: `👑 ${state.profile.name || 'A contender'} passed on the ${ch.category} Championship — the field is changing.`,
+            created_at: new Date().toISOString(),
+          })));
+        }
+      } catch(e) { console.warn('decline notify', e); }
       await promoteNextReserve(ch.id);
     }
     renderChallengeDetail();
@@ -13989,8 +14003,16 @@ async function promoteNextReserve(challengeId) {
   // Invite the next reserve + shrink the reserve list
   await db.from('challenge_invites').insert({ challenge_id: challengeId, invited_user_id: next.id, invite_status: 'pending' });
   await db.from('challenges').update({ reserve_list: remaining }).eq('id', challengeId);
-  // Notify + email the promoted player (fire and forget)
+  // v770 — in-app notification (feeds the bell AND push). Email alone was the
+  // exact single-point-of-failure that hid July's qualification from everyone.
   const deadlineLabel = ch.submission_deadline ? new Date(ch.submission_deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+  try {
+    await db.from('notifications').insert({
+      user_id: next.id, type: 'champ_qualified', challenge_id: challengeId,
+      message: `⚡ A spot opened up — you're IN the ${ch.category} Championship! Entries close ${deadlineLabel || 'soon'}. Tap to accept and compete.`,
+      created_at: new Date().toISOString(),
+    });
+  } catch(e) { console.warn('promotion notify', e); }
   db.functions.invoke('send-championship-email', {
     body: { type: 'qualified', userIds: [next.id], category: ch.category, deadline: deadlineLabel, challengeId }
   }).catch(e => console.warn('reserve promotion email', e));
@@ -17340,14 +17362,18 @@ function renderChallengeDetail() {
   const shareBtn = document.getElementById('cdShareBtn');
   if (shareBtn) shareBtn.addEventListener('click', e => { e.stopPropagation(); openPromote('challenge', ch); });
 
-  // Championship accept/decline banner — only for pending invitees during submitting phase
-  if (ch.is_championship && state.myChampInvite?.invite_status === 'pending' && status === 'submitting') {
+  // Championship accept/decline banner — pending invitees during submitting.
+  // v770 — also shown for 'no_show': being swept for not responding is NOT a
+  // locked door while the window is still open. Accepting flips them back in.
+  const _inviteSt = state.myChampInvite?.invite_status;
+  if (ch.is_championship && (_inviteSt === 'pending' || _inviteSt === 'no_show') && status === 'submitting') {
+    const _reclaim = _inviteSt === 'no_show';
     const heroEl = document.getElementById('cdHero');
     const banner = document.createElement('div');
     banner.style.cssText = 'margin-top:14px;padding:14px;background:rgba(255,200,87,0.1);border:1px solid rgba(255,200,87,0.35);border-radius:12px;';
     banner.innerHTML = `
-      <div style="font-weight:700;font-size:14px;margin-bottom:4px;">⚡ You qualified for this Championship!</div>
-      <div style="font-size:13px;color:var(--text-dim);margin-bottom:12px;">Accept to compete for the title, or decline to pass your spot to the next qualifier.</div>
+      <div style="font-weight:700;font-size:14px;margin-bottom:4px;">${_reclaim ? '🚫 Your spot was passed to a reserve' : '⚡ You qualified for this Championship!'}</div>
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:12px;">${_reclaim ? 'Entries are still open — accept now to reclaim your place in the field.' : 'Accept to compete for the title, or decline to pass your spot to the next qualifier.'}</div>
       <div style="display:flex;gap:8px;">
         <button id="champAcceptBtn" class="btn btn-primary" style="flex:1;">✅ Accept</button>
         <button id="champDeclineBtn" class="btn" style="flex:1;border:1px solid var(--border);">Decline</button>
