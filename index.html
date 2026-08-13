@@ -5411,7 +5411,13 @@ body.theme-light .champ-ticker {
 .ticker-item .ember-inline { vertical-align: middle; margin-right: 2px; }
 
 /* ── v772 Boost as standing: row line + breakdown sheet ── */
-.lb-boostline { font-size: 12px; color: var(--gold); font-weight: 700; margin-top: 2px; cursor: pointer; }
+.lb-boostline { font-size: 12px; color: var(--gold); font-weight: 700; margin-top: 2px; cursor: pointer;
+  display: inline-flex; align-items: baseline; gap: 3px; flex-wrap: wrap; }
+/* v773 — a tappable number with no cue is a hidden feature. Dotted underline
+   on the value + an ⓘ glyph: reads as "there's more here" without a button. */
+.lb-boostline b { border-bottom: 1px dotted rgba(255,200,87,.55); }
+.lb-boost-info { font-size: 10px; opacity: .75; }
+.lb-boostline:active { opacity: .65; }
 .lb-boostline b { font-family: var(--font-anton), sans-serif; font-size: 14.5px; letter-spacing: .02em; }
 .lb-boostline .lb-sub { color: var(--text-muted); font-weight: 500; font-size: 11px; }
 .bd-head { display: flex; gap: 11px; align-items: center; margin-bottom: 14px; padding-right: 34px; }
@@ -7972,7 +7978,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v772 · boost-standing";
+const APP_VERSION = "v773 · no-contest";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -9268,6 +9274,11 @@ async function loadLeaderboard() {
 
     const wentThroughSD = (chInfo[chId]?.sdRound || 0) > 0;
 
+    // v773 — NO CONTEST: a non-SD challenge with a single entrant produced no
+    // win for anyone. No opponent, no victory — and no boost_ledger row, which
+    // is why an uncontested win showed "0 Boost" instead of simply not existing.
+    if (!wentThroughSD && entries.length < 2) return;
+
     // ── Forfeit walkover: Sudden Death happened but only ONE tied player
     // resubmitted. Their lone final-round entry has zero votes (voting never
     // opened), so the normal max>0 paths can't see it — the sole survivor
@@ -10149,8 +10160,13 @@ function computeChallengeStatusFromCh(ch, entryCount) {
   const subEnd = ch.submission_deadline ? new Date(ch.submission_deadline) : null;
   const voteEnd = ch.voting_end ? new Date(ch.voting_end) : null;
   if (subEnd && now < subEnd) return 'submitting';
-  if (voteEnd && now < voteEnd) return entryCount < 1 ? 'voided' : 'voting';
-  return entryCount < 1 ? 'voided' : 'closed';
+  // v773 — a challenge needs an OPPONENT, not just an entrant. The old guard
+  // was `< 1` everywhere: it caught empty challenges but let a lone entrant
+  // with one vote book a real win over nobody. Sudden Death is exempt (its
+  // sole-survivor walkover is deliberate — those players met in an earlier round).
+  const _soloFloor = (ch.sd_round || 0) > 0 ? 1 : 2;
+  if (voteEnd && now < voteEnd) return entryCount < _soloFloor ? 'voided' : 'voting';
+  return entryCount < _soloFloor ? 'voided' : 'closed';
 }
 
 async function loadMyRecord() {
@@ -10228,7 +10244,9 @@ async function loadMyRecord() {
         result = allChEntries[0].user_id === me || (mineIsFinal && allChEntries[0].id === e.id) ? 'won' : 'lost';
       } else if (!mineIsFinal) {
         result = maxVotes > 0 ? 'lost' : 'voided'; // I didn't make the final round
-      } else if (maxVotes === 0) {
+      } else if (maxVotes === 0 || (finalR === 0 && allChEntries.length < 2)) {
+        // v773 — the comment always said "single entrant or no votes", but the
+        // condition only tested votes. A lone entrant WITH a vote slipped through.
         result = 'voided'; // single entrant or no votes — not a real win
       } else if (myVotes === maxVotes) {
         result = topCount > 1 ? 'tied' : 'won';
@@ -12347,7 +12365,7 @@ function renderLeaderboard() {
         ${lbAvatar}
         <div style="min-width:0">
           <div class="lb-name">${hofNameHTML(u.id, escapeHtml(u.name))}${isYou ? ' (you)' : ''}${isChamp ? ' <span class="lb-champ-tag">👑 Champ</span>' : reigningChampChipHTML(u.id)}${isLeader && !isChamp ? ' <span class="lb-leader-tag">🔥 Leader</span>' : ''}</div>
-          <div class="lb-boostline" data-boost-uid="${u.id}" title="How this was earned">⚡ <b>${u.catBoost}</b> Boost <span class="lb-sub">· ${u.catWins}–${u.catLosses} this month${(_qualCut >= 0 && i > _qualCut) ? ` · <span class="lb-back">${(ranked[_qualCut].catBoost - u.catBoost)} Boost back</span>` : ''}</span></div>
+          <div class="lb-boostline" data-boost-uid="${u.id}" title="How this was earned">⚡ <b>${u.catBoost}</b> Boost<span class="lb-boost-info">ⓘ</span> <span class="lb-sub">· ${u.catWins}–${u.catLosses} this month${(_qualCut >= 0 && i > _qualCut) ? ` · <span class="lb-back">${(ranked[_qualCut].catBoost - u.catBoost)} Boost back</span>` : ''}</span></div>
           ${renderLadderChip(u.id, { showSpark: true, size: 15 })}
         </div>
       </div>
@@ -13366,7 +13384,7 @@ function profileBoostCardHTML(userId) {
   if (!seasonBoost && !allTimeBoost && !sig) return '';
   return `<div class="pboost-card" style="cursor:pointer" onclick="openBoostSheet('${userId}', null)" title="How this was earned">
     <div class="pboost-row">
-      <div class="pboost-stat"><div class="pboost-num">${seasonBoost}</div><div class="pboost-lbl">BOOST THIS MONTH</div></div>
+      <div class="pboost-stat"><div class="pboost-num">${seasonBoost}</div><div class="pboost-lbl">BOOST THIS MONTH ⓘ</div></div>
       <div class="pboost-stat"><div class="pboost-num">${allTimeBoost}</div><div class="pboost-lbl">ALL-TIME BOOST</div></div>
     </div>
     ${sigLine}
