@@ -612,6 +612,23 @@ body.theme-light .nav { background: rgba(255, 255, 255, 0.88); border-bottom-col
 @keyframes tcin-lean{0%,100%{transform:rotate(-3deg)}50%{transform:rotate(2deg)}}
 .tcin.sly .tce{height:16%;top:16%}
 .tcin.sly .tcm{width:30%;margin-left:-15%;border-bottom-width:2px}
+/* --- commentary poses (v771) --- */
+/* shocked: wide eyes, quick pop — lead changes, upsets against the run of play */
+.tcin.shocked{animation:tcin-pop .45s ease-out 2}
+@keyframes tcin-pop{0%{transform:scale(1)}40%{transform:scale(1.14) translateY(-6px)}100%{transform:scale(1)}}
+.tcin.shocked .tce{width:32%;height:42%;top:0}
+.tcin.shocked .tcm{height:30%;border:3px solid #241405;border-radius:50%;width:24%;margin-left:-12%}
+/* sweat: worried — deadlines, empty fields, the clock */
+.tcin.sweat{animation:tcin-bob 1.1s ease-in-out infinite}
+.tcin.sweat .tcm{border-radius:40px 40px 0 0;border-bottom:none;border-top:3px solid #241405;bottom:4%}
+.tcin.sweat::after{content:"💧";position:absolute;top:12%;right:-14%;font-size:38%;animation:tcin-drip 1.4s ease-in infinite}
+@keyframes tcin-drip{0%{opacity:0;transform:translateY(-2px)}30%{opacity:1}100%{opacity:0;transform:translateY(8px)}}
+/* gutter: dim, slow, half-lidded — dead races, empty arenas */
+.tcin.gutter{animation:tcin-bob 4.6s ease-in-out infinite}
+.tcin.gutter .tcf{background:linear-gradient(to top,#8a2d18,#a44a1e 48%,#c98c3a 96%);box-shadow:0 0 8px -2px rgba(255,90,30,.3),inset -4px -4px 9px rgba(0,0,0,.28)}
+.tcin.gutter .tce{height:14%;top:22%}
+.tcin.gutter .tcm{width:26%;margin-left:-13%;border-bottom-width:2px}
+/* --- end commentary poses --- */
 /* --- end extra poses --- */
 /* Ember mascot as a centered hero (e.g. Ask Ember modal) */
 .ember-hero{display:flex;justify-content:center;align-items:flex-end;height:96px;overflow:visible;margin-bottom:2px}
@@ -5390,6 +5407,8 @@ body.theme-light .champ-ticker {
 .ticker-cat-label.champ { background: rgba(255,200,87,0.25); color: var(--gold); }
 .ticker-cat-label.leader { background: rgba(255,106,44,0.2); color: var(--ember); }
 .ticker-cat-label.streak { background: rgba(139,92,246,0.2); color: #a78bfa; }
+.ticker-cat-label.ember { background: linear-gradient(135deg, rgba(255,106,44,0.3), rgba(255,200,87,0.2)); color: var(--gold); }
+.ticker-item .ember-inline { vertical-align: middle; margin-right: 2px; }
 .ticker-cat-label.default { background: rgba(255,255,255,0.08); color: var(--text-muted); }
 .ticker-item .ticker-icon { font-size: 13px; padding-left: 8px; }
 .ticker-item .ticker-name { color: var(--text); font-weight: 700; }
@@ -7914,7 +7933,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v770 · roster-notifications";
+const APP_VERSION = "v771 · ember-ringside";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -8796,8 +8815,9 @@ async function loadAppData() {
   setTimeout(() => { try { maybeShowGetAppPrompt(); } catch(e) {} }, 4200);
   _lastNotifPoll = Date.now();
   startLiveUpdates();
-  // Build ticker after data is ready
-  setTimeout(buildTicker, 500);
+  // Build ticker after data is ready. v771 — live championship tallies feed
+  // Ember's ringside commentary; fetch them first so his lines have numbers.
+  setTimeout(() => { loadLiveChampTallies().finally(buildTicker); }, 500);
 }
 
 // =========================
@@ -12795,6 +12815,113 @@ function formatStoredMonth(monthStr) {
     .toLocaleString('default', { month: 'long', year: 'numeric' });
 }
 
+/* ---------- EMBER RINGSIDE COMMENTARY (v771) ----------
+   Templated, event-driven lines in Ember's voice — reads live state, costs no
+   API calls, and can't hallucinate. Sources: live championship tallies
+   (fetched below), the qualifying race, fresh crowns. Lead changes are spotted
+   per-device via localStorage (last leader seen), which is exactly the right
+   scope for "wait, WHAT happened" commentary. */
+
+// Live championship entry tallies — the records pipeline only loads CLOSED
+// challenges, so live vote counts need this small dedicated fetch.
+async function loadLiveChampTallies() {
+  try {
+    const live = (state.challenges || []).filter(ch =>
+      ch.is_championship && ['submitting', 'voting'].includes(computeChallengeStatus(ch)));
+    if (!live.length) { state.liveChampTallies = {}; return; }
+    const ids = live.map(c => c.id);
+    const { data: ents } = await db.from('entries')
+      .select('id, challenge_id, user_id').in('challenge_id', ids);
+    const eIds = (ents || []).map(e => e.id);
+    const counts = {};
+    if (eIds.length) {
+      const { data: votes } = await db.from('entry_votes').select('entry_id').in('entry_id', eIds);
+      (votes || []).forEach(v => { counts[v.entry_id] = (counts[v.entry_id] || 0) + 1; });
+    }
+    const nameOf = uid => {
+      const f = Object.values(state.champFighters || {}).flat().find(x => x.id === uid);
+      return f?.name || (state.leaderboardData?.users || []).find(u => u.id === uid)?.name || 'Someone';
+    };
+    const tallies = {};
+    live.forEach(ch => {
+      tallies[ch.id] = (ents || []).filter(e => e.challenge_id === ch.id)
+        .map(e => ({ userId: e.user_id, name: nameOf(e.user_id), votes: counts[e.id] || 0 }))
+        .sort((a, b) => b.votes - a.votes);
+    });
+    state.liveChampTallies = tallies;
+  } catch(e) { console.warn('live tallies', e); }
+}
+
+function emberTickerItems(selectedCats) {
+  const items = [];
+  const say = (pose, text) => items.push({
+    icon: '', name: '', badge: 'ember', category: '🔥 EMBER', grouped: true,
+    text: `${emberFace(20, pose)} <i style="font-style:normal">${text}</i>`,
+  });
+  try {
+    const live = (state.challenges || []).filter(ch =>
+      ch.is_championship && ['submitting', 'voting'].includes(computeChallengeStatus(ch)));
+
+    live.forEach(ch => {
+      if (selectedCats && !selectedCats.has(ch.category)) return;
+      const st = computeChallengeStatus(ch);
+      const tally = (state.liveChampTallies || {})[ch.id] || [];
+      const fighters = ((state.champFighters || {})[ch.id] || [])
+        .filter(f => !['declined', 'no_show'].includes(f.invite_status));
+
+      if (st === 'submitting') {
+        const entered = tally.length;
+        const field = fighters.length || 2;
+        const end = ch.submission_deadline ? Date.parse(ch.submission_deadline) : 0;
+        const fracLeft = end ? (end - Date.now()) / (end - Date.parse(ch.created_at || 0) || 1) : 1;
+        if (entered === 0 && fracLeft < 0.5) {
+          say('gutter', `It's quiet in the ${escapeHtml(ch.category)} arena… too quiet. Somebody throw a punch.`);
+        } else if (entered >= field && field >= 2) {
+          say('fired-up', `All fighters IN for the ${escapeHtml(ch.category)} crown. Voting opens when the bell rings.`);
+        } else if (entered > 0) {
+          say('point', `${entered} of ${field} entries locked for the ${escapeHtml(ch.category)} Championship. Who's stalling?`);
+        }
+      }
+
+      if (st === 'voting' && tally.length >= 2) {
+        const [a, b] = tally;
+        const end = ch.voting_end ? Date.parse(ch.voting_end) : 0;
+        const hrsLeft = end ? Math.max(0, Math.round((end - Date.now()) / 3600000)) : 999;
+
+        // Lead change — per-device memory of the last leader seen
+        try {
+          const key = `fc_ember_lead_${ch.id}`;
+          const last = localStorage.getItem(key);
+          const cur = a.votes > b.votes ? a.userId : (b.votes > a.votes ? b.userId : 'tied');
+          if (last && last !== cur && cur !== 'tied') {
+            say('shocked', `${escapeHtml(a.name)} SNATCHES the ${escapeHtml(ch.category)} lead. Didn't see that coming? Neither did they.`);
+          }
+          localStorage.setItem(key, cur);
+        } catch(e) {}
+
+        if (a.votes === b.votes) {
+          say('sly', `Dead level in the ${escapeHtml(ch.category)} final — ${escapeHtml(a.name)} and ${escapeHtml(b.name)}. Somebody blink.`);
+        } else if (hrsLeft <= 24) {
+          say('sweat', `${hrsLeft}h left. ${escapeHtml(a.name)} leads the ${escapeHtml(ch.category)} final by ${a.votes - b.votes} — it ends TONIGHT.`);
+        } else {
+          say('fired-up', `${escapeHtml(a.name)} holds the ${escapeHtml(ch.category)} lead ${a.votes}–${b.votes}. ${escapeHtml(b.name)} needs your vote, fast.`);
+        }
+      }
+    });
+
+    // Fresh crowns this month — Ember bows to nobody, but he'll announce them
+    const curMonth = `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`;
+    Object.values(getChampTitles())
+      .filter(t => t.month === curMonth && t.processed)
+      .slice(0, 2)
+      .forEach(t => {
+        if (selectedCats && !selectedCats.has(t.category)) return;
+        say('celebrate', `${escapeHtml(t.name)} took the ${escapeHtml(t.category)} crown. Bow, or beat 'em next month.`);
+      });
+  } catch(e) { console.warn('ember commentary', e); }
+  return items;
+}
+
 function buildTicker() {
   if (tickerDismissed()) return;
   const data = state.leaderboardData;
@@ -12818,6 +12945,9 @@ function buildTicker() {
       const mLabel = champMonthLabel(ch.id);
       items.push({ icon: '', name: '', badge: 'champ', category: `⚡ ${ch.category.toUpperCase()} CHAMPIONSHIP${mLabel ? ' · ' + mLabel.toUpperCase() : ''}`, text: action, grouped: true });
     });
+
+  // 0.2. Ember ringside commentary (v771) — right behind the CTAs, ahead of stats
+  try { emberTickerItems(selectedCats).forEach(it => items.push(it)); } catch(e) {}
 
   // 0.5. Championship qualifying race (v614) — countdown + bubble drama, last 10 days
   try {
