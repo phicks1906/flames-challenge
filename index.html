@@ -140,7 +140,13 @@ html[data-theme="light"] body {
 html {
   background-color: var(--bg) !important;
   scroll-behavior: smooth;
-  overscroll-behavior: none;
+  /* v769 — was `overscroll-behavior: none`, which also disables iOS
+     pull-to-refresh. Harmless in Safari (address-bar reload), but the
+     installed PWA has no address bar, leaving NO way to refresh short of
+     force-quitting. Keep -x contained so horizontal card scrolls can't
+     jitter the page; allow -y so the native gesture works. */
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: auto;
   color-scheme: dark;
   overflow-x: hidden;
   max-width: 100vw;
@@ -157,7 +163,8 @@ body {
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
-  overscroll-behavior: none;
+  overscroll-behavior-x: contain; /* v769 — see html rule */
+  overscroll-behavior-y: auto;
   background-color: var(--bg) !important;
 }
 
@@ -7907,7 +7914,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v768 · entry-thumbnails";
+const APP_VERSION = "v769 · pull-to-refresh";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
