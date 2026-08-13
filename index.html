@@ -7978,7 +7978,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v773 · no-contest";
+const APP_VERSION = "v774 · gauge-settle";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11474,6 +11474,8 @@ function applyDeepLink() {
   }
 }
 
+// v774 — module-scope handles so a re-render can cancel the previous sweep
+let _hcNeedleRaf = null, _hcNeedleT1 = null, _hcNeedleT2 = null;
 function renderHeatCheck() {
   if (!state.profile) return;
   const record = state.myRecord;
@@ -11601,31 +11603,43 @@ function renderHeatCheck() {
     if (winPct == null) {
       needle.style.display = 'none';
     } else {
-      const pctForNeedle = winPct;
-      const targetAngle = -135 + (270 * pctForNeedle / 100);
-      const startAngle = -135;
+      const targetAngle = -135 + (270 * winPct / 100);
       needle.style.display = '';
-      needle.setAttribute('transform', `rotate(${startAngle} 140 140)`);
-      // Animate via RAF — SVG setAttribute works on all iOS versions
-      const duration = 1400;
+
+      // v774 — cancel any in-flight sweep FIRST. updateHeatCheck() runs more
+      // than once per hydrate (and again after a crowning reloads records);
+      // without this, two RAF loops fought each other and the previous run's
+      // 1.5s fallback could slam the needle to a STALE angle. That, not the
+      // easing, is what made the gauge look erratic.
+      if (_hcNeedleRaf) cancelAnimationFrame(_hcNeedleRaf);
+      if (_hcNeedleT1) clearTimeout(_hcNeedleT1);
+      if (_hcNeedleT2) clearTimeout(_hcNeedleT2);
+
+      // Sweep from wherever the needle currently sits, not always from 0 —
+      // a re-render after a result should nudge, not restart from zero.
+      const prev = needle.getAttribute('transform');
+      const m = prev && prev.match(/rotate\(\s*(-?[\d.]+)/);
+      const startAngle = m ? parseFloat(m[1]) : -135;
+      if (!m) needle.setAttribute('transform', `rotate(${startAngle} 140 140)`);
+
+      const duration = 1100;
       let startTime = null;
-      const easeOutBack = t => {
-        const c1 = 1.70158, c3 = c1 + 1;
-        return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
-      };
+      // Gentle settle instead of the old easeOutBack, which overshot ~10% past
+      // the value and sprang back — on a stat readout that reads as a wrong
+      // number correcting itself.
+      const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
       const animateNeedle = (ts) => {
         if (!startTime) startTime = ts;
         const progress = Math.min((ts - startTime) / duration, 1);
-        const eased = easeOutBack(progress);
-        const angle = startAngle + (targetAngle - startAngle) * eased;
+        const angle = startAngle + (targetAngle - startAngle) * easeOutCubic(progress);
         needle.setAttribute('transform', `rotate(${angle} 140 140)`);
-        if (progress < 1) requestAnimationFrame(animateNeedle);
+        _hcNeedleRaf = progress < 1 ? requestAnimationFrame(animateNeedle) : null;
       };
-      setTimeout(() => requestAnimationFrame(animateNeedle), 100);
-      // iOS fallback — direct set after 1.5s if animation didn't work
-      setTimeout(() => {
+      _hcNeedleT1 = setTimeout(() => { _hcNeedleRaf = requestAnimationFrame(animateNeedle); }, 100);
+      // iOS fallback — land it exactly, in case RAF never ran
+      _hcNeedleT2 = setTimeout(() => {
         if (needle) needle.setAttribute('transform', `rotate(${targetAngle} 140 140)`);
-      }, 1600);
+      }, duration + 300);
     }
   }
 
