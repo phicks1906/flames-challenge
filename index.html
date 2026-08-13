@@ -7907,7 +7907,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v767 · titles-copy";
+const APP_VERSION = "v768 · entry-thumbnails";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -23014,7 +23014,7 @@ function renderProfileTab() {
       let mediaHtml = '';
       if (p.media_url) {
         mediaHtml = p.media_type === 'video'
-          ? `<div class="post-card-media"><video src="${escapeHtml(p.media_url)}" controls playsinline preload="metadata"></video></div>`
+          ? `<div class="post-card-media"><video src="${escapeHtml(p.media_url)}#t=0.1" controls playsinline preload="metadata"></video></div>`
           : `<div class="post-card-media"><img src="${escapeHtml(p.media_url)}" alt="" loading="lazy"></div>`;
       }
       const likeCount = psState.postLikeCounts[p.id] || 0;
@@ -23063,7 +23063,15 @@ function renderProfileTab() {
       const ch = en.challenge || {};
       let thumb = '🎬';
       if (en.media_type === 'photo' && en.media_url) thumb = `<img src="${escapeHtml(en.media_url)}" alt="">`;
-      else if (en.media_type === 'video' && en.media_url) thumb = `<video src="${escapeHtml(en.media_url)}" muted preload="metadata"></video>`;
+      else if (en.media_type === 'video' && en.media_url) {
+        // v768 — was `<video src=... preload="metadata">`, which paints NOTHING
+        // for Bunny HLS on iOS: .m3u8 gives no first frame from metadata alone,
+        // so every video entry rendered as a black square. Use the same poster
+        // pipeline as every other surface: dark placeholder up front, real
+        // still (self-hosted frame, else Bunny preview.webp) swapped in only
+        // once it's confirmed to load. No src = nothing downloads.
+        thumb = `<video ${_videoPosterAttr(en.media_url, en.poster_url)} muted playsinline preload="none"></video>`;
+      }
       else thumb = { photo:'📷', video:'🎬', audio:'🎵', text:'✍️' }[en.media_type] || '🎬';
       return `
         <div class="ps-row" data-cid="${ch.id || ''}">
@@ -23075,6 +23083,7 @@ function renderProfileTab() {
           </div>
         </div>`;
     }).join('');
+    _validateVideoPosters(c); // upgrade to the real still where it loads
     wireProfileRows();
     return;
   }
