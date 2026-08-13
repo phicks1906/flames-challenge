@@ -5409,6 +5409,36 @@ body.theme-light .champ-ticker {
 .ticker-cat-label.streak { background: rgba(139,92,246,0.2); color: #a78bfa; }
 .ticker-cat-label.ember { background: linear-gradient(135deg, rgba(255,106,44,0.3), rgba(255,200,87,0.2)); color: var(--gold); }
 .ticker-item .ember-inline { vertical-align: middle; margin-right: 2px; }
+
+/* ── v772 Boost as standing: row line + breakdown sheet ── */
+.lb-boostline { font-size: 12px; color: var(--gold); font-weight: 700; margin-top: 2px; cursor: pointer; }
+.lb-boostline b { font-family: var(--font-anton), sans-serif; font-size: 14.5px; letter-spacing: .02em; }
+.lb-boostline .lb-sub { color: var(--text-muted); font-weight: 500; font-size: 11px; }
+.bd-head { display: flex; gap: 11px; align-items: center; margin-bottom: 14px; padding-right: 34px; }
+.bd-av { width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, var(--ember), var(--flame));
+  display: grid; place-items: center; font-size: 20px; flex-shrink: 0; overflow: hidden; }
+.bd-av img { width: 100%; height: 100%; object-fit: cover; }
+.bd-name { font-family: var(--font-anton), sans-serif; font-size: 19px; }
+.bd-month { font-size: 12px; color: var(--text-muted); }
+.bd-total { text-align: center; padding: 14px; border-radius: 14px;
+  background: linear-gradient(135deg, rgba(255,200,87,.14), rgba(255,106,44,.07));
+  border: 1px solid rgba(255,200,87,.35); margin-bottom: 12px; }
+.bd-total-num { font-family: var(--font-anton), sans-serif; font-size: 40px; color: var(--gold); line-height: 1; }
+.bd-total-lbl { font-size: 10px; letter-spacing: .14em; color: var(--text-muted); margin-top: 3px; font-weight: 700; }
+.bd-ember { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; line-height: 1.45;
+  color: var(--text); font-style: italic; padding: 10px 12px; border-radius: 12px;
+  background: rgba(255,106,44,.08); margin-bottom: 14px; }
+.bd-sec { font-size: 10px; letter-spacing: .14em; color: var(--text-muted); font-weight: 700; margin-bottom: 7px; }
+.bd-win { padding: 9px 11px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); margin-bottom: 6px; }
+.bd-win-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.bd-win-title { font-size: 13px; font-weight: 700; min-width: 0; }
+.bd-win-pts { font-family: var(--font-anton), sans-serif; font-size: 15px; color: var(--gold); flex-shrink: 0; }
+.bd-win-parts { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+.bd-win-parts b { color: var(--text); }
+.bd-rule { display: flex; gap: 8px; align-items: flex-start; font-size: 11.5px; line-height: 1.5;
+  color: var(--text-muted); padding: 11px 12px; border-radius: 12px;
+  background: rgba(255,255,255,.04); border: 1px solid var(--border); margin-top: 12px; }
+.bd-rule b { color: var(--text); }
 .ticker-cat-label.default { background: rgba(255,255,255,0.08); color: var(--text-muted); }
 .ticker-item .ticker-icon { font-size: 13px; padding-left: 8px; }
 .ticker-item .ticker-name { color: var(--text); font-weight: 700; }
@@ -5949,6 +5979,15 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
      injected by maybeShowCelebration(); shown at most once per event. -->
 <div id="celebrationOverlay" role="dialog" aria-modal="true"></div>
 
+<!-- BOOST BREAKDOWN SHEET (v772) — public ledger: tap anyone's Boost, see how
+     it was earned, with Ember's read on the shape of their month. -->
+<div class="modal-backdrop" id="boostSheet" onclick="if(event.target===this)closeBoostSheet()">
+  <div class="modal" style="max-width:380px;max-height:82vh;overflow-y:auto">
+    <button class="modal-close-x" onclick="closeBoostSheet()">×</button>
+    <div id="boostSheetBody"></div>
+  </div>
+</div>
+
 <!-- ONE-TIME GET-THE-APP PROMPT (v763) — existing users only, shown once. -->
 <div class="modal-backdrop" id="getAppPrompt" onclick="if(event.target===this)dismissGetAppPrompt()">
   <div class="modal" style="max-width:340px">
@@ -6150,11 +6189,11 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       <div class="lb-how-body" id="lbHowBody">
         <div class="lb-how-item">
           <div class="lb-how-icon">🏆</div>
-          <div><strong>Win challenges</strong> — Every challenge you win this month moves you up your category's race. Pick a category chip to see where you stand.</div>
+          <div><strong>Win challenges, earn Boost</strong> — Every win earns Boost based on who you beat: stronger opponents and bigger turnouts are worth more. Beating a Spark earns 1; taking down a G.O.A.T. earns 24. Tap any Boost number to see exactly how it was earned.</div>
         </div>
         <div class="lb-how-item">
           <div class="lb-how-icon">🥇</div>
-          <div><strong>Make the top 3</strong> — The gold Championship Line marks who qualifies. Finish above it when the month ends and you're in Championship Night.</div>
+          <div><strong>Make the top 3</strong> — The race is ranked by Boost, not win count — five easy wins won't outrank one hard one. The gold Championship Line marks who qualifies; tied Boost shares the spot, and everyone tied advances.</div>
         </div>
         <div class="lb-how-item">
           <div class="lb-how-icon">⚡</div>
@@ -7933,7 +7972,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v771 · ember-ringside";
+const APP_VERSION = "v772 · boost-standing";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -12166,9 +12205,15 @@ function renderLeaderboard() {
       catAllTime: cat === 'All' ? (u.wins || 0) : (u.byCategory[cat] || 0),
       catLosses: u.monthlyLosses || 0,
     }))
-    .filter(u => u.catWins > 0) // v766 — a monthly board only ranks monthly wins
-    .sort((a, b) => b.catWins - a.catWins || b.catAllTime - a.catAllTime)
+    .filter(u => u.catWins > 0) // wins are the GATE — you must have won something
+    // v772 — Boost is the STANDING. Five farmed Spark wins rank below one win
+    // over a strong field; that's the whole reason Boost exists. Wins then
+    // all-time break exact Boost ties for display order only (tied Boost
+    // shares the rank — and shares the championship spot).
+    .sort((a, b) => (b.boostMonthByCat?.[cat] || 0) - (a.boostMonthByCat?.[cat] || 0)
+      || b.catWins - a.catWins || b.catAllTime - a.catAllTime)
     .slice(0, 10);
+  ranked.forEach(u => { u.catBoost = u.boostMonthByCat?.[cat] || 0; });
 
   // ── Champion banner ──
   // Leader = current #1 on rolling 30-day board
@@ -12260,7 +12305,7 @@ function renderLeaderboard() {
   ranked.forEach((u, i) => {
     if (i === 0) { lbRankByIndex[i] = 1; return; }
     const prev = ranked[i-1];
-    const tiedPrev = u.catWins === prev.catWins && u.catAllTime === prev.catAllTime;
+    const tiedPrev = u.catBoost === prev.catBoost; // v772 — tied Boost = shared rank
     lbRankByIndex[i] = tiedPrev ? lbRankByIndex[i-1] : i + 1;
   });
   // Championship qualifying race (v614): gold line splits qualified from chasing.
@@ -12268,7 +12313,16 @@ function renderLeaderboard() {
   const _raceOn = !liveCh // v766 — a live championship means the race already ended
     && !(state.champLaunches || []).some(l => l.month === curMonth && l.category === cat && !l.is_sponsored);
   const _monthWinners = ranked.filter(u => u.catWins > 0).length;
-  const _qualCut = _raceOn && _monthWinners > 0 ? Math.min(3, _monthWinners) - 1 : -1;
+  // v772 — top 3 DISTINCT Boost values qualify; everyone tied at a qualifying
+  // value advances (shared spot). The cut index = last row whose Boost is
+  // within the top-3 distinct values.
+  let _qualCut = -1;
+  if (_raceOn && _monthWinners > 0) {
+    const distinct = [...new Set(ranked.map(u => u.catBoost))].slice(0, 3);
+    for (let k = ranked.length - 1; k >= 0; k--) {
+      if (distinct.includes(ranked[k].catBoost)) { _qualCut = k; break; }
+    }
+  }
   const _thirdWins = _qualCut >= 0 ? ranked[_qualCut].catWins : null;
   const _lastDayLb = new Date(now2.getFullYear(), now2.getMonth() + 1, 0);
   const _daysLeftLb = Math.max(0, Math.ceil((_lastDayLb - now2) / 86400000));
@@ -12293,13 +12347,14 @@ function renderLeaderboard() {
         ${lbAvatar}
         <div style="min-width:0">
           <div class="lb-name">${hofNameHTML(u.id, escapeHtml(u.name))}${isYou ? ' (you)' : ''}${isChamp ? ' <span class="lb-champ-tag">👑 Champ</span>' : reigningChampChipHTML(u.id)}${isLeader && !isChamp ? ' <span class="lb-leader-tag">🔥 Leader</span>' : ''}</div>
-          <div class="lb-streak" style="font-size:11px;color:var(--text-muted)">${u.catWins}–${u.catLosses} this month · ${u.catAllTime} all-time${(_qualCut >= 0 && i > _qualCut && _thirdWins !== null) ? ` · <span class="lb-back">${_thirdWins - u.catWins <= 0 ? 'tied for the spot' : (_thirdWins - u.catWins) + ' win' + (_thirdWins - u.catWins === 1 ? '' : 's') + ' back'}</span>` : ''}</div>
+          <div class="lb-boostline" data-boost-uid="${u.id}" title="How this was earned">⚡ <b>${u.catBoost}</b> Boost <span class="lb-sub">· ${u.catWins}–${u.catLosses} this month${(_qualCut >= 0 && i > _qualCut) ? ` · <span class="lb-back">${(ranked[_qualCut].catBoost - u.catBoost)} Boost back</span>` : ''}</span></div>
           ${renderLadderChip(u.id, { showSpark: true, size: 15 })}
         </div>
       </div>
       ${!isYou ? `<button class="lb-follow-btn${isFollowing ? ' following' : ''}" data-lb-follow="${u.id}" title="${isFollowing ? 'Tap to unfollow' : 'Follow'}">${isFollowing ? '✓ Following' : '+ Follow'}</button>` : '<div></div>'}
     `;
     row.querySelector('[data-lb-uid]')?.addEventListener('click', () => openUserProfile(u.id));
+    row.querySelector('[data-boost-uid]')?.addEventListener('click', e => { e.stopPropagation(); openBoostSheet(u.id, cat); });
     const followBtn = row.querySelector('[data-lb-follow]');
     if (followBtn) followBtn.addEventListener('click', async e => { e.stopPropagation(); await lbToggleFollow(followBtn); });
     list.appendChild(row);
@@ -13309,7 +13364,7 @@ function profileBoostCardHTML(userId) {
     sigLine = `<div class="pboost-sig">${emberFace(24, 'celebrate')}<span>Signature win: beat ${who} · <b>${sig.total_boost} Boost</b></span></div>`;
   }
   if (!seasonBoost && !allTimeBoost && !sig) return '';
-  return `<div class="pboost-card">
+  return `<div class="pboost-card" style="cursor:pointer" onclick="openBoostSheet('${userId}', null)" title="How this was earned">
     <div class="pboost-row">
       <div class="pboost-stat"><div class="pboost-num">${seasonBoost}</div><div class="pboost-lbl">BOOST THIS MONTH</div></div>
       <div class="pboost-stat"><div class="pboost-num">${allTimeBoost}</div><div class="pboost-lbl">ALL-TIME BOOST</div></div>
@@ -15321,6 +15376,78 @@ function _celebMark(id) {
     arr.push(id);
     localStorage.setItem(CELEB_LS_KEY, JSON.stringify(arr.slice(-80)));
   } catch(e) {}
+}
+
+/* ---------- BOOST BREAKDOWN SHEET (v772) ----------
+   The auditable half of Boost-as-standing: tap any Boost number, see every
+   win itemized (who was beaten, at what tier, turnout), with Ember judging
+   the shape of the month. Same sheet for everyone — a public ledger. */
+function closeBoostSheet() { document.getElementById('boostSheet')?.classList.remove('open'); }
+
+async function openBoostSheet(userId, cat) {
+  const body = document.getElementById('boostSheetBody');
+  const sheet = document.getElementById('boostSheet');
+  if (!body || !sheet) return;
+  const u = (state.leaderboardData?.users || []).find(x => x.id === userId);
+  const name = u?.name || 'Player';
+  const curMonth = `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`;
+  const monthLabel = new Date().toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+
+  const rows = Object.values(state.boostByChallenge || {}).filter(r =>
+    r.winner_id === userId && r.month === curMonth && (!cat || r.category === cat));
+  const total = rows.reduce((s, r) => s + (r.total_boost || 0), 0);
+  const wins = rows.length;
+
+  sheet.classList.add('open');
+  body.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text-muted)">Loading…</div>';
+
+  const titleById = {};
+  try {
+    const ids = rows.map(r => r.challenge_id);
+    if (ids.length) {
+      const { data } = await db.from('challenges').select('id, title').in('id', ids);
+      (data || []).forEach(c => { titleById[c.id] = c.title; });
+    }
+  } catch(e) {}
+
+  // ── Ember's read on the shape of the month ──
+  const tiers = rows.flatMap(r => (r.detail?.opponents || []).map(o => LADDER.findIndex(l => l.key === o.tier)));
+  const topTier = tiers.length ? Math.max(...tiers) : -1;
+  const allSpark = tiers.length > 0 && tiers.every(t => t <= 0);
+  let pose = 'think', line;
+  if (!wins) { pose = 'gutter'; line = `No ${cat ? escapeHtml(cat) + ' ' : ''}wins yet this month. The tape's blank — go write on it.`; }
+  else if (allSpark && wins >= 3) { pose = 'sly'; line = `${wins} wins, all Sparks. Boost counts who you beat, not how many times you beat 'em.`; }
+  else if (topTier >= 4) { const tn = LADDER[topTier].name; pose = 'fired-up'; line = `Took down ${/^[AEIOUaeiou]/.test(tn) ? 'an' : 'a'} ${tn}. That's the deep end — that's how you climb.`; }
+  else if (topTier >= 2) { pose = 'fired-up'; line = `Real fights against real fields. The Boost shows it.`; }
+  else if (wins === 1) { pose = 'point'; line = `One on the board. Every climb starts somewhere.`; }
+  else { line = `Steady month. Beat somebody bigger and watch this number jump.`; }
+
+  const winRows = rows
+    .sort((a, b) => (b.total_boost || 0) - (a.total_boost || 0))
+    .map(r => {
+      const parts = [];
+      const byTier = {};
+      (r.detail?.opponents || []).forEach(o => { byTier[o.tier] = (byTier[o.tier] || 0) + 1; });
+      const phr = Object.entries(byTier)
+        .sort((a, b) => (BOOST_CFG.opponentPts[b[0]] || 0) - (BOOST_CFG.opponentPts[a[0]] || 0))
+        .map(([t, n]) => `${n > 1 ? n + ' ' : (/^[aeiou]/i.test(TIER_LABEL[t] || t) ? 'an ' : 'a ')}<b>${TIER_LABEL[t] || t}${n > 1 ? 's' : ''}</b>`);
+      if (phr.length && r.opponent_pts > 0) parts.push(`beat ${phr.join(' & ')} (+${r.opponent_pts})`);
+      if (r.vote_pts > 0) parts.push(`turnout (+${r.vote_pts})`);
+      return `<div class="bd-win">
+        <div class="bd-win-top"><span class="bd-win-title">${escapeHtml(titleById[r.challenge_id] || 'Challenge')}</span><span class="bd-win-pts">+${r.total_boost || 0}</span></div>
+        ${parts.length ? `<div class="bd-win-parts">${parts.join(' · ')}</div>` : ''}
+      </div>`;
+    }).join('');
+
+  body.innerHTML = `
+    <div class="bd-head">
+      <div class="bd-av">${avatarInner(u?.avatar)}</div>
+      <div><div class="bd-name">${escapeHtml(name)}</div><div class="bd-month">${cat ? escapeHtml(cat) + ' · ' : ''}${monthLabel}</div></div>
+    </div>
+    <div class="bd-total"><div class="bd-total-num">${total}</div><div class="bd-total-lbl">BOOST · ${wins} WIN${wins === 1 ? '' : 'S'}</div></div>
+    <div class="bd-ember">${emberFace(24, pose)}<span>${line}</span></div>
+    ${wins ? `<div class="bd-sec">HOW IT ADDS UP</div>${winRows}` : ''}
+    <div class="bd-rule">${emberFace(24, 'point')}<span><b>Boost rewards who you beat, not how often.</b> Every opponent is worth points by their ladder tier — a Spark is 1, a G.O.A.T. is 24. Big turnout adds more. Championships don't earn Boost; Boost is how you get to one.</span></div>`;
 }
 
 function closeCelebration() {
