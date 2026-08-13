@@ -6136,7 +6136,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
         </div>
         <div class="lb-how-item">
           <div class="lb-how-icon">🌟</div>
-          <div><strong>Hall of Fame</strong> — Championship titles are recorded permanently. Win a title multiple times and earn an "Nx Champion" badge on your profile forever.</div>
+          <div><strong>Hall of Fame</strong> — Championship titles are recorded permanently. Win the same title again and it stacks — "2x Champion," "3x Champion" — on your profile forever.</div>
         </div>
       </div>
     </div>
@@ -7113,6 +7113,10 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     <button class="modal-close-x" onclick="closeNotifSettings()" aria-label="Close">×</button>
     <h2>Notifications</h2>
     <p class="promote-sub">Choose which notifications show up in your bell.</p>
+    <div class="np-reach" style="margin-bottom:14px" id="npPushSection">
+      <div class="np-reach-head">📱 Push notifications</div>
+      <div id="npPushBody" style="padding-top:8px"></div>
+    </div>
     <div class="np-reach">
       <div class="np-reach-head">🔒 Private challenge invites</div>
       <div class="np-reach-opts" id="npReachOpts">
@@ -7895,7 +7899,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v763 · getapp-prompt";
+const APP_VERSION = "v765 · push-settings";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -9859,10 +9863,64 @@ function openNotifSettings() {
     });
   });
   renderInviteReach();
+  renderPushSetting(); // v765
   document.getElementById('notifSettingsModal').classList.add('open');
 }
 function closeNotifSettings() {
   document.getElementById('notifSettingsModal').classList.remove('open');
+}
+
+// v765 — push state + control inside notification settings, where anyone
+// would look for it. Async because subscription state lives in the SW.
+async function renderPushSetting() {
+  const el = document.getElementById('npPushBody');
+  if (!el) return;
+  const line = (txt, btn) => `<div style="font-size:13px;color:var(--text-muted);line-height:1.5;margin-bottom:${btn ? '10px' : '0'}">${txt}</div>${btn || ''}`;
+
+  if (!_isStandalonePWA() || !pushSupported()) {
+    el.innerHTML = line('Get championship news on your lock screen — even with the app closed. Available in the installed app.',
+      `<button class="btn btn-ghost" style="width:100%;padding:10px;font-size:13px" onclick="closeNotifSettings(); openGetAppSheet()">📲 How to install</button>`);
+    return;
+  }
+  if (Notification.permission === 'denied') {
+    el.innerHTML = line('Blocked for FlamesChallenge. To re-enable: iPhone Settings → Notifications → FlamesChallenge → Allow.');
+    return;
+  }
+  if (Notification.permission === 'default') {
+    el.innerHTML = line('Championship qualification, results, and challenges — on your lock screen even with the app closed.',
+      `<button class="btn btn-primary" style="width:100%;padding:10px;font-size:13px" onclick="enablePushNotifications().then(()=>renderPushSetting())">🔔 Turn on push</button>`);
+    return;
+  }
+  // granted — check for a live subscription
+  el.innerHTML = line('Checking…');
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      el.innerHTML = line('<b style="color:var(--success)">On</b> — championship news reaches your lock screen.',
+        `<button class="btn btn-ghost" style="width:100%;padding:10px;font-size:13px" onclick="disablePushNotifications()">Turn off on this device</button>`);
+    } else {
+      el.innerHTML = line('Permission granted but this device isn\'t registered yet.',
+        `<button class="btn btn-primary" style="width:100%;padding:10px;font-size:13px" onclick="ensurePushSubscription().then(()=>renderPushSetting())">🔔 Finish setup</button>`);
+    }
+  } catch(e) {
+    el.innerHTML = line('Couldn\'t read push status on this device.');
+  }
+}
+
+// Unsubscribe THIS device and remove its row. iOS permission stays granted
+// (only the user can revoke that in Settings), so turning back on is one tap.
+async function disablePushNotifications() {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      await db.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
+      await sub.unsubscribe();
+    }
+    toast('Push off on this device');
+  } catch(e) { console.warn('push off', e); toast('Couldn\'t turn off push'); }
+  renderPushSetting();
 }
 // Reach selector — writes profiles.invite_reach, which the server-side outbox
 // worker reads to decide ping vs Requests-bucket vs drop for private invites.
