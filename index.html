@@ -1202,6 +1202,14 @@ body.theme-light .nav { background: rgba(255, 255, 255, 0.88); border-bottom-col
   color: var(--text-muted); font-family: inherit; font-size: 13.5px; font-weight: 600;
   padding: 8px; cursor: pointer; }
 
+/* ── v766 Titles: live championship card ── */
+.lb-live-champ { background: linear-gradient(135deg, rgba(255,200,87,.12), rgba(255,106,44,.07));
+  border: 1px solid rgba(255,200,87,.4); border-radius: 16px; padding: 14px; margin-bottom: 12px; }
+.lb-live-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+.lb-live-head span:first-child { font-size: 11px; font-weight: 800; letter-spacing: .1em; color: var(--gold); }
+.lb-live-head span:last-child { font-size: 12px; font-weight: 700; color: var(--text-muted); }
+.lb-live-sub { font-size: 14px; margin-bottom: 10px; line-height: 1.4; }
+
 /* Championship challenge card badge */
 .ch-champ-tag {
   display: inline-block;
@@ -5951,7 +5959,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
   </button>
   <button class="bnav-btn" data-view="leaderboard" onclick="switchView('leaderboard')">
     <span class="bnav-icon">👑</span>
-    <span class="bnav-label">Prestige</span>
+    <span class="bnav-label">Titles</span>
   </button>
 </nav>
 
@@ -6108,8 +6116,8 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
   <div class="section">
     <div class="section-head">
       <div>
-        <h2 class="section-title">Leaderboard</h2>
-        <p class="section-sub">Monthly wins · updated live · <a class="lb-how-link" onclick="toggleLbHow()">ⓘ how it works</a></p>
+        <h2 class="section-title">Titles</h2>
+        <p class="section-sub">Who's in contention · updated live · <a class="lb-how-link" onclick="toggleLbHow()">ⓘ how it works</a></p>
       </div>
     </div>
     <div class="lb-how-card" id="lbHowCard" style="display:none">
@@ -6141,9 +6149,12 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       </div>
     </div>
 
+    <!-- v766 TITLES — Rankings + Championship merged into one "This Month"
+         view (internal key stays 'rankings' to avoid touching stored state).
+         One category = one story: live championship → monthly race with the
+         qualification line → that category's past championships. -->
     <div class="feed-tabs" style="margin-bottom:10px" id="lbMainTabs">
-      <button class="feed-tab active" data-lbtab="rankings">🏆 Rankings</button>
-      <button class="feed-tab" data-lbtab="championship">⚡ Championship</button>
+      <button class="feed-tab active" data-lbtab="rankings">📅 This Month</button>
       <button class="feed-tab" data-lbtab="halloffame">🌟 Hall of Fame</button>
     </div>
     <!-- v752 — Past pill removed; archive lives inside the Championship tab now -->
@@ -6154,6 +6165,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       <div id="lbChampionBanner" style="display:none"></div>
       <div class="ch-tabs" id="lbCategoryTabs" style="margin-bottom:12px"></div>
       <div class="leaderboard" id="lbList"></div>
+      <div id="lbPastWrap"></div>
     </div>
 
     <!-- HALL OF FAME TAB -->
@@ -6161,10 +6173,6 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       <div id="lbHofContent"></div>
     </div>
 
-    <!-- CHAMPIONSHIP TAB (includes past-championships archive, v752) -->
-    <div id="lbTabChampionship" style="display:none">
-      <div id="lbChampContent"></div>
-    </div>
   </div>
 </section>
 
@@ -7899,7 +7907,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v765 · push-settings";
+const APP_VERSION = "v766 · titles";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -8397,7 +8405,7 @@ async function saveInterestsSheet() {
     toast('Interests saved');
     // Repaint whatever surface is showing — Championship pins off interests.
     if (state.currentView === 'feed') renderFeed();
-    if (state.currentView === 'leaderboard' && _lbTab === 'championship') renderChampionshipTab();
+    if (state.currentView === 'leaderboard' && _lbTab === 'rankings') renderLeaderboard(); // v766
   } catch (e) {
     console.warn('save interests', e);
     toast('Save failed');
@@ -12031,6 +12039,27 @@ function injectPollTopAnswer(pollId) {
 }
 
 /* ---------- LEADERBOARD ---------- */
+// v766 — which category the Titles page opens on, when nothing is selected:
+// 1) a LIVE championship in one of your categories (biggest thing involving you)
+// 2) your interest/entered category with the most wins this month
+// 3) the platform's most active category
+// A tapped chip overrides this for the rest of the session (state.lbCategory).
+function pickTitlesLanding(data) {
+  try {
+    const mine = new Set(state.profile?.interests || []);
+    const me = (data?.users || []).find(u => u.id === state.profile?.id);
+    if (me) Object.keys(me.monthlyByCategory || {}).forEach(c => { if ((me.monthlyByCategory[c] || 0) > 0) mine.add(c); });
+    const liveCh = (state.challenges || []).find(ch =>
+      ch.is_championship && mine.has(ch.category) &&
+      ['submitting', 'voting'].includes(computeChallengeStatus(ch)));
+    if (liveCh && CATEGORIES.includes(liveCh.category)) return liveCh.category;
+    const winsIn = c => (data?.users || []).reduce((sum, u) => sum + (u.monthlyByCategory[c] || 0), 0);
+    const mineArr = [...mine].filter(c => CATEGORIES.includes(c));
+    if (mineArr.length) return mineArr.sort((a, b) => winsIn(b) - winsIn(a))[0];
+    return [...CATEGORIES].sort((a, b) => winsIn(b) - winsIn(a))[0] || CATEGORIES[0];
+  } catch(e) { return CATEGORIES[0]; }
+}
+
 function renderLeaderboard() {
   const list = document.getElementById('lbList');
   const tabsEl = document.getElementById('lbCategoryTabs');
@@ -12080,10 +12109,15 @@ function renderLeaderboard() {
     }
   }
 
-  const cat = state.lbCategory || 'All';
+  // v766 — no 'All': championships are per-category, so a cross-category
+  // ranking measures nothing anyone can win. Land on the most relevant chip.
+  if (!state.lbCategory || state.lbCategory === 'All' || !CATEGORIES.includes(state.lbCategory)) {
+    state.lbCategory = pickTitlesLanding(data);
+  }
+  const cat = state.lbCategory;
 
   // ── Category tabs ──
-  const allCats = ['All', ...CATEGORIES];
+  const allCats = [...CATEGORIES];
   if (tabsEl) {
     tabsEl.innerHTML = allCats.map(c =>
       `<button class="ch-tab${c === cat ? ' active' : ''}" data-lb-cat="${c}">${c}</button>`
@@ -12105,7 +12139,7 @@ function renderLeaderboard() {
       catAllTime: cat === 'All' ? (u.wins || 0) : (u.byCategory[cat] || 0),
       catLosses: u.monthlyLosses || 0,
     }))
-    .filter(u => u.catWins > 0 || u.catAllTime > 0)
+    .filter(u => u.catWins > 0) // v766 — a monthly board only ranks monthly wins
     .sort((a, b) => b.catWins - a.catWins || b.catAllTime - a.catAllTime)
     .slice(0, 10);
 
@@ -12120,8 +12154,23 @@ function renderLeaderboard() {
   const champTitle = champTitles[`${cat}-${curMonth}`];
   const champion = champTitle ? users.find(u => u.id === champTitle.userId) : null;
 
+  // v766 — live championship for this category gets top billing
+  const liveCh = (state.challenges || []).find(ch =>
+    ch.is_championship && ch.category === cat &&
+    ['submitting', 'voting'].includes(computeChallengeStatus(ch)));
+
   if (bannerEl) {
     const parts = [];
+    if (liveCh) {
+      const chStatus = computeChallengeStatus(liveCh);
+      const isVoting = chStatus === 'voting';
+      const deadline = isVoting ? liveCh.voting_end : liveCh.submission_deadline;
+      parts.push(`<div class="lb-live-champ">
+        <div class="lb-live-head"><span>⚡ CHAMPIONSHIP NIGHT — LIVE</span><span>${deadline ? '⏱ ' + formatCountdown(deadline) : ''}</span></div>
+        <div class="lb-live-sub">${isVoting ? 'Voting is open — crown the ' + escapeHtml(cat) + ' champion.' : 'Contenders are entering. One takes the ' + escapeHtml(cat) + ' crown.'}</div>
+        <button class="btn btn-primary" style="width:100%;padding:11px;font-size:13.5px" data-lb-open-ch="${liveCh.id}">${isVoting ? '🗳️ Watch & Vote →' : '⚡ View Championship →'}</button>
+      </div>`);
+    }
     // Champion banner (from Championship Challenge result)
     if (champion) {
       const isYouChamp = state.profile && champion.id === state.profile.id;
@@ -12156,6 +12205,10 @@ function renderLeaderboard() {
       bannerEl.querySelectorAll('[data-lb-follow]').forEach(btn => {
         btn.addEventListener('click', async e => { e.stopPropagation(); await lbToggleFollow(btn); });
       });
+      bannerEl.querySelector('[data-lb-open-ch]')?.addEventListener('click', () => {
+        const ch = (state.challenges || []).find(c => c.id === bannerEl.querySelector('[data-lb-open-ch]').dataset.lbOpenCh);
+        if (ch) openChallenge(ch);
+      });
     } else {
       bannerEl.style.display = 'none';
       bannerEl.innerHTML = '';
@@ -12165,8 +12218,14 @@ function renderLeaderboard() {
   // ── Rows ──
   list.innerHTML = '';
   if (ranked.length === 0) {
-    list.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted)">No wins in ${cat} yet — be the first!</div>`;
-    return;
+    // v766 — never rank 0-win users by all-time under a monthly header. Say
+    // the truth and hand them the door in.
+    list.innerHTML = `<div class="lbc-rows" style="text-align:center;padding:26px 20px">
+      <div style="font-size:30px;margin-bottom:8px">🏆</div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:5px">No wins yet this month</div>
+      <div style="font-size:12.5px;color:var(--text-muted);line-height:1.5;margin-bottom:14px">First ${escapeHtml(cat)} win takes the lead — and the top 3 on the last day of the month fight for the crown.</div>
+      <button class="btn btn-primary" style="padding:10px 22px;font-size:13px" onclick="switchView('challenges')">See open challenges →</button>
+    </div>`;
   }
 
   // Competition ranking: users tied on BOTH sort keys share a rank. Medals 1-3, numbers after.
@@ -12179,7 +12238,7 @@ function renderLeaderboard() {
   });
   // Championship qualifying race (v614): gold line splits qualified from chasing.
   // Only on category views, only while this category's championship hasn't launched.
-  const _raceOn = cat !== 'All'
+  const _raceOn = !liveCh // v766 — a live championship means the race already ended
     && !(state.champLaunches || []).some(l => l.month === curMonth && l.category === cat && !l.is_sponsored);
   const _monthWinners = ranked.filter(u => u.catWins > 0).length;
   const _qualCut = _raceOn && _monthWinners > 0 ? Math.min(3, _monthWinners) - 1 : -1;
@@ -12224,6 +12283,23 @@ function renderLeaderboard() {
       list.appendChild(line);
     }
   });
+
+  // ── v766: admin launch + this category's past championships ──
+  const pastWrap = document.getElementById('lbPastWrap');
+  if (pastWrap) {
+    const adminLaunch = (typeof isAdmin === 'function' && isAdmin() && _monthWinners >= 2 && _raceOn && !liveCh)
+      ? `<button class="lb-champ-launch-btn" style="margin:12px 0 0;width:100%" data-launch-cat="${escapeHtml(cat)}">⚡ Launch ${escapeHtml(cat)} Championship</button>` : '';
+    pastWrap.innerHTML = adminLaunch + renderPastChampsSection(cat);
+    pastWrap.querySelectorAll('[data-lbc-toggle]').forEach(row => {
+      row.addEventListener('click', () => {
+        const k = row.dataset.lbcToggle;
+        if (_lbcOpenRows.has(k)) _lbcOpenRows.delete(k); else _lbcOpenRows.add(k);
+        renderLeaderboard();
+      });
+    });
+    pastWrap.querySelector('[data-lbc-showall-past]')?.addEventListener('click', () => { _lbcShowAllPast = !_lbcShowAllPast; renderLeaderboard(); });
+    pastWrap.querySelector('[data-launch-cat]')?.addEventListener('click', e => { e.stopPropagation(); launchChampionshipChallenge(cat); });
+  }
 }
 
 async function lbToggleFollow(btn) {
@@ -12952,13 +13028,12 @@ function initLbTabs() {
     btn.addEventListener('click', () => {
       _lbTab = btn.dataset.lbtab;
       document.querySelectorAll('#lbMainTabs .feed-tab').forEach(b => b.classList.toggle('active', b.dataset.lbtab === _lbTab));
+      if (_lbTab === 'championship') _lbTab = 'rankings'; // v766 — merged into This Month
       document.getElementById('lbTabRankings').style.display = _lbTab === 'rankings' ? 'block' : 'none';
       document.getElementById('lbTabHallOfFame').style.display = _lbTab === 'halloffame' ? 'block' : 'none';
-      document.getElementById('lbTabChampionship').style.display = _lbTab === 'championship' ? 'block' : 'none';
       const cdEl = document.getElementById('lbChampCountdown');
       if (cdEl) cdEl.style.display = (_lbTab !== 'halloffame' && cdEl.dataset.active) ? 'block' : 'none';
       if (_lbTab === 'halloffame') renderHallOfFame();
-      if (_lbTab === 'championship') renderChampionshipTab();
     });
   });
 }
@@ -13168,7 +13243,7 @@ function entryModVisible(e, { allowAdmin = false } = {}) {
   return false;
 }
 // The active championship month per category (from launch records, not calendar).
-// Global: used by renderChampionshipTab AND both launch flows.
+// Global: used by the Titles This-Month view AND both launch flows.
 function getChampMonth(cat) {
   const now = new Date();
   const curMonthStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
@@ -13819,249 +13894,9 @@ function renderPastChampsSection(filterCat) {
     <div class="lbc-rows">${rows}${moreBtn}</div>`;
 }
 
-function renderChampionshipTab() {
-  // v752 redesign — the old layout gave every category a full card, so 10
-  // categories = ~8 screens, mostly empty states. New layout scales flat:
-  //   YOUR CATEGORIES  — interests + anywhere you have a win this month,
-  //                      expandable rows with your position called out
-  //   ALL CATEGORIES   — one compact line each (leader · wins), most-active
-  //                      first, capped at 6 with Show all
-  //   PAST CHAMPIONSHIPS — archive rows (was its own 📜 Past pill pre-v752)
-  // Row expansion state lives in _lbcOpenRows so it survives re-renders.
-  const el = document.getElementById('lbChampContent');
-  if (!el) return;
-  const data = state.leaderboardData;
-  if (!data) { el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted)">Loading...</div>'; return; }
-
-  const myId = state.profile?.id;
-  const now = new Date();
-  const curMonthStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-  const catChampMonth = formatStoredMonth(curMonthStr);
-  const catIcons = { Art: '🎨', Photography: '📷', Music: '🎵', Writing: '✍️', Cooking: '🍳', Style: '👗', Sports: '🏆', Fitness: '💪', Comedy: '😂', Other: '✨' };
-  const champTitles = getChampTitles();
-  const reigning = reigningChampsByCat();
-
-  // ── Per-category stats ──
-  const stats = CATEGORIES.map(cat => {
-    const ranked = [...(data.users || [])]
-      .filter(u => (u.monthlyByCategory[cat] || 0) > 0)
-      .sort((a, b) => (b.monthlyByCategory[cat] || 0) - (a.monthlyByCategory[cat] || 0));
-    const top3 = ranked.slice(0, 3);
-    const totalWins = ranked.reduce((s, u) => s + (u.monthlyByCategory[cat] || 0), 0);
-    const leader = ranked[0] || null;
-    const myRank = myId ? ranked.findIndex(u => u.id === myId) + 1 : 0;
-    const myWins = myId ? ((data.users || []).find(u => u.id === myId)?.monthlyByCategory[cat] || 0) : 0;
-    const champTitle = champTitles[`${cat}-${curMonthStr}`];
-    const champion = champTitle ? (data.users || []).find(u => u.id === champTitle.userId) : null;
-    const activeCh = (state.challenges || []).find(ch =>
-      ch.is_championship && ch.category === cat &&
-      ['submitting', 'voting'].includes(computeChallengeStatus(ch)));
-    return { cat, ranked, top3, totalWins, leader, myRank, myWins, champion, activeCh };
-  });
-
-  // Mine = onboarding interests + any category I have a win in this month.
-  const interestSet = new Set(state.profile?.interests || []);
-  const mine = stats.filter(s => interestSet.has(s.cat) || s.myWins > 0);
-  const mineSet = new Set(mine.map(s => s.cat));
-  // Rest, most active first — deduped so nothing appears twice on one screen.
-  const others = stats.filter(s => !mineSet.has(s.cat))
-    .sort((a, b) => b.totalWins - a.totalWins || a.cat.localeCompare(b.cat));
-
-  const ordinal = n => n === 1 ? '1ST' : n === 2 ? '2ND' : n === 3 ? '3RD' : n + 'TH';
-  const winsTxt = n => `${n} win${n === 1 ? '' : 's'}`;
-
-  // v754 — All opens collapsed: the row line ("X leads · YOU'RE 2ND") already
-  // answers the first question, and any auto-expand heuristic guesses wrong
-  // often enough to cost more than it saves. ONE exception: with exactly one
-  // category there is nothing to guess between, and a lone collapsed row reads
-  // as an empty page. Runs once per session, then the user's taps own the state.
-  if (!_lbcAutoExpandDone) {
-    _lbcAutoExpandDone = true;
-    if (mine.length === 1) _lbcOpenRows.add(`cat:${mine[0].cat}`);
-  }
-
-  // ── Expanded panel (shared by both sections) ──
-  const catPanel = (s) => {
-    const medals = ['🥇', '🥈', '🥉'];
-    // Competition ranking: tied win counts share a rank.
-    const rankOf = [];
-    s.top3.forEach((u, i) => {
-      const w = u.monthlyByCategory[s.cat];
-      rankOf[i] = (i === 0 || w !== s.top3[i-1].monthlyByCategory[s.cat]) ? i + 1 : rankOf[i-1];
-    });
-    const contenders = s.top3.map((u, i) => {
-      const isYou = u.id === myId;
-      const wins = u.monthlyByCategory[s.cat];
-      const icon = rankOf[i] <= 3 ? medals[rankOf[i] - 1] : '#' + rankOf[i];
-      return `<div class="lb-champ-contender${isYou ? ' you' : ''}">
-        <div class="lb-champ-rank">${icon}</div>
-        <div class="lb-champ-cav">${avatarInner(u.avatar)}</div>
-        <div class="lb-champ-cname">${escapeHtml(u.name)}${isYou ? ' <span style="color:var(--ember);font-size:11px">(you)</span>' : ''}</div>
-        <div class="lb-champ-cwins">${winsTxt(wins)}</div>
-      </div>`;
-    }).join('');
-    const openSpots = s.top3.length < 3
-      ? `<div style="padding:8px 0 2px;font-size:12px;color:var(--text-muted);text-align:center">${3 - s.top3.length} spot${3 - s.top3.length > 1 ? 's' : ''} open — win a challenge to claim one</div>` : '';
-
-    // My one-line status (condensed from the old per-card banners)
-    let myStatus = '';
-    if (myId) {
-      if (s.champion?.id === myId) {
-        myStatus = `<div class="lb-champ-my-status defending">👑 You are the current ${s.cat} Champion — defend your title!</div>`;
-      } else if (s.myRank > 0 && s.myRank <= 3) {
-        myStatus = `<div class="lb-champ-my-status qualify">✅ You're #${s.myRank} — you qualify for the ${catChampMonth} Championship Challenge.</div>`;
-      } else if (s.myWins > 0) {
-        myStatus = `<div class="lb-champ-my-status progress">You're #${s.myRank} with ${winsTxt(s.myWins)}. Reach top 3 to qualify.</div>`;
-      }
-    }
-
-    // Champion / defense line (condensed)
-    let crownLine = '';
-    if (s.champion) {
-      crownLine = `<div style="font-size:12px;color:var(--gold);padding:6px 0 2px">👑 Current Champion: <strong>${escapeHtml(s.champion.name)}</strong>${s.champion.id === myId ? ' (you)' : ''}</div>`;
-    } else if (reigning[s.cat]) {
-      const r = reigning[s.cat];
-      const def = champDefenseCount(r.userId, s.cat);
-      crownLine = `<div style="font-size:12px;color:var(--gold);padding:6px 0 2px">👑 ${r.userId === myId ? 'You defend' : escapeHtml(r.name) + ' defends'} the crown${def > 0 ? ` · ${def + 1}x defending` : ''}</div>`;
-    }
-
-    // Live championship CTA
-    let liveBtn = '';
-    if (s.activeCh) {
-      const chStatus = computeChallengeStatus(s.activeCh);
-      const isVoting = chStatus === 'voting';
-      const deadline = isVoting ? s.activeCh.voting_end : s.activeCh.submission_deadline;
-      liveBtn = `<button class="btn btn-primary" style="width:100%;margin-top:10px;padding:9px;font-size:13px" data-lbc-open-ch="${s.activeCh.id}">
-        ${isVoting ? '🗳️ Watch & Vote' : '⚡ View Championship'} ${deadline ? '· ⏱ ' + formatCountdown(deadline) : ''}</button>`;
-    }
-
-    const launchBtn = (isAdmin() && s.top3.length >= 2 && !s.activeCh)
-      ? `<button class="lb-champ-launch-btn" style="margin-top:10px" data-launch-cat="${escapeHtml(s.cat)}">⚡ Launch</button>` : '';
-
-    return `<div class="lbc-panel">
-      ${myStatus}
-      <div class="lbc-panel-lbl">Top 3 — qualify if the month ended today</div>
-      ${contenders || '<div style="font-size:12px;color:var(--text-muted);padding:4px 0">No wins yet this month.</div>'}
-      ${openSpots}${crownLine}${liveBtn}${launchBtn}
-    </div>`;
-  };
-
-  // ── Full row (Your Categories) ──
-  const fullRow = (s) => {
-    const key = `cat:${s.cat}`;
-    const isOpen = _lbcOpenRows.has(key);
-    let leadLine;
-    if (s.leader) {
-      const youBit = s.myRank > 0
-        ? ` <span class="lbc-you-pos${s.myRank <= 3 ? '' : ' out'}">YOU'RE ${ordinal(s.myRank)}</span>` : '';
-      leadLine = s.leader.id === myId
-        ? `<span class="lbc-lead-av">${avatarInner(s.leader.avatar)}</span> <span style="color:var(--ember);font-weight:700">You lead</span>`
-        : `<span class="lbc-lead-av">${avatarInner(s.leader.avatar)}</span> ${escapeHtml(s.leader.name)} leads${youBit}`;
-    } else {
-      leadLine = `<span class="dim" style="font-style:italic;opacity:0.7">No wins yet — first win takes the lead</span>`;
-    }
-    const rightPill = s.activeCh
-      ? `<span class="lbc-live-pill">⚡ LIVE</span>`
-      : (s.leader ? `<span class="lbc-wins-pill">${s.leader.monthlyByCategory[s.cat]}W</span>` : '');
-    return `<div class="lbc-row${isOpen ? ' open' : ''}" data-lbc-toggle="${escapeHtml(key)}">
-      <div class="lbc-cat-ic">${catIcons[s.cat] || '🏆'}</div>
-      <div class="lbc-mid">
-        <div class="lbc-cat-name">${escapeHtml(s.cat)}</div>
-        <div class="lbc-lead-line">${leadLine}</div>
-      </div>
-      ${rightPill}
-      <span class="lbc-chev">›</span>
-    </div>${isOpen ? catPanel(s) : ''}`;
-  };
-
-  // ── Compact row (All Categories) ──
-  const compactRow = (s) => {
-    const key = `cat:${s.cat}`;
-    const isOpen = _lbcOpenRows.has(key);
-    const leadBit = s.leader
-      ? `<span class="lbc-lead-av">${avatarInner(s.leader.avatar)}</span> ${escapeHtml(s.leader.name)} · ${s.leader.monthlyByCategory[s.cat]}W`
-      : `<span class="dim">no wins yet</span>`;
-    const livePill = s.activeCh ? `<span class="lbc-live-pill">⚡ LIVE</span>` : '';
-    return `<div class="lbc-crow${isOpen ? ' open' : ''}" data-lbc-toggle="${escapeHtml(key)}">
-      <span class="lbc-crow-ic">${catIcons[s.cat] || '🏆'}</span>
-      <span class="lbc-crow-name">${escapeHtml(s.cat)}</span>
-      <span class="lbc-crow-lead">${leadBit}</span>
-      ${livePill}
-      <span class="lbc-chev"${isOpen ? ' style="transform:rotate(90deg);color:var(--ember)"' : ''}>›</span>
-    </div>${isOpen ? catPanel(s) : ''}`;
-  };
-
-  // ── Chip strip ──
-  // Order: All, then your categories, then the rest most-active first. Stable
-  // per user (it only moves when interests change), so the strip stays learnable.
-  const chipCats = ['All', ...mine.map(s => s.cat), ...others.map(s => s.cat)];
-  if (!chipCats.includes(_lbcCat)) _lbcCat = 'All'; // guard: interests changed under us
-  const chipStrip = `<div class="ch-tabs" id="lbcChips" style="margin-bottom:14px">${
-    chipCats.map(c => `<button class="ch-tab${c === _lbcCat ? ' active' : ''}" data-lbc-chip="${escapeHtml(c)}">${c === 'All' ? 'All' : escapeHtml(c)}</button>`).join('')
-  }</div>`;
-
-  let bodyHtml;
-  if (_lbcCat !== 'All') {
-    // ── Single category: no rows to pick from, just the detail. ──
-    const s = stats.find(x => x.cat === _lbcCat);
-    bodyHtml = s
-      ? `<div class="lbc-rows" style="padding:2px 0">${catPanel(s).replace('class="lbc-panel"', 'class="lbc-panel" style="border-bottom:none;background:transparent;padding-left:14px;padding-right:14px"')}</div>`
-      : '';
-  } else {
-    // ── All: pinned rows for yours, compact rows for the rest. ──
-    const ALL_PREVIEW = 6;
-    const othersShown = _lbcShowAllCats ? others : others.slice(0, ALL_PREVIEW);
-
-    const mineHtml = mine.length
-      ? `<div class="lbc-sec"><span class="lbc-sec-title">🔥 Your Categories</span><span class="lbc-sec-note">interests + entered</span></div>
-         <div class="lbc-rows mine">${mine.map(fullRow).join('')}</div>`
-      : (myId ? `<div class="lbc-sec"><span class="lbc-sec-title">🔥 Your Categories</span></div>
-         <div class="lbc-rows mine"><div class="lbc-row" data-lbc-interests style="justify-content:center;gap:8px">
-           <span style="font-size:13px;color:var(--text-muted)">Pick your interests to pin categories here</span>
-           <span style="font-size:12.5px;font-weight:700;color:var(--ember)">Choose →</span>
-         </div></div>` : '');
-
-    const othersHtml = others.length
-      ? `<div class="lbc-sec"><span class="lbc-sec-title">${mine.length ? 'All Categories' : 'Qualifying now'}</span><span class="lbc-sec-note">most active first</span></div>
-         <div class="lbc-rows">${othersShown.map(compactRow).join('')}
-         ${others.length > ALL_PREVIEW ? `<button class="lbc-more" data-lbc-showall-cats>${_lbcShowAllCats ? 'Show fewer ▴' : `Show all ${others.length} ▾`}</button>` : ''}</div>`
-      : '';
-
-    bodyHtml = mineHtml + othersHtml;
-  }
-
-  el.innerHTML = chipStrip + bodyHtml + renderPastChampsSection(_lbcCat);
-
-  // ── Wiring (innerHTML replaced every render, so re-wire is correct here) ──
-  el.querySelectorAll('[data-lbc-chip]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      _lbcCat = btn.dataset.lbcChip;
-      _lbcShowAllPast = false; // scope changed — restart the archive preview
-      renderChampionshipTab();
-      document.getElementById('lbChampContent')?.scrollIntoView({ block: 'nearest' });
-    });
-  });
-  el.querySelectorAll('[data-lbc-toggle]').forEach(row => {
-    row.addEventListener('click', () => {
-      const k = row.dataset.lbcToggle;
-      if (_lbcOpenRows.has(k)) _lbcOpenRows.delete(k); else _lbcOpenRows.add(k);
-      renderChampionshipTab();
-    });
-  });
-  el.querySelector('[data-lbc-showall-cats]')?.addEventListener('click', () => { _lbcShowAllCats = !_lbcShowAllCats; renderChampionshipTab(); });
-  el.querySelector('[data-lbc-showall-past]')?.addEventListener('click', () => { _lbcShowAllPast = !_lbcShowAllPast; renderChampionshipTab(); });
-  el.querySelector('[data-lbc-interests]')?.addEventListener('click', () => openInterestEditor());
-  el.querySelectorAll('[data-launch-cat]').forEach(btn => {
-    btn.addEventListener('click', (e) => { e.stopPropagation(); launchChampionshipChallenge(btn.dataset.launchCat); });
-  });
-  el.querySelectorAll('[data-lbc-open-ch]').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const ch = (state.challenges || []).find(c => c.id === btn.dataset.lbcOpenCh);
-      if (ch) openChallenge(ch);
-    });
-  });
-}
+/* renderChampionshipTab removed in v766 — the Championship tab merged into
+   the This Month view (renderLeaderboard): live card, qualification line,
+   admin launch and the scoped archive all live there now. */
 
 let _championshipLaunching = false;
 
@@ -14277,7 +14112,7 @@ async function launchChampionshipChallenge(category) {
       body: { type: 'qualified', userIds: contenders.map(u => u.id), category, month, deadline: deadlineLabel, challengeId: ch.id }
     }).catch(e => console.warn('qualifier email', e));
     await loadChallenges();
-    renderChampionshipTab();
+    renderLeaderboard(); // v766 — championship view merged into This Month
   } catch(err) {
     console.error('launch championship', err);
     toast('Launch failed: ' + (err.message || 'unknown'));
@@ -20758,7 +20593,7 @@ const TOUR_STEPS = [
   },
   {
     target: () => document.querySelector('.bnav-btn[data-view="leaderboard"]'),
-    title: 'Prestige',
+    title: 'Titles',
     body: 'This is the climb. Regular wins get you in the game — Championships are what move you up the ladder, Spark all the way to G.O.A.T. Win one, watch your rank change. 🏆',
     position: 'above',
   },
