@@ -7988,7 +7988,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v779 · entry-deadlines";
+const APP_VERSION = "v781 · notif-prefs";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -9898,7 +9898,8 @@ const NOTIF_PREF_DEFS = [
   { key: 'competitions', label: 'My competitions',   sub: 'Votes, entries & results on your challenges', icon: '🏆' },
   { key: 'social',       label: 'Social',            sub: 'Likes, comments, replies, @mentions & new followers', icon: '💬' },
   { key: 'following',    label: 'From people you follow', sub: 'Their new challenges & polls', icon: '✨' },
-  { key: 'championship', label: 'Championships',      sub: 'Qualification & championship results', icon: '⚡' },
+  { key: 'championship', label: 'My championships',   sub: 'When you qualify, get promoted, or win', icon: '⚡' },
+  { key: 'champ_news',   label: 'Championship news',  sub: 'Voting reminders, roster changes & other results', icon: '📣' },
 ];
 function notifTypeCategory(type) {
   // Maps each raw notification type to one of the 4 grouped toggle keys.
@@ -9910,14 +9911,23 @@ function notifTypeCategory(type) {
     mention: 'social', follow: 'social',
     // From people you follow
     new_challenge: 'following', new_poll: 'following',
-    // Championships
-    champ_qualified: 'championship', champ_won: 'championship', champ_race: 'championship', upset: 'championship',
-    champ_friend_qualified: 'championship', champ_friend_won: 'championship',
+    // v781 — split. 'championship' = things happening TO YOU (most people
+    // always want these). 'champ_news' = things happening AROUND you — the
+    // vote reminders and roster churn, which is where the volume is.
+    champ_qualified: 'championship', champ_won: 'championship',
+    champ_launched: 'champ_news', champ_race: 'champ_news', upset: 'champ_news',
+    champ_friend_qualified: 'champ_news', champ_friend_won: 'champ_news',
   })[type];
 }
 function notifPrefKey() { return 'fc_notif_prefs_' + (state.profile?.id || 'anon'); }
 function getNotifPrefs() {
-  try { return JSON.parse(localStorage.getItem(notifPrefKey()) || '{}'); } catch (e) { return {}; }
+  // Profile is the source of truth (survives device changes); localStorage is
+  // the fast local cache read synchronously during render.
+  try {
+    const server = state.profile?.notif_prefs;
+    if (server && typeof server === 'object') return server;
+    return JSON.parse(localStorage.getItem(notifPrefKey()) || '{}');
+  } catch (e) { return {}; }
 }
 function isNotifTypeEnabled(type) {
   const cat = notifTypeCategory(type);
@@ -9928,6 +9938,13 @@ function setNotifPref(cat, enabled) {
   const prefs = getNotifPrefs();
   prefs[cat] = enabled;
   try { localStorage.setItem(notifPrefKey(), JSON.stringify(prefs)); } catch (e) {}
+  // v781 — ALSO write to the profile. Prefs lived only in localStorage, which
+  // the push-dispatch Edge Function (running server-side) can't read — so the
+  // toggle governed the bell while push ignored it entirely. Now both agree.
+  if (state.profile?.id) {
+    db.from('profiles').update({ notif_prefs: prefs }).eq('id', state.profile.id)
+      .then(({ error }) => { if (error) console.warn('notif pref save', error); });
+  }
   applyNotifPrefs();
 }
 function applyNotifPrefs() {
