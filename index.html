@@ -7988,7 +7988,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v777 · plain-ember";
+const APP_VERSION = "v779 · entry-deadlines";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -17662,12 +17662,13 @@ function renderChallengeDetail() {
   const shareBtn = document.getElementById('cdShareBtn');
   if (shareBtn) shareBtn.addEventListener('click', e => { e.stopPropagation(); openPromote('challenge', ch); });
 
-  // Championship accept/decline banner — pending invitees during submitting.
-  // v770 — also shown for 'no_show': being swept for not responding is NOT a
-  // locked door while the window is still open. Accepting flips them back in.
+  // Championship accept/decline banner — pending invitees only.
+  // v779 — the reclaim path is GONE. Qualifiers get days 1-3; day 4 belongs to
+  // reserves. Letting a cut qualifier re-enter on day 4 would mean a promoted
+  // reserve could start recording and lose the spot again mid-effort.
   const _inviteSt = state.myChampInvite?.invite_status;
-  if (ch.is_championship && (_inviteSt === 'pending' || _inviteSt === 'no_show') && status === 'submitting') {
-    const _reclaim = _inviteSt === 'no_show';
+  if (ch.is_championship && _inviteSt === 'pending' && status === 'submitting') {
+    const _reclaim = false;
     const heroEl = document.getElementById('cdHero');
     const banner = document.createElement('div');
     banner.style.cssText = 'margin-top:14px;padding:14px;background:rgba(255,200,87,0.1);border:1px solid rgba(255,200,87,0.35);border-radius:12px;';
