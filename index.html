@@ -4807,8 +4807,14 @@ body.theme-light .ch-status.voided .dot { background: #c92a2a; box-shadow: none;
 .cd-medal.gold { background: rgba(255,200,87,0.25); color: #ffd97a; border: 1px solid rgba(255,200,87,0.5); }
 .cd-medal.silver { background: rgba(212,212,212,0.2); color: #e8e8e8; border: 1px solid rgba(212,212,212,0.4); }
 .cd-medal.bronze { background: rgba(205,127,50,0.25); color: #f0a060; border: 1px solid rgba(205,127,50,0.4); }
-.cd-entry-media { aspect-ratio: 16 / 11; background: #000; overflow: hidden; position: relative; }
-.cd-entry-media img, .cd-entry-media video { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* v782 — was a hard 16/11 box with object-fit:cover, which sliced the top and
+   bottom off every portrait photo (heads cut off in championship entries).
+   Now the box follows the image: portrait shots show whole, capped at 80vh so
+   a very tall one can't swallow the screen, and letterboxing sits on black. */
+.cd-entry-media { background: #000; overflow: hidden; position: relative;
+  max-height: 80vh; display: flex; align-items: center; justify-content: center; }
+.cd-entry-media img, .cd-entry-media video { width: 100%; height: auto;
+  max-height: 80vh; object-fit: contain; display: block; }
 .cd-audio-wrap { padding: 24px 16px; background: linear-gradient(135deg, #1a1410, #0a0805); display: flex; align-items: center; height: 100%; }
 .cd-audio-wrap audio { width: 100%; }
 .cd-text-entry { padding: 20px 18px; background: linear-gradient(135deg, #1a1410, #0a0805); font-family: var(--font-bricolage); font-size: 16px; line-height: 1.5; color: var(--text); min-height: 140px; display: flex; align-items: center; }
@@ -7988,7 +7994,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v781 · notif-prefs";
+const APP_VERSION = "v783 · flyer-line";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11180,6 +11186,17 @@ async function postFlyerToFeed() {
   btn.textContent = 'Posting...'; btn.disabled = true;
 
   try {
+    // v783 — the flyer is baked once by the Generate button. Typing a line
+    // AFTER that updated the input but never re-rendered, so posting shipped
+    // the old PNG and the user's line silently vanished. Re-bake if the text
+    // in the box no longer matches what's actually on the image.
+    const typed = (document.getElementById('promoteHype')?.value || '').trim();
+    if (promoteState?.flyerGenerated && typed !== (promoteState.hype || '')) {
+      btn.textContent = 'Updating flyer...';
+      await userGeneratePromoteFlyer();
+      btn.textContent = 'Posting...';
+    }
+
     // Get flyer blob — use promoteState.blob (already generated), never fetch data: URLs on iOS
     let mediaUrl = null;
     let blob = promoteState?.blob || null;
