@@ -8020,7 +8020,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v791 · champ-flyer-server";
+const APP_VERSION = "v791.2 · champ-flyer-test";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -12710,7 +12710,17 @@ function renderLeaderboard() {
   if (pastWrap) {
     const adminLaunch = (typeof isAdmin === 'function' && isAdmin() && _monthWinners >= 2 && _raceOn && !liveCh)
       ? `<button class="lb-champ-launch-btn" style="margin:12px 0 0;width:100%" data-launch-cat="${escapeHtml(cat)}">⚡ Launch ${escapeHtml(cat)} Championship</button>` : '';
-    pastWrap.innerHTML = adminLaunch + renderPastChampsSection(cat);
+    // TEMPORARY admin-only flyer check. Renders the most recent championship
+    // that exists — including closed ones — via the function's `force` flag,
+    // so the artwork can be verified without waiting for a live launch.
+    // Remove once a real launch has rendered correctly.
+    const _lastChamp = (state.champLaunches || []).find(l => l.challenge_id);
+    const adminFlyerTest = (typeof isAdmin === 'function' && isAdmin() && _lastChamp)
+      ? `<button class="lb-champ-launch-btn" style="margin:12px 0 0;width:100%" data-flyer-test="${escapeHtml(_lastChamp.challenge_id)}">🖼 Flyer test · ${escapeHtml(_lastChamp.category || '')} ${escapeHtml(_lastChamp.month || '')}</button>` : '';
+    pastWrap.innerHTML = adminLaunch + adminFlyerTest + renderPastChampsSection(cat);
+    pastWrap.querySelectorAll('[data-flyer-test]').forEach(b => {
+      b.addEventListener('click', () => previewChampFlyer(b.dataset.flyerTest));
+    });
     pastWrap.querySelectorAll('[data-lbc-toggle]').forEach(row => {
       row.addEventListener('click', () => {
         const k = row.dataset.lbcToggle;
