@@ -8008,7 +8008,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v787 · outlaw-silhouette";
+const APP_VERSION = "v788 · wanted-template";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -10967,134 +10967,53 @@ function _drawOutlawSilhouette(ctx, x, y, w, h) {
 }
 
 async function _drawWantedFlyer(ctx, W, H, opts) {
-  const INK = '#2b1c0c';
-  const [wood, parch] = await Promise.all([
-    _loadImg(FLYER_ASSET_BASE + 'flyer-wood.webp'),
-    _loadImg(FLYER_ASSET_BASE + 'flyer-parchment.webp'),
-  ]);
+  // v788 — drawn on a pre-cleaned poster template (2:3, same as the flyer).
+  // The placeholder text was erased from the asset OFFLINE — stains and grain
+  // preserved, only the letters removed — so there is no runtime patching and
+  // therefore no visible patch rectangles. Slot positions were measured off
+  // the template, not eyeballed.
+  const tpl = await _loadImg(FLYER_ASSET_BASE + 'flyer-wanted-template.webp');
+  if (!tpl) { ctx.fillStyle = '#6b4f2e'; ctx.fillRect(0, 0, W, H); return; }
+  ctx.drawImage(tpl, 0, 0, W, H);
 
-  // Board
-  if (wood) ctx.drawImage(wood, 0, 0, W, H);
-  else { ctx.fillStyle = '#3a2a1c'; ctx.fillRect(0, 0, W, H); }
-
-  // Vignette so the eye lands on the paper
-  const vg = ctx.createRadialGradient(W/2, H*0.42, W*0.25, W/2, H*0.5, H*0.72);
-  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.5)');
-  ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
-
-  // Sheet — tilted slightly so it reads as nailed up by a person, not placed
-  // by software.
-  const sw = W * 0.86, sh = H * 0.90;
-  const sx = (W - sw) / 2, sy = (H - sh) / 2;
-  ctx.save();
-  ctx.translate(W / 2, H / 2); ctx.rotate(-1.2 * Math.PI / 180); ctx.translate(-W / 2, -H / 2);
-  ctx.shadowColor = 'rgba(0,0,0,0.65)'; ctx.shadowBlur = 34; ctx.shadowOffsetY = 16;
-  if (parch) ctx.drawImage(parch, sx, sy, sw, sh);
-  else { ctx.fillStyle = '#d9c396'; ctx.fillRect(sx, sy, sw, sh); }
-  ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
-
-  const cx = W / 2;
-  const pad = sw * 0.12;
-  const innerW = sw - pad * 2;
-  let y = sy + sh * 0.085;
-  ctx.textAlign = 'center';
-  ctx.fillStyle = INK;
-
-  // WANTED
-  ctx.globalAlpha = 0.9;
-  ctx.font = '150px Rye, Georgia, serif';
-  ctx.fillText('WANTED', cx, y + 112);
-  y += 150;
-
-  // rule
-  ctx.globalAlpha = 0.72;
-  ctx.fillRect(cx - innerW * 0.42, y, innerW * 0.84, 5);
-  y += 30;
-
-  // DEAD OR ALIVE
-  ctx.globalAlpha = 0.85;
-  ctx.font = '34px "Special Elite", Courier, monospace';
-  ctx.fillText('DEAD OR ALIVE', cx, y + 26);
-  y += 74;
-
-  // The outlaw: the CREATOR
-  ctx.globalAlpha = 0.9;
-  const who = (opts.creatorName || 'A CHALLENGER').toUpperCase();
-  const px = _fitText(ctx, who, innerW, 92, 'Rye, Georgia, serif');
-  ctx.fillText(who, cx, y + px * 0.78);
-  y += px + 22;
-
-  ctx.globalAlpha = 0.8;
-  ctx.font = '29px "Special Elite", Courier, monospace';
-  ctx.fillText('has thrown down a challenge', cx, y + 22);
-  y += 68;
-
-  // Portrait
-  const phW = sw * 0.50, phH = phW;
-  const phX = cx - phW / 2, phY = y;
-  ctx.globalAlpha = 0.92;
-  if (opts.heroImage) {
+  // Multiply so paper grain reads through the letters, like the template's
+  // own type. Plain fills sit on top and look printed on plastic.
+  const ink = (text, yFrac, px, family, alpha, maxW) => {
+    if (!text) return;
     ctx.save();
-    ctx.beginPath(); ctx.rect(phX, phY, phW, phH); ctx.clip();
-    const im = opts.heroImage;
-    const r = Math.max(phW / im.width, phH / im.height);
-    const dw = im.width * r, dh = im.height * r;
-    try { ctx.drawImage(im, phX + (phW - dw) / 2, phY + (phH - dh) / 2, dw, dh); } catch (e) {}
-    // Sepia: strip colour first, THEN tone. A single multiply over a full-colour
-    // photo leaves it obviously modern — this is what makes it read as printed.
-    ctx.globalCompositeOperation = 'saturation';
-    ctx.fillStyle = '#808080'; ctx.fillRect(phX, phY, phW, phH);
     ctx.globalCompositeOperation = 'multiply';
-    ctx.fillStyle = 'rgba(146,108,58,0.78)'; ctx.fillRect(phX, phY, phW, phH);
-    ctx.globalCompositeOperation = 'overlay';
-    ctx.fillStyle = 'rgba(255,232,190,0.22)'; ctx.fillRect(phX, phY, phW, phH);
-    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = alpha == null ? 0.94 : alpha;
+    ctx.fillStyle = '#241606';
+    ctx.textAlign = 'center';
+    _fitText(ctx, text, W * (maxW || 0.62), px, family);
+    ctx.fillText(text, W / 2, H * yFrac);
     ctx.restore();
-  } else {
-    _drawOutlawSilhouette(ctx, phX, phY, phW, phH);
-  }
-  ctx.strokeStyle = INK; ctx.lineWidth = 9; ctx.globalAlpha = 0.85;
-  ctx.strokeRect(phX, phY, phW, phH);
-  y += phH + 64;
+  };
 
-  // REWARD line — the bit that makes it feel authentic
-  ctx.globalAlpha = 0.9;
-  ctx.font = '30px "Special Elite", Courier, monospace';
-  ctx.fillText('REWARD', cx, y);
-  y += 52;
-  const prize = ('THE ' + (opts.kicker || 'FLAMES') + ' CROWN').toUpperCase();
-  const rpx = _fitText(ctx, prize, innerW, 60, 'Rye, Georgia, serif');
-  ctx.fillText(prize, cx, y + rpx * 0.78);
-  y += rpx + 34;
-
-  // The creator's own line
-  if (opts.hype) {
-    ctx.globalAlpha = 0.82;
-    ctx.font = 'italic 30px Georgia, serif';
-    const words = String(opts.hype).split(/\s+/);
-    let line = '', lines = [];
-    words.forEach(w => {
-      const t = line ? line + ' ' + w : w;
-      if (ctx.measureText(t).width > innerW && line) { lines.push(line); line = w; } else line = t;
-    });
-    if (line) lines.push(line);
-    lines.slice(0, 2).forEach(l => { ctx.fillText('"' + l + '"', cx, y); y += 38; });
-    y += 8;
+  // ── optional photo replaces the silhouette (panel interior, measured) ──
+  if (opts.heroImage) {
+    const bx = 0.213, by = 0.2840, bw = 0.574, bh = 0.3070;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(bx * W, by * H, bw * W, bh * H); ctx.clip();
+    const im = opts.heroImage;
+    const r = Math.max((bw * W) / im.width, (bh * H) / im.height);
+    const dw = im.width * r, dh = im.height * r;
+    try { ctx.drawImage(im, bx * W + (bw * W - dw) / 2, by * H + (bh * H - dh) / 2, dw, dh); } catch (e) {}
+    ctx.globalCompositeOperation = 'saturation';
+    ctx.fillStyle = '#808080'; ctx.fillRect(bx * W, by * H, bw * W, bh * H);
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.fillStyle = 'rgba(122,90,48,0.72)'; ctx.fillRect(bx * W, by * H, bw * W, bh * H);
+    ctx.restore();
   }
 
-  // Deadline
-  ctx.globalAlpha = 0.86;
-  ctx.font = '32px "Special Elite", Courier, monospace';
-  ctx.fillText('★  ' + (opts.deadlineLabel || 'ENTER NOW') + '  ★',
-    cx, Math.max(y + 10, sy + sh - 128));
-
-  // Fine print
-  ctx.globalAlpha = 0.62;
-  ctx.font = '24px "Special Elite", Courier, monospace';
-  ctx.fillText('FLAMESCHALLENGE.COM', cx, sy + sh - 62);
-
-  ctx.globalAlpha = 1;
-  ctx.restore();
+  ink((opts.creatorName || 'A CHALLENGER').toUpperCase(), 0.6760, 78, 'Rye, Georgia, serif', 0.94, 0.66);
+  ink((opts.kicker || 'A CHALLENGE').toUpperCase(), 0.7530, 40, 'Rye, Georgia, serif', 0.9, 0.54);
+  ink(opts.hype ? '"' + opts.hype + '"' : '', 0.7860, 27,
+      '"Special Elite", Courier, monospace', 0.86, 0.56);
+  ink('THE ' + (opts.kicker || 'FLAMES').toUpperCase() + ' CROWN', 0.8940, 62,
+      'Rye, Georgia, serif', 0.94, 0.70);
+  ink((opts.deadlineLabel || 'ENTER NOW') + '   ·   FLAMESCHALLENGE.COM', 0.9660, 23,
+      '"Special Elite", Courier, monospace', 0.8, 0.64);
 }
 
 async function generateFlyer(opts) {
