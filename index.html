@@ -8008,7 +8008,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v786 · silhouette-default";
+const APP_VERSION = "v787 · outlaw-silhouette";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -10901,24 +10901,68 @@ function _fitText(ctx, text, maxW, startPx, family, weight) {
 // default: most avatars are full-body shots, logos or pets, and a cropped
 // sunset in a wanted frame looks broken where a silhouette looks intentional.
 function _drawOutlawSilhouette(ctx, x, y, w, h) {
+  // v787 — a proper outlaw bust. The first version drew a floating hat crown,
+  // a detached head circle and a blob body — it read as a mushroom. This is
+  // one connected figure: brim → crown with a crease, head under the brim,
+  // then a duster with a popped collar.
   ctx.save();
   ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
-  ctx.fillStyle = 'rgba(74,54,32,0.30)'; ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = 'rgba(43,28,12,0.62)';
+  ctx.fillStyle = 'rgba(74,54,32,0.22)'; ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = 'rgba(43,28,12,0.72)';
+
   const cx = x + w / 2;
-  // hat brim + crown
-  ctx.beginPath(); ctx.ellipse(cx, y + h * 0.30, w * 0.40, h * 0.055, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.moveTo(cx - w * 0.20, y + h * 0.30);
-  ctx.quadraticCurveTo(cx - w * 0.17, y + h * 0.14, cx, y + h * 0.14);
-  ctx.quadraticCurveTo(cx + w * 0.17, y + h * 0.14, cx + w * 0.20, y + h * 0.30);
+  const U = h / 100;                    // 0-100 vertical units, easier to reason about
+
+  // ── shoulders / duster: drawn first so the head overlaps it ──
+  ctx.beginPath();
+  ctx.moveTo(cx - w * 0.46, y + 100 * U);
+  ctx.lineTo(cx - w * 0.42, y + 78 * U);
+  ctx.quadraticCurveTo(cx - w * 0.34, y + 66 * U, cx - w * 0.17, y + 62 * U);  // left shoulder
+  ctx.lineTo(cx - w * 0.09, y + 70 * U);                                       // collar notch
+  ctx.lineTo(cx,            y + 64 * U);
+  ctx.lineTo(cx + w * 0.09, y + 70 * U);
+  ctx.lineTo(cx + w * 0.17, y + 62 * U);
+  ctx.quadraticCurveTo(cx + w * 0.34, y + 66 * U, cx + w * 0.42, y + 78 * U);  // right shoulder
+  ctx.lineTo(cx + w * 0.46, y + 100 * U);
   ctx.closePath(); ctx.fill();
-  // head
-  ctx.beginPath(); ctx.ellipse(cx, y + h * 0.46, w * 0.15, h * 0.13, 0, 0, Math.PI * 2); ctx.fill();
-  // shoulders
-  ctx.beginPath(); ctx.moveTo(cx - w * 0.38, y + h);
-  ctx.quadraticCurveTo(cx - w * 0.34, y + h * 0.60, cx, y + h * 0.58);
-  ctx.quadraticCurveTo(cx + w * 0.34, y + h * 0.60, cx + w * 0.38, y + h);
+
+  // ── neck ──
+  ctx.beginPath();
+  ctx.moveTo(cx - w * 0.075, y + 55 * U);
+  ctx.lineTo(cx + w * 0.075, y + 55 * U);
+  ctx.lineTo(cx + w * 0.085, y + 67 * U);
+  ctx.lineTo(cx - w * 0.085, y + 67 * U);
   ctx.closePath(); ctx.fill();
+
+  // ── head: jaw tapers, top hidden under the brim ──
+  ctx.beginPath();
+  ctx.moveTo(cx - w * 0.135, y + 30 * U);
+  ctx.lineTo(cx + w * 0.135, y + 30 * U);
+  ctx.lineTo(cx + w * 0.125, y + 46 * U);
+  ctx.quadraticCurveTo(cx + w * 0.10, y + 58 * U, cx, y + 58 * U);
+  ctx.quadraticCurveTo(cx - w * 0.10, y + 58 * U, cx - w * 0.125, y + 46 * U);
+  ctx.closePath(); ctx.fill();
+
+  // ── hat: crown with a centre crease, sitting ON the brim ──
+  ctx.beginPath();
+  ctx.moveTo(cx - w * 0.175, y + 31 * U);
+  ctx.lineTo(cx - w * 0.155, y + 14 * U);
+  ctx.quadraticCurveTo(cx - w * 0.145, y + 8 * U, cx - w * 0.075, y + 7 * U);
+  ctx.quadraticCurveTo(cx - w * 0.035, y + 11 * U, cx, y + 10 * U);   // crease dip
+  ctx.quadraticCurveTo(cx + w * 0.035, y + 11 * U, cx + w * 0.075, y + 7 * U);
+  ctx.quadraticCurveTo(cx + w * 0.145, y + 8 * U, cx + w * 0.155, y + 14 * U);
+  ctx.lineTo(cx + w * 0.175, y + 31 * U);
+  ctx.closePath(); ctx.fill();
+
+  // ── brim: wide, dipping at the front, tips curled up ──
+  ctx.beginPath();
+  ctx.moveTo(cx - w * 0.40, y + 29 * U);
+  ctx.quadraticCurveTo(cx, y + 41 * U, cx + w * 0.40, y + 29 * U);   // underside sweep
+  ctx.quadraticCurveTo(cx + w * 0.42, y + 25 * U, cx + w * 0.34, y + 25 * U);
+  ctx.quadraticCurveTo(cx, y + 33 * U, cx - w * 0.34, y + 25 * U);
+  ctx.quadraticCurveTo(cx - w * 0.42, y + 25 * U, cx - w * 0.40, y + 29 * U);
+  ctx.closePath(); ctx.fill();
+
   ctx.restore();
 }
 
@@ -11242,16 +11286,21 @@ async function openPromote(type, item) {
     : state.profile?.name) || 'A CHALLENGER';
   promoteState = { type, id: item.id, link, shareText, blob: null, opts, heroUserUrl: null, heroAutoUrl: null };
   document.getElementById('promoteTitle').textContent = modalTitle;
-  // Do NOT auto-generate a flyer — that wastes work and surprises users. Show a
-  // prompt with a button; the flyer only renders when the user explicitly asks.
+  // v787 — auto-generate on open. The old opt-in button made sense before there
+  // were STYLES; now it forces Generate → pick style → re-bake, and nobody can
+  // tell what "Generate" does that "Post" doesn't. The flyer is the point of
+  // this sheet, so build it immediately and let style taps re-bake.
   document.getElementById('promotePreview').innerHTML = `
     <div class="promote-flyer-empty" style="padding:40px 24px;text-align:center;color:var(--text-muted)">
       <div style="font-size:34px;margin-bottom:10px">🖼️</div>
-      <div style="font-size:14px;margin-bottom:16px;line-height:1.5">Want a shareable flyer for this?<br>Generate one to post anywhere.</div>
+      <div style="font-size:14px;margin-bottom:16px;line-height:1.5">Building your flyer…</div>
       <button onclick="userGeneratePromoteFlyer()" style="background:linear-gradient(135deg,var(--ember),var(--flame));color:#fff;border:none;border-radius:24px;padding:11px 22px;font-weight:700;font-size:14px;cursor:pointer">🎨 Generate flyer</button>
     </div>`;
   document.getElementById('promoteModal').classList.add('open');
   updatePromoteMediaButtons();
+  // Build it right away — the hero preload below runs in parallel and a style
+  // tap re-bakes, so nothing is lost by starting now.
+  setTimeout(() => { try { userGeneratePromoteFlyer(); } catch(e) {} }, 60);
 
   // Flyer is NOT auto-rendered. Hero auto-detect below only PRELOADS a hero image
   // into state so that IF the user generates a flyer, it already has the best image.
