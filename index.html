@@ -25,7 +25,7 @@
 <meta property="og:image" content="https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/Assets/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=Cinzel:wght@600;700;900&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Rye&family=Special+Elite&family=Cinzel:wght@600;700;900&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet" />
 
 <!-- Supabase JS SDK -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -5426,6 +5426,14 @@ body.theme-light .champ-ticker {
 .ticker-cat-label.ember { background: linear-gradient(135deg, rgba(255,106,44,0.3), rgba(255,200,87,0.2)); color: var(--gold); }
 .ticker-item .ember-inline { vertical-align: middle; margin-right: 2px; }
 
+/* ── v784 flyer style picker ── */
+.promote-styles { display: flex; gap: 8px; margin-top: 12px; }
+.pstyle { flex: 1; padding: 10px 8px; border-radius: 12px; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--border); color: var(--text-muted);
+  font-family: inherit; font-size: 13px; font-weight: 700; }
+.pstyle.on { background: linear-gradient(135deg, rgba(255,106,44,.22), rgba(255,200,87,.10));
+  border-color: rgba(255,106,44,.55); color: var(--text); }
+
 /* ── v772 Boost as standing: row line + breakdown sheet ── */
 .lb-boostline { font-size: 12px; color: var(--gold); font-weight: 700; margin-top: 2px; cursor: pointer;
   display: inline-flex; align-items: baseline; gap: 3px; flex-wrap: wrap; }
@@ -7175,6 +7183,12 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     <p class="promote-sub">Your challenge is live! Share your flyer to get entries — post it to your followers or a group.</p>
     <div class="promote-preview" id="promotePreview"></div>
     <input type="file" id="promoteFileInput" accept="image/*" style="display:none" onchange="onPromoteFileSelected(this)" />
+    <!-- v784 — style picker. Slot-based templates: same content, different
+         dressing. More styles slot in here without touching the renderer. -->
+    <div class="promote-styles" id="promoteStyles">
+      <button class="pstyle on"  data-fstyle="ember"  onclick="setFlyerStyle('ember')">🔥 Classic</button>
+      <button class="pstyle"     data-fstyle="wanted" onclick="setFlyerStyle('wanted')">🤠 Wanted</button>
+    </div>
     <div style="margin-top:10px">
       <input id="promoteHype" type="text" maxlength="60" placeholder="Add a line to the flyer (optional)"
         oninput="document.getElementById('promoteHypeCount').textContent = (60 - this.value.length)"
@@ -7994,7 +8008,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v783 · flyer-line";
+const APP_VERSION = "v784 · wanted-flyer";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -10855,6 +10869,185 @@ function loadImageForFlyer(src) {
   });
 }
 
+/* ---------- FLYER STYLES (v784) ----------
+   Slot-based: every style fills the same slots (headline, who, portrait,
+   stakes, line, deadline, footer) and only the dressing changes.
+   Style 1 of 4: WANTED. The creator is the outlaw — their name is the one
+   on the poster, and the challenge is the bounty. */
+const FLYER_ASSET_BASE = 'https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/Assets/';
+
+function _loadImg(src) {
+  return new Promise((res) => {
+    const i = new Image();
+    i.crossOrigin = 'anonymous';
+    i.onload = () => res(i);
+    i.onerror = () => res(null);
+    i.src = src;
+  });
+}
+
+// Draws text that has to fit a width, shrinking until it does.
+function _fitText(ctx, text, maxW, startPx, family, weight) {
+  let px = startPx;
+  do {
+    ctx.font = `${weight ? weight + ' ' : ''}${px}px ${family}`;
+    if (ctx.measureText(text).width <= maxW) break;
+    px -= 2;
+  } while (px > 12);
+  return px;
+}
+
+// The outlaw silhouette — used when no photo is supplied. Deliberately the
+// default: most avatars are full-body shots, logos or pets, and a cropped
+// sunset in a wanted frame looks broken where a silhouette looks intentional.
+function _drawOutlawSilhouette(ctx, x, y, w, h) {
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  ctx.fillStyle = 'rgba(74,54,32,0.30)'; ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = 'rgba(43,28,12,0.62)';
+  const cx = x + w / 2;
+  // hat brim + crown
+  ctx.beginPath(); ctx.ellipse(cx, y + h * 0.30, w * 0.40, h * 0.055, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(cx - w * 0.20, y + h * 0.30);
+  ctx.quadraticCurveTo(cx - w * 0.17, y + h * 0.14, cx, y + h * 0.14);
+  ctx.quadraticCurveTo(cx + w * 0.17, y + h * 0.14, cx + w * 0.20, y + h * 0.30);
+  ctx.closePath(); ctx.fill();
+  // head
+  ctx.beginPath(); ctx.ellipse(cx, y + h * 0.46, w * 0.15, h * 0.13, 0, 0, Math.PI * 2); ctx.fill();
+  // shoulders
+  ctx.beginPath(); ctx.moveTo(cx - w * 0.38, y + h);
+  ctx.quadraticCurveTo(cx - w * 0.34, y + h * 0.60, cx, y + h * 0.58);
+  ctx.quadraticCurveTo(cx + w * 0.34, y + h * 0.60, cx + w * 0.38, y + h);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+async function _drawWantedFlyer(ctx, W, H, opts) {
+  const INK = '#2b1c0c';
+  const [wood, parch] = await Promise.all([
+    _loadImg(FLYER_ASSET_BASE + 'flyer-wood.webp'),
+    _loadImg(FLYER_ASSET_BASE + 'flyer-parchment.webp'),
+  ]);
+
+  // Board
+  if (wood) ctx.drawImage(wood, 0, 0, W, H);
+  else { ctx.fillStyle = '#3a2a1c'; ctx.fillRect(0, 0, W, H); }
+
+  // Vignette so the eye lands on the paper
+  const vg = ctx.createRadialGradient(W/2, H*0.42, W*0.25, W/2, H*0.5, H*0.72);
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.5)');
+  ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+
+  // Sheet — tilted slightly so it reads as nailed up by a person, not placed
+  // by software.
+  const sw = W * 0.86, sh = H * 0.90;
+  const sx = (W - sw) / 2, sy = (H - sh) / 2;
+  ctx.save();
+  ctx.translate(W / 2, H / 2); ctx.rotate(-1.2 * Math.PI / 180); ctx.translate(-W / 2, -H / 2);
+  ctx.shadowColor = 'rgba(0,0,0,0.65)'; ctx.shadowBlur = 34; ctx.shadowOffsetY = 16;
+  if (parch) ctx.drawImage(parch, sx, sy, sw, sh);
+  else { ctx.fillStyle = '#d9c396'; ctx.fillRect(sx, sy, sw, sh); }
+  ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+
+  const cx = W / 2;
+  const pad = sw * 0.12;
+  const innerW = sw - pad * 2;
+  let y = sy + sh * 0.085;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = INK;
+
+  // WANTED
+  ctx.globalAlpha = 0.9;
+  ctx.font = '150px Rye, Georgia, serif';
+  ctx.fillText('WANTED', cx, y + 112);
+  y += 150;
+
+  // rule
+  ctx.globalAlpha = 0.72;
+  ctx.fillRect(cx - innerW * 0.42, y, innerW * 0.84, 5);
+  y += 30;
+
+  // DEAD OR ALIVE
+  ctx.globalAlpha = 0.85;
+  ctx.font = '34px "Special Elite", Courier, monospace';
+  ctx.fillText('DEAD OR ALIVE', cx, y + 26);
+  y += 74;
+
+  // The outlaw: the CREATOR
+  ctx.globalAlpha = 0.9;
+  const who = (opts.creatorName || 'A CHALLENGER').toUpperCase();
+  const px = _fitText(ctx, who, innerW, 92, 'Rye, Georgia, serif');
+  ctx.fillText(who, cx, y + px * 0.78);
+  y += px + 22;
+
+  ctx.globalAlpha = 0.8;
+  ctx.font = '29px "Special Elite", Courier, monospace';
+  ctx.fillText('has thrown down a challenge', cx, y + 22);
+  y += 68;
+
+  // Portrait
+  const phW = sw * 0.50, phH = phW;
+  const phX = cx - phW / 2, phY = y;
+  ctx.globalAlpha = 0.92;
+  if (opts.heroImage) {
+    ctx.save();
+    ctx.beginPath(); ctx.rect(phX, phY, phW, phH); ctx.clip();
+    const im = opts.heroImage;
+    const r = Math.max(phW / im.width, phH / im.height);
+    const dw = im.width * r, dh = im.height * r;
+    try { ctx.drawImage(im, phX + (phW - dw) / 2, phY + (phH - dh) / 2, dw, dh); } catch (e) {}
+    // sepia wash so the photo sinks into the paper
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.fillStyle = 'rgba(150,116,70,0.55)'; ctx.fillRect(phX, phY, phW, phH);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.restore();
+  } else {
+    _drawOutlawSilhouette(ctx, phX, phY, phW, phH);
+  }
+  ctx.strokeStyle = INK; ctx.lineWidth = 9; ctx.globalAlpha = 0.85;
+  ctx.strokeRect(phX, phY, phW, phH);
+  y += phH + 64;
+
+  // REWARD line — the bit that makes it feel authentic
+  ctx.globalAlpha = 0.9;
+  ctx.font = '30px "Special Elite", Courier, monospace';
+  ctx.fillText('REWARD', cx, y);
+  y += 52;
+  const prize = ('THE ' + (opts.kicker || 'FLAMES') + ' CROWN').toUpperCase();
+  const rpx = _fitText(ctx, prize, innerW, 60, 'Rye, Georgia, serif');
+  ctx.fillText(prize, cx, y + rpx * 0.78);
+  y += rpx + 34;
+
+  // The creator's own line
+  if (opts.hype) {
+    ctx.globalAlpha = 0.82;
+    ctx.font = 'italic 30px Georgia, serif';
+    const words = String(opts.hype).split(/\s+/);
+    let line = '', lines = [];
+    words.forEach(w => {
+      const t = line ? line + ' ' + w : w;
+      if (ctx.measureText(t).width > innerW && line) { lines.push(line); line = w; } else line = t;
+    });
+    if (line) lines.push(line);
+    lines.slice(0, 2).forEach(l => { ctx.fillText('"' + l + '"', cx, y); y += 38; });
+    y += 8;
+  }
+
+  // Deadline
+  ctx.globalAlpha = 0.86;
+  ctx.font = '32px "Special Elite", Courier, monospace';
+  ctx.fillText('★  ' + (opts.deadlineLabel || 'ENTER NOW') + '  ★',
+    cx, Math.max(y + 10, sy + sh - 128));
+
+  // Fine print
+  ctx.globalAlpha = 0.62;
+  ctx.font = '24px "Special Elite", Courier, monospace';
+  ctx.fillText('FLAMESCHALLENGE.COM', cx, sy + sh - 62);
+
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
 async function generateFlyer(opts) {
   try { await document.fonts.ready; } catch (e) {}
   const W = 1080, H = 1620;
@@ -10863,6 +11056,14 @@ async function generateFlyer(opts) {
   const ctx = cv.getContext('2d');
 
   const hasHero = !!opts.heroImage;
+
+  // v784 — style dispatch. 'wanted' draws its own complete poster and returns.
+  if (opts.style === 'wanted') {
+    await _drawWantedFlyer(ctx, W, H, opts);
+    const dataUrl = cv.toDataURL('image/png');
+    const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
+    return { dataUrl, blob };
+  }
 
   // Dark background + ember glows
   ctx.fillStyle = '#0a0807';
@@ -11095,6 +11296,16 @@ async function openPromote(type, item) {
 
 async function generatePromoteFlyer() { return renderPromoteFlyer(); }
 // Explicit user action: generate the flyer on demand from the promote modal.
+// v784 — switching style re-bakes immediately so the preview always matches
+// the selection. promoteState.style is read by renderPromoteFlyer.
+function setFlyerStyle(style) {
+  if (!promoteState) return;
+  promoteState.style = style;
+  document.querySelectorAll('#promoteStyles .pstyle').forEach(b =>
+    b.classList.toggle('on', b.dataset.fstyle === style));
+  if (promoteState.flyerGenerated) renderPromoteFlyer();
+}
+
 async function userGeneratePromoteFlyer() {
   if (!promoteState) return;
   // v716 — moderate the hype line BEFORE the PNG is baked, and fail CLOSED.
@@ -11117,7 +11328,8 @@ async function userGeneratePromoteFlyer() {
 
 async function renderPromoteFlyer() {
   if (!promoteState) return;
-  const opts = { ...promoteState.opts, hype: promoteState.hype || '' }; // v716
+  const opts = { ...promoteState.opts, hype: promoteState.hype || '',
+                 style: promoteState.style || 'ember' }; // v716, v784
   const heroSrc = promoteState.heroUserUrl || promoteState.heroAutoUrl;
   if (heroSrc) {
     try {
