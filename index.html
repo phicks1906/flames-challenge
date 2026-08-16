@@ -8020,7 +8020,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v789 · flyer-reward";
+const APP_VERSION = "v791 · champ-flyer-server";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11027,6 +11027,45 @@ async function _drawWantedFlyer(ctx, W, H, opts) {
   ink((opts.deadlineLabel || 'ENTER NOW') + '   ·   FLAMESCHALLENGE.COM', 0.9660, 23,
       '"Special Elite", Courier, monospace', 0.8, 0.64);
 }
+
+/* ---------- CHAMPIONSHIP FLYER (v791) ----------
+   The flyer is rendered and posted SERVER-SIDE by the champ-flyer-post Edge
+   Function, on a pg_cron schedule. It no longer depends on a user opening the
+   app, and there is no client renderer — a second implementation here would
+   drift from the one that actually ships the image.
+
+   The admin preview below calls that same function with dry_run, so what you
+   see is the real output, not a lookalike. */
+async function previewChampFlyer(chId) {
+  toast('Rendering flyer…');
+  try {
+    // Admin's own session token — the cron secret is never shipped to the client.
+    const { data: { session: sess } } = await db.auth.getSession();
+    const r = await fetch(`${SUPABASE_URL}/functions/v1/champ-flyer-post`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sess?.access_token || ''}` },
+      body: JSON.stringify({ dry_run: true, force: true, challenge_id: chId }),
+    });
+    const j = await r.json();
+    const hit = (j.results || [])[0];
+    if (!hit || !hit.png_base64) {
+      toast(hit?.skipped || hit?.error || j.error || 'No flyer produced');
+      console.warn('champ flyer preview', j);
+      return;
+    }
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px';
+    ov.innerHTML = `<div style="color:var(--gold);font-size:12px;letter-spacing:.2em">${(hit.variant||'').toUpperCase()} · ${(hit.roster||[]).join(' vs ')}</div>
+      <img src="data:image/png;base64,${hit.png_base64}" style="max-width:100%;max-height:80vh;object-fit:contain;border-radius:8px">
+      <button style="padding:10px 22px;border:none;border-radius:999px;background:var(--ember);color:#fff;font-weight:700">Close</button>`;
+    ov.querySelector('button').onclick = () => ov.remove();
+    document.body.appendChild(ov);
+  } catch (e) {
+    console.error('champ flyer preview', e);
+    toast('Flyer render failed');
+  }
+}
+
 
 async function generateFlyer(opts) {
   try { await document.fonts.ready; } catch (e) {}
@@ -17851,6 +17890,7 @@ function renderChampionshipHero(ch, status, countdownTarget) {
     <div class="champ-arena flow">
       <div class="champ-arena-topbar">
         <span class="champ-arena-status ${status}"><span class="dot"></span>${status === 'submitting' ? 'CONTENDERS ENTERING' : isVotingPhase(status) ? 'VOTING' : status === 'closed' ? 'DECIDED' : ''}</span>
+        ${state.profile?.is_admin ? `<button class="cd-delete-btn" onclick="previewChampFlyer('${ch.id}')">🖼 Flyer</button>` : ''}
         ${canDelete ? `<button class="cd-delete-btn" id="cdDeleteBtn">🗑 Delete</button>` : ''}
       </div>
       <div class="champ-arena-crown">👑</div>
