@@ -7189,6 +7189,18 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       <button class="pstyle on"  data-fstyle="ember"  onclick="setFlyerStyle('ember')">🔥 Classic</button>
       <button class="pstyle"     data-fstyle="wanted" onclick="setFlyerStyle('wanted')">🤠 Wanted</button>
     </div>
+    <!-- v789 — the ONE piece of template furniture worth opening up. On a real
+         wanted poster the reward is the funniest line; everything else
+         (WANTED / DEAD OR ALIVE / WANTED FOR) is the joke and stays fixed. -->
+    <div id="promoteRewardRow" style="margin-top:10px;display:none">
+      <input id="promoteReward" type="text" maxlength="28" placeholder="Reward — e.g. BRAGGING RIGHTS"
+        oninput="promoteState && (promoteState.reward = this.value)"
+        style="width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit;font-size:14px">
+      <div style="display:flex;justify-content:space-between;margin-top:4px">
+        <span style="font-size:11px;color:var(--text-muted)">Leave blank for "The [Category] Crown"</span>
+        <button onclick="renderPromoteFlyer()" style="background:none;border:none;color:var(--ember);font-family:inherit;font-size:12px;font-weight:700;cursor:pointer">Update ↻</button>
+      </div>
+    </div>
     <div style="margin-top:10px">
       <input id="promoteHype" type="text" maxlength="60" placeholder="Add a line to the flyer (optional)"
         oninput="document.getElementById('promoteHypeCount').textContent = (60 - this.value.length)"
@@ -8008,7 +8020,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v788 · wanted-template";
+const APP_VERSION = "v789 · flyer-reward";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11010,7 +11022,7 @@ async function _drawWantedFlyer(ctx, W, H, opts) {
   ink((opts.kicker || 'A CHALLENGE').toUpperCase(), 0.7530, 40, 'Rye, Georgia, serif', 0.9, 0.54);
   ink(opts.hype ? '"' + opts.hype + '"' : '', 0.7860, 27,
       '"Special Elite", Courier, monospace', 0.86, 0.56);
-  ink('THE ' + (opts.kicker || 'FLAMES').toUpperCase() + ' CROWN', 0.8940, 62,
+  ink((opts.reward || ('THE ' + (opts.kicker || 'FLAMES') + ' CROWN')).toUpperCase(), 0.8940, 62,
       'Rye, Georgia, serif', 0.94, 0.70);
   ink((opts.deadlineLabel || 'ENTER NOW') + '   ·   FLAMESCHALLENGE.COM', 0.9660, 23,
       '"Special Elite", Courier, monospace', 0.8, 0.64);
@@ -11281,6 +11293,9 @@ function setFlyerStyle(style) {
   promoteState.style = style;
   document.querySelectorAll('#promoteStyles .pstyle').forEach(b =>
     b.classList.toggle('on', b.dataset.fstyle === style));
+  const rr = document.getElementById('promoteRewardRow');
+  if (rr) rr.style.display = style === 'wanted' ? 'block' : 'none';
+  updatePromoteMediaButtons();
   if (promoteState.flyerGenerated) renderPromoteFlyer();
 }
 
@@ -11307,7 +11322,8 @@ async function userGeneratePromoteFlyer() {
 async function renderPromoteFlyer() {
   if (!promoteState) return;
   const _style = promoteState.style || 'ember';
-  const opts = { ...promoteState.opts, hype: promoteState.hype || '', style: _style }; // v716, v784
+  const opts = { ...promoteState.opts, hype: promoteState.hype || '', style: _style,
+                 reward: (promoteState.reward || '').trim() }; // v716, v784, v789
   // v786 — Wanted defaults to the outlaw silhouette. Auto-detected challenge
   // photos (a beach, a plate of food) look broken in a mugshot frame; a
   // silhouette always looks deliberate. Only an explicit upload overrides it.
@@ -11340,11 +11356,21 @@ async function renderPromoteFlyer() {
 
 function updatePromoteMediaButtons() {
   if (!promoteState) return;
-  const has = !!(promoteState.heroUserUrl || promoteState.heroAutoUrl);
+  // v789 — Wanted only counts an EXPLICIT upload (the auto-detected challenge
+  // photo is ignored there), and the label has to say what the button actually
+  // does in this style: it replaces the outlaw, not "adds a photo".
+  const wanted = promoteState.style === 'wanted';
+  const has = wanted ? !!promoteState.heroUserUrl
+                     : !!(promoteState.heroUserUrl || promoteState.heroAutoUrl);
   const addBtn = document.getElementById('promoteAddPhotoBtn');
   const remBtn = document.getElementById('promoteRemovePhotoBtn');
-  if (addBtn) addBtn.textContent = has ? '🔁 Change photo' : '📷 Add photo';
-  if (remBtn) remBtn.style.display = has ? 'inline-block' : 'none';
+  if (addBtn) addBtn.textContent = wanted
+    ? (has ? '🔁 Change mugshot' : '🤠 Use my photo instead of the outlaw')
+    : (has ? '🔁 Change photo' : '📷 Add photo');
+  if (remBtn) {
+    remBtn.textContent = wanted ? 'Back to the outlaw' : 'Remove photo';
+    remBtn.style.display = has ? 'inline-block' : 'none';
+  }
 }
 
 function onPromoteFileSelected(input) {
