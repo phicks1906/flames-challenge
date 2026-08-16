@@ -8008,7 +8008,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v784 · wanted-flyer";
+const APP_VERSION = "v785 · wanted-fixes";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -10996,9 +10996,14 @@ async function _drawWantedFlyer(ctx, W, H, opts) {
     const r = Math.max(phW / im.width, phH / im.height);
     const dw = im.width * r, dh = im.height * r;
     try { ctx.drawImage(im, phX + (phW - dw) / 2, phY + (phH - dh) / 2, dw, dh); } catch (e) {}
-    // sepia wash so the photo sinks into the paper
+    // Sepia: strip colour first, THEN tone. A single multiply over a full-colour
+    // photo leaves it obviously modern — this is what makes it read as printed.
+    ctx.globalCompositeOperation = 'saturation';
+    ctx.fillStyle = '#808080'; ctx.fillRect(phX, phY, phW, phH);
     ctx.globalCompositeOperation = 'multiply';
-    ctx.fillStyle = 'rgba(150,116,70,0.55)'; ctx.fillRect(phX, phY, phW, phH);
+    ctx.fillStyle = 'rgba(146,108,58,0.78)'; ctx.fillRect(phX, phY, phW, phH);
+    ctx.globalCompositeOperation = 'overlay';
+    ctx.fillStyle = 'rgba(255,232,190,0.22)'; ctx.fillRect(phX, phY, phW, phH);
     ctx.globalCompositeOperation = 'source-over';
     ctx.restore();
   } else {
@@ -11230,6 +11235,11 @@ async function openPromote(type, item) {
     shareText = `🔥 ${item.title} — join the challenge on FlamesChallenge`;
   }
 
+  // v785 — creatorName was never in opts, so the Wanted poster always fell back
+  // to "A CHALLENGER". The creator IS the outlaw; their name is the point.
+  opts.creatorName = (type === 'challenge'
+    ? (item.creator?.name || (item.creator_id === state.profile?.id ? state.profile?.name : null))
+    : state.profile?.name) || 'A CHALLENGER';
   promoteState = { type, id: item.id, link, shareText, blob: null, opts, heroUserUrl: null, heroAutoUrl: null };
   document.getElementById('promoteTitle').textContent = modalTitle;
   // Do NOT auto-generate a flyer — that wastes work and surprises users. Show a
@@ -11328,8 +11338,12 @@ async function userGeneratePromoteFlyer() {
 
 async function renderPromoteFlyer() {
   if (!promoteState) return;
-  const opts = { ...promoteState.opts, hype: promoteState.hype || '',
-                 style: promoteState.style || 'ember' }; // v716, v784
+  const _style = promoteState.style || 'ember';
+  const opts = { ...promoteState.opts, hype: promoteState.hype || '', style: _style }; // v716, v784
+  // v785 — Wanted defaults to the outlaw silhouette. Auto-detected challenge
+  // photos (a beach, a plate of food) look broken in a mugshot frame; a
+  // silhouette always looks deliberate. Only an explicit upload overrides it.
+  if (_style === 'wanted' && !promoteState.heroUserUrl) opts.heroImage = null;
   const heroSrc = promoteState.heroUserUrl || promoteState.heroAutoUrl;
   if (heroSrc) {
     try {
