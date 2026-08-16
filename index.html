@@ -8008,7 +8008,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v785 · wanted-fixes";
+const APP_VERSION = "v786 · silhouette-default";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11340,11 +11340,15 @@ async function renderPromoteFlyer() {
   if (!promoteState) return;
   const _style = promoteState.style || 'ember';
   const opts = { ...promoteState.opts, hype: promoteState.hype || '', style: _style }; // v716, v784
-  // v785 — Wanted defaults to the outlaw silhouette. Auto-detected challenge
+  // v786 — Wanted defaults to the outlaw silhouette. Auto-detected challenge
   // photos (a beach, a plate of food) look broken in a mugshot frame; a
   // silhouette always looks deliberate. Only an explicit upload overrides it.
-  if (_style === 'wanted' && !promoteState.heroUserUrl) opts.heroImage = null;
-  const heroSrc = promoteState.heroUserUrl || promoteState.heroAutoUrl;
+  // NOTE: this must gate heroSrc itself — v785 nulled opts.heroImage one line
+  // too early and the loader below simply set it again.
+  const heroSrc = (_style === 'wanted')
+    ? promoteState.heroUserUrl
+    : (promoteState.heroUserUrl || promoteState.heroAutoUrl);
+  if (!heroSrc) opts.heroImage = null;
   if (heroSrc) {
     try {
       opts.heroImage = await loadImageForFlyer(heroSrc);
