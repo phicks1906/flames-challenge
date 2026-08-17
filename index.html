@@ -16,6 +16,14 @@
 <title>Flames Challenge — Where Opinions Ignite</title>
 <meta name="description" content="Vote on trending polls. Challenge your friends. Take the title." />
 
+<!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
+     the first kilobyte, so the update check can read it with a tiny ranged
+     request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
+     this tag; bump it HERE and nowhere else.
+     fc-whatsnew is the one line shown in the update prompt. -->
+<meta name="fc-build" content="v795 · update-check" />
+<meta name="fc-whatsnew" content="Flyer styles, theme fix, and update prompts." />
+
 <meta property="og:title" content="Flames Challenge — Where Opinions Ignite" />
 <meta property="og:description" content="Vote on what matters. Challenge your friends. Take the title." />
 <meta property="og:type" content="website" />
@@ -1435,6 +1443,39 @@ body.theme-light .nav { background: rgba(255, 255, 255, 0.88); border-bottom-col
 }
 
 /* ============ TOAST ============ */
+/* v795 — update banner. Sits above the bottom nav and clears the home
+   indicator. Uses fixed brand colours rather than theme vars so it is legible
+   in either theme and can't be broken by a theme-flag mismatch. */
+#fcUpdateBar {
+  position: fixed; left: 12px; right: 12px;
+  bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  z-index: 9998;
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 12px 12px 14px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #ff6a2c, #e0431f);
+  color: #fff;
+  box-shadow: 0 10px 28px rgba(0,0,0,.38);
+  animation: fcuIn .28s ease-out;
+}
+@keyframes fcuIn { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
+#fcUpdateBar .fcu-txt { flex: 1; min-width: 0; line-height: 1.25; }
+#fcUpdateBar .fcu-txt strong { display: block; font-size: 15px; }
+#fcUpdateBar .fcu-txt span {
+  display: block; font-size: 12.5px; opacity: .92;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+#fcUpdateBar .fcu-go {
+  flex: 0 0 auto; border: none; border-radius: 999px; cursor: pointer;
+  padding: 9px 16px; font-weight: 800; font-size: 14px;
+  background: #fff; color: #d8391a;
+}
+#fcUpdateBar .fcu-go:disabled { opacity: .7; }
+#fcUpdateBar .fcu-later {
+  flex: 0 0 auto; border: none; background: transparent; cursor: pointer;
+  color: rgba(255,255,255,.85); font-size: 16px; padding: 4px 6px;
+}
+
 .toast {
   position: fixed; bottom: calc(76px + max(12px, env(safe-area-inset-bottom)));
   left: 50%;
@@ -8028,7 +8069,125 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v794.3 · theme-fix";
+// v795 — read from the <meta name="fc-build"> tag at the top of the file so
+// there is exactly one place to bump. The fallback only fires if the tag is
+// somehow missing; it should never be what ships.
+const APP_VERSION = (document.querySelector('meta[name="fc-build"]')?.content || 'v795').trim();
+
+/* ---------- UPDATE CHECK (v795) ----------
+   Until now there was no update path at all: no `updatefound` handler, no
+   skipWaiting, no cache clearing. A user could sit on a build from weeks ago,
+   hitting bugs that were fixed, with no way to know — and on an installed iOS
+   PWA there isn't even a pull-to-refresh to fall back on.
+
+   How it works: fetch only the FIRST FEW KILOBYTES of index.html and read the
+   <meta name="fc-build"> tag out of it. A ranged request keeps this at a few
+   hundred bytes rather than 1.2 MB; if the server ignores Range, the stream is
+   cancelled after the first chunk, so the cost is the same either way.
+
+   Deliberately NOT using the service worker's updatefound event: sw.js is
+   network-first and doesn't version the app shell, so it never reliably fires
+   for an index.html change. Reading the file itself is the honest check.
+
+   This block sits EARLY in the script on purpose. It was originally at the
+   bottom, which meant any throw in the code above it — the exact situation
+   where a user is stuck on a broken build — silently disabled the only escape
+   hatch. It depends on nothing but APP_VERSION. Keep it that way. */
+function _fcuEsc(t){return String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+const UPDATE_CHECK_MS = 15 * 60 * 1000;
+let _lastUpdateCheck = 0;
+let _updateBannerUp = false;
+
+async function _fetchBuildTag() {
+  // Cache-bust and bypass both the HTTP cache and the service worker.
+  const url = `index.html?_v=${Date.now()}`;
+  const res = await fetch(url, {
+    cache: 'no-store',
+    headers: { Range: 'bytes=0-4095' },
+  });
+  // 206 means the range was honoured and we get a few hundred bytes. Anything
+  // else means the server sent the WHOLE file — 1.2 MB, and cancelling the
+  // stream doesn't help because it can arrive in a single chunk. Bail rather
+  // than poll a megabyte every 15 minutes on every device. Failing closed
+  // costs an update prompt; failing open costs bandwidth on every user.
+  if (res.status !== 206) {
+    try { await res.body?.cancel(); } catch (e) {}
+    throw new Error('range not supported (HTTP ' + res.status + ') — update check disabled');
+  }
+  const text = await res.text();
+  const build = text.match(/<meta\s+name="fc-build"\s+content="([^"]*)"/i);
+  const news  = text.match(/<meta\s+name="fc-whatsnew"\s+content="([^"]*)"/i);
+  if (!build) throw new Error('fc-build tag not found in first chunk');
+  return { build: build[1].trim(), news: news ? news[1].trim() : '' };
+}
+
+async function checkForUpdate(force) {
+  if (_updateBannerUp) return;
+  const now = Date.now();
+  if (!force && now - _lastUpdateCheck < UPDATE_CHECK_MS) return;
+  _lastUpdateCheck = now;
+  try {
+    const { build, news } = await _fetchBuildTag();
+    if (build && build !== APP_VERSION) showUpdateBanner(build, news);
+  } catch (e) {
+    // Offline or a blocked range request — never surface this to the user.
+    console.warn('update check skipped', e);
+  }
+}
+
+function showUpdateBanner(build, news) {
+  if (_updateBannerUp || document.getElementById('fcUpdateBar')) return;
+  _updateBannerUp = true;
+  const bar = document.createElement('div');
+  bar.id = 'fcUpdateBar';
+  bar.innerHTML = `
+    <div class="fcu-txt">
+      <strong>Update available</strong>
+      <span>${_fcuEsc(news || 'A newer version is ready.')}</span>
+    </div>
+    <button class="fcu-go">Update</button>
+    <button class="fcu-later" aria-label="Dismiss">✕</button>`;
+  document.body.appendChild(bar);
+  bar.querySelector('.fcu-later').onclick = () => {
+    bar.remove(); _updateBannerUp = false;
+    // Don't nag: hold off a full interval before asking again.
+    _lastUpdateCheck = Date.now();
+  };
+  bar.querySelector('.fcu-go').onclick = async () => {
+    const btn = bar.querySelector('.fcu-go');
+    btn.disabled = true; btn.textContent = 'Updating…';
+    await applyUpdate();
+  };
+}
+
+async function applyUpdate() {
+  // Clear every cache the service worker holds, then drop the worker itself,
+  // then hard-reload. Skipping any of these leaves the old shell in place.
+  try {
+    if (window.caches) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+  } catch (e) { console.warn('cache clear failed', e); }
+  try {
+    if (navigator.serviceWorker) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+    }
+  } catch (e) { console.warn('sw unregister failed', e); }
+  // Cache-busted URL so iOS can't serve the old document from memory.
+  const u = new URL(location.href);
+  u.searchParams.set('_u', Date.now());
+  location.replace(u.toString());
+}
+
+// Check shortly after load, and again whenever the app is brought back to the
+// foreground — that's when a PWA user is most likely sitting on a stale build.
+setTimeout(() => checkForUpdate(true), 20000);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') checkForUpdate(false);
+});
+
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
