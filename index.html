@@ -8022,7 +8022,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v792.1 · paper-flyers";
+const APP_VERSION = "v792.2 · paper-flyers";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11081,6 +11081,7 @@ async function previewChampFlyer(chId) {
    ten categories each, 1080×1349. Unknown category → 'other'.
 
    Slot geometry is measured off the finished 1080-wide files, not guessed. */
+const PAPER_TPL_VER = 'v2';
 const FLYER_CATS = ['art','photography','music','writing','cooking','style','sports','fitness','comedy','other'];
 function _flyerCatKey(cat) {
   const k = String(cat || '').toLowerCase().trim();
@@ -11157,7 +11158,10 @@ function _trackedText(ctx, text, cx, y, px, family, weight, trackPx) {
 
 async function _drawPaperFlyer(ctx, W, H, opts, kind) {
   const cat = _flyerCatKey(opts.kicker);
-  const tpl = await _loadImg(FLYER_ASSET_BASE + `flyer-${kind}-${cat}.jpg`);
+  // v792.2 — versioned filenames. Same-name re-uploads collided with browser
+  // caches AND with iOS Downloads (which silently renamed to " (1).jpg").
+  // Bump PAPER_TPL_VER whenever the artwork changes; never reuse a name.
+  const tpl = await _loadImg(FLYER_ASSET_BASE + `flyer-${kind}-${PAPER_TPL_VER}-${cat}.jpg`);
   if (!tpl) throw new Error(`flyer template failed: ${kind}/${cat}`);
   ctx.drawImage(tpl, 0, 0, W, H);
 
