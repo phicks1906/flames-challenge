@@ -8022,7 +8022,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v792 · paper-flyers";
+const APP_VERSION = "v792.1 · paper-flyers";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11089,46 +11089,37 @@ function _flyerCatKey(cat) {
 const NEWS_INK  = '#1c1410';
 const NEWS_SUB  = '#4a3a2a';
 
-/* Slot tables. Every number here was measured off the finished 1080×1349
-   files with pixel scans — not eyeballed. Fractions of W/H.
+/* Slot tables — v792.1. Both templates were regenerated with a proper
+   HEADLINE BOX above the hero frame, drawn in the template's own vocabulary
+   (bracketed corners matching the masthead rules). Every number here is a
+   pixel-scan off the finished 1080×1349 file. Fractions of W/H.
 
-   CHRONICLE. The masthead runs straight into the EST/VOL strip and then the
-   hero — there is NO clear band above the photo. The headline lives BELOW the
-   photo, in the blank band between the byline row and the columns
-   (0.579→0.686), like a caption-headline. Byline row: "By" is baked at
-   x 0.0685; icons are baked at 0.293 (📅), 0.518 (👥), 0.734 (🏆), each
-   ~28px wide. Text starts a beat after each. */
+   CHRONICLE
+     headline box   y 0.1519 → 0.2896   (double rules), x 0.063 → 0.952
+     hero frame     y 0.3081 → 0.6298
+     byline row     y 0.6455 → 0.6990; "By" baked at x 0.066; icons at
+                    0.371 (📅), 0.592 (👥), 0.821 (🏆)
+     columns        y 0.7054 → bottom  (baked copy) */
 const NEWS_SLOTS = {
-  headlineY: 0.640,
-  headlineMaxW: 0.86,
-  bylineY:   0.556,
+  headBox:   { y0: 0.1519, y1: 0.2896, x0: 0.063, x1: 0.952 },
+  bylineY:   0.6785,
   cells: [
-    { textX: 0.102, maxW: 0.17 },   // after baked "By"
-    { textX: 0.330, maxW: 0.17 },   // after 📅
-    { textX: 0.556, maxW: 0.16 },   // after 👥
-    { textX: 0.772, maxW: 0.19 },   // after 🏆
+    { textX: 0.100, maxW: 0.24 },   // after baked "By"
+    { textX: 0.412, maxW: 0.16 },   // after 📅
   ],
 };
 
-/* TEAR-OFF. Category line sits between the two stars (y ≈ 0.078); the flame
-   rule is at 0.118 and the frame starts at 0.151. The band between them
-   (0.118→0.151, ~44px) takes ONE compact headline line. Byline row: first cell
-   is a long blank (0.070→0.231) with no baked "By"; icons at 0.529 (👥),
-   0.737 (🏆). The 📅 is at ~0.28 but overlaps the first cell's blank; the row
-   is: [name] | 📅 [date] | 👥 [winner] | 🏆 [how]. */
+/* TEAR-OFF
+     headline box   y 0.1041 → 0.2211, x 0.061 → 0.930
+     hero frame     y 0.2518 → 0.6583
+     byline row     y 0.6648 → 0.7375; "By" baked at 0.082; icons at
+                    0.331 (📅), 0.527 (👥), 0.731 (🏆) */
 const TEAR_SLOTS = {
-  // The flame ornament sits at 0.118 dead centre, so the narrow band under
-  // it (0.118→0.151) cannot carry a centred headline without colliding. The
-  // headline moves UP between the stars (0.059→0.112, ~70px), which is the
-  // roomier of the two bands. Category goes to the byline row's first cell.
-  headlineY: 0.094,
-  headlineMaxW: 0.72,     // stars sit at 0.11 / 0.89 — stay inside them
-  bylineY:   0.668,
+  headBox:   { y0: 0.1041, y1: 0.2211, x0: 0.061, x1: 0.930 },
+  bylineY:   0.7085,
   cells: [
-    { textX: 0.080, maxW: 0.19 },   // "By NAME" — 📅 icon starts at 0.28
-    { textX: 0.310, maxW: 0.19 },   // after 📅
-    { textX: 0.572, maxW: 0.14 },   // after 👥
-    { textX: 0.780, maxW: 0.19 },   // after 🏆
+    { textX: 0.118, maxW: 0.19 },   // after baked "By"
+    { textX: 0.372, maxW: 0.14 },   // after 📅
   ],
 };
 
@@ -11175,38 +11166,63 @@ async function _drawPaperFlyer(ctx, W, H, opts, kind) {
   const headFont = 'Anton, Impact, ' + serif;
   const title = String(opts.title || '').toUpperCase();
   const creator = (opts.creatorName || '').trim();
-  const deadline = opts.deadlineDate
-    ? (opts.phase === 'voting' ? `Voting closes ${opts.deadlineDate}` : `Entries close ${opts.deadlineDate}`)
-    : 'Enter now';
+  const catLbl = String(opts.kicker || 'Challenge').toUpperCase();
+  const dateTxt = opts.deadlineDate || '';
 
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = NEWS_INK;
-
-  // headline — Anton, one line, shrink to fit the slot
   ctx.textAlign = 'center';
-  const hpx = _fitTracked(ctx, title, W * S.headlineMaxW, kind === 'news' ? 62 : 46, headFont, '', 1);
-  ctx.font = `${hpx}px ${headFont}`;
-  ctx.fillText(title, W / 2, H * S.headlineY);
 
-  // byline row — text after each baked icon
+  // ── headline box: category eyebrow + big headline, black ink on paper ──
+  const bx0 = W * S.headBox.x0, bx1 = W * S.headBox.x1;
+  const by0 = H * S.headBox.y0, by1 = H * S.headBox.y1;
+  const bw = bx1 - bx0, bh = by1 - by0;
+  const cx = (bx0 + bx1) / 2;
+
+  // eyebrow — small tracked caps at the top of the box
+  const eyebrow = `NEW CHALLENGE  ·  ${catLbl}`;
+  _trackedText(ctx, eyebrow, cx, by0 + bh * 0.30, 22, serif, '700', 6);
+
+  // headline — fill the remaining box; wrap to 2 lines if it must
+  const maxW = bw * 0.92;
+  let px = _fitTracked(ctx, title, maxW, Math.round(bh * 0.60), headFont, '', 0);
+  let lines = [title];
+  if (px < Math.round(bh * 0.34)) {
+    // too small on one line → split roughly in half at a space
+    const words = title.split(' ');
+    let best = null, bestDiff = 1e9;
+    for (let k = 1; k < words.length; k++) {
+      const l1 = words.slice(0, k).join(' '), l2 = words.slice(k).join(' ');
+      const d = Math.abs(l1.length - l2.length);
+      if (d < bestDiff) { bestDiff = d; best = [l1, l2]; }
+    }
+    if (best) {
+      const p1 = _fitTracked(ctx, best[0], maxW, Math.round(bh * 0.40), headFont, '', 0);
+      const p2 = _fitTracked(ctx, best[1], maxW, Math.round(bh * 0.40), headFont, '', 0);
+      px = Math.min(p1, p2); lines = best;
+    }
+  }
+  ctx.font = `${px}px ${headFont}`;
+  if (lines.length === 1) {
+    ctx.fillText(lines[0], cx, by0 + bh * 0.80);
+  } else {
+    ctx.fillText(lines[0], cx, by0 + bh * 0.62);
+    ctx.fillText(lines[1], cx, by0 + bh * 0.94);
+  }
+
+  // ── byline row: name after "By", date after 📅. Other cells stay empty ──
   const rowY = H * S.bylineY;
   ctx.textAlign = 'left';
-  const items = [
-    creator ? (kind === 'news' ? creator : `By ${creator}`) : '',
-    deadline,
-    'Winner by vote',
-    'flameschallenge.com',
-  ];
+  const items = [creator, dateTxt];
   items.forEach((t, i) => {
     if (!t) return;
     const c = S.cells[i];
-    const maxW = W * c.maxW;
-    // shrink to a floor, then ellipsise — never overrun into the next icon.
-    let px = 21;
-    ctx.font = `700 ${px}px ${serif}`;
-    while (ctx.measureText(t).width > maxW && px > 16) { px -= 1; ctx.font = `700 ${px}px ${serif}`; }
+    const mw = W * c.maxW;
+    let fpx = 26;
+    ctx.font = `700 ${fpx}px ${serif}`;
+    while (ctx.measureText(t).width > mw && fpx > 18) { fpx -= 1; ctx.font = `700 ${fpx}px ${serif}`; }
     let out = t;
-    while (ctx.measureText(out).width > maxW && out.length > 4) out = out.slice(0, -2).trimEnd() + '…';
+    while (ctx.measureText(out).width > mw && out.length > 4) out = out.slice(0, -2).trimEnd() + '…';
     ctx.fillText(out, W * c.textX, rowY);
   });
 }
