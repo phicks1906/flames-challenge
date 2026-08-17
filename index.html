@@ -8022,7 +8022,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v792.2 · paper-flyers";
+const APP_VERSION = "v792.4 · paper-flyers";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11087,8 +11087,15 @@ function _flyerCatKey(cat) {
   const k = String(cat || '').toLowerCase().trim();
   return FLYER_CATS.includes(k) ? k : 'other';
 }
-const NEWS_INK  = '#1c1410';
-const NEWS_SUB  = '#4a3a2a';
+/* Ink colours. Measured off the baked type in the templates: the display
+   masthead averages RGB(40,33,23) and the body columns RGB(84,69,48) — warm
+   and much lighter than a flat black, because printed ink lets paper through.
+   These are MULTIPLY sources: drawn over ~RGB(187,175,150) paper they land on
+   those measured values, and the grain and creases show through the letters.
+   Drawing flat opaque ink is what made the text sit on top of the page
+   instead of in it. */
+const NEWS_INK  = '#3f3020';   // display: headline
+const NEWS_SUB  = '#736452';   // body: eyebrow, byline
 
 /* Slot tables — v792.1. Both templates were regenerated with a proper
    HEADLINE BOX above the hero frame, drawn in the template's own vocabulary
@@ -11103,7 +11110,7 @@ const NEWS_SUB  = '#4a3a2a';
      columns        y 0.7054 → bottom  (baked copy) */
 const NEWS_SLOTS = {
   headBox:   { y0: 0.1519, y1: 0.2896, x0: 0.063, x1: 0.952 },
-  bylineY:   0.6785,
+  bylineY:   0.6720,   // row is 0.6455→0.6990; baked "By" baseline sits here
   cells: [
     { textX: 0.100, maxW: 0.24 },   // after baked "By"
     { textX: 0.412, maxW: 0.16 },   // after 📅
@@ -11117,7 +11124,7 @@ const NEWS_SLOTS = {
                     0.331 (📅), 0.527 (👥), 0.731 (🏆) */
 const TEAR_SLOTS = {
   headBox:   { y0: 0.1041, y1: 0.2211, x0: 0.061, x1: 0.930 },
-  bylineY:   0.7085,
+  bylineY:   0.6970,   // row is 0.6648→0.7375; baked "By" baseline sits here
   cells: [
     { textX: 0.118, maxW: 0.19 },   // after baked "By"
     { textX: 0.372, maxW: 0.14 },   // after 📅
@@ -11174,8 +11181,10 @@ async function _drawPaperFlyer(ctx, W, H, opts, kind) {
   const dateTxt = opts.deadlineDate || '';
 
   ctx.textBaseline = 'alphabetic';
-  ctx.fillStyle = NEWS_INK;
   ctx.textAlign = 'center';
+  // Everything from here is printed INTO the paper, not onto it.
+  ctx.save();
+  ctx.globalCompositeOperation = 'multiply';
 
   // ── headline box: category eyebrow + big headline, black ink on paper ──
   const bx0 = W * S.headBox.x0, bx1 = W * S.headBox.x1;
@@ -11185,13 +11194,17 @@ async function _drawPaperFlyer(ctx, W, H, opts, kind) {
 
   // eyebrow — small tracked caps at the top of the box
   const eyebrow = `NEW CHALLENGE  ·  ${catLbl}`;
-  _trackedText(ctx, eyebrow, cx, by0 + bh * 0.30, 22, serif, '700', 6);
+  ctx.fillStyle = NEWS_SUB;
+  _trackedText(ctx, eyebrow, cx, by0 + bh * 0.24, 22, serif, '700', 6);
+  ctx.fillStyle = NEWS_INK;
 
-  // headline — fill the remaining box; wrap to 2 lines if it must
+  // headline — Anton's cap-height is ~0.72 of font-size (vs ~0.66 for the
+  // fallback serif), so it needs a lower ceiling than it looks. 0.44 of the
+  // box height keeps the caps clear of the eyebrow with Anton loaded.
   const maxW = bw * 0.92;
-  let px = _fitTracked(ctx, title, maxW, Math.round(bh * 0.60), headFont, '', 0);
+  let px = _fitTracked(ctx, title, maxW, Math.round(bh * 0.44), headFont, '', 0);
   let lines = [title];
-  if (px < Math.round(bh * 0.34)) {
+  if (px < Math.round(bh * 0.28)) {
     // too small on one line → split roughly in half at a space
     const words = title.split(' ');
     let best = null, bestDiff = 1e9;
@@ -11201,22 +11214,23 @@ async function _drawPaperFlyer(ctx, W, H, opts, kind) {
       if (d < bestDiff) { bestDiff = d; best = [l1, l2]; }
     }
     if (best) {
-      const p1 = _fitTracked(ctx, best[0], maxW, Math.round(bh * 0.40), headFont, '', 0);
-      const p2 = _fitTracked(ctx, best[1], maxW, Math.round(bh * 0.40), headFont, '', 0);
+      const p1 = _fitTracked(ctx, best[0], maxW, Math.round(bh * 0.30), headFont, '', 0);
+      const p2 = _fitTracked(ctx, best[1], maxW, Math.round(bh * 0.30), headFont, '', 0);
       px = Math.min(p1, p2); lines = best;
     }
   }
   ctx.font = `${px}px ${headFont}`;
   if (lines.length === 1) {
-    ctx.fillText(lines[0], cx, by0 + bh * 0.80);
+    ctx.fillText(lines[0], cx, by0 + bh * 0.76);
   } else {
-    ctx.fillText(lines[0], cx, by0 + bh * 0.62);
-    ctx.fillText(lines[1], cx, by0 + bh * 0.94);
+    ctx.fillText(lines[0], cx, by0 + bh * 0.58);
+    ctx.fillText(lines[1], cx, by0 + bh * 0.90);
   }
 
   // ── byline row: name after "By", date after 📅. Other cells stay empty ──
   const rowY = H * S.bylineY;
   ctx.textAlign = 'left';
+  ctx.fillStyle = NEWS_SUB;
   const items = [creator, dateTxt];
   items.forEach((t, i) => {
     if (!t) return;
@@ -11229,6 +11243,8 @@ async function _drawPaperFlyer(ctx, W, H, opts, kind) {
     while (ctx.measureText(out).width > mw && out.length > 4) out = out.slice(0, -2).trimEnd() + '…';
     ctx.fillText(out, W * c.textX, rowY);
   });
+
+  ctx.restore();
 }
 
 async function generateFlyer(opts) {
