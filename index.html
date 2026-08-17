@@ -33,11 +33,17 @@
 <!-- Theme bootstrap: apply saved theme BEFORE styles render to avoid flash -->
 <script>
 (function(){
+  // v794.3 — this used to default to 'light' while getTheme() defaulted to
+  // 'dark'. With nothing saved, boot marked the page light, then applyTheme
+  // ran and removed the body class but LEFT data-theme="light" on <html>, so
+  // body-class rules went dark while html[data-theme] rules stayed light —
+  // a half-dark screen. Both defaults must agree, and both flags must always
+  // be written together. Keep this in sync with getTheme().
   try {
-    var t = localStorage.getItem('fc_theme') || 'light';
+    var t = localStorage.getItem('fc_theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', t);
     if (t === 'light') {
-      // Body doesn't exist yet — set on documentElement, then mirror to body on DOMContentLoaded
-      document.documentElement.setAttribute('data-theme', 'light');
+      // Body doesn't exist yet — mirror to it once it does.
       document.addEventListener('DOMContentLoaded', function(){ document.body.classList.add('theme-light'); });
     }
   } catch (e) {}
@@ -8022,7 +8028,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v794.2 · classic-v2";
+const APP_VERSION = "v794.3 · theme-fix";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -8033,6 +8039,9 @@ function getTheme() {
   try { return localStorage.getItem(THEME_KEY) || 'dark'; } catch (e) { return 'dark'; }
 }
 function applyTheme(t) {
+  // Both flags, always. Styles are written against BOTH html[data-theme] and
+  // body.theme-light; setting only one leaves the page in a mixed state.
+  document.documentElement.setAttribute('data-theme', t === 'light' ? 'light' : 'dark');
   if (t === 'light') document.body.classList.add('theme-light');
   else document.body.classList.remove('theme-light');
   const icon = document.getElementById('themeIcon');
