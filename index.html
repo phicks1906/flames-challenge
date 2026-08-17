@@ -5427,7 +5427,7 @@ body.theme-light .champ-ticker {
 .ticker-item .ember-inline { vertical-align: middle; margin-right: 2px; }
 
 /* ── v784 flyer style picker ── */
-.promote-styles { display: flex; gap: 8px; margin-top: 12px; }
+.promote-styles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
 .pstyle { flex: 1; padding: 10px 8px; border-radius: 12px; cursor: pointer;
   background: var(--surface); border: 1px solid var(--border); color: var(--text-muted);
   font-family: inherit; font-size: 13px; font-weight: 700; }
@@ -7186,8 +7186,10 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     <!-- v784 — style picker. Slot-based templates: same content, different
          dressing. More styles slot in here without touching the renderer. -->
     <div class="promote-styles" id="promoteStyles">
-      <button class="pstyle on"  data-fstyle="ember"  onclick="setFlyerStyle('ember')">🔥 Classic</button>
-      <button class="pstyle"     data-fstyle="wanted" onclick="setFlyerStyle('wanted')">🤠 Wanted</button>
+      <button class="pstyle on"  data-fstyle="ember"   onclick="setFlyerStyle('ember')">🔥 Classic</button>
+      <button class="pstyle"     data-fstyle="wanted"  onclick="setFlyerStyle('wanted')">🤠 Wanted</button>
+      <button class="pstyle"     data-fstyle="news"    onclick="setFlyerStyle('news')">📰 Chronicle</button>
+      <button class="pstyle"     data-fstyle="tearoff" onclick="setFlyerStyle('tearoff')">📌 Tear-off</button>
     </div>
     <!-- v789 — the ONE piece of template furniture worth opening up. On a real
          wanted poster the reward is the funniest line; everything else
@@ -8020,7 +8022,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v791.2 · champ-flyer-test";
+const APP_VERSION = "v792 · paper-flyers";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11067,6 +11069,148 @@ async function previewChampFlyer(chId) {
 }
 
 
+/* ---------- CHRONICLE + TEAR-OFF FLYERS (v792) ----------
+   Two more slot-based templates. Both are PRE-COMPOSITED per category —
+   the hero photo is already baked into the paper offline (sepia on the
+   tear-off, black newsprint ink on the Chronicle), so at runtime this only
+   draws text into empty slots. No user photo, no user text: these are
+   announcements, not the Wanted gag. Headline, creator and deadline all come
+   from the challenge itself.
+
+   Assets: Assets/flyer-news-{cat}.jpg and Assets/flyer-tearoff-{cat}.jpg,
+   ten categories each, 1080×1349. Unknown category → 'other'.
+
+   Slot geometry is measured off the finished 1080-wide files, not guessed. */
+const FLYER_CATS = ['art','photography','music','writing','cooking','style','sports','fitness','comedy','other'];
+function _flyerCatKey(cat) {
+  const k = String(cat || '').toLowerCase().trim();
+  return FLYER_CATS.includes(k) ? k : 'other';
+}
+const NEWS_INK  = '#1c1410';
+const NEWS_SUB  = '#4a3a2a';
+
+/* Slot tables. Every number here was measured off the finished 1080×1349
+   files with pixel scans — not eyeballed. Fractions of W/H.
+
+   CHRONICLE. The masthead runs straight into the EST/VOL strip and then the
+   hero — there is NO clear band above the photo. The headline lives BELOW the
+   photo, in the blank band between the byline row and the columns
+   (0.579→0.686), like a caption-headline. Byline row: "By" is baked at
+   x 0.0685; icons are baked at 0.293 (📅), 0.518 (👥), 0.734 (🏆), each
+   ~28px wide. Text starts a beat after each. */
+const NEWS_SLOTS = {
+  headlineY: 0.640,
+  headlineMaxW: 0.86,
+  bylineY:   0.556,
+  cells: [
+    { textX: 0.102, maxW: 0.17 },   // after baked "By"
+    { textX: 0.330, maxW: 0.17 },   // after 📅
+    { textX: 0.556, maxW: 0.16 },   // after 👥
+    { textX: 0.772, maxW: 0.19 },   // after 🏆
+  ],
+};
+
+/* TEAR-OFF. Category line sits between the two stars (y ≈ 0.078); the flame
+   rule is at 0.118 and the frame starts at 0.151. The band between them
+   (0.118→0.151, ~44px) takes ONE compact headline line. Byline row: first cell
+   is a long blank (0.070→0.231) with no baked "By"; icons at 0.529 (👥),
+   0.737 (🏆). The 📅 is at ~0.28 but overlaps the first cell's blank; the row
+   is: [name] | 📅 [date] | 👥 [winner] | 🏆 [how]. */
+const TEAR_SLOTS = {
+  // The flame ornament sits at 0.118 dead centre, so the narrow band under
+  // it (0.118→0.151) cannot carry a centred headline without colliding. The
+  // headline moves UP between the stars (0.059→0.112, ~70px), which is the
+  // roomier of the two bands. Category goes to the byline row's first cell.
+  headlineY: 0.094,
+  headlineMaxW: 0.72,     // stars sit at 0.11 / 0.89 — stay inside them
+  bylineY:   0.668,
+  cells: [
+    { textX: 0.080, maxW: 0.19 },   // "By NAME" — 📅 icon starts at 0.28
+    { textX: 0.310, maxW: 0.19 },   // after 📅
+    { textX: 0.572, maxW: 0.14 },   // after 👥
+    { textX: 0.780, maxW: 0.19 },   // after 🏆
+  ],
+};
+
+function _fitTracked(ctx, text, maxW, startPx, family, weight, track) {
+  let px = startPx;
+  do {
+    ctx.font = `${weight ? weight + ' ' : ''}${px}px ${family}`;
+    const w = ctx.measureText(text).width + Math.max(0, text.length - 1) * track;
+    if (w <= maxW) break;
+    px -= 1;
+  } while (px > 12);
+  return px;
+}
+
+// Letter-spaced centred text. ctx.letterSpacing is iOS 17.4+ / Chrome 99+;
+// older Safari silently ignores it, so fall back to glyph-by-glyph.
+function _trackedText(ctx, text, cx, y, px, family, weight, trackPx) {
+  ctx.font = `${weight ? weight + ' ' : ''}${px}px ${family}`;
+  if ('letterSpacing' in ctx) {
+    ctx.letterSpacing = trackPx + 'px';
+    ctx.textAlign = 'center';
+    ctx.fillText(text, cx, y);
+    ctx.letterSpacing = '0px';
+    return;
+  }
+  const chars = [...text];
+  let total = 0;
+  chars.forEach(c => { total += ctx.measureText(c).width + trackPx; });
+  total -= trackPx;
+  ctx.textAlign = 'left';
+  let x = cx - total / 2;
+  chars.forEach(c => { ctx.fillText(c, x, y); x += ctx.measureText(c).width + trackPx; });
+  ctx.textAlign = 'center';
+}
+
+async function _drawPaperFlyer(ctx, W, H, opts, kind) {
+  const cat = _flyerCatKey(opts.kicker);
+  const tpl = await _loadImg(FLYER_ASSET_BASE + `flyer-${kind}-${cat}.jpg`);
+  if (!tpl) throw new Error(`flyer template failed: ${kind}/${cat}`);
+  ctx.drawImage(tpl, 0, 0, W, H);
+
+  const S = kind === 'news' ? NEWS_SLOTS : TEAR_SLOTS;
+  const serif = 'Georgia, "Times New Roman", serif';
+  const headFont = 'Anton, Impact, ' + serif;
+  const title = String(opts.title || '').toUpperCase();
+  const creator = (opts.creatorName || '').trim();
+  const deadline = opts.deadlineDate
+    ? (opts.phase === 'voting' ? `Voting closes ${opts.deadlineDate}` : `Entries close ${opts.deadlineDate}`)
+    : 'Enter now';
+
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = NEWS_INK;
+
+  // headline — Anton, one line, shrink to fit the slot
+  ctx.textAlign = 'center';
+  const hpx = _fitTracked(ctx, title, W * S.headlineMaxW, kind === 'news' ? 62 : 46, headFont, '', 1);
+  ctx.font = `${hpx}px ${headFont}`;
+  ctx.fillText(title, W / 2, H * S.headlineY);
+
+  // byline row — text after each baked icon
+  const rowY = H * S.bylineY;
+  ctx.textAlign = 'left';
+  const items = [
+    creator ? (kind === 'news' ? creator : `By ${creator}`) : '',
+    deadline,
+    'Winner by vote',
+    'flameschallenge.com',
+  ];
+  items.forEach((t, i) => {
+    if (!t) return;
+    const c = S.cells[i];
+    const maxW = W * c.maxW;
+    // shrink to a floor, then ellipsise — never overrun into the next icon.
+    let px = 21;
+    ctx.font = `700 ${px}px ${serif}`;
+    while (ctx.measureText(t).width > maxW && px > 16) { px -= 1; ctx.font = `700 ${px}px ${serif}`; }
+    let out = t;
+    while (ctx.measureText(out).width > maxW && out.length > 4) out = out.slice(0, -2).trimEnd() + '…';
+    ctx.fillText(out, W * c.textX, rowY);
+  });
+}
+
 async function generateFlyer(opts) {
   try { await document.fonts.ready; } catch (e) {}
   const W = 1080, H = 1620;
@@ -11075,6 +11219,15 @@ async function generateFlyer(opts) {
   const ctx = cv.getContext('2d');
 
   const hasHero = !!opts.heroImage;
+
+  // v792 — paper templates are 1080×1349, not 1620. Size the canvas to match.
+  if (opts.style === 'news' || opts.style === 'tearoff') {
+    cv.height = 1349;
+    await _drawPaperFlyer(ctx, W, 1349, opts, opts.style);
+    const dataUrl = cv.toDataURL('image/png');
+    const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
+    return { dataUrl, blob };
+  }
 
   // v784 — style dispatch. 'wanted' draws its own complete poster and returns.
   if (opts.style === 'wanted') {
@@ -11244,6 +11397,14 @@ async function openPromote(type, item) {
       sub: creatorName ? `Created by ${creatorName}` : '',
       deadlineText: phaseTxt,
       ctaText: status === 'voting' ? 'Vote now on' : 'Enter now on',
+      // v792 — paper flyers print a DATE, not a countdown ("2d 4h" looks
+      // wrong on newsprint). Voting phase prints the voting close instead.
+      deadlineDate: (() => {
+        const d = status === 'voting' ? item.voting_end : item.submission_deadline;
+        if (!d) return '';
+        return new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }).toUpperCase();
+      })(),
+      phase: status,
     };
     modalTitle = 'Promote your challenge';
     shareText = `🔥 ${item.title} — join the challenge on FlamesChallenge`;
@@ -11334,6 +11495,17 @@ function setFlyerStyle(style) {
     b.classList.toggle('on', b.dataset.fstyle === style));
   const rr = document.getElementById('promoteRewardRow');
   if (rr) rr.style.display = style === 'wanted' ? 'block' : 'none';
+  // v792 — Chronicle and Tear-off take no user photo and no extra line. They
+  // are announcements: headline, creator, deadline, all from the challenge.
+  // Hiding the controls is the honest thing — showing a photo button that does
+  // nothing is worse than not having one.
+  const paper = style === 'news' || style === 'tearoff';
+  const hypeWrap = document.getElementById('promoteHype')?.closest('div');
+  if (hypeWrap) hypeWrap.style.display = paper ? 'none' : '';
+  const addBtn = document.getElementById('promoteAddPhotoBtn');
+  const remBtn = document.getElementById('promoteRemovePhotoBtn');
+  if (addBtn) addBtn.style.display = paper ? 'none' : '';
+  if (remBtn && paper) remBtn.style.display = 'none';
   updatePromoteMediaButtons();
   if (promoteState.flyerGenerated) renderPromoteFlyer();
 }
@@ -11370,7 +11542,9 @@ async function renderPromoteFlyer() {
   // too early and the loader below simply set it again.
   const heroSrc = (_style === 'wanted')
     ? promoteState.heroUserUrl
-    : (promoteState.heroUserUrl || promoteState.heroAutoUrl);
+    : (_style === 'news' || _style === 'tearoff')
+      ? null   // v792 — hero is baked into the template; nothing to load
+      : (promoteState.heroUserUrl || promoteState.heroAutoUrl);
   if (!heroSrc) opts.heroImage = null;
   if (heroSrc) {
     try {
@@ -11395,14 +11569,21 @@ async function renderPromoteFlyer() {
 
 function updatePromoteMediaButtons() {
   if (!promoteState) return;
+  const addBtn = document.getElementById('promoteAddPhotoBtn');
+  const remBtn = document.getElementById('promoteRemovePhotoBtn');
+  // v792 — paper styles: no photo controls at all.
+  if (promoteState.style === 'news' || promoteState.style === 'tearoff') {
+    if (addBtn) addBtn.style.display = 'none';
+    if (remBtn) remBtn.style.display = 'none';
+    return;
+  }
+  if (addBtn) addBtn.style.display = '';
   // v789 — Wanted only counts an EXPLICIT upload (the auto-detected challenge
   // photo is ignored there), and the label has to say what the button actually
   // does in this style: it replaces the outlaw, not "adds a photo".
   const wanted = promoteState.style === 'wanted';
   const has = wanted ? !!promoteState.heroUserUrl
                      : !!(promoteState.heroUserUrl || promoteState.heroAutoUrl);
-  const addBtn = document.getElementById('promoteAddPhotoBtn');
-  const remBtn = document.getElementById('promoteRemovePhotoBtn');
   if (addBtn) addBtn.textContent = wanted
     ? (has ? '🔁 Change mugshot' : '🤠 Use my photo instead of the outlaw')
     : (has ? '🔁 Change photo' : '📷 Add photo');
