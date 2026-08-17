@@ -8022,7 +8022,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v792.4 · paper-flyers";
+const APP_VERSION = "v792.5 · paper-flyers";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -10982,10 +10982,12 @@ function _drawOutlawSilhouette(ctx, x, y, w, h) {
 
 async function _drawWantedFlyer(ctx, W, H, opts) {
   // v788 — drawn on a pre-cleaned poster template (2:3, same as the flyer).
-  // The placeholder text was erased from the asset OFFLINE — stains and grain
-  // preserved, only the letters removed — so there is no runtime patching and
-  // therefore no visible patch rectangles. Slot positions were measured off
-  // the template, not eyeballed.
+  // Slot positions were measured off the template, not eyeballed.
+  // KNOWN ISSUE (v792.5): the offline erase of the placeholder text left three
+  // flat, lighter rectangles behind the name / category / reward lines, with
+  // hard edges that cut across the poster's creases. That is baked into the
+  // asset — the renderer below is already correct (multiply, so grain reads
+  // through the letters). Fixing it means re-blending the artwork, not code.
   const tpl = await _loadImg(FLYER_ASSET_BASE + 'flyer-wanted-template.webp');
   if (!tpl) { ctx.fillStyle = '#6b4f2e'; ctx.fillRect(0, 0, W, H); return; }
   ctx.drawImage(tpl, 0, 0, W, H);
@@ -11094,8 +11096,8 @@ function _flyerCatKey(cat) {
    those measured values, and the grain and creases show through the letters.
    Drawing flat opaque ink is what made the text sit on top of the page
    instead of in it. */
-const NEWS_INK  = '#3f3020';   // display: headline
-const NEWS_SUB  = '#736452';   // body: eyebrow, byline
+const NEWS_INK  = '#57432d';   // display: headline
+const NEWS_SUB  = '#8a7864';   // body: eyebrow, byline
 
 /* Slot tables — v792.1. Both templates were regenerated with a proper
    HEADLINE BOX above the hero frame, drawn in the template's own vocabulary
