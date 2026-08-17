@@ -8022,7 +8022,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
-const APP_VERSION = "v794 · classic-v2";
+const APP_VERSION = "v794.2 · classic-v2";
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
 const MAX_ENTRIES_PER_CHALLENGE = 20;
@@ -11268,15 +11268,15 @@ const CLASSIC_SLOTS = {
   cap2: { y0: 0.780, y1: 0.834, x0: 0.310, x1: 0.690 },
 };
 
-/* Classic needs a photo — the hero frame is the whole point of the layout and
-   an empty one is the "large empty middle" this template exists to fix. The
-   picker hides the style when there is nothing to put in it. */
-function shouldOfferClassic() {
-  return !!(promoteState && (promoteState.heroUserUrl || promoteState.heroAutoUrl));
-}
-
 async function _drawClassicFlyer(ctx, W, H, opts) {
-  const tpl = await _loadImg(FLYER_ASSET_BASE + 'flyer-classic-v2.webp');
+  // v794.1 — per-category templates with the art already baked into the hero
+  // frame, same pattern as Chronicle and Tear-off. A user photo draws OVER it.
+  // Earlier this style hid itself when there was no photo; that was wrong —
+  // it should always work, and the frame should never be empty. It also masked
+  // a real failure: when the challenge photo fails to load (CORS, missing
+  // file), heroImage comes back null and the frame rendered black.
+  const cat = _flyerCatKey(opts.kicker);
+  const tpl = await _loadImg(FLYER_ASSET_BASE + `flyer-classic-${PAPER_TPL_VER}-${cat}.webp`);
   if (!tpl) throw new Error('classic template failed to load');
   ctx.drawImage(tpl, 0, 0, W, H);
 
@@ -11403,9 +11403,9 @@ async function generateFlyer(opts) {
   //   title plaque      y 0.600→0.721, x 0.138→0.862
   //   byline capsule    y 0.780→0.834, x 0.310→0.690
   //
-  // Classic REQUIRES a photo — see shouldOfferClassic(). Without one the hero
-  // frame is a large empty box, which is the original complaint. Rather than
-  // paper over it with a logo or a repeated title, the style is withheld.
+  // The hero frame always has art: the per-category template bakes it in, and
+  // a user photo simply draws over the top. It can never render empty, which
+  // was the original complaint about this style.
   cv.height = 1349;
   await _drawClassicFlyer(ctx, W, 1349, opts);
   const dataUrl = cv.toDataURL('image/png');
@@ -11539,16 +11539,6 @@ async function generatePromoteFlyer() { return renderPromoteFlyer(); }
 // Explicit user action: generate the flyer on demand from the promote modal.
 // v784 — switching style re-bakes immediately so the preview always matches
 // the selection. promoteState.style is read by renderPromoteFlyer.
-// v794 — Classic requires a photo; the picker reflects that instead of
-// offering a style that would render an empty frame.
-function updateFlyerStyleAvailability() {
-  const btn = document.querySelector('#promoteStyles .pstyle[data-fstyle="ember"]');
-  if (!btn) return;
-  const ok = shouldOfferClassic();
-  btn.style.display = ok ? '' : 'none';
-  if (!ok && promoteState && promoteState.style === 'ember') setFlyerStyle('wanted');
-}
-
 function setFlyerStyle(style) {
   if (!promoteState) return;
   promoteState.style = style;
@@ -11601,11 +11591,13 @@ async function renderPromoteFlyer() {
   // silhouette always looks deliberate. Only an explicit upload overrides it.
   // NOTE: this must gate heroSrc itself — v785 nulled opts.heroImage one line
   // too early and the loader below simply set it again.
-  const heroSrc = (_style === 'wanted')
-    ? promoteState.heroUserUrl
-    : (_style === 'news' || _style === 'tearoff')
-      ? null   // v792 — hero is baked into the template; nothing to load
-      : (promoteState.heroUserUrl || promoteState.heroAutoUrl);
+  // v794.2 — every template now ships with baked category art, so the AUTO
+  // detected challenge photo no longer overrides it. Only an explicit upload
+  // does. Same rule Wanted has always used. Chronicle and Tear-off take no
+  // photo at all — their art is part of the paper.
+  const heroSrc = (_style === 'news' || _style === 'tearoff')
+    ? null
+    : promoteState.heroUserUrl;
   if (!heroSrc) opts.heroImage = null;
   if (heroSrc) {
     try {
@@ -11613,8 +11605,12 @@ async function renderPromoteFlyer() {
     } catch (e) {
       console.warn('hero image load failed, falling back to text-only', e);
       opts.heroImage = null;
-      // If the auto-detected one failed (CORS, etc.), drop it
-      if (heroSrc === promoteState.heroAutoUrl) promoteState.heroAutoUrl = null;
+      // v794.2 — heroSrc can only be the user's own upload now, so a failure
+      // means that upload is unusable. Clear it and re-sync the buttons, or the
+      // sheet keeps offering "Change / Remove photo" for a photo that isn't
+      // there. The flyer falls back to the baked category art, not to nothing.
+      promoteState.heroUserUrl = null;
+      updatePromoteMediaButtons();
     }
   }
   try {
@@ -11639,13 +11635,13 @@ function updatePromoteMediaButtons() {
     return;
   }
   if (addBtn) addBtn.style.display = '';
-  updateFlyerStyleAvailability();
   // v789 — Wanted only counts an EXPLICIT upload (the auto-detected challenge
   // photo is ignored there), and the label has to say what the button actually
   // does in this style: it replaces the outlaw, not "adds a photo".
+  // v794.2 — an explicit upload is the only thing that counts as "has photo"
+  // now, for every style. The auto-detected one no longer replaces baked art.
   const wanted = promoteState.style === 'wanted';
-  const has = wanted ? !!promoteState.heroUserUrl
-                     : !!(promoteState.heroUserUrl || promoteState.heroAutoUrl);
+  const has = !!promoteState.heroUserUrl;
   if (addBtn) addBtn.textContent = wanted
     ? (has ? '🔁 Change mugshot' : '🤠 Use my photo instead of the outlaw')
     : (has ? '🔁 Change photo' : '📷 Add photo');
