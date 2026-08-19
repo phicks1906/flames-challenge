@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v800 · flyer-media" />
-<meta name="fc-whatsnew" content="Drag to reposition your flyer photo, and Fit mode replaces black bars." />
+<meta name="fc-build" content="v802 · challenge-cards" />
+<meta name="fc-whatsnew" content="Challenge cards now show the entries, the vote count, and one clear action." />
 
 <meta property="og:title" content="Flames Challenge — Where Opinions Ignite" />
 <meta property="og:description" content="Vote on what matters. Challenge your friends. Take the title." />
@@ -3645,6 +3645,78 @@ html[data-theme="light"] .ps-heat-card { background: #1a1008; }
 .ps-row-meta { font-size: 12px; color: var(--text-muted); }
 
 /* Feed item: challenge tile (mini card style) */
+/* ---------- v802 · challenge card (step 4) ---------- */
+/* .feed-challenge-card is a flex container (column). Its children do NOT
+   automatically take the full width, so blocks with no intrinsic content —
+   the empty-state frame and the winner image — collapsed to 0px. Every direct
+   block of the card stretches explicitly. */
+.chc-top,.chc-title,.chc-strip,.chc-empty,.chc-win,.chc-fin,.chc-meta,.chc-cta{
+  width:100%;align-self:stretch;box-sizing:border-box;flex:0 0 auto}
+.chc-top{display:flex;align-items:center;gap:9px}
+.chc-av{width:34px;height:34px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;
+ background:var(--bg-2);border:1px solid var(--border);overflow:hidden;
+ font-weight:800;font-size:13px;color:#c9b8a8}
+.chc-av img{width:100%;height:100%;object-fit:cover;display:block}
+.chc-who{flex:1;min-width:0}
+.chc-nm{font-weight:700;font-size:13.5px;line-height:1.15;
+ white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chc-cat{font-weight:600;font-size:11.5px;line-height:1.2;color:#b8aa9e}
+.chc-dots{color:var(--text-muted);font-weight:700;font-size:15px;letter-spacing:1px;
+ padding:2px 4px;cursor:pointer}
+.chc-title{font-weight:800;font-size:21px;line-height:1.22;margin:9px 0 0}
+
+.chc-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:10px}
+.chc-t{position:relative;aspect-ratio:1;border-radius:9px;overflow:hidden;background:var(--bg-2)}
+.chc-t img{width:100%;height:100%;object-fit:cover;display:block}
+.chc-more{position:absolute;inset:0;background:rgba(8,5,4,.68);display:grid;place-items:center;
+ font-weight:800;font-size:17px;color:#fff}
+
+.chc-empty{margin-top:10px;height:118px;border-radius:11px;position:relative;overflow:hidden;
+ border:1.5px dashed #3a2e26;background:#171210}
+.chc-empty img{width:100%;height:100%;object-fit:cover;display:block;opacity:.34;filter:grayscale(.85)}
+.chc-empty-ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+ justify-content:center;gap:6px;
+ background:repeating-linear-gradient(45deg,rgba(255,255,255,.015) 0 8px,transparent 8px 16px)}
+.chc-plus{width:30px;height:30px;border-radius:50%;border:1.5px solid #5a4a3d;display:grid;
+ place-items:center;font-size:20px;color:#9d8a7a;line-height:1}
+.chc-empty-msg{font-weight:700;font-size:12.5px;color:#cdbfb2}
+
+.chc-win{margin-top:10px;border-radius:12px;overflow:hidden;position:relative;height:172px}
+.chc-win img{width:100%;height:100%;object-fit:cover;display:block}
+.chc-crown{position:absolute;left:10px;top:10px;background:rgba(10,7,5,.75);
+ border:1px solid rgba(255,200,87,.5);color:var(--gold);border-radius:999px;
+ padding:5px 10px;font-weight:800;font-size:10.5px;letter-spacing:.08em}
+
+.chc-fin{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px}
+.chc-fin-p{border-radius:10px;overflow:hidden;background:var(--bg-2)}
+.chc-fin-p img{width:100%;aspect-ratio:1;object-fit:cover;display:block}
+.chc-fin-n{font-weight:800;font-size:11.5px;text-align:center;padding:7px 2px;color:#f2e7dc;
+ background:#1b1512;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Metadata: counts grouped left, deadline right. On a narrow phone the deadline
+   drops to its own line rather than the text shrinking. */
+.chc-meta{display:flex;align-items:center;gap:8px 10px;margin-top:11px;flex-wrap:wrap;
+ font-weight:600;font-size:12.5px;color:#d3c6bb}
+.chc-meta > span{display:inline-flex;align-items:center;white-space:nowrap}
+/* Deadline sits right when the row has room and wraps to its own line when it
+   doesn't — no fixed breakpoint, because whether it fits depends on how long
+   the counts and the countdown happen to be. A hard media query forced even
+   short rows ("Open · Entries close in 3h 14m") onto two lines. Text never
+   shrinks either way. */
+.chc-rt{margin-left:auto;color:#c2b4a8}
+.chc-ico{width:12.5px;height:12.5px;margin-right:5px;opacity:.95;flex:0 0 auto}
+.chc-pill{display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border-radius:999px;
+ font-weight:800;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase}
+.chc-pill .d{width:5px;height:5px;border-radius:50%;background:currentColor}
+.chc-open{background:rgba(110,255,166,.12);color:#6effa6}
+.chc-vote{background:rgba(255,106,44,.16);color:#ff8a4d}
+.chc-win-pill,.chc-pill.chc-win{background:rgba(255,200,87,.14);color:var(--gold)}
+
+.chc-cta{display:block;width:100%;margin-top:11px;padding:13px;border:none;border-radius:12px;
+ background:linear-gradient(135deg,var(--ember),#e0431f);color:#fff;
+ font-family:inherit;font-weight:800;font-size:15px;cursor:pointer}
+.chc-cta.chc-ghost{background:none;border:1px solid var(--border);color:var(--text)}
+
 .feed-challenge-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -4428,7 +4500,9 @@ body.theme-light .ch-status.voided .dot { background: #c92a2a; box-shadow: none;
   background: rgba(10, 7, 5, 0.95);
   backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border);
-  padding: 14px 22px;
+  /* v801 — was a flat 14px, which put the ✕ and the title under the Dynamic
+     Island: visible but untappable. Same fix .cd-sheet-header got in v761. */
+  padding: calc(14px + env(safe-area-inset-top, 0px)) 22px 14px;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -5669,7 +5743,8 @@ body.ticker-visible main { padding-bottom: 112px; }
 }
 .entry-viewer-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 16px;
+  /* v801 — safe-area top; this sheet can open flush against the status bar. */
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 16px 16px;
   border-bottom: 1px solid var(--border);
   position: sticky; top: 0;
   background: var(--surface);
@@ -5964,7 +6039,8 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 @keyframes entrantsUp { from { transform: translateY(40px); opacity: 0.6; } to { transform: translateY(0); opacity: 1; } }
 .entrants-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 4px 12px; position: sticky; top: 0;
+  /* v801 — safe-area top. */
+  padding: calc(14px + env(safe-area-inset-top, 0px)) 4px 12px; position: sticky; top: 0;
   background: var(--surface); z-index: 1;
 }
 .entrants-header h3 { font-family: var(--font-display); font-size: 20px; text-transform: uppercase; letter-spacing: 0.04em; }
@@ -20866,8 +20942,35 @@ function renderFeed() {
     header.addEventListener('pointerup', e => {
       const moved = Math.abs(e.clientY - startY) > 8 || Math.abs(e.clientX - startX) > 8;
       if (moved) return;
-      if (e.target.closest('[data-fcc-vote],[data-fcc-submit],.fcc-vote-btn,.fcc-submit-btn')) return;
+      // v802 — the card now has its own primary action and an overflow dot.
+      // Both handle their own tap; the card body still opens the viewer.
+      if (e.target.closest('[data-fcc-vote],[data-fcc-submit],.fcc-vote-btn,.fcc-submit-btn,[data-chc-act],[data-chc-menu]')) return;
       openFeedViewer(ch.id);
+    });
+  });
+
+  // v802 — challenge card primary action. Phase decides where it goes:
+  // Enter opens the submit sheet, Vote/View open the challenge itself.
+  c.querySelectorAll('[data-chc-act]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const ch = (state.challenges || []).find(x => x.id === btn.dataset.chcAct);
+      if (!ch) return;
+      // openSubmitEntry() reads state.currentChallenge — it takes no challenge
+      // argument. Same pattern the existing [data-fcc-submit] handler uses.
+      if (ch.computedStatus === 'submitting' && state.profile) {
+        state.currentChallenge = ch;
+        openSubmitEntry();
+      } else {
+        openChallenge(ch);
+      }
+    });
+  });
+  c.querySelectorAll('[data-chc-menu]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const ch = (state.challenges || []).find(x => x.id === btn.dataset.chcMenu);
+      if (ch) openPromote('challenge', ch);
     });
   });
 
@@ -21204,6 +21307,127 @@ function renderFlyerCard(p) {
     </div>`;
 }
 
+/* ---------- v802 · CHALLENGE CARD (step 4) ----------
+   The card used to be text and metadata: no action button, creator buried in
+   grey meta, vote count never shown, and the competing work hidden until you
+   expanded it. On a competition app that reads as an event listing.
+
+   Media is now phase-adaptive:
+     open, no entries → desaturated category art, unmistakably a placeholder
+     open / voting    → three real entry thumbnails with a +N tile
+     decided          → the winning entry, large, with a crown badge
+     championship     → three finalist panels with names
+
+   The Enter/Vote/Winner progress bar is gone from feed cards. It repeated what
+   the status pill, the countdown and the button already said, and cost height.
+   It still lives on the challenge detail page.
+
+   EGRESS: tiles render at ~110px. Photos go through Supabase image transforms,
+   video reuses Bunny's preview.webp (already used by the lazy-preview system),
+   everything below the fold is lazy. Full uploads never load in the feed. */
+
+const CARD_TILE = 220;   // px — request size for feed thumbnails
+
+function _cardThumbUrl(e) {
+  if (!e) return null;
+  if (e.media_type === 'video') {
+    // Bunny animated preview — same asset the lazy-preview system already uses.
+    const m = (e.media_url || '').match(/\/([0-9a-f-]{36})\//i);
+    if (m) return `https://${BUNNY_CDN_HOST}/${m[1]}/preview.webp`;
+    return e.poster_url || null;
+  }
+  if (e.media_type === 'audio') return e.poster_url || null;   // cover art if present
+  if (!e.media_url) return null;
+  // Supabase image transform — never the original upload.
+  if (e.media_url.includes('/storage/v1/object/public/')) {
+    return e.media_url.replace('/object/public/', '/render/image/public/')
+         + `?width=${CARD_TILE}&height=${CARD_TILE}&resize=cover&quality=72`;
+  }
+  return e.media_url;
+}
+
+function _cardEntriesFor(ch) {
+  return (state.feedEntries || [])
+    .filter(e => e.challenge_id === ch.id && e.moderation_status !== 'rejected');
+}
+
+function _cardVotes(ch, entries) {
+  return entries.reduce((n, e) => n + (state.feedVoteCounts?.[e.id] || 0), 0);
+}
+
+function _compactCount(n) {
+  return n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/, '') + 'K' : String(n);
+}
+
+/* One time grammar everywhere. Never a bare duration. */
+function _cardDeadlineText(ch, status) {
+  if (status === 'submitting' && ch.submission_deadline)
+    return `Entries close in ${formatCountdown(ch.submission_deadline)}`;
+  if (isVotingPhase(status)) {
+    // The status pill already reads VOTING; repeating the word here wrapped the
+    // metadata row onto two lines. Shortened rather than shrinking the text.
+    const t = status === 'sd_submitting' ? ch.sd_submit_end : ch.voting_end;
+    return t ? `Ends in ${formatCountdown(t)}` : 'Voting open';
+  }
+  if (ch.voting_end) return `Ended ${timeAgo(ch.voting_end)}`;
+  return '';
+}
+
+const _CARD_ICON = {
+  user: '<svg class="chc-ico" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm0 1.5c-3 0-5.5 1.6-5.5 3.6V14h11v-.9c0-2-2.5-3.6-5.5-3.6Z"/></svg>',
+  // Ballot box. Deliberately NOT a flame — flame already means Boost.
+  vote: '<svg class="chc-ico" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M4.2 1.4h7.6v5.1h-1.5V2.9H5.7v3.6H4.2V1.4Zm2.1 2.2h3.4v1.2H6.3V3.6Zm0 2h3.4v1.2H6.3V5.6ZM1.6 7.6h12.8v6.9H1.6V7.6Zm1.5 1.5v3.9h9.8V9.1H9.6a1.6 1.6 0 0 1-3.2 0H3.1Z"/></svg>',
+};
+
+function _cardMediaHTML(ch, status, entries, isChampionship) {
+  const withThumb = entries.map(e => ({ e, u: _cardThumbUrl(e) })).filter(x => x.u);
+
+  // Championship — three finalists with names, not promo text over stock art.
+  if (isChampionship && withThumb.length >= 2) {
+    const three = withThumb.slice(0, 3);
+    return `<div class="chc-fin">${three.map(({ e, u }) => `
+      <div class="chc-fin-p">
+        <img src="${escapeHtml(u)}" loading="lazy" alt="">
+        <div class="chc-fin-n">${escapeHtml((e.submitter?.name || '').toUpperCase())}</div>
+      </div>`).join('')}</div>`;
+  }
+
+  // Decided — the winning entry, large.
+  if (status === 'closed' && withThumb.length) {
+    let best = withThumb[0], bestV = -1;
+    withThumb.forEach(x => {
+      const v = state.feedVoteCounts?.[x.e.id] || 0;
+      if (v > bestV) { bestV = v; best = x; }
+    });
+    const nm = best.e.submitter?.name || 'Winner';
+    return `<div class="chc-win">
+      <img src="${escapeHtml(best.u)}" loading="lazy" alt="">
+      <div class="chc-crown">👑 WINNER · ${escapeHtml(nm.toUpperCase())}</div>
+    </div>`;
+  }
+
+  // Open or voting with entries — three tiles, +N on the last.
+  if (withThumb.length) {
+    const three = withThumb.slice(0, 3);
+    const extra = withThumb.length - three.length;
+    return `<div class="chc-strip">${three.map(({ u }, i) => `
+      <div class="chc-t">
+        <img src="${escapeHtml(u)}" loading="lazy" alt="">
+        ${extra > 0 && i === three.length - 1 ? `<div class="chc-more">+${extra}</div>` : ''}
+      </div>`).join('')}</div>`;
+  }
+
+  // No entries — a placeholder that can never be mistaken for a submission.
+  // No image at all: there is no per-category art small enough to be worth a
+  // request here, and any photo risks reading as somebody's entry.
+  return `<div class="chc-empty">
+    <div class="chc-empty-ov">
+      <div class="chc-plus">+</div>
+      <div class="chc-empty-msg">No entries yet — be the first</div>
+    </div>
+  </div>`;
+}
+
 function renderFeedChallengeCard(ch) {
   const phase = challengePhase(ch.computedStatus);
   const creator = ch.creator || { name: 'Unknown' };
@@ -21216,23 +21440,66 @@ function renderFeedChallengeCard(ch) {
   // phase+time element (it shows phase, progress, and the next deadline);
   // everything else defers to it. Meta keeps what the banner doesn't say:
   // entry count, and the creator once the challenge is decided.
-  const meta = `${entryCount} ${entryWord} · by ${escapeHtml(creator.name)}`;
   const isChampionship = ch.title && ch.title.startsWith('⚡');
   const expanded = state.feedExpanded;
-  // v699 — countdownText removed; the fct banner is the only countdown. See meta note.
+  const status = ch.computedStatus;
 
-  // Compact card — uses same CSS classes as poll card for consistent look
+  // ── v802 step 4 — creator row, media, competition strip, one action ────────
+  const av = creator.avatar && /^https?:/.test(creator.avatar)
+    ? `<img src="${escapeHtml(creator.avatar)}" alt="" loading="lazy">`
+    : `<span>${escapeHtml((creator.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`;
+
+  const cardEntries = _cardEntriesFor(ch);
+  const voteTotal = _cardVotes(ch, cardEntries);
+  const mediaHtml = _cardMediaHTML(ch, status, cardEntries, isChampionship);
+
+  // Status pill. "Title vote" on a championship confirms voting is still open —
+  // "Final" read as though the result had already happened.
+  let pillCls = 'open', pillTxt = 'Open';
+  if (isVotingPhase(status)) {
+    pillCls = 'vote'; pillTxt = isChampionship ? 'Title vote' : 'Voting';
+  } else if (status === 'closed') {
+    pillCls = 'win'; pillTxt = 'Winner';
+  } else if (status === 'voided') {
+    pillCls = 'win'; pillTxt = 'No contest';
+  }
+
+  // Counts are always worded — a bare number beside a small icon isn't legible.
+  const counts = [];
+  if (isChampionship) {
+    if (entryCount) counts.push(`<span>${entryCount} finalist${entryCount === 1 ? '' : 's'}</span>`);
+  } else if (status !== 'closed' && entryCount) {
+    counts.push(`<span>${_CARD_ICON.user}${entryCount} ${entryWord}</span>`);
+  }
+  if (voteTotal > 0) counts.push(`<span>${_CARD_ICON.vote}${_compactCount(voteTotal)} votes</span>`);
+
+  const deadline = _cardDeadlineText(ch, status);
+  // The decided card's winner is already named on the image badge; repeating it
+  // in a pill was saying the same thing twice.
+  const showPill = status !== 'closed';
+
+  let ctaTxt = 'View challenge', ctaCls = '';
+  if (status === 'submitting') ctaTxt = 'Enter challenge';
+  else if (isVotingPhase(status)) ctaTxt = isChampionship ? 'Vote for champion' : 'Vote now';
+  else if (status === 'closed') { ctaTxt = 'View result'; ctaCls = ' chc-ghost'; }
+
   const compactHtml = `
-    <div class="feed-poll-header">
-      <span class="feed-poll-tag" style="color:${isChampionship ? 'var(--gold)' : 'var(--ember)'};">${isChampionship ? '👑 CHAMPIONSHIP' : '🏆 CHALLENGE'} <span style="opacity:0.55">·</span> ${escapeHtml((ch.category||'Other').toUpperCase())}${ch.media_type ? ' <span style="opacity:0.55">·</span> ' + mediaTypeLabel(ch.media_type) : ''}</span>
+    <div class="chc-top">
+      <div class="chc-av">${av}</div>
+      <div class="chc-who">
+        <div class="chc-nm">${escapeHtml(creator.name)}</div>
+        <div class="chc-cat">${escapeHtml(ch.category || 'Other')}${ch.media_type ? ' · ' + mediaTypeLabel(ch.media_type) : ''}</div>
+      </div>
+      <div class="chc-dots" data-chc-menu="${ch.id}">•••</div>
     </div>
-    ${cardPhaseBannerHTML(ch, ch.computedStatus)}
-    <div class="feed-poll-question">${escapeHtml(ch.title)}</div>
-    <div class="feed-poll-time">${meta}</div>
-    ${entryCount > 0 && !expanded ? `<div style="color:var(--ember);font-size:11px;font-weight:700;margin-top:6px;letter-spacing:0.01em;">Tap to see ${entryCount} entr${entryCount===1?'y':'ies'} ›</div>` : ''}`;
-    /* v699 — "Tap to see 3 entries ›" was rendering directly ABOVE the three
-       entries themselves in expanded mode: a bold ember call-to-action pointing
-       at something already on screen. CTA ink is spent only when it buys a tap. */
+    <div class="chc-title">${escapeHtml(ch.title)}</div>
+    ${mediaHtml}
+    <div class="chc-meta">
+      ${showPill ? `<span class="chc-pill cc-${pillCls}"><span class="d"></span>${pillTxt}</span>` : ''}
+      ${counts.join('')}
+      ${deadline ? `<span class="chc-rt">${escapeHtml(deadline)}</span>` : ''}
+    </div>
+    <button class="chc-cta${ctaCls}" data-chc-act="${ch.id}">${ctaTxt}</button>`;
 
   if (!expanded) {
     return `<div class="feed-challenge-card" data-cid="${ch.id}">${compactHtml}</div>`;
