@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1009 — Brand Restraint</title>
+<title>FlamesChallenge v1010 — Update Reliability</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1009 · brand-restraint-card-correction" />
-<meta name="fc-whatsnew" content="Crowned F primary identity, Arena competition mark with restored red-and-gold smoke, and hardened owner-aware challenge actions." />
+<meta name="fc-build" content="v1010 · update-reliability" />
+<meta name="fc-whatsnew" content="Reliable version alerts across iPhone, installed PWA, and hosts that do not support HTTP range requests." />
 
 <meta property="og:title" content="FlamesChallenge — Create. Compete. Get Crowned." />
 <meta property="og:description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
@@ -8958,66 +8958,104 @@ const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
 // somehow missing; it should never be what ships.
 const APP_VERSION = (document.querySelector('meta[name="fc-build"]')?.content || 'v795').trim();
 
-/* ---------- UPDATE CHECK (v795) ----------
-   Until now there was no update path at all: no `updatefound` handler, no
-   skipWaiting, no cache clearing. A user could sit on a build from weeks ago,
-   hitting bugs that were fixed, with no way to know — and on an installed iOS
-   PWA there isn't even a pull-to-refresh to fall back on.
+/* ---------- UPDATE CHECK (v1010) ----------
+   The previous checker required the host to return HTTP 206 for a Range
+   request. Many static hosts and CDN configurations correctly returned 200
+   with the full HTML instead. The code treated that as failure and silently
+   disabled version alerts. v1010 accepts both responses, reads only enough of
+   the stream to find the two build meta tags, then cancels the remainder.
 
-   How it works: fetch only the FIRST FEW KILOBYTES of index.html and read the
-   <meta name="fc-build"> tag out of it. A ranged request keeps this at a few
-   hundred bytes rather than 1.2 MB; if the server ignores Range, the stream is
-   cancelled after the first chunk, so the cost is the same either way.
-
-   Deliberately NOT using the service worker's updatefound event: sw.js is
-   network-first and doesn't version the app shell, so it never reliably fires
-   for an index.html change. Reading the file itself is the honest check.
-
-   This block sits EARLY in the script on purpose. It was originally at the
-   bottom, which meant any throw in the code above it — the exact situation
-   where a user is stuck on a broken build — silently disabled the only escape
-   hatch. It depends on nothing but APP_VERSION. Keep it that way. */
+   This block remains early and dependency-free so a later UI error cannot
+   disable the update escape hatch. */
 function _fcuEsc(t){return String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 const UPDATE_CHECK_MS = 15 * 60 * 1000;
+const UPDATE_READ_LIMIT = 48 * 1024;
 let _lastUpdateCheck = 0;
 let _updateBannerUp = false;
+let _updateCheckInFlight = null;
+
+function _parseBuildTags(text) {
+  const build = text.match(/<meta\s+name=["']fc-build["']\s+content=["']([^"']*)["']/i);
+  const news  = text.match(/<meta\s+name=["']fc-whatsnew["']\s+content=["']([^"']*)["']/i);
+  return build ? { build: build[1].trim(), news: news ? news[1].trim() : '' } : null;
+}
+
+async function _readBuildHead(res) {
+  if (!res.ok) throw new Error('update request failed (HTTP ' + res.status + ')');
+  const reader = res.body?.getReader?.();
+  if (!reader) {
+    const text = await res.text();
+    const tags = _parseBuildTags(text.slice(0, UPDATE_READ_LIMIT));
+    if (!tags) throw new Error('fc-build tag not found');
+    return tags;
+  }
+
+  const decoder = new TextDecoder();
+  let text = '';
+  let received = 0;
+  try {
+    while (received < UPDATE_READ_LIMIT) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      received += value?.byteLength || 0;
+      text += decoder.decode(value, { stream: true });
+      const tags = _parseBuildTags(text);
+      if (tags) return tags;
+    }
+    text += decoder.decode();
+    const tags = _parseBuildTags(text);
+    if (!tags) throw new Error('fc-build tag not found in response head');
+    return tags;
+  } finally {
+    try { await reader.cancel(); } catch (e) {}
+  }
+}
 
 async function _fetchBuildTag() {
-  // Cache-bust and bypass both the HTTP cache and the service worker.
-  const url = `index.html?_v=${Date.now()}`;
-  const res = await fetch(url, {
+  // Always check the deployed root document, not the current SPA route.
+  const url = new URL('/index.html', location.origin);
+  url.searchParams.set('_fc_update', Date.now());
+  const res = await fetch(url.toString(), {
     cache: 'no-store',
-    headers: { Range: 'bytes=0-4095' },
+    credentials: 'same-origin',
+    headers: {
+      'Range': 'bytes=0-49151',
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache'
+    }
   });
-  // 206 means the range was honoured and we get a few hundred bytes. Anything
-  // else means the server sent the WHOLE file — 1.2 MB, and cancelling the
-  // stream doesn't help because it can arrive in a single chunk. Bail rather
-  // than poll a megabyte every 15 minutes on every device. Failing closed
-  // costs an update prompt; failing open costs bandwidth on every user.
-  if (res.status !== 206) {
-    try { await res.body?.cancel(); } catch (e) {}
-    throw new Error('range not supported (HTTP ' + res.status + ') — update check disabled');
-  }
-  const text = await res.text();
-  const build = text.match(/<meta\s+name="fc-build"\s+content="([^"]*)"/i);
-  const news  = text.match(/<meta\s+name="fc-whatsnew"\s+content="([^"]*)"/i);
-  if (!build) throw new Error('fc-build tag not found in first chunk');
-  return { build: build[1].trim(), news: news ? news[1].trim() : '' };
+  // 206 is ideal; 200 is valid and common. _readBuildHead handles both.
+  return _readBuildHead(res);
 }
 
 async function checkForUpdate(force) {
-  if (_updateBannerUp) return;
+  if (_updateBannerUp) return { status: 'banner-visible' };
   const now = Date.now();
-  if (!force && now - _lastUpdateCheck < UPDATE_CHECK_MS) return;
+  if (!force && now - _lastUpdateCheck < UPDATE_CHECK_MS) return { status: 'throttled' };
+  if (_updateCheckInFlight) return _updateCheckInFlight;
   _lastUpdateCheck = now;
-  try {
-    const { build, news } = await _fetchBuildTag();
-    if (build && build !== APP_VERSION) showUpdateBanner(build, news);
-  } catch (e) {
-    // Offline or a blocked range request — never surface this to the user.
-    console.warn('update check skipped', e);
-  }
+
+  _updateCheckInFlight = (async () => {
+    try {
+      const { build, news } = await _fetchBuildTag();
+      if (build && build !== APP_VERSION) {
+        showUpdateBanner(build, news);
+        return { status: 'update-available', build };
+      }
+      return { status: 'current', build };
+    } catch (e) {
+      // Network failures stay non-blocking, but remain inspectable in console.
+      console.warn('update check skipped', e);
+      return { status: 'error', error: String(e?.message || e) };
+    } finally {
+      _updateCheckInFlight = null;
+    }
+  })();
+  return _updateCheckInFlight;
 }
+
+// Exposed for Settings/debugging and support without duplicating checker logic.
+window.fcCheckForUpdate = () => checkForUpdate(true);
 
 function showUpdateBanner(build, news) {
   if (_updateBannerUp || document.getElementById('fcUpdateBar')) return;
@@ -9076,12 +9114,15 @@ async function applyUpdate() {
   go();
 }
 
-// Check shortly after load, and again whenever the app is brought back to the
-// foreground — that's when a PWA user is most likely sitting on a stale build.
-setTimeout(() => checkForUpdate(true), 20000);
+// Check quickly after load, periodically while open, and whenever iOS restores
+// the PWA from suspension or connectivity returns.
+setTimeout(() => checkForUpdate(true), 4000);
+setInterval(() => checkForUpdate(false), UPDATE_CHECK_MS);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') checkForUpdate(false);
 });
+window.addEventListener('pageshow', e => checkForUpdate(!!e.persisted));
+window.addEventListener('online', () => checkForUpdate(true));
 
 // Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
 // When reached, the challenge shows "Challenge full" and the submit path is blocked.
