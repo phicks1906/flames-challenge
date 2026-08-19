@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v802 · challenge-cards" />
-<meta name="fc-whatsnew" content="Challenge cards now show the entries, the vote count, and one clear action." />
+<meta name="fc-build" content="v803 · card-shell" />
+<meta name="fc-whatsnew" content="Challenge cards rebuilt everywhere — entries, votes and one clear action." />
 
 <meta property="og:title" content="Flames Challenge — Where Opinions Ignite" />
 <meta property="og:description" content="Vote on what matters. Challenge your friends. Take the title." />
@@ -3670,6 +3670,11 @@ html[data-theme="light"] .ps-heat-card { background: #1a1008; }
 .chc-t img{width:100%;height:100%;object-fit:cover;display:block}
 .chc-more{position:absolute;inset:0;background:rgba(8,5,4,.68);display:grid;place-items:center;
  font-weight:800;font-size:17px;color:#fff}
+.chc-strip-2{grid-template-columns:repeat(2,1fr)}
+.chc-next{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+ border:1.5px dashed #3a2e26;background:#171210;
+ background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.015) 0 8px,transparent 8px 16px)}
+.chc-next-msg{font-weight:700;font-size:11.5px;color:#cdbfb2;text-align:center;padding:0 6px}
 
 .chc-empty{margin-top:10px;height:118px;border-radius:11px;position:relative;overflow:hidden;
  border:1.5px dashed #3a2e26;background:#171210}
@@ -3892,7 +3897,9 @@ html[data-theme="light"] .ps-heat-card { background: #1a1008; }
   border-radius: var(--radius);
   overflow: hidden;
   border: 1px solid var(--border);
-  border-left: 3px solid rgba(255,106,44,0.85);
+  /* v803 — the 3px ember left rail is gone. The card carries its own hierarchy
+     now (creator row, dominant title, media, status pill); a coloured stripe was
+     a fourth signal saying "this is a challenge" to a card that already says so. */
   margin-bottom: 20px;
   contain: layout style;
 }
@@ -4195,7 +4202,9 @@ html[data-theme="light"] .ps-heat-card { background: #1a1008; }
 /* Posts: subtle left blue accent */
 .post-card { border-left: 3px solid rgba(79, 195, 247, 0.4); }
 /* Challenge tiles: ember left accent */
-.feed-challenge-card { border-left: 3px solid rgba(255, 106, 44, 0.5); }
+/* v803 — the orange left rail is removed. The card now carries its own
+   hierarchy (creator row, title, media, status pill); a coloured rail on top of
+   that was a third signal saying the same thing. */
 /* Winner cards: gold left accent */
 /* winner border defined above */
 /* Poll cards in feed: purple accent */
@@ -4258,7 +4267,9 @@ html[data-theme="light"] .ps-heat-card { background: #1a1008; }
 .challenges-wrap {
   max-width: 1280px;
   margin: 0 auto;
-  padding: 24px 22px 60px;
+  /* v803 — safe-area guard. The nav is sticky, so on this view the search field
+     could sit against the status bar / Dynamic Island before any scroll. */
+  padding: calc(24px + env(safe-area-inset-top, 0px)) 22px 60px;
 }
 .ch-header {
   display: flex;
@@ -4271,7 +4282,10 @@ html[data-theme="light"] .ps-heat-card { background: #1a1008; }
 .ch-tabs {
   display: flex;
   gap: 6px;
-  padding: 6px;
+  /* v803 — the last tab was cut off at the right edge with nothing to show the
+     row scrolled. Extra right padding plus scroll-snap gives it somewhere to go. */
+  padding: 6px 14px 6px 6px;
+  scroll-padding-right: 14px;
   background: var(--overlay-1);
   border: 1px solid var(--border);
   border-radius: 100px;
@@ -18314,13 +18328,7 @@ function renderChallenges() {
     return `
       <div class="fcc-challenge-wrap${isChampionship ? ' champ-gold' : ''}" data-cid="${ch.id}">
         <div class="feed-challenge-card feed-challenge-expanded" data-chid="${ch.id}" style="padding:16px;cursor:pointer;">
-          <div class="feed-poll-header">
-            <span class="feed-poll-tag" style="color:${isChampionship ? 'var(--gold)' : 'var(--ember)'};">${isChampionship ? `👑 CHAMPIONSHIP · ${champMonthLabel(ch.id) ? champMonthLabel(ch.id).toUpperCase() + ' · ' : ''}` : '🏆 CHALLENGE · '}${escapeHtml((ch.category||'').toUpperCase())}${ch.media_type ? ' · ' + mediaTypeLabel(ch.media_type) : ''}</span>
-            <span class="feed-poll-time">${countdownText}</span>
-          </div>
-          ${cardPhaseBannerHTML(ch, ch.computedStatus)}
-          <div style="font-family:var(--font-bricolage);font-weight:700;font-size:17px;color:var(--text);margin-bottom:3px;">${escapeHtml(ch.title)}</div>
-          <div style="font-size:13px;color:var(--text-muted);">${meta}</div>
+          ${buildChallengeCardShell(ch)}
         </div>
         ${drawerHtml}
       </div>`;
@@ -20689,13 +20697,7 @@ function renderFeed() {
         // Fallback: fighters not loaded — keep the simple pinned card (gold-treated)
         return `<div class="fcc-challenge-wrap champ-gold" data-cid="${ch.id}" onclick="openChallenge((state.challenges||[]).find(c=>c.id==='${ch.id}'))">
           <div class="feed-challenge-card" style="padding:16px;cursor:pointer;">
-            <div class="feed-poll-header">
-              <span class="feed-poll-tag" style="color:var(--gold);">👑 CHAMPIONSHIP</span>
-              <span class="feed-poll-time">⏱ ${countdown}</span>
-            </div>
-            ${cardPhaseBannerHTML(ch, status)}
-            <div class="feed-poll-question">${escapeHtml(ch.title)}</div>
-            <div class="feed-poll-time">${entryCount} entr${entryCount===1?'y':'ies'} · ${ch.category}</div>
+            ${buildChallengeCardShell(ch)}
           </div>
         </div>`;
       }).join('');
@@ -21406,6 +21408,16 @@ function _cardMediaHTML(ch, status, entries, isChampionship) {
     </div>`;
   }
 
+  // v803 — exactly one entry on an open challenge. A single full-width image
+  // reads as "this is the answer"; pairing it with an invitation tile keeps it
+  // looking like a contest that still has room.
+  if (withThumb.length === 1 && status === 'submitting') {
+    return `<div class="chc-strip chc-strip-2">
+      <div class="chc-t"><img src="${escapeHtml(withThumb[0].u)}" loading="lazy" alt=""></div>
+      <div class="chc-t chc-next"><div class="chc-plus">+</div><div class="chc-next-msg">Be the next entry</div></div>
+    </div>`;
+  }
+
   // Open or voting with entries — three tiles, +N on the last.
   if (withThumb.length) {
     const three = withThumb.slice(0, 3);
@@ -21428,22 +21440,13 @@ function _cardMediaHTML(ch, status, entries, isChampionship) {
   </div>`;
 }
 
-function renderFeedChallengeCard(ch) {
-  const phase = challengePhase(ch.computedStatus);
+/* v803 — ONE shell, two surfaces. The feed and the Challenges page were
+   drawing different cards; the Challenges page kept the old phase banner and
+   tracker after the feed moved on. Both now call this. */
+function buildChallengeCardShell(ch) {
   const creator = ch.creator || { name: 'Unknown' };
   const entryCount = state.entryCounts[ch.id] || 0;
   const entryWord = entryCount === 1 ? 'entry' : 'entries';
-  // v699 — HIERARCHY. This card was saying the same countdown THREE times:
-  // header-right "⏱ 2d 18h", the fct banner's "Winner in 2d 18h", and this meta
-  // line's "voting ends 2d 18h". Triplicate time isn't emphasis, it's noise that
-  // makes everything shout at once. The fct banner is the ONE canonical
-  // phase+time element (it shows phase, progress, and the next deadline);
-  // everything else defers to it. Meta keeps what the banner doesn't say:
-  // entry count, and the creator once the challenge is decided.
-  const isChampionship = ch.title && ch.title.startsWith('⚡');
-  const expanded = state.feedExpanded;
-  const status = ch.computedStatus;
-
   // ── v802 step 4 — creator row, media, competition strip, one action ────────
   const av = creator.avatar && /^https?:/.test(creator.avatar)
     ? `<img src="${escapeHtml(creator.avatar)}" alt="" loading="lazy">`
@@ -21483,7 +21486,7 @@ function renderFeedChallengeCard(ch) {
   else if (isVotingPhase(status)) ctaTxt = isChampionship ? 'Vote for champion' : 'Vote now';
   else if (status === 'closed') { ctaTxt = 'View result'; ctaCls = ' chc-ghost'; }
 
-  const compactHtml = `
+  return `
     <div class="chc-top">
       <div class="chc-av">${av}</div>
       <div class="chc-who">
@@ -21500,6 +21503,24 @@ function renderFeedChallengeCard(ch) {
       ${deadline ? `<span class="chc-rt">${escapeHtml(deadline)}</span>` : ''}
     </div>
     <button class="chc-cta${ctaCls}" data-chc-act="${ch.id}">${ctaTxt}</button>`;
+}
+
+function renderFeedChallengeCard(ch) {
+  const phase = challengePhase(ch.computedStatus);
+  const creator = ch.creator || { name: 'Unknown' };
+  const entryCount = state.entryCounts[ch.id] || 0;
+  const entryWord = entryCount === 1 ? 'entry' : 'entries';
+  // v699 — HIERARCHY. This card was saying the same countdown THREE times:
+  // header-right "⏱ 2d 18h", the fct banner's "Winner in 2d 18h", and this meta
+  // line's "voting ends 2d 18h". Triplicate time isn't emphasis, it's noise that
+  // makes everything shout at once. The fct banner is the ONE canonical
+  // phase+time element (it shows phase, progress, and the next deadline);
+  // everything else defers to it. Meta keeps what the banner doesn't say:
+  // entry count, and the creator once the challenge is decided.
+  const isChampionship = ch.title && ch.title.startsWith('⚡');
+  const expanded = state.feedExpanded;
+  const compactHtml = buildChallengeCardShell(ch);
+
 
   if (!expanded) {
     return `<div class="feed-challenge-card" data-cid="${ch.id}">${compactHtml}</div>`;
