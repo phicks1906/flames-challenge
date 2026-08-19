@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v795 · update-check" />
-<meta name="fc-whatsnew" content="Flyer styles, theme fix, and update prompts." />
+<meta name="fc-build" content="v796 · promote-sheet" />
+<meta name="fc-whatsnew" content="Promote screen rebuilt for phones — nothing gets cut off." />
 
 <meta property="og:title" content="Flames Challenge — Where Opinions Ignite" />
 <meta property="og:description" content="Vote on what matters. Challenge your friends. Take the title." />
@@ -2118,15 +2118,76 @@ body.theme-light .auth-form input { background: #ffffff; }
 .comment-send:active { transform: scale(0.96); }
 
 /* Promote / flyer modal */
-.promote-modal { max-width: 440px; max-height: 88vh; overflow-y: auto; }
+/* v796 step 1 — Promote is a full-screen sheet on phones. Header pinned,
+   body scrolls on its own, footer pinned above the home indicator. Nothing
+   can be pushed off-screen and nothing hides behind device chrome.
+   Scoped to #promoteModal so the shared .modal styles are untouched — the
+   rest of the sheets get this same treatment in step 5. */
+#promoteModal { padding: 0; align-items: stretch; justify-content: stretch; }
+.promote-modal {
+  display: flex; flex-direction: column;
+  width: 100%; max-width: 100%;
+  height: 100%; max-height: 100%;
+  border: none; border-radius: 0;
+  padding: 0;
+  animation: none;
+}
+.pm-head {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 8px;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 10px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.pm-title {
+  flex: 1; text-align: center;
+  font-size: 17px; font-weight: 800;
+  font-family: var(--font-bricolage);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pm-back, .pm-done {
+  flex: 0 0 auto; border: none; background: none; cursor: pointer;
+  font-family: inherit; padding: 8px 10px; min-width: 60px;
+}
+.pm-back { font-size: 26px; line-height: 1; color: var(--text); text-align: left; }
+.pm-done { font-size: 15px; font-weight: 700; color: var(--ember); text-align: right; }
+.pm-body {
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 14px 16px 18px;
+}
+.pm-foot {
+  flex: 0 0 auto;
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.pm-foot .btn { width: 100%; margin: 0; }
+
+/* On a wide screen it can still be a centred card. */
+@media (min-width: 620px) {
+  #promoteModal { padding: 20px; align-items: center; justify-content: center; }
+  .promote-modal {
+    max-width: 460px; height: auto; max-height: 92vh;
+    border: 1px solid var(--border-bright); border-radius: 24px;
+  }
+  .pm-head { border-radius: 24px 24px 0 0; padding-top: 12px; }
+  .pm-foot { border-radius: 0 0 24px 24px; }
+}
 .promote-sub { font-size: 13px; color: var(--text-dim); margin-bottom: 14px; line-height: 1.45; }
 .promote-preview {
   border-radius: 16px; overflow: hidden;
-  min-height: 200px; max-height: 50vh; display: grid; place-items: center;
+  min-height: 160px; display: grid; place-items: center;
   background: var(--overlay-1);
   border: 1px solid var(--border, #2a221d);
 }
-.promote-flyer-img { width: 100%; max-height: 50vh; object-fit: contain; display: block; }
+/* v796 step 1 — in a full-screen sheet the flyer would otherwise fill the
+   whole body and push every control below the fold. Cap it at ~44% of the
+   viewport so the style picker stays visible without scrolling. */
+.pm-body .promote-preview { max-height: 44vh; }
+.promote-flyer-img { width: 100%; max-height: 44vh; object-fit: contain; display: block; }
 .promote-loading { padding: 70px 24px; color: var(--text-muted); font-size: 14px; text-align: center; line-height: 1.5; }
 .promote-actions { display: flex; gap: 10px; margin-top: 10px; }
 .promote-media-row {
@@ -7224,10 +7285,19 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 <!-- PROMOTE / FLYER MODAL -->
 <div class="modal-backdrop" id="promoteModal">
+  <!-- v796 step 1 — full-screen sheet, not a floating desktop modal.
+       Three fixed regions: header, scrolling body, pinned footer. The old
+       build was one long scroll capped at 88vh with a 36px display heading
+       colliding with the close button, and no safe-area padding — which is
+       why the action buttons ended up under the home indicator. -->
   <div class="modal promote-modal">
-    <button class="modal-close-x" onclick="closePromote()" aria-label="Close">×</button>
-    <h2 id="promoteTitle">Promote your challenge</h2>
-    <p class="promote-sub">Your challenge is live! Share your flyer to get entries — post it to your followers or a group.</p>
+    <div class="pm-head">
+      <button class="pm-back" onclick="closePromote()" aria-label="Back">‹</button>
+      <div class="pm-title" id="promoteTitle">Promote challenge</div>
+      <button class="pm-done" onclick="closePromote()">Done</button>
+    </div>
+    <div class="pm-body">
+    <p class="promote-sub">Share your flyer to get entries — post it to your followers or a group.</p>
     <div class="promote-preview" id="promotePreview"></div>
     <input type="file" id="promoteFileInput" accept="image/*" style="display:none" onchange="onPromoteFileSelected(this)" />
     <!-- v784 — style picker. Slot-based templates: same content, different
@@ -7263,17 +7333,19 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       <button class="btn btn-ghost btn-sm" id="promoteAddPhotoBtn" onclick="document.getElementById('promoteFileInput').click()">📷 Add photo</button>
       <button class="btn btn-ghost btn-sm" id="promoteRemovePhotoBtn" onclick="clearPromoteHero()" style="display:none">Remove photo</button>
     </div>
-    <button class="btn btn-primary" style="width:100%;margin-top:12px" onclick="postFlyerToFeed()">📤 Post to Feed</button>
-    <button class="btn btn-ghost" style="width:100%;margin-top:8px" id="promoteShareGroupBtn" onclick="openFlyerGroupPicker()">👥 Share to Group</button>
-    <div id="flyerGroupPicker" style="display:none;margin-top:8px;background:var(--bg-2);border-radius:var(--radius);padding:10px;">
+    <div id="flyerGroupPicker" style="display:none;margin-top:10px;background:var(--bg-2);border-radius:var(--radius);padding:10px;">
       <div style="font-size:13px;color:var(--text-muted);margin-bottom:8px;">Choose a group:</div>
       <div id="flyerGroupList" style="display:flex;flex-direction:column;gap:6px;max-height:160px;overflow-y:auto;"></div>
     </div>
-    <div class="promote-actions" style="margin-top:8px;">
+    <div class="promote-actions" style="margin-top:12px;">
       <button class="btn btn-ghost" onclick="promoteShare()">📤 Share / Save</button>
       <button class="btn btn-ghost" onclick="promoteCopy()">🔗 Copy link</button>
     </div>
-    <button style="width:100%;margin-top:12px;background:none;border:none;color:var(--text-muted);font-size:14px;cursor:pointer;padding:8px;font-family:inherit;" onclick="closePromote()">Later</button>
+    </div><!-- /.pm-body -->
+    <div class="pm-foot">
+      <button class="btn btn-primary" onclick="postFlyerToFeed()">📤 Post to Feed</button>
+      <button class="btn btn-ghost" id="promoteShareGroupBtn" onclick="openFlyerGroupPicker()">👥 Share to Group</button>
+    </div>
   </div>
 </div>
 
@@ -13117,17 +13189,11 @@ function renderLeaderboard() {
   if (pastWrap) {
     const adminLaunch = (typeof isAdmin === 'function' && isAdmin() && _monthWinners >= 2 && _raceOn && !liveCh)
       ? `<button class="lb-champ-launch-btn" style="margin:12px 0 0;width:100%" data-launch-cat="${escapeHtml(cat)}">⚡ Launch ${escapeHtml(cat)} Championship</button>` : '';
-    // TEMPORARY admin-only flyer check. Renders the most recent championship
-    // that exists — including closed ones — via the function's `force` flag,
-    // so the artwork can be verified without waiting for a live launch.
-    // Remove once a real launch has rendered correctly.
-    const _lastChamp = (state.champLaunches || []).find(l => l.challenge_id);
-    const adminFlyerTest = (typeof isAdmin === 'function' && isAdmin() && _lastChamp)
-      ? `<button class="lb-champ-launch-btn" style="margin:12px 0 0;width:100%" data-flyer-test="${escapeHtml(_lastChamp.challenge_id)}">🖼 Flyer test · ${escapeHtml(_lastChamp.category || '')} ${escapeHtml(_lastChamp.month || '')}</button>` : '';
-    pastWrap.innerHTML = adminLaunch + adminFlyerTest + renderPastChampsSection(cat);
-    pastWrap.querySelectorAll('[data-flyer-test]').forEach(b => {
-      b.addEventListener('click', () => previewChampFlyer(b.dataset.flyerTest));
-    });
+    // v795.1 — the temporary "Flyer test" button lived here. It existed only to
+    // verify the championship flyer artwork before a live launch existed; that
+    // is done. The 🖼 Flyer button in the championship arena topbar remains as
+    // the permanent admin preview.
+    pastWrap.innerHTML = adminLaunch + renderPastChampsSection(cat);
     pastWrap.querySelectorAll('[data-lbc-toggle]').forEach(row => {
       row.addEventListener('click', () => {
         const k = row.dataset.lbcToggle;
