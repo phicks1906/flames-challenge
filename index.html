@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1011 — Approved Logo Lock</title>
+<title>FlamesChallenge v1012 — Guidance Layout Fix</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,7 +21,7 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1011 · approved-logo-lock" />
+<meta name="fc-build" content="v1012 · guidance-layout-specificity-fix" />
 <meta name="fc-whatsnew" content="The approved Crowned F is now the single canonical logo across the header, login, favicon, and app icon. Home recommendation layout and duplicate challenge handling are also stabilized." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
@@ -6496,7 +6496,11 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 <style id="fc-v1006-stability-css">
 /* v1006 — deterministic Home guidance + profile activation fixes */
-#emberHomeCard[data-fc-stable-guidance="1"]{display:flex!important}
+/* Stable guidance may be either a generic flex card or a challenge grid.
+   The old ID rule forced every state back to flex and overrode the later
+   challenge-recommendation grid, crushing copy beside the CTA. */
+#emberHomeCard[data-fc-stable-guidance="1"]:not(.challenge-recommendation){display:flex!important}
+#emberHomeCard[data-fc-stable-guidance="1"].challenge-recommendation{display:grid!important}
 #profileSheet.fc-profile-v1005 .cd-sheet-header{position:sticky;top:0;z-index:12}
 #profileSheet.fc-profile-v1005 .ps-hero>.ps-name{display:none!important}
 #profileSheet.fc-profile-v1005 .fc-profile-identity .ps-name{display:block!important}
@@ -6641,6 +6645,19 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 }
 .challenge-recommendation .ember-rec-description{
   max-width:48ch!important;line-height:1.45!important;
+}
+/* v1012 final specificity lock: the stable-state attribute must never return a
+   challenge recommendation to the generic horizontal flex layout. */
+#emberHomeCard[data-fc-stable-guidance="1"].challenge-recommendation{
+  display:grid!important;
+  grid-template-columns:56px minmax(0,1fr)!important;
+  grid-template-rows:auto auto!important;
+}
+#emberHomeCard[data-fc-stable-guidance="1"].challenge-recommendation .ember-guidance-action{
+  grid-column:1 / -1!important;
+  grid-row:2!important;
+  min-height:46px!important;
+  height:auto!important;
 }
 @media(max-width:420px){
   .ember-guidance-card.challenge-recommendation{
