@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v803 · card-shell" />
-<meta name="fc-whatsnew" content="Challenge cards rebuilt everywhere — entries, votes and one clear action." />
+<meta name="fc-build" content="v803.1 · card-fix" />
+<meta name="fc-whatsnew" content="Fixes the blank feed in v803, and the Update button that sometimes did nothing." />
 
 <meta property="og:title" content="Flames Challenge — Where Opinions Ignite" />
 <meta property="og:description" content="Vote on what matters. Challenge your friends. Take the title." />
@@ -8424,22 +8424,33 @@ function showUpdateBanner(build, news) {
 async function applyUpdate() {
   // Clear every cache the service worker holds, then drop the worker itself,
   // then hard-reload. Skipping any of these leaves the old shell in place.
+  //
+  // v803.1 — each step is time-boxed. On iOS, caches.delete() and
+  // serviceWorker.unregister() can hang indefinitely when the worker is
+  // mid-fetch; the button then reads "Updating…" forever and the reload never
+  // fires. The reload is the step that actually matters, so nothing before it
+  // is allowed to block it for more than ~1.5s. And the navigation is forced
+  // even if the earlier promises never settle.
+  const withTimeout = (p, ms) => Promise.race([p, new Promise(r => setTimeout(r, ms))]);
+  const u = new URL(location.href);
+  u.searchParams.set('_u', Date.now());
+  const go = () => { try { location.replace(u.toString()); } catch (e) { location.href = u.toString(); } };
+  // Hard ceiling: whatever happens, navigate.
+  const hardStop = setTimeout(go, 3500);
   try {
     if (window.caches) {
-      const keys = await caches.keys();
-      await Promise.all(keys.map(k => caches.delete(k)));
+      const keys = await withTimeout(caches.keys(), 1500) || [];
+      await withTimeout(Promise.all(keys.map(k => caches.delete(k))), 1500);
     }
   } catch (e) { console.warn('cache clear failed', e); }
   try {
     if (navigator.serviceWorker) {
-      const regs = await navigator.serviceWorker.getRegistrations();
-      await Promise.all(regs.map(r => r.unregister()));
+      const regs = await withTimeout(navigator.serviceWorker.getRegistrations(), 1500) || [];
+      await withTimeout(Promise.all(regs.map(r => r.unregister())), 1500);
     }
   } catch (e) { console.warn('sw unregister failed', e); }
-  // Cache-busted URL so iOS can't serve the old document from memory.
-  const u = new URL(location.href);
-  u.searchParams.set('_u', Date.now());
-  location.replace(u.toString());
+  clearTimeout(hardStop);
+  go();
 }
 
 // Check shortly after load, and again whenever the app is brought back to the
@@ -21447,6 +21458,12 @@ function buildChallengeCardShell(ch) {
   const creator = ch.creator || { name: 'Unknown' };
   const entryCount = state.entryCounts[ch.id] || 0;
   const entryWord = entryCount === 1 ? 'entry' : 'entries';
+  // v803.1 — these two were referenced below but never declared in this
+  // function after it was extracted, so every card render threw a
+  // ReferenceError and the whole feed came up blank. `node --check` can't
+  // catch this; only running it can.
+  const isChampionship = !!(ch.title && ch.title.startsWith('⚡'));
+  const status = ch.computedStatus;
   // ── v802 step 4 — creator row, media, competition strip, one action ────────
   const av = creator.avatar && /^https?:/.test(creator.avatar)
     ? `<img src="${escapeHtml(creator.avatar)}" alt="" loading="lazy">`
