@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v797 · flyer-thumbs" />
-<meta name="fc-whatsnew" content="See each flyer style before you pick it. Save and Share are separate now." />
+<meta name="fc-build" content="v798 · safe-areas" />
+<meta name="fc-whatsnew" content="Buttons no longer hide under the status bar or home indicator." />
 
 <meta property="og:title" content="Flames Challenge — Where Opinions Ignite" />
 <meta property="og:description" content="Vote on what matters. Challenge your friends. Take the title." />
@@ -60,6 +60,13 @@
 
 <style>
 :root {
+  /* v798 — expose the device safe-area insets as custom properties so JS can
+     read them too. Anything positioned by script (tour bubble, sheets) has to
+     clamp against these, not a flat 8px, or it lands under the Dynamic Island
+     or the home indicator. */
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+
   --bg: #000000;
   --bg-1: #050505;
   --bg-2: #0a0807;
@@ -7633,10 +7640,14 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
 <!-- IMAGE CROP MODAL -->
 <div id="cropModal" style="display:none;position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,0.95);flex-direction:column;align-items:center;justify-content:space-between;">
-  <div style="padding:16px 20px;width:100%;display:flex;align-items:center;justify-content:space-between;">
-    <button onclick="cancelCrop()" style="background:none;border:none;color:#fff;font-size:16px;cursor:pointer;padding:8px;">Cancel</button>
-    <span style="color:#fff;font-size:16px;font-weight:600;">Crop Photo</span>
-    <button onclick="confirmCrop()" style="background:var(--ember);border:none;color:#fff;font-size:16px;font-weight:700;cursor:pointer;padding:8px 18px;border-radius:20px;">Use Photo</button>
+  <!-- v798 — the header had a flat 16px top padding, which put Cancel and Use
+       Photo underneath the status bar: unreadable and untappable on any phone
+       with a notch or Dynamic Island. Same class of bug as the Promote sheet.
+       flex:0 0 auto so it can never be squeezed by the canvas below it. -->
+  <div style="flex:0 0 auto;padding:calc(12px + env(safe-area-inset-top, 0px)) 16px 12px;width:100%;box-sizing:border-box;display:flex;align-items:center;gap:8px;justify-content:space-between;">
+    <button onclick="cancelCrop()" style="flex:0 0 auto;background:none;border:none;color:#fff;font-size:16px;cursor:pointer;padding:8px;">Cancel</button>
+    <span style="flex:1;text-align:center;color:#fff;font-size:16px;font-weight:600;white-space:nowrap;">Crop Photo</span>
+    <button onclick="confirmCrop()" style="flex:0 0 auto;background:var(--ember);border:none;color:#fff;font-size:15px;font-weight:700;cursor:pointer;padding:8px 16px;border-radius:20px;white-space:nowrap;">Use Photo</button>
   </div>
   <!-- Canvas container -->
   <div id="cropContainer" style="position:relative;overflow:hidden;touch-action:none;flex:1;width:100%;display:flex;align-items:center;justify-content:center;">
@@ -7652,7 +7663,9 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       <div class="crop-handle" data-pos="br" style="position:absolute;bottom:-6px;right:-6px;width:20px;height:20px;border-bottom:3px solid #fff;border-right:3px solid #fff;cursor:se-resize;"></div>
     </div>
   </div>
-  <div style="padding:16px 20px;text-align:center;">
+  <!-- Bottom padding clears the home indicator; without it the ratio buttons
+       sit under the swipe bar. -->
+  <div style="flex:0 0 auto;padding:12px 20px calc(14px + env(safe-area-inset-bottom, 0px));text-align:center;">
     <div id="cropRatioLabel" style="color:rgba(255,255,255,0.6);font-size:13px;margin-bottom:8px;"></div>
     <div style="display:flex;gap:10px;justify-content:center;">
       <button onclick="setCropRatio(16,9)"  id="cropBtn169"  class="crop-ratio-btn">16:9</button>
@@ -21863,19 +21876,27 @@ function renderTourStep() {
     hole.setAttribute('rx', '10');
     if (ring) { ring.setAttribute('x', rect.left - pad); ring.setAttribute('y', rect.top - pad); ring.setAttribute('width', rect.width + pad * 2); ring.setAttribute('height', rect.height + pad * 2); }
 
-    // Position bubble above or below
-    const bubbleH = 200;
+    // Position bubble above or below.
+    // v798 — measure the bubble instead of assuming 200px, and clamp against
+    // the real safe-area insets. The old flat 8px margin put the bubble under
+    // the Dynamic Island at the top and the home indicator at the bottom.
+    const bubbleH = bubble.offsetHeight || 200;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
+    const cs = getComputedStyle(document.documentElement);
+    const satPx = parseFloat(cs.getPropertyValue('--sat')) || 0;
+    const sabPx = parseFloat(cs.getPropertyValue('--sab')) || 0;
+    const topLimit = satPx + 8;
+    const botLimit = vh - sabPx - bubbleH - 8;
     bubble.style.left = '50%';
     bubble.style.transform = 'translateX(-50%)';
     bubble.style.right = 'auto';
 
     if (step.position === 'above' || rect.top > vh * 0.6) {
-      bubble.style.top  = Math.max(8, rect.top - bubbleH - 16) + 'px';
+      bubble.style.top  = Math.max(topLimit, rect.top - bubbleH - 16) + 'px';
       bubble.style.bottom = 'auto';
     } else {
-      bubble.style.top  = Math.min(rect.bottom + 16, vh - bubbleH - 8) + 'px';
+      bubble.style.top  = Math.max(topLimit, Math.min(rect.bottom + 16, botLimit)) + 'px';
       bubble.style.bottom = 'auto';
     }
   } else {
