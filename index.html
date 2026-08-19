@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v798 · safe-areas" />
-<meta name="fc-whatsnew" content="Buttons no longer hide under the status bar or home indicator." />
+<meta name="fc-build" content="v800 · flyer-media" />
+<meta name="fc-whatsnew" content="Drag to reposition your flyer photo, and Fit mode replaces black bars." />
 
 <meta property="og:title" content="Flames Challenge — Where Opinions Ignite" />
 <meta property="og:description" content="Vote on what matters. Challenge your friends. Take the title." />
@@ -1468,10 +1468,15 @@ body.theme-light .nav { background: rgba(255, 255, 255, 0.88); border-bottom-col
 @keyframes fcuIn { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
 #fcUpdateBar .fcu-txt { flex: 1; min-width: 0; line-height: 1.25; }
 #fcUpdateBar .fcu-txt strong { display: block; font-size: 15px; }
+/* v799 — this was one line with an ellipsis, so the what's-new note was
+   unreadable and tapping it did nothing. Wrap it instead; three lines is
+   plenty for a one-sentence summary and costs nothing. */
 #fcUpdateBar .fcu-txt span {
-  display: block; font-size: 12.5px; opacity: .92;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  display: block; font-size: 12.5px; opacity: .92; line-height: 1.35;
+  overflow-wrap: anywhere;
 }
+#fcUpdateBar { align-items: flex-start; }
+#fcUpdateBar .fcu-go, #fcUpdateBar .fcu-later { align-self: center; }
 #fcUpdateBar .fcu-go {
   flex: 0 0 auto; border: none; border-radius: 999px; cursor: pointer;
   padding: 9px 16px; font-weight: 800; font-size: 14px;
@@ -5564,6 +5569,36 @@ body.theme-light .champ-ticker {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
 }
 .promote-actions .btn { font-size: 12.5px; padding: 10px 6px; }
+
+/* v800 step 3 — media toolbar above the flyer preview. */
+.pm-tools {
+  display: flex; align-items: center; gap: 8px;
+  margin: 0 0 10px; flex-wrap: wrap;
+}
+.pm-tool {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 12px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--bg-2);
+  color: var(--text); font-family: inherit; font-size: 13px; font-weight: 600;
+  cursor: pointer;
+}
+.pm-tool span { font-size: 14px; line-height: 1; }
+.pm-fitseg {
+  margin-left: auto; display: flex; border-radius: 999px; overflow: hidden;
+  border: 1px solid var(--border); background: var(--bg-2);
+}
+.pm-fitseg button {
+  border: none; background: none; cursor: pointer; font-family: inherit;
+  padding: 8px 14px; font-size: 13px; font-weight: 700; color: var(--text-muted);
+}
+.pm-fitseg button.on { background: var(--ember); color: #fff; }
+.pm-hint {
+  margin-top: 6px; text-align: center;
+  font-size: 11.5px; color: var(--text-muted);
+}
+/* While dragging, don't let the browser pan the sheet instead of the photo. */
+.promote-preview.pm-draggable { cursor: grab; touch-action: none; }
+.promote-preview.pm-dragging { cursor: grabbing; }
 .pstyle { flex: 1; padding: 10px 8px; border-radius: 12px; cursor: pointer;
   background: var(--surface); border: 1px solid var(--border); color: var(--text-muted);
   font-family: inherit; font-size: 13px; font-weight: 700; }
@@ -7326,7 +7361,22 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     </div>
     <div class="pm-body">
     <p class="promote-sub">Share your flyer to get entries — post it to your followers or a group.</p>
+    <!-- v800 step 3 — media toolbar. Replaces the lone "Add photo" button that
+         sat below everything with no way to adjust what it inserted. -->
+    <div class="pm-tools" id="promoteTools">
+      <button class="pm-tool" id="pmReplace" onclick="document.getElementById('promoteFileInput').click()">
+        <span>🖼</span>Photo</button>
+      <button class="pm-tool" id="pmRemove" onclick="clearPromoteHero()" style="display:none">
+        <span>🚫</span>Remove</button>
+      <button class="pm-tool" id="pmReset" onclick="resetHeroFocus()" style="display:none">
+        <span>◎</span>Centre</button>
+      <div class="pm-fitseg" id="pmFitSeg" style="display:none">
+        <button class="on" data-fit="fill" onclick="setHeroFit('fill')">Fill</button>
+        <button data-fit="fit" onclick="setHeroFit('fit')">Fit</button>
+      </div>
+    </div>
     <div class="promote-preview" id="promotePreview"></div>
+    <div class="pm-hint" id="pmDragHint" style="display:none">Drag the photo to reposition it</div>
     <input type="file" id="promoteFileInput" accept="image/*" style="display:none" onchange="onPromoteFileSelected(this)" />
     <!-- v784 — style picker. Slot-based templates: same content, different
          dressing. More styles slot in here without touching the renderer. -->
@@ -7367,9 +7417,11 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
         <span style="font-size:11px;color:var(--text-muted)"><span id="promoteHypeCount">60</span> left</span>
       </div>
     </div>
-    <div class="promote-media-row" id="promoteMediaRow">
-      <button class="btn btn-ghost btn-sm" id="promoteAddPhotoBtn" onclick="document.getElementById('promoteFileInput').click()">📷 Add photo</button>
-      <button class="btn btn-ghost btn-sm" id="promoteRemovePhotoBtn" onclick="clearPromoteHero()" style="display:none">Remove photo</button>
+    <!-- v800 — the old Add/Remove photo row moved into .pm-tools above the
+         preview. Hidden stubs kept so updatePromoteMediaButtons() has targets. -->
+    <div id="promoteMediaRow" style="display:none">
+      <button id="promoteAddPhotoBtn"></button>
+      <button id="promoteRemovePhotoBtn"></button>
     </div>
     <div id="flyerGroupPicker" style="display:none;margin-top:10px;background:var(--bg-2);border-radius:var(--radius);padding:10px;">
       <div style="font-size:13px;color:var(--text-muted);margin-bottom:8px;">Choose a group:</div>
@@ -11177,14 +11229,56 @@ function loadImageForFlyer(src) {
    on the poster, and the challenge is the bounty. */
 const FLYER_ASSET_BASE = 'https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/Assets/';
 
+/* v800 — memoised. Every flyer render re-downloaded the template, which made
+   live repositioning impossible and made style switching feel slow. Templates
+   are immutable (their filenames carry a version), so caching is safe. */
+const _imgCache = new Map();
 function _loadImg(src) {
-  return new Promise((res) => {
+  if (_imgCache.has(src)) return Promise.resolve(_imgCache.get(src));
+  const pr = new Promise((res) => {
     const i = new Image();
     i.crossOrigin = 'anonymous';
     i.onload = () => res(i);
     i.onerror = () => res(null);
     i.src = src;
   });
+  _imgCache.set(src, pr);
+  return pr.then(img => { _imgCache.set(src, img); return img; });
+}
+
+/* Shared hero painter for every flyer style.
+
+   FILL  — cover-crop, positioned by a focal point the user can drag.
+   FIT   — the whole image, letterboxed onto a blurred, darkened copy of
+           itself rather than black bars. A vertical phone video dropped into
+           a horizontal well used to produce two black slabs that made the
+           flyer look like a screenshot of a screenshot.
+
+   focus is {x, y} in 0..1; 0.5/0.5 is centred. */
+function _paintHero(ctx, im, x, y, w, h, fit, focus) {
+  if (!im) return;
+  const fx = Math.min(1, Math.max(0, focus?.x ?? 0.5));
+  const fy = Math.min(1, Math.max(0, focus?.y ?? 0.5));
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  if (fit === 'fit') {
+    // blurred cover backdrop first
+    const rb = Math.max(w / im.width, h / im.height) * 1.15;
+    const bwid = im.width * rb, bhei = im.height * rb;
+    ctx.save();
+    try { ctx.filter = 'blur(26px) brightness(0.55)'; } catch (e) {}
+    try { ctx.drawImage(im, x + (w - bwid) / 2, y + (h - bhei) / 2, bwid, bhei); } catch (e) {}
+    ctx.restore();
+    // then the whole image, contained
+    const rc = Math.min(w / im.width, h / im.height);
+    const cw = im.width * rc, ch = im.height * rc;
+    try { ctx.drawImage(im, x + (w - cw) / 2, y + (h - ch) / 2, cw, ch); } catch (e) {}
+  } else {
+    const r = Math.max(w / im.width, h / im.height);
+    const dw = im.width * r, dh = im.height * r;
+    try { ctx.drawImage(im, x + (w - dw) * fx, y + (h - dh) * fy, dw, dh); } catch (e) {}
+  }
+  ctx.restore();
 }
 
 // Draws text that has to fit a width, shrinking until it does.
@@ -11306,12 +11400,9 @@ async function _drawWantedFlyer(ctx, W, H, opts) {
     // x 0.272→0.754, y 0.2510→0.5480 (measured). Inset slightly so the photo
     // never overlaps the ornamental border.
     const bx = 0.278, by = 0.2560, bw = 0.470, bh = 0.2870;
+    _paintHero(ctx, opts.heroImage, bx * W, by * H, bw * W, bh * H, opts.heroFit, opts.heroFocus);
     ctx.save();
     ctx.beginPath(); ctx.rect(bx * W, by * H, bw * W, bh * H); ctx.clip();
-    const im = opts.heroImage;
-    const r = Math.max((bw * W) / im.width, (bh * H) / im.height);
-    const dw = im.width * r, dh = im.height * r;
-    try { ctx.drawImage(im, bx * W + (bw * W - dw) / 2, by * H + (bh * H - dh) / 2, dw, dh); } catch (e) {}
     ctx.globalCompositeOperation = 'saturation';
     ctx.fillStyle = '#808080'; ctx.fillRect(bx * W, by * H, bw * W, bh * H);
     ctx.globalCompositeOperation = 'multiply';
@@ -11578,15 +11669,7 @@ async function _drawClassicFlyer(ctx, W, H, opts) {
 
   // hero photo, cover-cropped into the ember frame
   const h = box('hero');
-  if (opts.heroImage) {
-    const im = opts.heroImage;
-    const r = Math.max(h.w / im.width, h.h / im.height);
-    const dw = im.width * r, dh = im.height * r;
-    ctx.save();
-    ctx.beginPath(); ctx.rect(h.x, h.y, h.w, h.h); ctx.clip();
-    try { ctx.drawImage(im, h.x + (h.w - dw) / 2, h.y + (h.h - dh) / 2, dw, dh); } catch (e) {}
-    ctx.restore();
-  }
+  if (opts.heroImage) _paintHero(ctx, opts.heroImage, h.x, h.y, h.w, h.h, opts.heroFit, opts.heroFocus);
 
   ctx.textBaseline = 'alphabetic';
 
@@ -11753,7 +11836,8 @@ async function openPromote(type, item) {
   opts.creatorName = (type === 'challenge'
     ? (item.creator?.name || (item.creator_id === state.profile?.id ? state.profile?.name : null))
     : state.profile?.name) || 'A CHALLENGER';
-  promoteState = { type, id: item.id, link, shareText, blob: null, opts, heroUserUrl: null, heroAutoUrl: null };
+  promoteState = { type, id: item.id, link, shareText, blob: null, opts, heroUserUrl: null, heroAutoUrl: null,
+                   heroFit: 'fill', heroFocus: { x: 0.5, y: 0.5 } };  // v800
   document.getElementById('promoteTitle').textContent = modalTitle;
   // v787 — auto-generate on open. The old opt-in button made sense before there
   // were STYLES; now it forces Generate → pick style → re-bake, and nobody can
@@ -11766,6 +11850,7 @@ async function openPromote(type, item) {
       <button onclick="userGeneratePromoteFlyer()" style="background:linear-gradient(135deg,var(--ember),var(--flame));color:#fff;border:none;border-radius:24px;padding:11px 22px;font-weight:700;font-size:14px;cursor:pointer">🎨 Generate flyer</button>
     </div>`;
   wireFlyerThumbs();
+  wireHeroDrag();
   document.getElementById('promoteModal').classList.add('open');
   updatePromoteMediaButtons();
   // Build it right away — the hero preload below runs in parallel and a style
@@ -11830,6 +11915,79 @@ async function generatePromoteFlyer() { return renderPromoteFlyer(); }
 /* v797 step 2 — point the style thumbnails at their assets. Done in JS rather
    than hardcoded src attributes so the Storage base URL stays in one place.
    Lazily: they only load when the Promote sheet is first opened. */
+/* v800 step 3 — reposition and fit.
+
+   heroFocus is a 0..1 focal point; dragging the preview moves it, and the
+   renderer crops around it. heroFit switches between cover-crop (Fill) and
+   whole-image-on-a-blurred-backdrop (Fit), which is what a vertical video
+   needs — the old behaviour letterboxed it with black slabs.
+
+   Re-render is throttled to one frame in flight at a time. That's only
+   affordable because _loadImg is cached now; before, every frame refetched
+   the template. */
+function setHeroFit(f) {
+  if (!promoteState) return;
+  promoteState.heroFit = f;
+  document.querySelectorAll('#pmFitSeg button').forEach(b =>
+    b.classList.toggle('on', b.dataset.fit === f));
+  renderPromoteFlyer();
+}
+
+function resetHeroFocus() {
+  if (!promoteState) return;
+  promoteState.heroFocus = { x: 0.5, y: 0.5 };
+  renderPromoteFlyer();
+}
+
+function updateHeroTools() {
+  if (!promoteState) return;
+  const style = promoteState.style;
+  const paper = style === 'news' || style === 'tearoff';
+  const hasUser = !!promoteState.heroUserUrl;
+  const show = (id, on) => { const e = document.getElementById(id); if (e) e.style.display = on ? '' : 'none'; };
+  // Chronicle and Tear-off take no photo at all — their art is in the paper.
+  show('pmReplace', !paper);
+  show('pmRemove', !paper && hasUser);
+  show('pmReset', !paper && hasUser && promoteState.heroFit !== 'fit');
+  show('pmFitSeg', !paper && hasUser);
+  show('pmDragHint', !paper && hasUser && promoteState.heroFit !== 'fit');
+  const prev = document.getElementById('promotePreview');
+  if (prev) prev.classList.toggle('pm-draggable', !paper && hasUser && promoteState.heroFit !== 'fit');
+}
+
+let _pmDrag = null, _pmPending = false;
+function wireHeroDrag() {
+  const prev = document.getElementById('promotePreview');
+  if (!prev || prev.dataset.dragWired) return;
+  prev.dataset.dragWired = '1';   // persistent element — attach once, never in a re-render
+  const start = (e) => {
+    if (!promoteState || !prev.classList.contains('pm-draggable')) return;
+    const p = e.touches ? e.touches[0] : e;
+    _pmDrag = { x: p.clientX, y: p.clientY,
+                fx: promoteState.heroFocus?.x ?? 0.5, fy: promoteState.heroFocus?.y ?? 0.5,
+                w: prev.clientWidth || 1, h: prev.clientHeight || 1 };
+    prev.classList.add('pm-dragging');
+  };
+  const move = (e) => {
+    if (!_pmDrag || !promoteState) return;
+    const p = e.touches ? e.touches[0] : e;
+    // Drag right → reveal more of the left edge, so the focal point moves left.
+    const nx = _pmDrag.fx - (p.clientX - _pmDrag.x) / _pmDrag.w;
+    const ny = _pmDrag.fy - (p.clientY - _pmDrag.y) / _pmDrag.h;
+    promoteState.heroFocus = { x: Math.min(1, Math.max(0, nx)), y: Math.min(1, Math.max(0, ny)) };
+    if (e.cancelable) e.preventDefault();
+    if (!_pmPending) {
+      _pmPending = true;
+      requestAnimationFrame(async () => { await renderPromoteFlyer(); _pmPending = false; });
+    }
+  };
+  const end = () => { _pmDrag = null; prev.classList.remove('pm-dragging'); };
+  prev.addEventListener('pointerdown', start);
+  window.addEventListener('pointermove', move, { passive: false });
+  window.addEventListener('pointerup', end);
+  window.addEventListener('pointercancel', end);
+}
+
 let _fthumbsWired = false;
 function wireFlyerThumbs() {
   if (_fthumbsWired) return;
@@ -11899,6 +12057,9 @@ async function renderPromoteFlyer() {
   const heroSrc = (_style === 'news' || _style === 'tearoff')
     ? null
     : promoteState.heroUserUrl;
+  // v800 — hand the painter the user's fit mode and focal point.
+  opts.heroFit = promoteState.heroFit || 'fill';
+  opts.heroFocus = promoteState.heroFocus || { x: 0.5, y: 0.5 };
   if (!heroSrc) opts.heroImage = null;
   if (heroSrc) {
     try {
@@ -11936,6 +12097,7 @@ function updatePromoteMediaButtons() {
     return;
   }
   if (addBtn) addBtn.style.display = '';
+  updateHeroTools();   // v800 — toolbar mirrors the same state
   // v789 — Wanted only counts an EXPLICIT upload (the auto-detected challenge
   // photo is ignored there), and the label has to say what the button actually
   // does in this style: it replaces the outlaw, not "adds a photo".
@@ -11962,6 +12124,8 @@ function onPromoteFileSelected(input) {
   reader.onload = async () => {
     if (!promoteState) return;
     promoteState.heroUserUrl = reader.result;
+    promoteState.heroFocus = { x: 0.5, y: 0.5 };   // v800 — new photo, fresh framing
+    promoteState.heroFit = 'fill';
     promoteState.flyerGenerated = true;
     document.getElementById('promotePreview').innerHTML = '<div class="promote-loading">Updating flyer…</div>';
     await renderPromoteFlyer();
