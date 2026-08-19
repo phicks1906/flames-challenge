@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1005 — Home & Navigation</title>
+<title>FlamesChallenge v1006 — Home & Profile Stability</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,7 +21,7 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1005 · home-navigation" />
+<meta name="fc-build" content="v1006 · home-profile-stability" />
 <meta name="fc-whatsnew" content="Home now leads with relevant live competitions, compact progress, clearer navigation icons, and a competitive You profile." />
 
 <meta property="og:title" content="FlamesChallenge — Create. Compete. Get Crowned." />
@@ -6406,11 +6406,11 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 #fcPurposeCard[hidden]{display:none!important}
 
 #profileSheet.fc-profile-v1005{background:#080808}
-#profileSheet.fc-profile-v1005 .fc-profile-sheet-head{
+#profileSheet.fc-profile-v1005 .cd-sheet-header{
   min-height:68px;padding:calc(12px + env(safe-area-inset-top,0px)) 18px 12px;
   background:rgba(8,8,8,.96);backdrop-filter:blur(18px);border-bottom:1px solid rgba(255,255,255,.08)
 }
-#profileSheet.fc-profile-v1005 .fc-profile-sheet-head h2{
+#profileSheet.fc-profile-v1005 .cd-sheet-header h2{
   font-family:var(--font-bricolage);font-size:18px;font-weight:750;letter-spacing:-.01em;
   text-transform:none;color:var(--text)
 }
@@ -6487,6 +6487,18 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
   .fc-profile-founder{padding:6px 8px}
   .fc-profile-metric b{font-size:18px}
 }
+</style>
+
+
+<style id="fc-v1006-stability-css">
+/* v1006 — deterministic Home guidance + profile activation fixes */
+#emberHomeCard[data-fc-stable-guidance="1"]{display:flex!important}
+#profileSheet.fc-profile-v1005 .cd-sheet-header{position:sticky;top:0;z-index:12}
+#profileSheet.fc-profile-v1005 .ps-hero>.ps-name{display:none!important}
+#profileSheet.fc-profile-v1005 .fc-profile-identity .ps-name{display:block!important}
+#profileSheet.fc-profile-v1005 .ps-hero>.ps-social-line{display:none!important}
+#profileSheet.fc-profile-v1005 .fc-profile-identity .ps-social-line{display:block!important}
+#profileSheet.fc-profile-v1005 .ps-row-title{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 </style>
 
 </head>
@@ -26879,12 +26891,26 @@ document.addEventListener('click', (e) => {
       el.onclick=(event)=>{if(!event.target.closest('[data-ember-guidance-action]'))move.run();};
     }
   }
+  let emberGuidanceHasPainted=false;
   async function renderEmberGuidance(){
+    const home=document.getElementById('emberHomeCard');
+    // Do not paint a temporary empty-state card while authentication/app data are
+    // still hydrating. That early paint was later displaced by the completed Home
+    // render, creating the visible appear-then-disappear race.
+    if(!state.profile || state.loading){
+      if(home && !emberGuidanceHasPainted) home.style.display='none';
+      return;
+    }
     await hydrateEmberVoteContext();
     renderPurposeCard();
     const move=chooseEmberMove();
     window.__emberLastRecommendation = move.challenge ? { id:move.challenge.id, title:move.displayTitle || move.challenge.title, category:move.category, reason:move.reason, action:move.action } : null;
-    paintGuidance(document.getElementById('emberHomeCard'),move);
+    paintGuidance(home,move);
+    if(home){
+      home.dataset.fcStableGuidance='1';
+      home.style.display='flex';
+    }
+    emberGuidanceHasPainted=true;
     const c=document.getElementById('emberCompeteCard');
     if(c){
       const interests=(state.profile?.interests || []).filter(Boolean);
@@ -26911,6 +26937,18 @@ document.addEventListener('click', (e) => {
     renderFeedHello=function(){const r=_renderFeedHello.apply(this,arguments);requestAnimationFrame(renderEmberGuidance);return r;};
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',initEmberV2,{once:true}); else initEmberV2();
+
+  // Keep the Home guidance shell stable through late auth/data renders. This is
+  // deliberately a guard, not another independent recommendation renderer.
+  const emberHomeNode=document.getElementById('emberHomeCard');
+  if(emberHomeNode){
+    const restoreGuidance=()=>{
+      if(!state.profile || state.loading) return;
+      const hidden=getComputedStyle(emberHomeNode).display==='none';
+      if(hidden || !emberHomeNode.childElementCount) queueMicrotask(()=>renderEmberGuidance());
+    };
+    new MutationObserver(restoreGuidance).observe(emberHomeNode,{attributes:true,attributeFilter:['style','class'],childList:true});
+  }
 })();
 </script>
 
@@ -27185,7 +27223,7 @@ document.addEventListener('click', (e) => {
   function upgradeProfileV1005(){
     const sheet=document.getElementById('profileSheet');
     const hero=sheet?.querySelector('.ps-hero');
-    const prof=window.psState?.profile;
+    const prof=(typeof psState!=='undefined' ? psState.profile : null);
     if(!sheet||!hero||!prof) return;
     const isMe=!!state.profile && prof.id===state.profile.id;
     sheet.classList.add('fc-profile-v1005');
@@ -27194,6 +27232,29 @@ document.addEventListener('click', (e) => {
     ensureProfileIdentity(hero,isMe);
     ensureProfileActions(hero,isMe);
     rebuildProfileOverview(prof,isMe);
+  }
+
+  function cleanProfileChallengeTitles(){
+    document.querySelectorAll('#psContent .ps-row[data-cid]').forEach(row=>{
+      const cid=row.dataset.cid;
+      const ch=(state.challenges||[]).find(x=>String(x.id)===String(cid))
+        || (typeof psState!=='undefined' ? (psState.challenges||[]).find(x=>String(x.id)===String(cid)) : null)
+        || (typeof psState!=='undefined' ? (psState.entries||[]).find(e=>String(e.challenge?.id)===String(cid))?.challenge : null);
+      if(!ch) return;
+      const raw=String(ch.title||'Challenge').trim();
+      const title=raw.split(/\s*(?::|—|\s-\s)\s*/).filter(Boolean)[0]||raw;
+      const titleEl=row.querySelector('.ps-row-title');
+      if(titleEl) titleEl.textContent=title;
+    });
+  }
+
+  if(typeof renderProfileTab==='function'){
+    const baseRenderProfileTabV1006=renderProfileTab;
+    renderProfileTab=function(){
+      const r=baseRenderProfileTabV1006.apply(this,arguments);
+      cleanProfileChallengeTitles();
+      return r;
+    };
   }
 
   if(typeof renderProfileSheet==='function'){
