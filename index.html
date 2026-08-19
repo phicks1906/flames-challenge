@@ -13,19 +13,19 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>Flames Challenge — Where Opinions Ignite</title>
-<meta name="description" content="Vote on trending polls. Challenge your friends. Take the title." />
+<title>FlamesChallenge — Create. Compete. Get Crowned.</title>
+<meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
      the first kilobyte, so the update check can read it with a tiny ranged
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v805 · card-shell-2" />
-<meta name="fc-whatsnew" content="Cards get a proper surface, Delete moves behind ⋯, detail sheet sizes to content." />
+<meta name="fc-build" content="v900 · focused-competition-ux" />
+<meta name="fc-whatsnew" content="A focused competition experience: compact cards, clearer navigation, guided creation, stronger profiles and titles." />
 
-<meta property="og:title" content="Flames Challenge — Where Opinions Ignite" />
-<meta property="og:description" content="Vote on what matters. Challenge your friends. Take the title." />
+<meta property="og:title" content="FlamesChallenge — Create. Compete. Get Crowned." />
+<meta property="og:description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 <meta property="og:type" content="website" />
 
 <link rel="icon" type="image/png" href="https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/Assets/icon.png">
@@ -6122,6 +6122,106 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 .entrant-votes { font-size: 13px; color: var(--text-muted); }
 
 </style>
+
+<style id="fc-ux-v900">
+/* ==========================================================================\n   v900 — FOCUSED COMPETITION UX\n   This block intentionally comes last so obsolete full-bleed feed rules cannot\n   erase the approved card shell. Everyday screens stay quiet; orange is reserved\n   for the one primary action and live competition.\n   ========================================================================== */
+:root {
+  --info: #5eb7e8;
+  --danger: #e5483f;
+  --champion: #ffc857;
+  --card-surface: #151210;
+  --card-gap: 20px;
+}
+
+/* Core app rhythm */
+#feedContainer {
+  gap: var(--card-gap) !important;
+  padding: 12px 0 calc(112px + env(safe-area-inset-bottom, 0px)) !important;
+}
+#feedContainer > .fcc-challenge-wrap:not(.champ-gold),
+#feedContainer > .feed-activity-card,
+#feedContainer > .feed-card,
+#feedContainer > .post-card,
+#feedContainer > .feed-poll-card {
+  margin: 0 0 var(--card-gap) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 18px !important;
+  background: var(--card-surface) !important;
+  overflow: hidden !important;
+  box-shadow: 0 10px 30px rgba(0,0,0,.20) !important;
+}
+#feedContainer > .fcc-challenge-wrap:not(.champ-gold) .feed-challenge-card {
+  padding: 16px !important;
+  border: 0 !important;
+  border-radius: 18px !important;
+  background: transparent !important;
+}
+/* The bug fix: never append the expanded entries drawer beneath a compact card. */
+#feedContainer .fcc-feed-drawer,
+#feedExpandBtn { display: none !important; }
+
+/* Approved challenge-card hierarchy */
+.chc-title { font-size: 21px !important; line-height: 1.14 !important; margin: 10px 0 12px !important; }
+.chc-media { gap: 8px !important; }
+.chc-tile { aspect-ratio: 1 / 1 !important; border-radius: 14px !important; }
+.chc-meta { gap: 10px !important; row-gap: 6px !important; color: var(--text-dim) !important; }
+.chc-rt { margin-left: auto !important; }
+.chc-cta { min-height: 48px !important; margin-top: 14px !important; }
+@media (max-width: 365px) {
+  .chc-meta { align-items: flex-start !important; }
+  .chc-rt { flex-basis: 100%; margin-left: 0 !important; }
+}
+
+/* Navigation: action-based, not a list of product objects. */
+.bottom-nav { grid-template-columns: repeat(5, 1fr) !important; }
+.bnav-icon { font-family: var(--font-bricolage); font-style: normal; font-size: 25px !important; }
+.bnav-btn.active .bnav-icon { color: var(--ember); }
+.ux-polls-link { margin-left: auto; align-self: center; }
+
+/* Guided challenge creation */
+.cc-progress { display:flex; gap:6px; padding:0 0 16px; position:sticky; top:0; z-index:4; background:var(--bg); }
+.cc-progress-step { flex:1; height:4px; border-radius:99px; background:var(--border); overflow:hidden; }
+.cc-progress-step.active, .cc-progress-step.done { background:linear-gradient(90deg,var(--ember),var(--flame)); }
+.cc-step { display:none; animation:uxStepIn .18s ease; }
+.cc-step.active { display:block; }
+@keyframes uxStepIn { from{opacity:.35;transform:translateX(10px)} to{opacity:1;transform:none} }
+.cc-step-title { font:700 17px/1.2 var(--font-bricolage); margin:2px 0 4px; }
+.cc-step-sub { color:var(--text-dim); font-size:13px; margin-bottom:18px; }
+.cc-step-actions { display:flex; gap:10px; position:sticky; bottom:calc(0px - env(safe-area-inset-bottom,0px)); padding:12px 0 calc(12px + env(safe-area-inset-bottom,0px)); background:linear-gradient(180deg,transparent 0,var(--bg) 22%); z-index:5; }
+.cc-step-actions .btn { flex:1; }
+.cc-self-toggle { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:6px; border:1px solid var(--border); border-radius:14px; background:var(--surface); margin-bottom:16px; }
+.cc-self-toggle button { border:0; border-radius:10px; padding:11px; color:var(--text-dim); background:transparent; font-weight:700; }
+.cc-self-toggle button.active { color:white; background:linear-gradient(135deg,var(--ember),var(--flame)); }
+
+/* Suggestion choices reveal their intent, instead of three unexplained pills. */
+.fc-sug-chip { display:flex !important; flex-direction:column; align-items:flex-start !important; gap:3px; text-align:left; }
+.fc-sug-kind { color:var(--ember); font-size:9px; font-weight:800; letter-spacing:.09em; text-transform:uppercase; }
+
+/* Profile: competitive identity first, posts last. */
+.ps-tabs { position:sticky; top:0; z-index:3; background:var(--surface); }
+.ps-empty.ux-zero { border:1px solid var(--border); border-radius:16px; padding:24px 18px; background:var(--surface-2); }
+
+/* Titles focus card — answer “what should I do next?” before explaining rules. */
+.ux-title-focus { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; padding:14px; margin:0 0 14px; background:linear-gradient(135deg,rgba(255,200,87,.09),rgba(255,106,44,.05)); border:1px solid rgba(255,200,87,.25); border-radius:16px; }
+.ux-title-metric { text-align:center; min-width:0; }
+.ux-title-metric b { display:block; color:var(--text); font-size:19px; }
+.ux-title-metric span { display:block; color:var(--text-muted); font-size:9px; text-transform:uppercase; letter-spacing:.08em; white-space:nowrap; }
+.ux-title-path { grid-column:1/-1; padding-top:10px; border-top:1px solid var(--border); font-size:12px; color:var(--text-dim); }
+.ux-title-path strong { color:var(--gold); }
+
+/* Full-height mobile work surfaces; small confirmations remain ordinary modals. */
+@media (max-width: 640px) {
+  .cc-sheet.open { inset:0 !important; height:100dvh !important; max-height:100dvh !important; border-radius:0 !important; }
+  .cc-sheet-header { padding-top:calc(12px + env(safe-area-inset-top,0px)) !important; min-height:calc(58px + env(safe-area-inset-top,0px)); }
+  .cc-sheet-inner { padding-bottom:calc(92px + env(safe-area-inset-bottom,0px)) !important; }
+  #promoteModal .modal, #cropModal .modal { width:100vw !important; max-width:none !important; height:100dvh !important; max-height:none !important; border-radius:0 !important; }
+}
+
+/* Everyday surfaces stay restrained. Championship-specific components retain gold/fire. */
+.feed-challenge-card:not(.champ-gold), .poll-card, .post-card { filter:none; }
+.feed-challenge-card:not(.champ-gold)::before { display:none !important; }
+</style>
+
 </head>
 <body>
 <!-- v690 — View-as-member banner. Deliberately loud and impossible to miss: the
@@ -6148,7 +6248,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
   <div class="auth-card">
     <div class="auth-brand">
       <img src="https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/Assets/logo.png" alt="FlamesChallenge" style="width:100%;max-width:280px;height:auto;object-fit:contain;filter:drop-shadow(0 2px 16px rgba(255,106,44,0.4));margin-bottom:8px;">
-      <p>Where opinions ignite</p>
+      <p>Create. Compete. Get crowned.</p>
     </div>
 
     <div class="auth-tabs">
@@ -6348,25 +6448,25 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
   </div>
 </div>
 
-<nav class="bottom-nav" id="bottomNav">
-  <button class="bnav-btn active" data-view="feed" onclick="switchView('feed')">
-    <span class="bnav-icon">🏠</span>
-    <span class="bnav-label">Feed</span>
+<nav class="bottom-nav" id="bottomNav" aria-label="Primary navigation">
+  <button class="bnav-btn active" data-view="feed" onclick="switchView('feed')" aria-label="Home">
+    <span class="bnav-icon" aria-hidden="true">⌂</span>
+    <span class="bnav-label">Home</span>
   </button>
-  <button class="bnav-btn" data-view="challenges" onclick="switchView('challenges')">
-    <span class="bnav-icon">🏆</span>
-    <span class="bnav-label">Challenges</span>
+  <button class="bnav-btn" data-view="challenges" onclick="switchView('challenges')" aria-label="Compete">
+    <span class="bnav-icon" aria-hidden="true">◇</span>
+    <span class="bnav-label">Compete</span>
   </button>
-  <button class="bnav-create" onclick="openCreateSheet()">
+  <button class="bnav-create" onclick="openCreateSheet()" aria-label="Create">
     <span class="bnav-create-icon">+</span>
   </button>
-  <button class="bnav-btn" data-view="polls" onclick="switchView('polls')">
-    <span class="bnav-icon">🗳️</span>
-    <span class="bnav-label">Polls</span>
-  </button>
-  <button class="bnav-btn" data-view="leaderboard" onclick="switchView('leaderboard')">
-    <span class="bnav-icon">👑</span>
+  <button class="bnav-btn" data-view="leaderboard" onclick="switchView('leaderboard')" aria-label="Titles">
+    <span class="bnav-icon" aria-hidden="true">♛</span>
     <span class="bnav-label">Titles</span>
+  </button>
+  <button class="bnav-btn" data-view="you" onclick="openProfile()" aria-label="You">
+    <span class="bnav-icon" aria-hidden="true">○</span>
+    <span class="bnav-label">You</span>
   </button>
 </nav>
 
@@ -6468,7 +6568,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 
     <div class="composer" onclick="openCreatePost()" role="button" tabindex="0">
       <div class="avatar" id="composerAvatar">🔥</div>
-      <div class="composer-input" id="composerPrompt">What's the heat? Share something...</div>
+      <div class="composer-input" id="composerPrompt">Share an update…</div>
     </div>
 
     <button id="feedNewPill" class="feed-new-pill" style="display:none" onclick="applyFeedNewItems()" aria-label="Show new items"></button>
@@ -6481,9 +6581,10 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
   <div class="challenges-wrap">
     <div class="ch-header">
       <div>
-        <h2 class="section-title">Challenges</h2>
-        <p class="section-sub">Compete. Vote. Win.</p>
+        <h2 class="section-title">Compete</h2>
+        <p class="section-sub">Enter challenges. Vote on the work. Advance toward a title.</p>
       </div>
+      <button type="button" class="btn btn-ghost btn-sm ux-polls-link" onclick="switchView('polls')">Polls</button>
     </div>
     <div class="ch-search-wrap">
       <span class="ch-search-icon">🔍</span>
@@ -6523,8 +6624,8 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
   <div class="section">
     <div class="section-head">
       <div>
-        <h2 class="section-title">Titles</h2>
-        <p class="section-sub">Who's in contention · updated live · <a class="lb-how-link" onclick="toggleLbHow()">ⓘ how it works</a></p>
+        <h2 class="section-title">Your path to the crown</h2>
+        <p class="section-sub">Win challenges. Earn Boost. Finish top three. Fight for the crown. · <a class="lb-how-link" onclick="toggleLbHow()">How it works</a></p>
       </div>
     </div>
     <div class="lb-how-card" id="lbHowCard" style="display:none">
@@ -6646,7 +6747,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       </div>
 
       <div class="cc-field" id="ccUploadField">
-        <label>Your entry <span class="hint">(you're competing too!)</span></label>
+        <label>Your entry <span class="hint">(only if you choose to compete)</span></label>
         <div style="background:var(--surface-2);border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:12px;color:var(--text-muted);line-height:1.5;">
           💡 <strong>Tip:</strong> Trim your video to under 2 minutes in your Photos app before uploading for the fastest experience.
         </div>
@@ -6745,7 +6846,7 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       <div id="ccError" class="auth-error"></div>
 
       <div class="cc-submit-area">
-        <button type="submit" class="btn btn-primary" style="width:100%">🔥 Light it up</button>
+        <button type="submit" class="btn btn-primary" style="width:100%">Preview &amp; launch</button>
       </div>
     </form>
   </div>
@@ -6791,8 +6892,8 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
   <div class="cc-sheet-inner">
     <form id="createPostForm" class="cc-form">
       <div class="cc-field">
-        <label for="cpContent">What's the heat? <span class="hint">(1-1000 characters)</span></label>
-        <textarea id="cpContent" maxlength="1000" placeholder="Share what's going on... a win, a vibe, a thought, a hot take..." style="min-height:120px"></textarea>
+        <label for="cpContent">Share an update <span class="hint">(1–1000 characters)</span></label>
+        <textarea id="cpContent" maxlength="1000" placeholder="Share a win, an update, or something worth discussing…" style="min-height:120px"></textarea>
         <div class="post-suggest" id="postMentionBox" style="display:none"></div>
       </div>
 
@@ -6888,9 +6989,9 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       <button class="btn ps-msg-btn" id="psMessageBtn" style="display:none" onclick="if(psState&&psState.profile)openDmWith(psState.profile.id)">💬 Message</button>
     </div>
     <div class="ps-tabs">
-      <button class="ps-tab active" data-pstab="posts">Posts</button>
-      <button class="ps-tab" data-pstab="challenges">Challenges</button>
+      <button class="ps-tab active" data-pstab="challenges">Challenges</button>
       <button class="ps-tab" data-pstab="entries">Entries</button>
+      <button class="ps-tab" data-pstab="posts">Posts</button>
     </div>
     <div class="ps-content" id="psContent"></div>
   </div>
@@ -10045,11 +10146,12 @@ function renderProfileChip() {
 function updateComposerContext(hint) {
   const el = document.getElementById('composerPrompt');
   if (!el) return;
-  el.textContent = hint || "What's the heat? Share something...";
+  el.textContent = hint || "Share an update…";
 }
 
-// Feed always expanded
-state.feedExpanded = true;
+// Feed cards stay compact. Entry media opens in the challenge viewer instead of
+// rendering a second, full-size drawer beneath the card.
+state.feedExpanded = false;
 
 function toggleFeedExpand() {
   state.feedExpanded = !state.feedExpanded;
@@ -13262,7 +13364,7 @@ async function castVote(pollId, optionIdx) {
     return;
   }
 
-  toast('🗳️ Vote cast');
+  toast('Vote recorded — you can change it until voting ends.');
 }
 
 function injectPollTopAnswer(pollId) {
@@ -17463,6 +17565,7 @@ let ccState = {
   mediaType: 'photo',
   category: 'Photography',
   visibility: 'public',
+  competeSelf: true,
   file: null,
   fileUrl: null,
 };
@@ -17932,8 +18035,8 @@ document.getElementById('createChallengeForm').addEventListener('submit', async 
   if (!subDeadline || !voteEnd) return showCcError('Set both deadlines.');
   if (new Date(voteEnd) <= new Date(subDeadline)) return showCcError('Voting must end after submissions close.');
   if (new Date(subDeadline) <= new Date()) return showCcError('Submission deadline must be in the future.');
-  if (ccState.mediaType === 'text' && !textEntry) return showCcError('Add your text entry.');
-  if (ccState.mediaType !== 'text' && !ccState.file) return showCcError('Upload your entry.');
+  if (ccState.competeSelf !== false && ccState.mediaType === 'text' && !textEntry) return showCcError('Add your text entry.');
+  if (ccState.competeSelf !== false && ccState.mediaType !== 'text' && !ccState.file) return showCcError('Upload your entry.');
 
   // Validate private has at least 1 invitee
   let invitees = [];
@@ -17952,9 +18055,9 @@ document.getElementById('createChallengeForm').addEventListener('submit', async 
     // Moderate ALL user text in one shot: challenge title, rules, the entry
     // caption, and (for text entries) the text body itself. Previously only
     // title+rules were checked, letting harassment text ride in the caption.
-    const _allText = [title, rules || '', caption || '', (ccState.mediaType === 'text' ? textEntry : '')].filter(Boolean).join(' ').trim();
+    const _allText = [title, rules || '', (ccState.competeSelf !== false ? caption || '' : ''), (ccState.competeSelf !== false && ccState.mediaType === 'text' ? textEntry : '')].filter(Boolean).join(' ').trim();
     if (_allText && !await moderateText(_allText, 'challenge')) { btn.disabled = false; btn.textContent = orig; return; }
-    if (ccState.mediaType !== 'text') {
+    if (ccState.competeSelf !== false && ccState.mediaType !== 'text') {
       // Compress if user opted in
       let fileToUpload = ccState.file;
       // NOTE: client-side video compression DISABLED. The MediaRecorder/canvas re-mux
@@ -18018,43 +18121,45 @@ document.getElementById('createChallengeForm').addEventListener('submit', async 
     }).select().single();
     if (chError) throw new Error('Challenge create failed: ' + chError.message);
 
-    btn.textContent = 'Adding entry...';
-    // Moderate photo entries BEFORE creating the entry — same gate the normal
-    // entry-submission path uses. Without this, photos inserted straight to
-    // 'clear' and went live with zero moderation (critical bug found in beta).
-    if (ccState.mediaType === 'photo' && mediaUrl) {
-      btn.textContent = 'Checking...';
-      if (!await moderateImage(mediaUrl, 'entry')) {
-        // moderateImage already toasted the user. Roll back the challenge we
-        // just created so we don't leave an empty challenge behind.
-        try { await db.from('challenges').delete().eq('id', chData.id); } catch (e) {}
-        btn.disabled = false; btn.textContent = orig;
-        return;
+    if (ccState.competeSelf !== false) {
+      btn.textContent = 'Adding entry...';
+      // Moderate photo entries BEFORE creating the entry — same gate the normal
+      // entry-submission path uses. Without this, photos inserted straight to
+      // 'clear' and went live with zero moderation (critical bug found in beta).
+      if (ccState.mediaType === 'photo' && mediaUrl) {
+        btn.textContent = 'Checking...';
+        if (!await moderateImage(mediaUrl, 'entry')) {
+          // moderateImage already toasted the user. Roll back the challenge we
+          // just created so we don't leave an empty challenge behind.
+          try { await db.from('challenges').delete().eq('id', chData.id); } catch (e) {}
+          btn.disabled = false; btn.textContent = orig;
+          return;
+        }
       }
-    }
-    // The creator's first entry needs moderation too, exactly like a normal
-    // entry submission. Video entries insert as 'pending' and get triggered below.
-    const ccEntryRow = {
-      challenge_id: chData.id,
-      user_id: state.profile.id,
-      media_url: mediaUrl,
-      media_type: ccState.mediaType,
-      caption: ccState.mediaType === 'text' ? textEntry : (caption || null),
-      poster_url: posterUrl,
-      moderation_status: ccState.mediaType === 'video' ? 'pending' : 'clear',
-    };
-    let ccEntryData, entryError;
-    ({ data: ccEntryData, error: entryError } = await db.from('entries').insert(ccEntryRow).select('id').single());
-    if (entryError && /moderation_status/.test(entryError.message || '')) {
-      delete ccEntryRow.moderation_status;
+      // The creator's first entry needs moderation too, exactly like a normal
+      // entry submission. Video entries insert as 'pending' and get triggered below.
+      const ccEntryRow = {
+        challenge_id: chData.id,
+        user_id: state.profile.id,
+        media_url: mediaUrl,
+        media_type: ccState.mediaType,
+        caption: ccState.mediaType === 'text' ? textEntry : (caption || null),
+        poster_url: posterUrl,
+        moderation_status: ccState.mediaType === 'video' ? 'pending' : 'clear',
+      };
+      let ccEntryData, entryError;
       ({ data: ccEntryData, error: entryError } = await db.from('entries').insert(ccEntryRow).select('id').single());
-    }
-    if (entryError) throw new Error('Entry create failed: ' + entryError.message);
-    // Kick off async video moderation for the creator's entry
-    if (ccEntryData && ccState.mediaType === 'video' && mediaUrl) {
-      triggerVideoModeration(ccEntryData.id, mediaUrl);
-    }
+      if (entryError && /moderation_status/.test(entryError.message || '')) {
+        delete ccEntryRow.moderation_status;
+        ({ data: ccEntryData, error: entryError } = await db.from('entries').insert(ccEntryRow).select('id').single());
+      }
+      if (entryError) throw new Error('Entry create failed: ' + entryError.message);
+      // Kick off async video moderation for the creator's entry
+      if (ccEntryData && ccState.mediaType === 'video' && mediaUrl) {
+        triggerVideoModeration(ccEntryData.id, mediaUrl);
+      }
 
+    }
     // Insert invites if private
     if (ccState.visibility === 'private' && invitees.length > 0) {
       btn.textContent = 'Sending invites...';
@@ -18452,7 +18557,7 @@ function renderChallenges() {
           { onConflict: 'challenge_id,voter_id' }
         );
         if (error) throw error;
-        toast('🗳️ Vote cast');
+        toast('Vote recorded — you can change it until voting ends.');
       } catch(err) { toast('Vote failed'); }
       renderChallenges();
     });
@@ -21120,7 +21225,7 @@ function renderFeed() {
             { onConflict: 'challenge_id,voter_id' }
           );
           if (error) throw error;
-          toast('🗳️ Vote cast');
+          toast('Vote recorded — you can change it until voting ends.');
           updateComposerContext(`Just voted in "${ch.title}" — share your take`);
         } catch(err) { toast('Vote failed'); }
         renderFeed();
@@ -21170,7 +21275,7 @@ function renderFeed() {
           { onConflict: 'challenge_id,voter_id' }
         );
         if (error) throw error;
-        toast('🗳️ Vote cast');
+        toast('Vote recorded — you can change it until voting ends.');
         updateComposerContext(`Just voted in "${ch.title}" — share your take`);
       } catch(err) {
         toast('Vote failed');
@@ -21580,129 +21685,10 @@ function buildChallengeCardShell(ch) {
 }
 
 function renderFeedChallengeCard(ch) {
-  const phase = challengePhase(ch.computedStatus);
-  const creator = ch.creator || { name: 'Unknown' };
-  const entryCount = state.entryCounts[ch.id] || 0;
-  const entryWord = entryCount === 1 ? 'entry' : 'entries';
-  // v699 — HIERARCHY. This card was saying the same countdown THREE times:
-  // header-right "⏱ 2d 18h", the fct banner's "Winner in 2d 18h", and this meta
-  // line's "voting ends 2d 18h". Triplicate time isn't emphasis, it's noise that
-  // makes everything shout at once. The fct banner is the ONE canonical
-  // phase+time element (it shows phase, progress, and the next deadline);
-  // everything else defers to it. Meta keeps what the banner doesn't say:
-  // entry count, and the creator once the challenge is decided.
-  const isChampionship = ch.title && ch.title.startsWith('⚡');
-  const expanded = state.feedExpanded;
-  const compactHtml = buildChallengeCardShell(ch);
-
-
-  if (!expanded) {
-    return `<div class="feed-challenge-card" data-cid="${ch.id}">${compactHtml}</div>`;
-  }
-
-  // Expanded card — load entries inline
-  const chEntries = (state.feedEntries || []).filter(e => e.challenge_id === ch.id);
-  const myVoteForCh = state.currentVotes?.find(v =>
-    chEntries.some(e => e.id === v.entry_id) && v.voter_id === state.profile?.id
-  );
-  const canEnter = ch.computedStatus === 'submitting'
-    && state.profile
-    && !myLiveEntry(chEntries, ch.id) // v715/v746
-    // Championships are invite-only for EVERYONE, admins included — only an
-    // invited contender (present in the fighter roster) may enter. Mirrors the
-    // DB trigger enforce_championship_invite so the UI and server agree.
-    && canEnterChampionship(ch); // v702 — was roster membership with NO status check: an invited-but-not-accepted user could enter from the feed
-
-
-  let entriesHtml = '';
-  if (chEntries.length === 0) {
-    entriesHtml = `<div class="fcc-no-entries">No entries yet${canEnter ? ' — be the first!' : ''}</div>`;
-  } else {
-    const canVote = isVotingPhase(ch.computedStatus);
-    entriesHtml = `<div class="fcc-entries-scroll" style="display:flex!important;flex-wrap:nowrap!important;overflow-x:auto!important;overflow-y:hidden!important;-webkit-overflow-scrolling:touch!important;width:100%;min-width:0;box-sizing:border-box;">` + chEntries.map(e => {
-      const sub = e.submitter || { name: 'Unknown', avatar: '🔥' };
-      const isMyEntry = state.profile && e.user_id === state.profile.id;
-      const iVoted = myVoteForCh?.entry_id === e.id;
-      let mediaHtml = '';
-      if (e.moderation_status === 'rejected') {
-        mediaHtml = `<div class="fcc-entry-media fcc-entry-placeholder" style="flex-direction:column;gap:4px;color:var(--text-muted);text-align:center;padding:12px;"><div style="font-size:26px;">🚫</div><div style="font-size:11px;font-weight:700;">Not Approved</div></div>`;
-      } else if (e.media_type === 'photo' && e.media_url) {
-        mediaHtml = `<img src="${escapeHtml(e.media_url)}" class="fcc-entry-media" loading="lazy">`;
-      } else if (e.media_type === 'video' && e.media_url) {
-        if (e.poster_url) {
-          // Show poster as a tappable image — tapping opens full detail
-          mediaHtml = `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}" data-fcc-entry="${e.id}">
-            <video data-src="${escapeHtml(e.media_url)}" ${_videoPosterAttr(e.media_url, e.poster_url)} muted playsinline preload="none" data-lazy-video style="width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;"></video>
-            <div class="fcc-play-overlay">▶</div>
-          </div>`;
-        } else {
-          // No poster — use muted autoplay video to show first frame
-          mediaHtml = `<div class="fcc-entry-media fcc-video-thumb" data-fcc-open="${ch.id}" data-fcc-entry="${e.id}" style="position:relative;">
-            <video data-src="${escapeHtml(e.media_url)}" muted playsinline preload="none" data-lazy-video style="width:100%;height:100%;object-fit:cover;display:block;"></video>
-            <div class="fcc-play-overlay">▶</div>
-          </div>`;
-        }
-      } else if (e.media_type === 'audio') {
-        mediaHtml = _audioTileHtml(e); // v693 — shared tile, see _audioTileHtml
-      } else if (e.media_type === 'text' && e.caption) {
-        mediaHtml = `<div class="fcc-entry-media fcc-text-entry">${escapeHtml(e.caption.slice(0, 80))}${e.caption.length > 80 ? '…' : ''}</div>`;
-      } else {
-        const catIcons = {Art:'🎨',Photography:'📷',Music:'🎵',Writing:'✍️',Cooking:'🍳',Style:'👗',Sports:'🏆',Fitness:'💪',Comedy:'😂'};
-        mediaHtml = `<div class="fcc-entry-media fcc-entry-placeholder">${catIcons[ch.category] || '🎬'}</div>`;
-      }
-      const voteBtn = canVote && state.profile
-        ? `<button class="fcc-vote-btn${iVoted ? ' voted' : ''}" data-fcc-vote="${e.id}" data-fcc-chid="${ch.id}">${iVoted ? '✓ Voted' : '🗳️ Vote'}</button>`
-        : isMyEntry ? `<span class="fcc-your-entry">Your entry</span>` : '';
-      return `<div class="fcc-entry-card" style="cursor:pointer;" data-entry-open="${ch.id}" data-entry-id="${e.id}">
-        ${mediaHtml}
-        <div class="fcc-entry-footer">
-          <div class="fcc-entry-avatar">${honoredAvatarHTML(sub.id, avatarInner(sub.avatar), 36)}</div>
-          <div class="fcc-entry-name">${escapeHtml(sub.name)}</div>
-          ${(state.entryLikeCounts[e.id] || state.entryCommentCounts[e.id]) ? `<div class="fcc-entry-counts">${state.entryLikeCounts[e.id] ? '🔥 ' + state.entryLikeCounts[e.id] : ''}${state.entryLikeCounts[e.id] && state.entryCommentCounts[e.id] ? ' · ' : ''}${state.entryCommentCounts[e.id] ? '💬 ' + state.entryCommentCounts[e.id] : ''}</div>` : ''}
-          ${voteBtn}
-        </div>
-      </div>`;
-    }).join('') + `</div>` + _entryDotsHtml(chEntries.length); // v747 — ghost spacer gone (full-width cards), dots added
-  }
-
-  // Bottom bar (v619): mirror the challenges-page states so the two surfaces
-  // never disagree — submit / "You're in!"+Edit / "in the running".
-  const _feedMyEntry = myLiveEntry(chEntries, ch.id); // v715/v746
-  const _feedMyRejected = myRejectedEntry(chEntries); // v715
-  let submitBtn = '';
-  if (canEnter && _feedMyRejected) {
-    // v715 — entered, got rejected, can still fix it. Don't just show a bare
-    // "+ Submit your entry" as though nothing happened: say what happened, then
-    // offer the way forward.
-    submitBtn = `<div style="padding:6px 12px;background:rgba(255,45,31,0.07);border-top:1px solid rgba(255,45,31,0.35);">
-      <div style="font-size:13px;color:#ff6a6a;font-weight:700;margin-bottom:6px;">🚫 Your entry wasn't approved</div>
-      <button class="fcc-submit-btn" data-fcc-submit="${ch.id}">+ Submit another entry</button>
-    </div>`;
-  } else if (canEnter) {
-    submitBtn = `<div style="padding:0 0 8px"><button class="fcc-submit-btn" data-fcc-submit="${ch.id}">+ Submit your entry</button></div>`;
-  } else if (_feedMyEntry && ch.computedStatus === 'submitting') {
-    const _fdl = ch.submission_deadline ? formatCountdown(ch.submission_deadline) : null;
-    submitBtn = `<div style="padding:6px 12px;background:rgba(255,106,44,0.06);border-top:1px solid var(--border);">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${_fdl ? '4px' : '0'};">
-        <span style="font-size:13px;color:var(--ember);font-weight:700;">✓ You're in!</span>
-        <button class="fcc-submit-btn" style="padding:6px 12px;font-size:12px;" data-fcc-submit="${ch.id}" data-edit="1">✏️ Edit</button>
-      </div>
-      ${_fdl ? `<div style="font-size:11px;color:var(--text-muted);">You can change your entry for ${_fdl}</div>` : ''}
-    </div>`;
-  } else if (_feedMyEntry && ch.computedStatus === 'voting') {
-    submitBtn = `<div style="padding:6px 12px;background:rgba(255,106,44,0.06);border-top:1px solid var(--border);">
-      <span style="font-size:13px;color:var(--ember);font-weight:700;">🔥 Your entry is in the running — voting is live</span>
-    </div>`;
-  }
-
-  // Return card + separate drawer div — keeps scroll outside overflow:hidden card
+  const isChampionship = !!(ch.title && ch.title.startsWith('⚡'));
   return `<div class="fcc-challenge-wrap${isChampionship ? ' champ-gold' : ''}" data-cid="${ch.id}">
-    <div class="feed-challenge-card feed-challenge-expanded" data-fcc-cid="${ch.id}" style="padding:16px;cursor:pointer;">
-      ${compactHtml}
-    </div>
-    <div class="fcc-feed-drawer" data-drawer-cid="${ch.id}">
-      ${entriesHtml}
-      ${submitBtn}
+    <div class="feed-challenge-card" data-fcc-cid="${ch.id}">
+      ${buildChallengeCardShell(ch)}
     </div>
   </div>`;
 }
@@ -22644,11 +22630,14 @@ async function _fcSuggest({ kind, category, context, targetId, boxId, btn }) {
       box.innerHTML = '<div class="fc-sug-note">Couldn\'t reach the fire right now — try again in a sec. 🔥</div>';
       return;
     }
-    ideas.forEach(idea => {
+    const suggestionModes = kind === 'challenge'
+      ? ['Simple', 'Competitive', 'Scroll-stopping']
+      : ['Clear', 'Energetic', 'Scroll-stopping'];
+    ideas.forEach((idea, ideaIndex) => {
       const chip = document.createElement('button');
       chip.type = 'button';
       chip.className = 'fc-sug-chip';
-      chip.textContent = idea;
+      chip.innerHTML = `<span class="fc-sug-kind">${suggestionModes[ideaIndex] || 'Option'}</span><span>${escapeHtml(String(idea))}</span>`;
       chip.onclick = () => {
         target.value = idea.slice(0, target.maxLength > 0 ? target.maxLength : idea.length);
         target.dispatchEvent(new Event('input', { bubbles: true }));
@@ -23616,7 +23605,7 @@ async function fvVote(btn, chId) {
         { onConflict: 'challenge_id,voter_id' }));
     }
     if (upErr) throw upErr;
-    toast('🗳️ Vote cast');
+    toast('Vote recorded — you can change it until voting ends.');
     btn.textContent = '✓ Voted';
     btn.style.background = 'var(--ember)';
     btn.disabled = true;
@@ -24166,7 +24155,7 @@ async function loadFollows() {
 }
 
 let upmCurrentUserId = null;
-let psState = { userId: null, tab: 'posts', profile: null, posts: [], challenges: [], entries: [], postLikeCounts: {} };
+let psState = { userId: null, tab: 'challenges', profile: null, posts: [], challenges: [], entries: [], postLikeCounts: {} };
 
 /* ===================== DIRECT MESSAGES (v488) ===================== */
 let dmState = { threadId: null, otherId: null, otherName: '', otherAvatar: '🔥', messages: [] };
@@ -24442,7 +24431,7 @@ function closeDmSettings(){
 async function openUserProfile(userId) {
   if (!userId) { console.warn('[openUserProfile] no userId'); return; }
   console.log('[openUserProfile] opening', userId);
-  psState = { userId, tab: 'posts', profile: null, posts: [], challenges: [], entries: [], postLikeCounts: {} };
+  psState = { userId, tab: 'challenges', profile: null, posts: [], challenges: [], entries: [], postLikeCounts: {} };
 
   // Open sheet with loading state immediately
   document.getElementById('psHeaderName').textContent = 'Profile';
@@ -24454,7 +24443,7 @@ async function openUserProfile(userId) {
   document.getElementById('psFollowBtn').style.display = 'none';
   { const _mb = document.getElementById('psMessageBtn'); if (_mb) _mb.style.display = 'none'; }
   document.getElementById('psContent').innerHTML = '<div class="ps-empty">Loading…</div>';
-  document.querySelectorAll('.ps-tab').forEach(t => t.classList.toggle('active', t.dataset.pstab === 'posts'));
+  document.querySelectorAll('.ps-tab').forEach(t => t.classList.toggle('active', t.dataset.pstab === 'challenges'));
   document.getElementById('profileSheet').classList.add('open');
   document.body.style.overflow = 'hidden';
 
@@ -26152,5 +26141,140 @@ document.addEventListener('click', (e) => {
 });
 
 </script>
+
+<script id="fc-ux-v900-js">
+(function(){
+  'use strict';
+
+  /* ---------- Four-step challenge creation ---------- */
+  let uxCcStep = 1;
+  const stepLabels = [
+    ['The challenge','Define what people are competing to create.'],
+    ['Your entry','Choose whether you are competing, then add your work.'],
+    ['Timing & voting','Set the entry window, voting window, and tie behavior.'],
+    ['Audience & launch','Choose who can participate, review, and launch.']
+  ];
+
+  function uxField(id){ const el=document.getElementById(id); return el ? el.closest('.cc-field') : null; }
+  function uxMove(step, nodes){
+    const host=document.querySelector(`#createChallengeForm .cc-step[data-ux-step="${step}"] .cc-step-body`);
+    if(!host) return;
+    nodes.filter(Boolean).forEach(n=>host.appendChild(n));
+  }
+  function uxSyncEntryChoice(){
+    const active = ccState.competeSelf !== false;
+    document.querySelectorAll('[data-cc-self]').forEach(b=>b.classList.toggle('active', (b.dataset.ccSelf==='yes')===active));
+    ['ccUploadField','ccTextField','ccCaptionField'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display = active && (id!=='ccTextField' || ccState.mediaType==='text') && (id!=='ccUploadField' || ccState.mediaType!=='text') ? '' : 'none'; });
+  }
+  window.uxSetCompeteSelf = function(value){ ccState.competeSelf = value; uxSyncEntryChoice(); };
+  window.uxCcShowStep = function(step){
+    uxCcStep=Math.max(1,Math.min(4,step));
+    document.querySelectorAll('#createChallengeForm .cc-step').forEach(el=>el.classList.toggle('active',Number(el.dataset.uxStep)===uxCcStep));
+    document.querySelectorAll('#createChallengeForm .cc-progress-step').forEach((el,i)=>{ el.classList.toggle('active',i+1===uxCcStep); el.classList.toggle('done',i+1<uxCcStep); });
+    const h=document.getElementById('uxCcStepHeading'), sub=document.getElementById('uxCcStepSub');
+    if(h) h.textContent=`Step ${uxCcStep} of 4 · ${stepLabels[uxCcStep-1][0]}`;
+    if(sub) sub.textContent=stepLabels[uxCcStep-1][1];
+    const inner=document.querySelector('#createChallengeSheet .cc-sheet-inner'); if(inner) inner.scrollTop=0;
+  };
+  window.uxCcNext = function(){
+    if(uxCcStep===1 && !document.getElementById('ccTitle')?.value.trim()){ showCcError('Add a challenge title before continuing.'); return; }
+    uxCcShowStep(uxCcStep+1);
+  };
+  window.uxCcBack = function(){ uxCcShowStep(uxCcStep-1); };
+
+  function buildChallengeSteps(){
+    const form=document.getElementById('createChallengeForm');
+    if(!form || form.dataset.uxStepped) return;
+    form.dataset.uxStepped='1';
+    const progress=document.createElement('div');
+    progress.className='cc-progress';
+    progress.innerHTML='<span class="cc-progress-step active"></span><span class="cc-progress-step"></span><span class="cc-progress-step"></span><span class="cc-progress-step"></span>';
+    const heading=document.createElement('div');
+    heading.innerHTML='<div class="cc-step-title" id="uxCcStepHeading"></div><div class="cc-step-sub" id="uxCcStepSub"></div>';
+    form.prepend(heading); form.prepend(progress);
+    const original=[...form.children].filter(n=>!n.classList.contains('cc-progress') && n!==heading);
+    const steps=[];
+    for(let i=1;i<=4;i++){
+      const sec=document.createElement('section'); sec.className='cc-step'; sec.dataset.uxStep=i;
+      sec.innerHTML='<div class="cc-step-body"></div><div class="cc-step-actions"></div>';
+      form.appendChild(sec); steps.push(sec);
+    }
+    // Existing fields, grouped without recreating inputs or losing event listeners.
+    uxMove(1,[uxField('ccTitle'),document.getElementById('ccCategoryPills')?.closest('.cc-field'),document.getElementById('ccMediaTypePills')?.closest('.cc-field'),uxField('ccRules')]);
+    const self=document.createElement('div'); self.className='cc-self-toggle'; self.innerHTML='<button type="button" data-cc-self="yes" onclick="uxSetCompeteSelf(true)">I’m competing</button><button type="button" data-cc-self="no" onclick="uxSetCompeteSelf(false)">Host only</button>';
+    steps[1].querySelector('.cc-step-body').prepend(self);
+    uxMove(2,[document.getElementById('ccUploadField'),document.getElementById('ccTextField'),document.getElementById('ccCaptionField')]);
+    uxMove(3,[document.getElementById('ccSuddenDeathCheck')?.closest('.cc-field'),document.getElementById('ccEnterPills')?.closest('.cc-field'),document.getElementById('ccVotePills')?.closest('.cc-field'),document.getElementById('ccScheduleSummary'),document.getElementById('ccCustomDatesToggle'),document.getElementById('ccCustomDates')]);
+    uxMove(4,[document.getElementById('ccVisPills')?.closest('.cc-field'),document.getElementById('ccInviteField'),document.getElementById('ccError'),document.querySelector('#createChallengeForm .cc-submit-area')]);
+    original.filter(n=>n.parentNode===form).forEach(n=>steps[3].querySelector('.cc-step-body').appendChild(n));
+    steps.forEach((sec,i)=>{
+      const a=sec.querySelector('.cc-step-actions');
+      if(i>0) a.insertAdjacentHTML('beforeend','<button type="button" class="btn btn-ghost" onclick="uxCcBack()">Back</button>');
+      if(i<3) a.insertAdjacentHTML('beforeend','<button type="button" class="btn btn-primary" onclick="uxCcNext()">Next</button>');
+    });
+    // The real submit button already lives in step 4; no duplicate action.
+    uxSyncEntryChoice(); uxCcShowStep(1);
+    document.querySelectorAll('#ccMediaTypePills [data-mt]').forEach(btn=>btn.addEventListener('click',()=>setTimeout(uxSyncEntryChoice,0)));
+  }
+
+  /* ---------- Titles: concise current-state summary ---------- */
+  function uxRenderTitleFocus(){
+    const target=document.getElementById('lbTabRankings');
+    if(!target || document.getElementById('uxTitleFocus') || !state.leaderboardData) return;
+    const users=state.leaderboardData.users||[];
+    const me=users.find(u=>u.id===state.profile?.id);
+    if(!me) return;
+    const cat=state.lbCategory || (typeof pickTitlesLanding==='function' ? pickTitlesLanding(state.leaderboardData) : null);
+    const score=u=>Number((u.monthlyByCategory||{})[cat]||0);
+    const ranked=[...users].filter(u=>score(u)>0).sort((a,b)=>score(b)-score(a));
+    const rank=Math.max(1,ranked.findIndex(u=>u.id===me.id)+1);
+    const line=ranked[2] ? score(ranked[2]) : 0;
+    const boost=score(me);
+    const gap=Math.max(0,line-boost);
+    const last=new Date(new Date().getFullYear(),new Date().getMonth()+1,0,23,59,59);
+    const days=Math.max(0,Math.ceil((last-Date.now())/86400000));
+    const box=document.createElement('div'); box.id='uxTitleFocus'; box.className='ux-title-focus';
+    box.innerHTML=`<div class="ux-title-metric"><b>${rank}${rank===1?'st':rank===2?'nd':rank===3?'rd':'th'}</b><span>Rank</span></div><div class="ux-title-metric"><b>${boost}</b><span>Boost</span></div><div class="ux-title-metric"><b>${line}</b><span>Championship line</span></div><div class="ux-title-metric"><b>${gap}</b><span>Gap</span></div><div class="ux-title-path"><strong>${days} day${days===1?'':'s'} left.</strong> ${gap===0?'You are on or above the line. Keep defending your position.':'Best path: beat a stronger opponent or win a high-turnout challenge.'}</div>`;
+    target.prepend(box);
+  }
+  if(typeof renderLeaderboard==='function'){
+    const baseRenderLeaderboard=renderLeaderboard;
+    renderLeaderboard=function(){ const r=baseRenderLeaderboard.apply(this,arguments); requestAnimationFrame(uxRenderTitleFocus); return r; };
+  }
+
+  /* ---------- Zero-state actions ---------- */
+  const baseRenderProfileTab=typeof renderProfileTab==='function' ? renderProfileTab : null;
+  if(baseRenderProfileTab){
+    renderProfileTab=function(){
+      const r=baseRenderProfileTab.apply(this,arguments);
+      requestAnimationFrame(()=>{
+        const c=document.getElementById('psContent'); if(!c) return;
+        const e=c.querySelector('.ps-empty'); if(!e) return;
+        const own=psState.userId===state.profile?.id;
+        if(!own) return;
+        e.classList.add('ux-zero');
+        if(psState.tab==='challenges') e.innerHTML='<strong>Your record starts with your first challenge.</strong><div style="height:12px"></div><button class="btn btn-primary" onclick="closeProfileSheet();switchView(\'challenges\')">Enter a live challenge</button><button class="btn btn-ghost" style="margin-left:8px" onclick="closeProfileSheet();openCreateChallenge()">Start your own</button>';
+        if(psState.tab==='entries') e.innerHTML='<strong>No entries yet.</strong><p style="margin:6px 0 14px;color:var(--text-dim)">Enter a live challenge and put your work in front of the crowd.</p><button class="btn btn-primary" onclick="closeProfileSheet();switchView(\'challenges\')">Explore challenges</button>';
+        if(psState.tab==='posts') e.innerHTML='<strong>No updates yet.</strong><p style="margin:6px 0 14px;color:var(--text-dim)">Share a win, an update, or something worth discussing.</p><button class="btn btn-primary" onclick="closeProfileSheet();openCreatePost()">Share an update</button>';
+      });
+      return r;
+    };
+  }
+
+  /* ---------- Initialization and function wrappers ---------- */
+  function initUxV900(){
+    buildChallengeSteps();
+    // The old expand control contradicts the compact feed model.
+    const expand=document.getElementById('feedExpandBtn'); if(expand) expand.remove();
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',initUxV900,{once:true}); else initUxV900();
+
+  if(typeof openCreateChallenge==='function'){
+    const baseOpenCreateChallenge=openCreateChallenge;
+    openCreateChallenge=async function(){ ccState.competeSelf=true; const r=await baseOpenCreateChallenge.apply(this,arguments); uxSyncEntryChoice(); uxCcShowStep(1); return r; };
+  }
+})();
+</script>
+
 </body>
 </html>
