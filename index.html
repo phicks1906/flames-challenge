@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1012 — Guidance Layout Fix</title>
+<title>FlamesChallenge v1013 — Public Landing & First-Use Onboarding</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1012 · guidance-layout-specificity-fix" />
-<meta name="fc-whatsnew" content="The approved Crowned F is now the single canonical logo across the header, login, favicon, and app icon. Home recommendation layout and duplicate challenge handling are also stabilized." />
+<meta name="fc-build" content="v1013 · public-landing-first-use-onboarding" />
+<meta name="fc-whatsnew" content="Public live-competition landing, vote-before-signup flow, deferred interest setup, creator recommendations, and first-use action choices." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -6669,6 +6669,78 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
   }
 }
 </style>
+
+<style id="fc-v1013-public-css">
+/* v1013 — public product experience before authentication */
+#authView.fc-public-auth{
+  display:block!important;overflow:auto!important;align-items:initial!important;justify-content:initial!important;
+  min-height:100dvh!important;padding:0!important;background:#050505!important;
+}
+#authView.fc-public-auth .auth-card{display:none!important}
+#authView.fc-public-auth.fc-auth-sheet-open .auth-card{
+  display:block!important;position:fixed!important;z-index:10040!important;
+  inset:max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom))!important;
+  width:auto!important;max-width:560px!important;height:auto!important;max-height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom))!important;
+  margin:auto!important;overflow:auto!important;border-radius:28px!important;
+  background:linear-gradient(155deg,#15110f,#080706 68%)!important;
+  border:1px solid rgba(255,126,58,.34)!important;box-shadow:0 24px 80px rgba(0,0,0,.72)!important;
+  padding:56px 22px 28px!important;
+}
+#authView.fc-public-auth.fc-auth-sheet-open::after{
+  content:"";position:fixed;inset:0;z-index:10030;background:rgba(0,0,0,.76);backdrop-filter:blur(12px);
+}
+#authView.fc-public-auth.fc-auth-sheet-open #fcPublicLanding{filter:blur(3px);pointer-events:none}
+#authView.fc-public-auth .auth-card .auth-brand{display:none!important}
+#authView.fc-public-auth .auth-card .auth-tabs{margin-top:0!important}
+#fcPublicAuthClose{
+  position:absolute;top:14px;right:14px;width:40px;height:40px;border-radius:50%;border:1px solid rgba(255,255,255,.16);
+  background:#171513;color:#fff;font-size:25px;line-height:1;display:grid;place-items:center;cursor:pointer;
+}
+#fcAuthContext{display:none;margin:0 0 18px;padding:13px 14px;border:1px solid rgba(255,131,64,.30);border-radius:16px;background:rgba(255,93,36,.08)}
+#fcAuthContext.show{display:block}
+#fcAuthContext strong{display:block;color:#fff;font-size:15px;margin-bottom:4px}
+#fcAuthContext span{display:block;color:#c7b8ad;font-size:13px;line-height:1.45}
+
+#fcPublicLanding{position:relative;z-index:2;min-height:100dvh;color:#fff;background:
+ radial-gradient(circle at 16% 8%,rgba(255,69,27,.17),transparent 24rem),
+ radial-gradient(circle at 88% 34%,rgba(255,188,70,.09),transparent 28rem),#050505;padding-bottom:54px}
+.fc-public-header{position:sticky;top:0;z-index:15;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:calc(13px + env(safe-area-inset-top)) clamp(18px,4vw,42px) 13px;background:rgba(5,5,5,.82);border-bottom:1px solid rgba(255,255,255,.08);backdrop-filter:blur(18px)}
+.fc-public-brand{display:flex;align-items:center;gap:10px;min-width:0}.fc-public-brand .fc-approved-logo{width:58px;height:58px;flex:0 0 auto}.fc-public-brand-name{font-family:var(--font-bricolage);font-weight:900;font-size:clamp(17px,4vw,23px);letter-spacing:-.045em}.fc-public-brand-name span{color:#ff6a2c}
+.fc-public-auth-actions{display:flex;align-items:center;gap:8px}.fc-public-auth-actions button{border-radius:999px;padding:10px 15px;font:700 13px var(--font-dm);cursor:pointer}.fc-public-login{color:#fff;background:transparent;border:1px solid rgba(255,255,255,.22)}.fc-public-signup{color:#140803;background:linear-gradient(135deg,#ffab35,#ff4828);border:0}
+.fc-public-main{width:min(1120px,100%);margin:0 auto;padding:clamp(34px,7vw,82px) clamp(18px,5vw,50px) 0}
+.fc-public-hero{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(320px,.95fr);gap:clamp(28px,5vw,68px);align-items:center}
+.fc-public-copy-kicker,.fc-public-section-kicker{font:800 12px var(--font-dm);letter-spacing:.19em;text-transform:uppercase;color:#ff9d58}
+.fc-public-copy h1{font-family:var(--font-bricolage);font-size:clamp(42px,7vw,82px);line-height:.96;letter-spacing:-.065em;margin:12px 0 20px;max-width:760px}.fc-public-copy h1 em{font-style:normal;color:#ff5b2e}.fc-public-copy>p{color:#c8bbb2;font-size:clamp(17px,2vw,21px);line-height:1.5;max-width:650px;margin:0 0 24px}
+.fc-public-loop{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:26px}.fc-public-loop span{padding:8px 11px;border:1px solid rgba(255,255,255,.13);border-radius:999px;color:#eee5df;font-weight:750;font-size:12px}.fc-public-loop b{color:#ff642f}
+.fc-public-hero-actions{display:flex;gap:10px;flex-wrap:wrap}.fc-public-primary,.fc-public-secondary{min-height:50px;padding:0 20px;border-radius:15px;font:800 15px var(--font-dm);cursor:pointer}.fc-public-primary{border:0;color:#140803;background:linear-gradient(135deg,#ffac36,#ff4028)}.fc-public-secondary{border:1px solid rgba(255,255,255,.20);background:#111;color:#fff}
+.fc-public-live{position:relative;border:1px solid rgba(255,116,48,.33);border-radius:26px;background:linear-gradient(155deg,rgba(35,19,13,.96),rgba(9,8,8,.98) 72%);padding:20px;box-shadow:0 24px 65px rgba(0,0,0,.45);overflow:hidden}.fc-public-live::after{content:"";position:absolute;width:240px;height:240px;border-radius:50%;right:-90px;bottom:-120px;background:rgba(255,91,34,.13);filter:blur(25px);pointer-events:none}
+.fc-public-live-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}.fc-live-pill{display:inline-flex;align-items:center;gap:7px;color:#70e29b;font-weight:850;font-size:12px;letter-spacing:.08em;text-transform:uppercase}.fc-live-pill::before{content:"";width:8px;height:8px;border-radius:50%;background:#48da80;box-shadow:0 0 12px #48da80}.fc-public-countdown{color:#bcaea5;font-size:12px}
+#fcPublicFeatureTitle{font-family:var(--font-bricolage);font-size:clamp(25px,4vw,36px);line-height:1.05;letter-spacing:-.035em;margin:0 0 6px}.fc-public-prompt{font-size:14px;color:#bdaea5;line-height:1.45;margin:0 0 16px}.fc-public-entry-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.fc-public-entry{position:relative;border:1px solid rgba(255,255,255,.12);border-radius:17px;overflow:hidden;background:#0d0c0b;min-width:0;cursor:pointer;transition:.18s transform,.18s border-color,.18s box-shadow}.fc-public-entry:hover,.fc-public-entry:focus-visible{transform:translateY(-2px);border-color:rgba(255,119,54,.75);outline:0}.fc-public-entry.selected{border-color:#ff6a31;box-shadow:0 0 0 2px rgba(255,91,40,.20),0 12px 32px rgba(255,62,24,.16)}
+.fc-public-entry-media{height:clamp(150px,27vw,235px);background:linear-gradient(135deg,#22130e,#080808);display:grid;place-items:center;overflow:hidden}.fc-public-entry-media img,.fc-public-entry-media video{width:100%;height:100%;object-fit:cover;display:block}.fc-public-entry-media .fc-public-text-entry{padding:18px;color:#f1e7df;font-family:Georgia,serif;font-size:16px;line-height:1.45;max-height:100%;overflow:hidden}.fc-public-entry-media .fc-public-media-fallback{font-size:38px}.fc-public-entry-body{padding:11px 12px 13px}.fc-public-entry-user{display:flex;align-items:center;gap:7px;color:#d8cec7;font-size:12px;margin-bottom:8px}.fc-public-entry-avatar{width:24px;height:24px;border-radius:50%;background:#21130e;display:grid;place-items:center;overflow:hidden;flex:0 0 auto}.fc-public-entry-avatar img{width:100%;height:100%;object-fit:cover}.fc-public-vote-btn{width:100%;height:40px;border-radius:11px;border:1px solid rgba(255,112,47,.48);background:rgba(255,83,31,.10);color:#ffad72;font-weight:850;cursor:pointer}.fc-public-entry.selected .fc-public-vote-btn{background:linear-gradient(135deg,#ff9439,#ff4729);color:#130804;border:0}
+.fc-public-rule{display:flex;gap:8px;align-items:flex-start;margin:14px 1px 0;color:#aa9d94;font-size:12px;line-height:1.45}.fc-public-rule svg{flex:0 0 auto;margin-top:1px;color:#ff8246}
+.fc-public-loading{min-height:390px;display:grid;place-items:center;color:#b5a9a1;text-align:center;padding:24px}.fc-public-loading b{display:block;color:#fff;margin-bottom:5px}
+.fc-public-browse{margin-top:clamp(55px,8vw,90px)}.fc-public-section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin-bottom:18px}.fc-public-section-head h2{font-family:var(--font-bricolage);font-size:clamp(28px,5vw,48px);letter-spacing:-.045em;line-height:1;margin:8px 0 0}.fc-public-section-head p{color:#aa9d94;max-width:420px;font-size:14px;line-height:1.45;margin:0}.fc-public-more{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}.fc-public-ch-card{display:flex;flex-direction:column;min-width:0;border:1px solid rgba(255,255,255,.11);border-radius:19px;background:#0d0c0b;overflow:hidden}.fc-public-ch-media{height:150px;background:linear-gradient(145deg,#2b160e,#080808);display:grid;place-items:center;overflow:hidden}.fc-public-ch-media img{width:100%;height:100%;object-fit:cover}.fc-public-ch-body{padding:15px}.fc-public-ch-meta{font-size:11px;color:#ff9b5f;font-weight:800;letter-spacing:.10em;text-transform:uppercase}.fc-public-ch-body h3{font-family:var(--font-bricolage);font-size:20px;line-height:1.1;margin:8px 0 7px}.fc-public-ch-body p{color:#aa9e96;font-size:13px;line-height:1.4;margin:0 0 13px}.fc-public-ch-action{margin-top:auto;width:100%;height:42px;border:1px solid rgba(255,255,255,.13);border-radius:11px;background:#141210;color:#fff;font-weight:800;cursor:pointer}
+.fc-public-proof{margin-top:clamp(52px,8vw,90px);padding:clamp(25px,5vw,44px);border-top:1px solid rgba(255,255,255,.10);border-bottom:1px solid rgba(255,255,255,.10);display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px}.fc-public-proof b{display:block;font-family:var(--font-bricolage);font-size:20px;margin-bottom:5px}.fc-public-proof span{color:#a99d95;font-size:13px;line-height:1.4}.fc-public-final{text-align:center;padding:clamp(54px,8vw,92px) 0 15px}.fc-public-final h2{font-family:var(--font-bricolage);font-size:clamp(32px,6vw,58px);line-height:1;letter-spacing:-.05em;margin:0 0 14px}.fc-public-final p{color:#b4a79f;margin:0 auto 24px;max-width:570px;line-height:1.5}
+
+/* first-use sheet after the public experience */
+#fcFirstUseSheet{position:fixed;inset:0;z-index:10070;display:none;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.72);backdrop-filter:blur(10px)}#fcFirstUseSheet.open{display:flex}
+.fc-fu-panel{width:min(620px,100%);max-height:92dvh;overflow:auto;border:1px solid rgba(255,126,58,.32);border-radius:28px 28px 0 0;background:linear-gradient(155deg,#171311,#080707 74%);padding:24px 20px calc(22px + env(safe-area-inset-bottom));box-shadow:0 -25px 70px rgba(0,0,0,.65)}
+.fc-fu-progress{display:flex;gap:6px;margin:0 0 22px}.fc-fu-progress i{height:4px;flex:1;border-radius:8px;background:#302a27}.fc-fu-progress i.on{background:linear-gradient(90deg,#ffab38,#ff4d2c)}.fc-fu-kicker{color:#ff9e5e;font-size:11px;font-weight:850;letter-spacing:.18em;text-transform:uppercase}.fc-fu-panel h2{font-family:var(--font-bricolage);font-size:31px;line-height:1.04;letter-spacing:-.04em;margin:9px 0 9px}.fc-fu-panel>p,.fc-fu-copy{color:#b9aca4;line-height:1.5;font-size:15px}.fc-fu-vote-confirm{display:flex;align-items:center;gap:14px;margin:18px 0;padding:16px;border:1px solid rgba(81,224,139,.27);border-radius:17px;background:rgba(51,179,103,.08)}.fc-fu-check{width:42px;height:42px;border-radius:50%;background:#50db87;color:#06140b;display:grid;place-items:center;font-size:24px;font-weight:900;flex:0 0 auto}.fc-fu-vote-confirm b{display:block;margin-bottom:3px}.fc-fu-vote-confirm span{color:#9fbdab;font-size:13px;line-height:1.35}.fc-fu-rulebox{padding:14px;border-radius:15px;background:#11100f;border:1px solid rgba(255,255,255,.09);color:#c6bab2;font-size:13px;line-height:1.5}
+.fc-fu-interests{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:18px 0}.fc-fu-interest{min-height:48px;border:1px solid rgba(255,255,255,.13);border-radius:13px;background:#11100f;color:#d7cdc6;font-weight:780;text-align:left;padding:0 13px;cursor:pointer}.fc-fu-interest.on{border-color:#ff7138;background:rgba(255,91,38,.12);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,91,38,.12)}
+.fc-fu-creators{display:flex;flex-direction:column;gap:9px;margin:18px 0}.fc-fu-creator{display:flex;align-items:center;gap:11px;padding:11px;border:1px solid rgba(255,255,255,.10);border-radius:14px;background:#0f0e0d}.fc-fu-creator-avatar{width:45px;height:45px;border-radius:50%;display:grid;place-items:center;overflow:hidden;background:#21140f;font-size:23px;flex:0 0 auto}.fc-fu-creator-avatar img{width:100%;height:100%;object-fit:cover}.fc-fu-creator-info{min-width:0;flex:1}.fc-fu-creator-info b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.fc-fu-creator-info span{display:block;color:#9c9088;font-size:12px;margin-top:3px}.fc-fu-follow{height:37px;padding:0 13px;border-radius:10px;border:1px solid rgba(255,119,52,.45);background:transparent;color:#ff9f64;font-weight:800;cursor:pointer}.fc-fu-follow.on{background:#ff6532;color:#160904;border-color:#ff6532}.fc-fu-actions{display:flex;gap:10px;margin-top:20px}.fc-fu-next,.fc-fu-back{height:50px;border-radius:14px;font-weight:850;cursor:pointer}.fc-fu-next{flex:1;border:0;background:linear-gradient(135deg,#ffad38,#ff4629);color:#160904}.fc-fu-back{width:94px;border:1px solid rgba(255,255,255,.15);background:#111;color:#fff}.fc-fu-next:disabled{opacity:.45}.fc-fu-choices{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-top:22px}.fc-fu-choice{min-height:112px;text-align:left;border-radius:17px;padding:16px;border:1px solid rgba(255,255,255,.13);background:#11100f;color:#fff;cursor:pointer}.fc-fu-choice.primary{border-color:rgba(255,112,46,.52);background:linear-gradient(150deg,rgba(255,100,40,.18),#11100f)}.fc-fu-choice b{display:block;font-size:17px;margin-bottom:6px}.fc-fu-choice span{display:block;color:#a99d95;font-size:13px;line-height:1.4}
+
+@media(max-width:760px){
+  .fc-public-brand-name{display:none}.fc-public-header{padding-left:16px;padding-right:16px}.fc-public-auth-actions button{padding:9px 13px}
+  .fc-public-main{padding-top:32px}.fc-public-hero{grid-template-columns:1fr}.fc-public-copy h1{font-size:48px;max-width:580px}.fc-public-live{padding:16px}
+  .fc-public-more{grid-template-columns:1fr}.fc-public-proof{grid-template-columns:1fr 1fr}.fc-public-section-head{align-items:flex-start;flex-direction:column}
+}
+@media(max-width:410px){
+  .fc-public-copy h1{font-size:42px}.fc-public-entry-grid{gap:7px}.fc-public-entry-media{height:145px}.fc-public-entry-body{padding:9px}.fc-public-entry-user{font-size:11px}.fc-public-vote-btn{font-size:12px}
+  .fc-public-proof{grid-template-columns:1fr}.fc-fu-choices{grid-template-columns:1fr}.fc-fu-panel h2{font-size:28px}
+}
+@media(prefers-reduced-motion:reduce){.fc-public-entry{transition:none!important}}
+</style>
+
 </head>
 <body>
 <!-- v690 — View-as-member banner. Deliberately loud and impossible to miss: the
@@ -27555,5 +27627,226 @@ document.addEventListener('click', (e) => {
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();
 })();
 </script>
+
+<script id="fc-v1013-public-js">
+(function(){
+  const PENDING_VOTE_KEY='fc_pending_public_vote_v1013';
+  const PUBLIC_SEEN_KEY='fc_public_experience_v1013';
+  const NEW_SIGNUP_KEY='fc_new_signup_v1013';
+  const FIRST_USE_PREFIX='fc_first_use_v1013_';
+  let publicLoadToken=0;
+  let publicChallenges=[];
+  let publicEntries=[];
+  let fuStep=1;
+  let fuInterests=new Set();
+  let fuFollows=new Set();
+  let fuSuggestions=[];
+  let voteWasApplied=false;
+
+  function safe(t){try{return escapeHtml(String(t??''));}catch(e){return String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}}
+  function splitTitle(raw){
+    const parts=String(raw||'Challenge').split(/\s*(?::|—|\s-\s)\s*/).filter(Boolean);
+    return {name:parts[0]||'Challenge',prompt:parts.slice(1).join(' — ')};
+  }
+  function statusOf(ch){
+    try{return computeChallengeStatus(ch);}catch(e){}
+    const now=Date.now(), s=ch.submission_deadline?new Date(ch.submission_deadline).getTime():0, v=ch.voting_end?new Date(ch.voting_end).getTime():0;
+    if(s&&now<s)return 'submitting'; if(v&&now<v)return 'voting'; return 'closed';
+  }
+  function countdown(date){
+    if(!date)return '';
+    try{return formatCountdown(date);}catch(e){}
+    const d=new Date(date)-Date.now(); if(d<=0)return 'closing now'; const h=Math.floor(d/36e5),m=Math.floor((d%36e5)/6e4);return h>=24?`${Math.floor(h/24)}d ${h%24}h`:`${h}h ${m}m`;
+  }
+  function entryMedia(e,cls=''){
+    const url=e.poster_url||e.media_url||'';
+    if((e.media_type==='photo'||e.media_type==='image')&&url)return `<img src="${safe(url)}" alt="" loading="lazy">`;
+    if(e.media_type==='video'&&url)return `<img src="${safe(url)}" alt="Video entry" loading="lazy">`;
+    if(e.media_type==='text')return `<div class="fc-public-text-entry">${safe(e.caption||'Written entry')}</div>`;
+    if(e.media_type==='audio')return `<div class="fc-public-media-fallback">♫</div>`;
+    return `<div class="fc-public-media-fallback">${cls==='Photography'?'▣':'◆'}</div>`;
+  }
+  function avatar(v){
+    const s=String(v||'🔥');
+    if(/^https?:|^data:image/.test(s))return `<img src="${safe(s)}" alt="">`;
+    return safe(s);
+  }
+  function ensureDOM(){
+    const auth=document.getElementById('authView');
+    if(!auth||document.getElementById('fcPublicLanding'))return;
+    const landing=document.createElement('section');
+    landing.id='fcPublicLanding';
+    landing.innerHTML=`
+      <header class="fc-public-header">
+        <div class="fc-public-brand" aria-label="FlamesChallenge"><span class="fc-approved-logo"></span><div class="fc-public-brand-name">FLAMES<span>CHALLENGE</span></div></div>
+        <div class="fc-public-auth-actions"><button class="fc-public-login" type="button" data-public-auth="login">Log in</button><button class="fc-public-signup" type="button" data-public-auth="signup">Create account</button></div>
+      </header>
+      <main class="fc-public-main">
+        <section class="fc-public-hero">
+          <div class="fc-public-copy">
+            <div class="fc-public-copy-kicker">CREATE · COMPETE · GET CROWNED</div>
+            <h1>Put your work in front of the <em>crowd.</em></h1>
+            <p>Start a challenge or enter one. The crowd gets one vote. The winner earns Boost and moves closer to a monthly Championship.</p>
+            <div class="fc-public-loop" aria-label="Product loop"><span>Start</span><b>→</b><span>Enter</span><b>→</b><span>Vote</span><b>→</b><span>Win</span><b>→</b><span>Advance</span></div>
+            <div class="fc-public-hero-actions"><button class="fc-public-primary" type="button" id="fcPublicBrowse">See live competitions</button><button class="fc-public-secondary" type="button" data-public-auth="signup">Start a challenge</button></div>
+          </div>
+          <article class="fc-public-live" id="fcPublicFeature"><div class="fc-public-loading"><div><b>Loading a live competition…</b><span>The crowd is deciding now.</span></div></div></article>
+        </section>
+        <section class="fc-public-browse" id="fcPublicBrowseSection">
+          <div class="fc-public-section-head"><div><div class="fc-public-section-kicker">LIVE NOW</div><h2>See what people are competing over.</h2></div><p>Photography, music, cooking, writing, fitness, comedy, style, sports, and more.</p></div>
+          <div class="fc-public-more" id="fcPublicMore"><div class="fc-public-ch-card"><div class="fc-public-ch-media"></div><div class="fc-public-ch-body"><div class="fc-public-ch-meta">Loading</div><h3>Finding live challenges…</h3></div></div></div>
+        </section>
+        <section class="fc-public-proof"><div><b>Real entries</b><span>People submit photos, videos, audio, or text—not just opinions.</span></div><div><b>One vote</b><span>Each person gets one vote per challenge and can change it before voting closes.</span></div><div><b>Visible outcomes</b><span>A challenge produces a winner only when at least two people compete.</span></div><div><b>A real climb</b><span>Wins earn Boost. Top monthly contenders compete for the crown.</span></div></section>
+        <section class="fc-public-final"><h2>Your work belongs in the competition.</h2><p>Enter something already live or create the prompt everyone else has to beat.</p><button class="fc-public-primary" type="button" data-public-auth="signup">Create your account</button></section>
+      </main>`;
+    auth.prepend(landing);
+    const card=auth.querySelector('.auth-card');
+    if(card){
+      card.style.position='relative';
+      const close=document.createElement('button');close.id='fcPublicAuthClose';close.type='button';close.setAttribute('aria-label','Close');close.textContent='×';close.onclick=closeAuthSheet;card.prepend(close);
+      const ctx=document.createElement('div');ctx.id='fcAuthContext';
+      const tabs=card.querySelector('.auth-tabs'); if(tabs) tabs.before(ctx);
+    }
+    ensureFirstUseDOM();
+    auth.querySelectorAll('[data-public-auth]').forEach(b=>b.addEventListener('click',()=>openAuthSheet(b.dataset.publicAuth)));
+    document.getElementById('fcPublicBrowse')?.addEventListener('click',()=>document.getElementById('fcPublicBrowseSection')?.scrollIntoView({behavior:'smooth'}));
+  }
+  function ensureFirstUseDOM(){
+    if(document.getElementById('fcFirstUseSheet'))return;
+    const sh=document.createElement('div');sh.id='fcFirstUseSheet';sh.innerHTML='<div class="fc-fu-panel" id="fcFirstUsePanel"></div>';document.body.appendChild(sh);
+  }
+  function activateLanding(){
+    ensureDOM();
+    const auth=document.getElementById('authView');if(!auth)return;
+    auth.classList.add('fc-public-auth');auth.classList.remove('fc-auth-sheet-open');
+    try{localStorage.setItem(PUBLIC_SEEN_KEY,'1');}catch(e){}
+    const vid=document.getElementById('authVideoBg');if(vid)vid.style.display='none';
+    loadPublicChallenges();
+  }
+  function openAuthSheet(mode='signup',context){
+    ensureDOM();
+    const auth=document.getElementById('authView');if(!auth)return;
+    if(context) setAuthContext(context); else setAuthContextFromPending();
+    auth.classList.add('fc-auth-sheet-open');
+    switchAuthTab(mode);
+    requestAnimationFrame(()=>auth.querySelector(mode==='login'?'#loginEmail':'#signupName')?.focus());
+  }
+  function closeAuthSheet(){document.getElementById('authView')?.classList.remove('fc-auth-sheet-open');clearAuthError();}
+  function setAuthContext({title,text}={}){const el=document.getElementById('fcAuthContext');if(!el)return;if(!title){el.classList.remove('show');el.innerHTML='';return;}el.innerHTML=`<strong>${safe(title)}</strong><span>${safe(text||'')}</span>`;el.classList.add('show');}
+  function pendingVote(){try{return JSON.parse(localStorage.getItem(PENDING_VOTE_KEY)||'null');}catch(e){return null}}
+  function setAuthContextFromPending(){const p=pendingVote();if(p)setAuthContext({title:`Save your vote in “${p.challengeTitle||'this challenge'}”`,text:'Create an account or log in. You get one vote per challenge, can change it until voting closes, and see standings after your vote.'});else setAuthContext();}
+
+  async function loadPublicChallenges(){
+    const token=++publicLoadToken;
+    try{
+      const {data:chs,error}=await db.from('challenges')
+        .select('id,title,category,media_type,submission_deadline,voting_start,voting_end,created_at,is_public,creator_id,is_championship,creator:profiles!challenges_creator_id_fkey(id,name,avatar)')
+        .eq('is_public',true).order('created_at',{ascending:false}).limit(18);
+      if(error)throw error;if(token!==publicLoadToken)return;
+      publicChallenges=(chs||[]).filter(ch=>['submitting','voting','sudden_death'].includes(statusOf(ch)));
+      const ids=publicChallenges.map(c=>c.id);
+      publicEntries=[];
+      if(ids.length){
+        const {data:ens,error:ee}=await db.from('entries')
+          .select('id,challenge_id,user_id,media_url,media_type,poster_url,caption,moderation_status,submitter:profiles!entries_user_id_fkey(id,name,avatar)')
+          .in('challenge_id',ids).or('moderation_status.is.null,moderation_status.eq.clear,moderation_status.eq.approved');
+        if(!ee)publicEntries=ens||[];
+      }
+      renderPublicLanding();
+    }catch(err){console.warn('public landing load',err);renderPublicFallback();}
+  }
+  function entriesFor(ch){return publicEntries.filter(e=>String(e.challenge_id)===String(ch.id));}
+  function featureScore(ch){const s=statusOf(ch),n=entriesFor(ch).length;return (s==='voting'||s==='sudden_death'?100:0)+(n>=2?40:n*8)+(ch.is_championship?15:0);}
+  function renderPublicLanding(){
+    if(!publicChallenges.length){renderPublicFallback();return;}
+    const ordered=[...publicChallenges].sort((a,b)=>featureScore(b)-featureScore(a));
+    const feature=ordered[0], entries=entriesFor(feature).slice(0,2), status=statusOf(feature);renderFeature(feature,entries,status);
+    renderMore(ordered.slice(1,4).length?ordered.slice(1,4):ordered.slice(0,3));
+  }
+  function renderFeature(ch,entries,status){
+    const box=document.getElementById('fcPublicFeature');if(!box)return;const t=splitTitle(ch.title),voting=status==='voting'||status==='sudden_death';
+    const end=voting?ch.voting_end:ch.submission_deadline;
+    let entryHTML='';
+    if(entries.length){entryHTML=entries.map(e=>`<article class="fc-public-entry" tabindex="0" data-public-entry="${safe(e.id)}" data-public-ch="${safe(ch.id)}"><div class="fc-public-entry-media">${entryMedia(e,ch.category)}</div><div class="fc-public-entry-body"><div class="fc-public-entry-user"><span class="fc-public-entry-avatar">${avatar(e.submitter?.avatar)}</span><span>${safe(e.submitter?.name||'Competitor')}</span></div><button type="button" class="fc-public-vote-btn">${voting?'Vote for this entry':'View this entry'}</button></div></article>`).join('');}
+    else entryHTML=`<div class="fc-public-loading" style="grid-column:1/-1;min-height:260px"><div><b>Be the first entrant.</b><span>This challenge is open now.</span></div></div>`;
+    box.innerHTML=`<div class="fc-public-live-head"><span class="fc-live-pill">${voting?'Voting live':'Open for entries'}</span><span class="fc-public-countdown">${voting?'Voting':'Entries'} close in ${safe(countdown(end))}</span></div><h2 id="fcPublicFeatureTitle">${safe(t.name)}</h2><p class="fc-public-prompt">${safe(t.prompt||(`Submit a ${String(ch.media_type||'entry').toLowerCase()} for this ${ch.category||''} challenge.`))}</p><div class="fc-public-entry-grid">${entryHTML}</div><div class="fc-public-rule"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg><span>${voting?'Pick one entry. Create an account to save your vote. You may change it until voting closes; standings appear after you vote.':'Create an account to enter. A challenge needs at least two entrants to produce a winner.'}</span></div>`;
+    box.querySelectorAll('[data-public-entry]').forEach(card=>{
+      const e=entries.find(x=>String(x.id)===card.dataset.publicEntry);
+      const go=()=>voting?selectPublicVote(ch,e,card):openAuthSheet('signup',{title:`Enter “${t.name}”`,text:'Create an account, then submit your work before entries close.'});
+      card.addEventListener('click',go);card.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();go();}});
+    });
+  }
+  function renderMore(list){const el=document.getElementById('fcPublicMore');if(!el)return;el.innerHTML=list.map(ch=>{const t=splitTitle(ch.title),en=entriesFor(ch),first=en[0],s=statusOf(ch),end=(s==='voting'||s==='sudden_death')?ch.voting_end:ch.submission_deadline;return `<article class="fc-public-ch-card"><div class="fc-public-ch-media">${first?entryMedia(first,ch.category):'<span style="font-size:35px;color:#ff9254">◇</span>'}</div><div class="fc-public-ch-body"><div class="fc-public-ch-meta">${safe(ch.category||'Challenge')} · ${s==='voting'||s==='sudden_death'?'Vote now':'Open to enter'}</div><h3>${safe(t.name)}</h3><p>${en.length} ${en.length===1?'entry':'entries'} · ${s==='voting'||s==='sudden_death'?'Voting':'Entries'} close in ${safe(countdown(end))}</p><button type="button" class="fc-public-ch-action" data-more-ch="${safe(ch.id)}">${s==='voting'||s==='sudden_death'?'See the matchup':'Enter challenge'}</button></div></article>`}).join('');
+    el.querySelectorAll('[data-more-ch]').forEach(btn=>btn.addEventListener('click',()=>{const ch=publicChallenges.find(c=>String(c.id)===btn.dataset.moreCh);const s=ch&&statusOf(ch);if(ch&&(s==='voting'||s==='sudden_death')){const feature=document.getElementById('fcPublicFeature');renderFeature(ch,entriesFor(ch).slice(0,2),s);feature?.scrollIntoView({behavior:'smooth',block:'center'});}else openAuthSheet('signup',{title:'Enter this challenge',text:'Create an account, add your entry, and let the crowd decide.'});}));
+  }
+  function renderPublicFallback(){
+    const box=document.getElementById('fcPublicFeature');if(box)box.innerHTML='<div class="fc-public-loading"><div><b>Live competitions are loading.</b><span>Log in or create an account to see every open challenge.</span><div style="margin-top:18px"><button class="fc-public-primary" type="button" data-public-auth="signup">Create account</button></div></div></div>';
+    const more=document.getElementById('fcPublicMore');if(more)more.innerHTML=['Photography','Music','Cooking'].map((c,i)=>`<article class="fc-public-ch-card"><div class="fc-public-ch-media"><span style="font-size:38px;color:#ff9254">${['▣','♫','◇'][i]}</span></div><div class="fc-public-ch-body"><div class="fc-public-ch-meta">${c}</div><h3>Compete in what you make.</h3><p>Live challenges appear here when connected.</p><button class="fc-public-ch-action" data-public-auth="signup">Create account</button></div></article>`).join('');
+    document.querySelectorAll('[data-public-auth]').forEach(b=>{if(!b.dataset.fcWired){b.dataset.fcWired='1';b.addEventListener('click',()=>openAuthSheet(b.dataset.publicAuth||'signup'));}});
+  }
+  function selectPublicVote(ch,e,card){
+    document.querySelectorAll('.fc-public-entry').forEach(x=>x.classList.toggle('selected',x===card));
+    card.querySelector('.fc-public-vote-btn').textContent='Your pick ✓';
+    const title=splitTitle(ch.title).name;
+    try{localStorage.setItem(PENDING_VOTE_KEY,JSON.stringify({challengeId:ch.id,entryId:e.id,challengeTitle:title,at:Date.now()}));localStorage.setItem(PUBLIC_SEEN_KEY,'1');}catch(err){}
+    setTimeout(()=>openAuthSheet('signup',{title:`Save your vote in “${title}”`,text:'Create an account or log in. You get one vote per challenge and can change it until voting closes.'}),260);
+  }
+
+  async function resumePublicExperience(){
+    const p=pendingVote();let applied=false;
+    if(p&&state.profile){
+      const ch=(state.challenges||[]).find(c=>String(c.id)===String(p.challengeId));
+      if(ch&&['voting','sudden_death'].includes(statusOf(ch))){
+        try{
+          switchView('challenges');await openChallenge(ch);
+          if((state.currentEntries||[]).some(e=>String(e.id)===String(p.entryId))){await voteOnEntry(p.entryId);applied=true;voteWasApplied=true;}
+        }catch(e){console.warn('pending public vote',e)}
+      }
+      try{localStorage.removeItem(PENDING_VOTE_KEY);}catch(e){}
+    }
+    const isNew=(()=>{try{return localStorage.getItem(NEW_SIGNUP_KEY)==='1';}catch(e){return false}})();
+    if(isNew){try{localStorage.setItem(TOUR_KEY,'1');}catch(e){}setTimeout(()=>openFirstUse(applied),applied?700:900);}
+  }
+
+  function firstUseKey(){return FIRST_USE_PREFIX+(state.profile?.id||'anon')}
+  function openFirstUse(voteApplied){
+    if(!state.profile)return;try{if(localStorage.getItem(firstUseKey()))return;}catch(e){}
+    voteWasApplied=!!voteApplied;fuStep=1;fuInterests=new Set(state.profile.interests||[]);fuFollows=new Set();renderFirstUse();document.getElementById('fcFirstUseSheet')?.classList.add('open');
+  }
+  function progress(){return `<div class="fc-fu-progress">${[1,2,3,4].map(i=>`<i class="${i<=fuStep?'on':''}"></i>`).join('')}</div>`}
+  function renderFirstUse(){const panel=document.getElementById('fcFirstUsePanel');if(!panel)return;if(fuStep===1){panel.innerHTML=`${progress()}<div class="fc-fu-kicker">YOU'RE IN</div><h2>${voteWasApplied?'Your vote is saved.':'You have seen the competition. Now make it yours.'}</h2>${voteWasApplied?'<div class="fc-fu-vote-confirm"><div class="fc-fu-check">✓</div><div><b>One vote recorded</b><span>You may change your choice until voting closes.</span></div></div>':'<p class="fc-fu-copy">FlamesChallenge is built around real entries, one crowd vote, and a visible winner.</p>'}<div class="fc-fu-rulebox"><b>How voting works</b><br>One vote per person, per challenge. Results stay hidden until you vote or the challenge ends. A creator cannot manufacture a result with only one entrant.</div><div class="fc-fu-actions"><button class="fc-fu-next" data-fu-next>Choose your interests →</button></div>`;}
+    else if(fuStep===2){panel.innerHTML=`${progress()}<div class="fc-fu-kicker">PERSONALIZE COMPETE</div><h2>What do you actually want to see?</h2><p class="fc-fu-copy">Pick the categories Ember should use when recommending challenges.</p><div class="fc-fu-interests">${INTEREST_DEFS.map(d=>`<button type="button" class="fc-fu-interest ${fuInterests.has(d.key)?'on':''}" data-fu-interest="${safe(d.key)}">${d.icon} ${safe(d.key)}</button>`).join('')}</div><div class="fc-fu-actions"><button class="fc-fu-back" data-fu-back>Back</button><button class="fc-fu-next" data-fu-save-interests ${fuInterests.size?'':'disabled'}>Find creators →</button></div>`;panel.querySelectorAll('[data-fu-interest]').forEach(b=>b.onclick=()=>{const k=b.dataset.fuInterest;if(fuInterests.has(k))fuInterests.delete(k);else fuInterests.add(k);renderFirstUse();});}
+    else if(fuStep===3){panel.innerHTML=`${progress()}<div class="fc-fu-kicker">BUILD YOUR FEED</div><h2>Creators in your lanes.</h2><p class="fc-fu-copy">Follow people who compete in the categories you chose. You can change this later.</p><div class="fc-fu-creators" id="fcFuCreators">${fuSuggestions.length?creatorRows():'<div style="padding:22px;text-align:center;color:#a99d95">Finding creators…</div>'}</div><div class="fc-fu-actions"><button class="fc-fu-back" data-fu-back>Back</button><button class="fc-fu-next" data-fu-save-follows>Continue →</button></div>`;if(!fuSuggestions.length)loadFuCreators();wireCreatorRows();}
+    else{panel.innerHTML=`${progress()}<div class="fc-fu-kicker">YOUR NEXT MOVE</div><h2>Compete now or put your own prompt in front of the crowd.</h2><p class="fc-fu-copy">The setup is done. Choose the action that starts your record.</p><div class="fc-fu-choices"><button class="fc-fu-choice primary" data-fu-enter><b>Enter a live challenge →</b><span>Find an open competition matched to your interests.</span></button><button class="fc-fu-choice" data-fu-create><b>Start your own →</b><span>Set the prompt, collect entries, and let the crowd decide.</span></button></div>`;}
+    wireFu();
+  }
+  function wireFu(){const p=document.getElementById('fcFirstUsePanel');if(!p)return;p.querySelector('[data-fu-next]')?.addEventListener('click',()=>{fuStep=2;renderFirstUse()});p.querySelector('[data-fu-back]')?.addEventListener('click',()=>{fuStep=Math.max(1,fuStep-1);renderFirstUse()});p.querySelector('[data-fu-save-interests]')?.addEventListener('click',saveFuInterests);p.querySelector('[data-fu-save-follows]')?.addEventListener('click',saveFuFollows);p.querySelector('[data-fu-enter]')?.addEventListener('click',()=>finishFu('enter'));p.querySelector('[data-fu-create]')?.addEventListener('click',()=>finishFu('create'));}
+  async function saveFuInterests(){if(!fuInterests.size)return;const btn=document.querySelector('[data-fu-save-interests]');if(btn){btn.disabled=true;btn.textContent='Saving…'};const vals=[...fuInterests];try{await db.from('profiles').update({interests:vals}).eq('id',state.profile.id);state.profile.interests=vals;}catch(e){console.warn('first use interests',e)}fuStep=3;fuSuggestions=[];renderFirstUse();}
+  async function loadFuCreators(){try{const {data}=await db.from('profiles').select('id,name,avatar,interests').neq('id',state.profile.id).limit(100);const chosen=fuInterests;fuSuggestions=(data||[]).map(p=>({...p,overlap:(p.interests||[]).filter(i=>chosen.has(i)).length})).filter(p=>p.overlap>0).sort((a,b)=>b.overlap-a.overlap).slice(0,5);if(!fuSuggestions.length)fuSuggestions=(data||[]).slice(0,5);renderFirstUse();}catch(e){fuSuggestions=[];const el=document.getElementById('fcFuCreators');if(el)el.innerHTML='<div style="padding:20px;text-align:center;color:#a99d95">Creator suggestions will appear in your feed.</div>';}}
+  function creatorRows(){return fuSuggestions.map(p=>`<div class="fc-fu-creator"><div class="fc-fu-creator-avatar">${avatar(p.avatar)}</div><div class="fc-fu-creator-info"><b>${safe(p.name||'Creator')}</b><span>${p.overlap?`${p.overlap} shared interest${p.overlap===1?'':'s'}`:'Active creator'}</span></div><button type="button" class="fc-fu-follow ${fuFollows.has(p.id)?'on':''}" data-fu-follow="${safe(p.id)}">${fuFollows.has(p.id)?'Following ✓':'+ Follow'}</button></div>`).join('')}
+  function wireCreatorRows(){document.querySelectorAll('[data-fu-follow]').forEach(b=>b.onclick=()=>{const id=b.dataset.fuFollow;if(fuFollows.has(id))fuFollows.delete(id);else fuFollows.add(id);renderFirstUse();});}
+  async function saveFuFollows(){if(fuFollows.size){try{const rows=[...fuFollows].map(id=>({follower_id:state.profile.id,followee_id:id}));await db.from('follows').upsert(rows,{onConflict:'follower_id,followee_id',ignoreDuplicates:true});fuFollows.forEach(id=>state.myFollowing.add(id));}catch(e){console.warn('first use follows',e)}}fuStep=4;renderFirstUse();}
+  function finishFu(action){try{localStorage.setItem(firstUseKey(),'1');localStorage.removeItem(NEW_SIGNUP_KEY);localStorage.setItem(TOUR_KEY,'1');}catch(e){}document.getElementById('fcFirstUseSheet')?.classList.remove('open');if(action==='create')openCreateChallenge();else{state.cFilter='active';switchView('challenges');}}
+
+  // Existing signup previously asked for interests before email verification.
+  // v1013 defers that until after the person has seen a real competition and signed in.
+  window.fcOriginalShowInterestPicker=typeof showInterestPicker==='function'?showInterestPicker:null;
+  showInterestPicker=function(){try{localStorage.setItem(NEW_SIGNUP_KEY,'1');localStorage.setItem(PUBLIC_SEEN_KEY,'1');}catch(e){}showVerifyScreen();};
+
+  const baseShowAuth=showAuth;
+  showAuth=function(){baseShowAuth.apply(this,arguments);activateLanding();};
+  const baseShowApp=showApp;
+  showApp=function(){document.getElementById('authView')?.classList.remove('fc-auth-sheet-open');return baseShowApp.apply(this,arguments);};
+  const baseLoadAppData=loadAppData;
+  loadAppData=async function(){const r=await baseLoadAppData.apply(this,arguments);setTimeout(resumePublicExperience,250);return r;};
+
+  // Make the experience reachable immediately even if the auth SDK reported
+  // a signed-out session before this final enhancement script executed.
+  ensureDOM();
+  if(!state.session&&document.getElementById('authView')?.style.display!=='none')activateLanding();
+  window.fcOpenPublicAuth=openAuthSheet;
+})();
+</script>
+
 </body>
 </html>
