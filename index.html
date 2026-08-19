@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v796 · promote-sheet" />
-<meta name="fc-whatsnew" content="Promote screen rebuilt for phones — nothing gets cut off." />
+<meta name="fc-build" content="v797 · flyer-thumbs" />
+<meta name="fc-whatsnew" content="See each flyer style before you pick it. Save and Share are separate now." />
 
 <meta property="og:title" content="Flames Challenge — Where Opinions Ignite" />
 <meta property="og:description" content="Vote on what matters. Challenge your friends. Take the title." />
@@ -5535,7 +5535,28 @@ body.theme-light .champ-ticker {
 .ticker-item .ember-inline { vertical-align: middle; margin-right: 2px; }
 
 /* ── v784 flyer style picker ── */
-.promote-styles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+/* v797 step 2 — four visual thumbnails in a row. Each shows the real template
+   so the difference is legible without tapping through all four. */
+.promote-styles {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 8px; margin-top: 12px;
+}
+.promote-styles .pstyle {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 6px 4px 8px;
+}
+.promote-styles .pstyle img {
+  width: 100%; aspect-ratio: 168 / 210;
+  object-fit: cover; border-radius: 7px; display: block;
+  background: var(--overlay-1);
+  border: 1px solid var(--border);
+}
+.promote-styles .pstyle.on img { border-color: var(--ember); }
+.promote-styles .pstyle span {
+  font-size: 11.5px; font-weight: 700; line-height: 1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+}
+.promote-actions .btn { font-size: 12.5px; padding: 10px 6px; }
 .pstyle { flex: 1; padding: 10px 8px; border-radius: 12px; cursor: pointer;
   background: var(--surface); border: 1px solid var(--border); color: var(--text-muted);
   font-family: inherit; font-size: 13px; font-weight: 700; }
@@ -7302,11 +7323,21 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
     <input type="file" id="promoteFileInput" accept="image/*" style="display:none" onchange="onPromoteFileSelected(this)" />
     <!-- v784 — style picker. Slot-based templates: same content, different
          dressing. More styles slot in here without touching the renderer. -->
+    <!-- v797 step 2 — visual thumbnails, not text pills. Four emoji beside four
+         words told you nothing about how the flyers actually differ; you had to
+         tap each one to find out. The thumbnails are real renders of each
+         template, ~8 KB each.
+         NOTE: the attribute is data-Fthumb, not data-thumb — data-thumb is
+         already owned by the video poster pipeline (_validateVideoPosters). -->
     <div class="promote-styles" id="promoteStyles">
-      <button class="pstyle on"  data-fstyle="ember"   onclick="setFlyerStyle('ember')">🔥 Classic</button>
-      <button class="pstyle"     data-fstyle="wanted"  onclick="setFlyerStyle('wanted')">🤠 Wanted</button>
-      <button class="pstyle"     data-fstyle="news"    onclick="setFlyerStyle('news')">📰 Chronicle</button>
-      <button class="pstyle"     data-fstyle="tearoff" onclick="setFlyerStyle('tearoff')">📌 Tear-off</button>
+      <button class="pstyle on"  data-fstyle="ember"   onclick="setFlyerStyle('ember')">
+        <img src="" data-fthumb="ember" alt="" loading="lazy"><span>Classic</span></button>
+      <button class="pstyle"     data-fstyle="wanted"  onclick="setFlyerStyle('wanted')">
+        <img src="" data-fthumb="wanted" alt="" loading="lazy"><span>Wanted</span></button>
+      <button class="pstyle"     data-fstyle="news"    onclick="setFlyerStyle('news')">
+        <img src="" data-fthumb="news" alt="" loading="lazy"><span>Chronicle</span></button>
+      <button class="pstyle"     data-fstyle="tearoff" onclick="setFlyerStyle('tearoff')">
+        <img src="" data-fthumb="tearoff" alt="" loading="lazy"><span>Tear-off</span></button>
     </div>
     <!-- v789 — the ONE piece of template furniture worth opening up. On a real
          wanted poster the reward is the funniest line; everything else
@@ -7337,8 +7368,11 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       <div style="font-size:13px;color:var(--text-muted);margin-bottom:8px;">Choose a group:</div>
       <div id="flyerGroupList" style="display:flex;flex-direction:column;gap:6px;max-height:160px;overflow-y:auto;"></div>
     </div>
+    <!-- v797 step 2 — Save and Share were one button doing two jobs.
+         promoteSave() already existed; it just had nothing to call it. -->
     <div class="promote-actions" style="margin-top:12px;">
-      <button class="btn btn-ghost" onclick="promoteShare()">📤 Share / Save</button>
+      <button class="btn btn-ghost" onclick="promoteSave()">💾 Save image</button>
+      <button class="btn btn-ghost" onclick="promoteShare()">📤 Share</button>
       <button class="btn btn-ghost" onclick="promoteCopy()">🔗 Copy link</button>
     </div>
     </div><!-- /.pm-body -->
@@ -11718,6 +11752,7 @@ async function openPromote(type, item) {
       <div style="font-size:14px;margin-bottom:16px;line-height:1.5">Building your flyer…</div>
       <button onclick="userGeneratePromoteFlyer()" style="background:linear-gradient(135deg,var(--ember),var(--flame));color:#fff;border:none;border-radius:24px;padding:11px 22px;font-weight:700;font-size:14px;cursor:pointer">🎨 Generate flyer</button>
     </div>`;
+  wireFlyerThumbs();
   document.getElementById('promoteModal').classList.add('open');
   updatePromoteMediaButtons();
   // Build it right away — the hero preload below runs in parallel and a style
@@ -11779,6 +11814,19 @@ async function generatePromoteFlyer() { return renderPromoteFlyer(); }
 // Explicit user action: generate the flyer on demand from the promote modal.
 // v784 — switching style re-bakes immediately so the preview always matches
 // the selection. promoteState.style is read by renderPromoteFlyer.
+/* v797 step 2 — point the style thumbnails at their assets. Done in JS rather
+   than hardcoded src attributes so the Storage base URL stays in one place.
+   Lazily: they only load when the Promote sheet is first opened. */
+let _fthumbsWired = false;
+function wireFlyerThumbs() {
+  if (_fthumbsWired) return;
+  _fthumbsWired = true;
+  document.querySelectorAll('#promoteStyles img[data-fthumb]').forEach(img => {
+    img.src = FLYER_ASSET_BASE + `flyer-thumb-${img.dataset.fthumb}.webp`;
+    img.onerror = () => { img.style.display = 'none'; };  // label still reads fine
+  });
+}
+
 function setFlyerStyle(style) {
   if (!promoteState) return;
   promoteState.style = style;
