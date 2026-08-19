@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1001 — Ember Production System</title>
+<title>FlamesChallenge v1002 — Interest-Aware Guidance</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1001 · ember-production-system" />
-<meta name="fc-whatsnew" content="Ember now uses the approved competition-host design across guidance, commentary, tours, profiles, and Ask Ember." />
+<meta name="fc-build" content="v1002 · interest-aware-guidance" />
+<meta name="fc-whatsnew" content="Ember now recommends challenges from your interests and participation history, explains the challenge, and gives a role-aware next action." />
 
 <meta property="og:title" content="FlamesChallenge — Create. Compete. Get Crowned." />
 <meta property="og:description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
@@ -328,11 +328,12 @@ html { scroll-padding-top: var(--nav-h); }
   flex-shrink: 0;
 }
 .brand-logo-img {
-  width: 185%; height: 185%;
-  max-width: none;
-  object-fit: cover;
+  width: 100%; height: 100%;
+  max-width: 100%;
+  object-fit: contain;
   display: block;
   flex-shrink: 0;
+  transform: none;
 }
 .brand-mark {
   width: 32px; height: 32px;
@@ -6304,6 +6305,37 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
 .ember-guidance-art .ember-prod,.fc-purpose-ember .ember-prod{border-radius:16px}
 @media(prefers-reduced-motion:reduce){.ember-prod,.ember-prod:before,.ember-prod:after,.ember-prod img{animation:none!important;transition:none!important}}
 </style>
+
+<style id="fc-v1002-interest-css">
+/* v1002 — interim brand-mark repair. Full identity redesign is a separate workstream. */
+.brand-icon-wrap{background:#090605;box-shadow:0 0 0 1px rgba(255,255,255,.04) inset}
+.brand-logo-img{width:100%!important;height:100%!important;object-fit:contain!important;transform:none!important}
+
+/* Purpose explains the loop once, then gets out of the way after participation. */
+.fc-purpose-card{padding:14px;gap:12px}
+.fc-purpose-ember{width:58px;flex-basis:58px}
+.fc-purpose-copy h2{font-size:17px;line-height:1.18;margin-bottom:4px}
+.fc-purpose-copy p{margin-bottom:9px}
+
+/* Interest-aware recommendation card. */
+.ember-guidance-card.challenge-recommendation{align-items:flex-start;padding:15px;gap:13px;cursor:pointer;background:linear-gradient(145deg,rgba(255,106,44,.075),rgba(255,255,255,.025));border-color:rgba(255,106,44,.22)}
+.challenge-recommendation .ember-guidance-art{width:58px;flex-basis:58px;margin-top:14px}
+.ember-rec-kicker{font-size:10px;line-height:1.3;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--ember-bright);margin-bottom:5px}
+.ember-rec-type{font-size:11px;font-weight:750;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px}
+.ember-rec-title{font-family:var(--font-bricolage);font-size:18px!important;line-height:1.15;margin:0 0 5px!important;color:var(--text)}
+.ember-rec-description{font-size:13px!important;line-height:1.42!important;color:var(--text-dim)!important;margin:0 0 7px!important}
+.ember-rec-relation{font-size:12px;line-height:1.35;color:var(--text);font-weight:650;margin-bottom:5px}
+.ember-rec-meta{font-size:11px;line-height:1.3;color:var(--text-muted);font-variant-numeric:tabular-nums}
+.ember-guidance-action{appearance:none;border:1px solid rgba(255,106,44,.45);background:rgba(255,106,44,.10);border-radius:999px;color:var(--ember-bright);font:inherit;font-size:12px;font-weight:800;white-space:nowrap;padding:9px 11px;align-self:center;cursor:pointer;position:relative;z-index:2}
+.ember-guidance-action:active{transform:scale(.98)}
+@media(max-width:520px){
+  .ember-guidance-card.challenge-recommendation{display:grid!important;grid-template-columns:52px minmax(0,1fr);align-items:start}
+  .challenge-recommendation .ember-guidance-art{width:52px;flex-basis:52px;margin-top:15px;grid-row:1}
+  .challenge-recommendation .ember-guidance-main{grid-column:2;grid-row:1}
+  .challenge-recommendation .ember-guidance-action{grid-column:2;justify-self:start;align-self:auto;margin-top:10px}
+}
+</style>
+
 </head>
 <body>
 <!-- v690 — View-as-member banner. Deliberately loud and impossible to miss: the
@@ -6590,8 +6622,8 @@ body.theme-light .cd-medal.bronze { color: #7a4a1a; }
       <div class="fc-purpose-ember" id="fcPurposeEmber"></div>
       <div class="fc-purpose-copy">
         <div class="fc-purpose-label">HOW FLAMESCHALLENGE WORKS</div>
-        <h2 id="fcPurposeTitle">Create or enter a challenge. The crowd votes. Winners advance.</h2>
-        <p>Start a competition, submit your work, vote once, and build toward monthly Championships.</p>
+        <h2 id="fcPurposeTitle">Create or enter a challenge. The crowd votes. Winners earn Boost.</h2>
+        <p>Submit your work, cast one vote per challenge, and climb toward monthly Championships.</p>
         <div class="fc-purpose-actions">
           <button class="btn btn-primary" onclick="switchView('challenges')">Enter a live challenge</button>
           <button class="btn btn-ghost" onclick="openCreateChallenge()">Start your own</button>
@@ -22809,9 +22841,15 @@ function buildEmberContext() {
       name: state.profile.name,
       wins: state.myWLT?.wins || 0,
       losses: state.myWLT?.losses || 0,
-      streak: state.myWLT?.streak || 0
+      streak: state.myWLT?.streak || 0,
+      interests: Array.isArray(state.profile.interests) ? state.profile.interests : [],
+      enteredCategories: [...new Set((state.myRecord || []).map(r => r.challenge?.category).filter(Boolean))]
     } : null,
-    competition: { openCount, votingCount },
+    competition: {
+      openCount,
+      votingCount,
+      recommendation: window.__emberLastRecommendation || null
+    },
     challenge: ch ? {
       id: ch.id,
       title: ch.title,
@@ -26437,35 +26475,215 @@ document.addEventListener('click', (e) => {
   function renderPurposeCard(){
     const card=document.getElementById('fcPurposeCard'); if(!card) return;
     let dismissed=false; try{ dismissed=localStorage.getItem('fc-purpose-dismissed-v1')==='1'; }catch(e){}
-    card.style.display=dismissed?'none':'flex';
+    const uid=state.profile?.id;
+    const hasEntered=!!Object.keys(state.myEnteredCh || {}).length || !!(state.myRecord || []).length;
+    const hasCreated=!!uid && (state.challenges || []).some(ch=>ch.creator_id===uid);
+    const hasVoted=state.emberVotedChallengeIds instanceof Set && state.emberVotedChallengeIds.size>0;
+    card.style.display=(dismissed || hasEntered || hasCreated || hasVoted)?'none':'flex';
     const art=document.getElementById('fcPurposeEmber'); if(art) art.innerHTML=emberFace(70,'wave');
   }
+  let emberVoteCacheUser = null;
+  let emberVoteCacheAt = 0;
+
+  function emberNorm(value){ return String(value || '').trim().toLowerCase(); }
+  function emberMediaLabel(ch){
+    const raw = String(ch?.media_type || 'entry').trim();
+    return raw ? raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase() : 'Entry';
+  }
+  function emberShort(text, max=118){
+    const clean = String(text || '').replace(/\s+/g,' ').trim();
+    if(!clean) return '';
+    return clean.length <= max ? clean : clean.slice(0, max - 1).trimEnd() + '…';
+  }
+  function emberInstruction(ch){
+    const supplied = emberShort(ch?.rules || ch?.description || ch?.prompt || '', 118);
+    if(supplied) return supplied;
+    const media = emberNorm(ch?.media_type);
+    const category = emberNorm(ch?.category);
+    if(media === 'photo' || category === 'photography') return 'Submit a photo that answers this challenge.';
+    if(media === 'video') return 'Submit a video that answers this challenge.';
+    if(media === 'audio' || category === 'music') return 'Submit an audio entry that answers this challenge.';
+    if(media === 'text' || category === 'writing') return 'Submit a written entry that answers this challenge.';
+    if(category === 'cooking') return 'Submit your dish or cooking entry for the crowd to judge.';
+    if(category === 'fitness') return 'Submit a fitness entry that meets the challenge rules.';
+    return 'Submit work that answers the challenge prompt.';
+  }
+  function emberEntryFor(ch){
+    const uid = state.profile?.id;
+    if(!uid || !ch) return null;
+    return (state.feedEntries || []).find(e => e.challenge_id === ch.id && e.user_id === uid)
+      || (state.currentEntries || []).find(e => e.challenge_id === ch.id && e.user_id === uid)
+      || null;
+  }
+  function emberHasEntered(ch){
+    return !!(state.myEnteredCh && state.myEnteredCh[ch.id])
+      || !!emberEntryFor(ch)
+      || (state.myRecord || []).some(r => r.challenge?.id === ch.id);
+  }
+  async function hydrateEmberVoteContext(force=false){
+    const uid = state.profile?.id;
+    if(!uid){ state.emberVotedChallengeIds = new Set(); return; }
+    if(!force && emberVoteCacheUser === uid && Date.now() - emberVoteCacheAt < 300000 && state.emberVotedChallengeIds instanceof Set) return;
+    try{
+      const { data, error } = await db.from('entry_votes').select('challenge_id').eq('voter_id', uid).limit(2000);
+      if(error) throw error;
+      state.emberVotedChallengeIds = new Set((data || []).map(v => v.challenge_id).filter(Boolean));
+      emberVoteCacheUser = uid;
+      emberVoteCacheAt = Date.now();
+    }catch(e){
+      state.emberVotedChallengeIds = state.emberVotedChallengeIds instanceof Set ? state.emberVotedChallengeIds : new Set();
+      console.warn('Ember vote context', e);
+    }
+  }
+  function emberPreferenceProfile(){
+    const explicit = new Set((state.profile?.interests || []).map(emberNorm).filter(Boolean));
+    const history = new Map();
+    (state.myRecord || []).forEach(r => {
+      const cat = emberNorm(r.challenge?.category);
+      if(!cat) return;
+      let points = 2;
+      if(r.result === 'won') points += 3;
+      if(r.result === 'pending') points += 1;
+      history.set(cat, (history.get(cat) || 0) + points);
+    });
+    return { explicit, history };
+  }
+  function emberDeadlineScore(ch, status){
+    const raw = status === 'submitting' ? ch.submission_deadline : ch.voting_end;
+    const end = raw ? Date.parse(raw) : NaN;
+    if(!Number.isFinite(end)) return 0;
+    const hours = Math.max(0, (end - Date.now()) / 3600000);
+    if(hours <= 3) return 24;
+    if(hours <= 12) return 18;
+    if(hours <= 24) return 13;
+    if(hours <= 72) return 7;
+    return 0;
+  }
+  function emberMoveAction(ch, status){
+    const uid = state.profile?.id;
+    const creator = !!uid && ch.creator_id === uid;
+    const entered = emberHasEntered(ch);
+    const voted = state.emberVotedChallengeIds instanceof Set && state.emberVotedChallengeIds.has(ch.id);
+    const myEntry = emberEntryFor(ch);
+
+    if(status === 'submitting'){
+      if(creator) return { label:'Promote challenge', relation:'You created this challenge.', run:()=>openPromote('challenge', ch) };
+      if(entered) return { label:'Edit your entry', relation:'You already entered and can still make changes.', run:()=>{ state.currentChallenge=ch; myEntry ? openSubmitEntry(myEntry) : openChallenge(ch); } };
+      return { label:'Enter challenge', relation:(state.entryCounts[ch.id]||0)===1?'It needs a second entrant to produce a result.':'It is open for entries now.', run:()=>{ state.currentChallenge=ch; openSubmitEntry(); } };
+    }
+    if(['voting','sudden_death'].includes(status)){
+      return voted
+        ? { label:'View voting', relation:'You already voted. You can review the matchup before voting closes.', run:()=>openChallenge(ch) }
+        : { label:'Vote now', relation:'You have not voted in this challenge yet.', run:()=>openChallenge(ch) };
+    }
+    return { label:'View result', relation:'The result is ready.', run:()=>openChallenge(ch) };
+  }
+  function emberRecommendationReason(ch, profile, explicitMatch, historyPoints, followed){
+    const category = String(ch.category || 'this category');
+    if(explicitMatch) return `Matches your ${category} interest`;
+    if(historyPoints > 0) return `Based on your recent ${category} participation`;
+    if(followed) return 'From a creator you follow';
+    if(profile.explicit.size) return 'No live challenge currently matches your saved interests';
+    return 'Recommended from the strongest live options';
+  }
   function chooseEmberMove(){
-    const all=state.challenges||[];
-    const voting=all.find(ch=>['voting','sudden_death'].includes(computeChallengeStatus(ch)));
-    if(voting) return {pose:'point',title:'A vote is waiting',text:`“${voting.title}” is live now${voting.voting_end?` · ${safeCountdown(voting.voting_end)} left`:''}.`,action:'Vote now',run:()=>openChallenge(voting)};
-    const open=all.filter(ch=>computeChallengeStatus(ch)==='submitting').sort((a,b)=>(state.entryCounts[a.id]||0)-(state.entryCounts[b.id]||0))[0];
-    if(open) return {pose:(state.entryCounts[open.id]||0)<2?'sweat':'attentive',title:'Your next move',text:`“${open.title}” is open with ${state.entryCounts[open.id]||0} entr${(state.entryCounts[open.id]||0)===1?'y':'ies'}${open.submission_deadline?` · ${safeCountdown(open.submission_deadline)} left`:''}.`,action:'View challenge',run:()=>openChallenge(open)};
-    return {pose:'wave',title:'Start the next competition',text:'No live challenge needs your attention. Put a prompt in front of the crowd and let them decide.',action:'Start a challenge',run:()=>openCreateChallenge()};
+    const all = (state.challenges || []).filter(ch => {
+      const st = computeChallengeStatus(ch);
+      return ['submitting','voting','sudden_death'].includes(st) && (ch.is_public !== false || ch.creator_id === state.profile?.id);
+    });
+    const profile = emberPreferenceProfile();
+    const followed = state.myFollowing instanceof Set ? state.myFollowing : new Set();
+
+    if(!all.length) return {pose:'wave',title:'Start the next competition',text:'No live challenge needs your attention. Put a prompt in front of the crowd and let them decide.',action:'Start a challenge',run:()=>openCreateChallenge()};
+
+    const evaluated = all.map(ch => {
+      const status = computeChallengeStatus(ch);
+      const cat = emberNorm(ch.category);
+      const explicitMatch = profile.explicit.has(cat);
+      const historyPoints = profile.history.get(cat) || 0;
+      const followsCreator = followed.has(ch.creator_id);
+      const action = emberMoveAction(ch, status);
+      let score = 0;
+      if(explicitMatch) score += 120;
+      score += Math.min(historyPoints * 8, 48);
+      if(followsCreator) score += 18;
+      score += emberDeadlineScore(ch, status);
+      if(status === 'voting' && action.label === 'Vote now') score += 34;
+      if(status === 'submitting' && action.label === 'Enter challenge') score += 28;
+      if(status === 'submitting' && (state.entryCounts[ch.id] || 0) === 1) score += 12;
+      if(ch.is_championship) score += 8;
+      return { ch, status, explicitMatch, historyPoints, followsCreator, action, score };
+    });
+
+    // Explicit interests are a hard first choice whenever a matching live challenge exists.
+    const explicitMatches = evaluated.filter(x => x.explicitMatch);
+    let pool = explicitMatches.length ? explicitMatches : evaluated.filter(x => x.historyPoints > 0 || x.followsCreator);
+
+    // Do not quietly recommend an unrelated category when the user has saved interests.
+    if(!pool.length && profile.explicit.size){
+      const labels = [...profile.explicit].map(x => x.charAt(0).toUpperCase()+x.slice(1));
+      return {
+        pose:'attentive',
+        title:'No live match for your interests yet',
+        text:`Nothing open currently matches ${labels.slice(0,3).join(', ')}${labels.length>3?' and your other interests':''}. Browse all challenges or update your interests.`,
+        action:'Browse challenges',
+        run:()=>switchView('challenges')
+      };
+    }
+    if(!pool.length) pool = evaluated;
+    pool.sort((a,b)=>b.score-a.score);
+    const best = pool[0];
+    const ch = best.ch;
+    const count = state.entryCounts[ch.id] || 0;
+    const deadline = best.status === 'submitting' ? ch.submission_deadline : ch.voting_end;
+    const deadlineLabel = best.status === 'submitting' ? 'Entries close' : 'Voting ends';
+    const reason = emberRecommendationReason(ch, profile, best.explicitMatch, best.historyPoints, best.followsCreator);
+    return {
+      pose: best.status === 'voting' || best.status === 'sudden_death' ? 'point' : count < 2 ? 'concerned' : 'attentive',
+      title:'Your next move',
+      challenge:ch,
+      category:String(ch.category || 'Challenge'),
+      media:emberMediaLabel(ch),
+      description:emberInstruction(ch),
+      reason,
+      relation:best.action.relation,
+      meta:`${count} entr${count===1?'y':'ies'}${deadline ? ` · ${deadlineLabel} in ${safeCountdown(deadline)}` : ''}`,
+      action:best.action.label,
+      run:best.action.run
+    };
   }
   function paintGuidance(el,move){
     if(!el||!move) return;
     el.style.display='flex';
-    el.innerHTML=`<div class="ember-guidance-art">${emberFace(46,move.pose)}</div><div class="ember-guidance-main"><strong>${escapeHtml(move.title)}</strong><p>${escapeHtml(move.text)}</p></div><span class="ember-guidance-action">${escapeHtml(move.action)} →</span>`;
-    el.onclick=move.run;
+    el.classList.toggle('challenge-recommendation', !!move.challenge);
+    if(move.challenge){
+      el.innerHTML=`<div class="ember-guidance-art">${emberFace(54,move.pose)}</div><div class="ember-guidance-main"><div class="ember-rec-kicker">${escapeHtml(move.reason)}</div><div class="ember-rec-type">${escapeHtml(move.category)} · ${escapeHtml(move.media)}</div><strong class="ember-rec-title">${escapeHtml(move.challenge.title || 'Untitled challenge')}</strong><p class="ember-rec-description">${escapeHtml(move.description)}</p><div class="ember-rec-relation">${escapeHtml(move.relation)}</div><div class="ember-rec-meta">${escapeHtml(move.meta)}</div></div><button type="button" class="ember-guidance-action" data-ember-guidance-action>${escapeHtml(move.action)} <span aria-hidden="true">→</span></button>`;
+      const actionBtn=el.querySelector('[data-ember-guidance-action]');
+      if(actionBtn) actionBtn.onclick=(event)=>{event.stopPropagation();move.run();};
+      el.onclick=(event)=>{if(!event.target.closest('[data-ember-guidance-action]'))move.run();};
+    }else{
+      el.innerHTML=`<div class="ember-guidance-art">${emberFace(46,move.pose)}</div><div class="ember-guidance-main"><strong>${escapeHtml(move.title)}</strong><p>${escapeHtml(move.text)}</p></div><button type="button" class="ember-guidance-action" data-ember-guidance-action>${escapeHtml(move.action)} <span aria-hidden="true">→</span></button>`;
+      const actionBtn=el.querySelector('[data-ember-guidance-action]');
+      if(actionBtn) actionBtn.onclick=(event)=>{event.stopPropagation();move.run();};
+      el.onclick=(event)=>{if(!event.target.closest('[data-ember-guidance-action]'))move.run();};
+    }
   }
-  function renderEmberGuidance(){
+  async function renderEmberGuidance(){
+    await hydrateEmberVoteContext();
     renderPurposeCard();
     const move=chooseEmberMove();
+    window.__emberLastRecommendation = move.challenge ? { id:move.challenge.id, title:move.challenge.title, category:move.category, reason:move.reason, action:move.action } : null;
     paintGuidance(document.getElementById('emberHomeCard'),move);
     const c=document.getElementById('emberCompeteCard');
     if(c){
-      const open=(state.challenges||[]).filter(ch=>computeChallengeStatus(ch)==='submitting').length;
-      const voting=(state.challenges||[]).filter(ch=>['voting','sudden_death'].includes(computeChallengeStatus(ch))).length;
-      paintGuidance(c,{pose:voting?'point':'attentive',title:voting?`${voting} vote${voting===1?'':'s'} live`:`${open} open challenge${open===1?'':'s'}`,text:voting?'The crowd is deciding now. Ask me which competition needs your attention.':'Choose a challenge, submit the work, and let the crowd decide.',action:'Ask Ember',run:()=>openEmber()});
+      const interests=(state.profile?.interests || []).filter(Boolean);
+      const relevant=(state.challenges||[]).filter(ch=>['submitting','voting','sudden_death'].includes(computeChallengeStatus(ch)) && (!interests.length || interests.map(emberNorm).includes(emberNorm(ch.category))));
+      const voting=relevant.filter(ch=>['voting','sudden_death'].includes(computeChallengeStatus(ch))).length;
+      paintGuidance(c,{pose:voting?'point':'attentive',title:interests.length?'Challenges matched to your interests':'Choose your competition',text:interests.length?`${relevant.length} live challenge${relevant.length===1?'':'s'} match your saved categories.`:'Add interests to improve what Ember recommends.',action:'Ask Ember',run:()=>openEmber()});
     }
   }
-  function initEmberV2(){
+  async function initEmberV2(){
+    await hydrateEmberVoteContext();
     renderPurposeCard();
     renderEmberGuidance();
   }
