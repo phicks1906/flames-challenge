@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1021 — Native Challenge Creation</title>
+<title>FlamesChallenge v1022 — Challenge Creation Clarity & State Fix</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1021 · native-challenge-creation" />
-<meta name="fc-whatsnew" content="Challenge creation is now a native four-step flow with draft autosave, step validation, explicit host-or-compete selection, safer media handling, recommended timing, and a final launch preview." />
+<meta name="fc-build" content="v1022 · challenge-creation-clarity-state-fix" />
+<meta name="fc-whatsnew" content="Challenge creation now uses clearer language, concise context-aware Ember title ideas, honest caption assistance, a corrected host-only state, concrete timing guidance, and plain-language sudden-death rules." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -7000,6 +7000,29 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
 @media(max-width:360px){.cc-native-progress-item b{display:none}.cc-native-progress-item{min-width:30px}.cc-media-grid{grid-template-columns:1fr!important}}
 </style>
 
+
+<style id="fc-v1022-challenge-creation-clarity-css">
+/* v1022 — clarity, honest Ember assistance, and state correctness. */
+#createChallengeSheet .cc-native-progress{
+  position:relative!important;
+  top:auto!important;
+  z-index:1!important;
+}
+#createChallengeSheet .cc-host-note[hidden]{display:none!important}
+#createChallengeSheet .cc-recommended-timing span{line-height:1.35}
+#createChallengeSheet .cc-toggle-row>div{min-width:0}
+#createChallengeSheet .cc-toggle-row span{max-width:510px}
+#createChallengeSheet .fc-sug-chip.fc-v1022-title-idea .fc-sug-kind,
+#createChallengeSheet .fc-sug-chip.fc-v1022-caption-idea .fc-sug-kind{color:#ff9860}
+#createChallengeSheet .fc-v1022-ember-note{
+  padding:12px 13px;border:1px solid rgba(255,126,67,.20);border-radius:12px;
+  background:rgba(255,94,38,.045);color:#a99c94;font-size:12px;line-height:1.45
+}
+@media(max-width:520px){
+  #createChallengeSheet .cc-native-progress{padding-top:4px!important;margin-bottom:18px!important}
+}
+</style>
+
 </head>
 <body>
 <!-- v690 — View-as-member banner. Deliberately loud and impossible to miss: the
@@ -7553,15 +7576,15 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
       </div>
 
       <div class="cc-native-heading">
-        <div class="cc-step-title" id="uxCcStepHeading">Step 1 of 4 · The challenge</div>
-        <div class="cc-step-sub" id="uxCcStepSub">Define what people are competing to create.</div>
+        <div class="cc-step-title" id="uxCcStepHeading">Step 1 of 4 · Set the challenge</div>
+        <div class="cc-step-sub" id="uxCcStepSub">Name the challenge, choose a category, and select what entrants will submit.</div>
         <div class="cc-draft-status" id="ccDraftStatus" aria-live="polite"></div>
       </div>
 
       <section class="cc-step active" data-ux-step="1">
         <div class="cc-step-body">
           <div class="cc-field">
-            <label for="ccTitle">Challenge title <span class="hint">Make the contest clear at a glance</span><button type="button" class="fc-sug-btn" onclick="suggestChallengeIdea(this)">Ask Ember</button></label>
+            <label for="ccTitle">Challenge name <span class="hint">Keep it short and clear</span><button type="button" class="fc-sug-btn" onclick="suggestChallengeTitleV1022(this)">Ask Ember</button></label>
             <input id="ccTitle" type="text" maxlength="80" required placeholder="e.g. Best Sunset Photo This Week" />
             <div class="fc-sug-box" id="ccTitleSugBox"></div>
           </div>
@@ -7621,14 +7644,14 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
           </div>
 
           <div class="cc-field" id="ccCaptionField">
-            <label for="ccCaption">Entry caption <span class="hint">Optional</span><button type="button" class="fc-sug-btn" onclick="suggestCaption(this,'cc')">Ask Ember</button></label>
+            <label for="ccCaption">Entry caption <span class="hint">Optional</span><button type="button" class="fc-sug-btn" onclick="suggestCaptionV1022(this,'cc')">Polish with Ember</button></label>
             <input id="ccCaption" type="text" maxlength="120" placeholder="Add context without explaining the whole entry." />
             <div class="fc-sug-box" id="ccCaptionSugBox"></div>
           </div>
 
           <div class="cc-host-note" id="ccHostOnlyNote" hidden>
-            <strong>You can enter later.</strong>
-            <span>The challenge will open without your work. You can submit while the entry window is open.</span>
+            <strong>Hosting without an entry</strong>
+            <span>The challenge will open without your work. You can still enter before entries close.</span>
           </div>
         </div>
         <div class="cc-step-actions cc-native-actions">
@@ -7639,7 +7662,7 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
 
       <section class="cc-step" data-ux-step="3">
         <div class="cc-step-body">
-          <div class="cc-recommended-timing"><span>RECOMMENDED</span><strong>3 days to enter · 2 days to vote</strong><small>Long enough to collect work without letting the challenge lose momentum.</small></div>
+          <div class="cc-recommended-timing"><span>RECOMMENDED FOR MOST CHALLENGES</span><strong>3 days for entries · 2 days for voting</strong><small>5 days from launch to result.</small></div>
 
           <div class="cc-field">
             <label>Time to enter</label>
@@ -7671,7 +7694,7 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
 
           <div class="cc-field">
             <div class="cc-toggle-row">
-              <div><strong>Sudden death on a tie</strong><span>Tied entrants submit fresh hidden work, followed by a final vote.</span></div>
+              <div><strong>Sudden death on a tie</strong><span>If voting ends tied, only the tied entrants submit a new entry. The new entries are revealed together when the runoff vote opens.</span></div>
               <label class="cc-switch"><input type="checkbox" id="ccSuddenDeathCheck"><span id="ccSuddenDeathSlider"></span></label>
             </div>
           </div>
@@ -27122,7 +27145,7 @@ document.addEventListener('click', (e) => {
   /* ---------- Four-step challenge creation ---------- */
   let uxCcStep = 1;
   const stepLabels = [
-    ['The challenge','Define what people are competing to create.'],
+    ['Set the challenge','Name the challenge, choose a category, and select what entrants will submit.'],
     ['Your entry','Choose whether you are competing, then add your work.'],
     ['Timing & voting','Set the entry window, voting window, and tie behavior.'],
     ['Audience & launch','Choose who can participate, review, and launch.']
@@ -28410,7 +28433,7 @@ window.__fcLandingDeduplication={
   const DRAFT_VERSION=1;
   let step=1, saveTimer=null, restoring=false, openedOnce=false, suppressCloseSave=false;
   const labels=[
-    ['The challenge','Define what people are competing to create.'],
+    ['Set the challenge','Name the challenge, choose a category, and select what entrants will submit.'],
     ['Your entry','Choose whether you are competing, then add your work.'],
     ['Timing & voting','Use the recommended pace or set exact dates.'],
     ['Audience & launch','Choose who can participate, then review everything before launch.']
@@ -28537,7 +28560,126 @@ window.__fcLandingDeduplication={
 </script>
 
 <script id="fc-v1021-native-challenge-creation-marker">
-window.__fcNativeChallengeCreation={build:'v1021',steps:['challenge','entry','timing','audience-and-launch'],draftAutosave:true,finalPreview:true,videoHandling:'original upload with duration guidance; no audio-damaging browser re-encode'};
+window.__fcNativeChallengeCreation={build:'v1022',steps:['challenge','entry','timing','audience-and-launch'],draftAutosave:true,finalPreview:true,videoHandling:'original upload with duration guidance; no audio-damaging browser re-encode',clarityAndStateFix:true};
+</script>
+
+
+<script id="fc-v1022-challenge-creation-clarity-js">
+(function(){
+  'use strict';
+  const endpoint = typeof SUGGEST_ENDPOINT !== 'undefined'
+    ? SUGGEST_ENDPOINT
+    : 'https://sioalvawzayfphwzqctq.supabase.co/functions/v1/suggest-content';
+
+  const fallbackTitles = {
+    Art: ['One Theme, Your Style','Color Without Limits','Make the Ordinary New'],
+    Photography: ['Golden Hour Silhouettes','Reflection Play','Street Geometry'],
+    Music: ['Best Original Hook','One-Take Chorus','Soundtrack the Moment'],
+    Writing: ['The Last Line Wins','A Story in 100 Words','Open With Impact'],
+    Cooking: ['One Plate, One Winner','Best Comfort Food','The Ingredient Challenge'],
+    Style: ['Best Look, One Theme','Statement Piece Challenge','Style It Your Way'],
+    Sports: ['Best Skill Shot','Clutch Moment Challenge','Precision Under Pressure'],
+    Fitness: ['Form First','Strongest Finish','The One-Minute Challenge'],
+    Comedy: ['Best 30-Second Bit','Turn This Into a Joke','Funniest Take Wins'],
+    Other: ['Show Us Your Best','One Prompt, Your Way','The Crowd Decides']
+  };
+
+  function cleanTitle(raw){
+    let s=String(raw||'').replace(/^\s*(simple|competitive|scroll[- ]stopping|title idea|option\s*\d*)\s*[:\-–—]\s*/i,'').trim();
+    s=s.split(/\r?\n/)[0].trim();
+    const colon=s.indexOf(':'); if(colon>2)s=s.slice(0,colon).trim();
+    const dash=s.search(/\s[—–]\s/); if(dash>2)s=s.slice(0,dash).trim();
+    s=s.replace(/^["'“”]+|["'“”]+$/g,'').replace(/[.!?]+$/,'').trim();
+    if(s.length>56){s=s.slice(0,56).replace(/\s+\S*$/,'').trim()}
+    return s.length>=3?s:'';
+  }
+  function unique(list){return [...new Set(list.map(x=>String(x||'').trim()).filter(Boolean))]}
+  function fallbackFor(category){return fallbackTitles[category]||fallbackTitles.Other}
+  function renderIdeas(box,target,ideas,kind){
+    box.innerHTML='';
+    ideas.forEach(idea=>{
+      const chip=document.createElement('button');
+      chip.type='button';
+      chip.className=`fc-sug-chip fc-v1022-${kind}-idea`;
+      chip.innerHTML=`<span class="fc-sug-kind">${kind==='title'?'Title idea':'Caption option'}</span><span>${escapeHtml(idea)}</span>`;
+      chip.onclick=()=>{
+        target.value=idea.slice(0,target.maxLength>0?target.maxLength:idea.length);
+        target.dispatchEvent(new Event('input',{bubbles:true}));
+        box.innerHTML='';
+      };
+      box.appendChild(chip);
+    });
+    const tip=document.createElement('div');tip.className='fc-sug-note';tip.textContent='Tap one to use it. You can edit it before continuing.';box.appendChild(tip);
+  }
+
+  window.suggestChallengeTitleV1022=async function(btn){
+    const box=document.getElementById('ccTitleSugBox'),target=document.getElementById('ccTitle');
+    if(!box||!target)return;
+    const original=btn.textContent;btn.disabled=true;btn.textContent='Thinking…';box.innerHTML='';
+    const category=ccState.category||'Other',media=ccState.mediaType||'entry',seed=target.value.trim(),rules=document.getElementById('ccRules')?.value.trim()||'';
+    try{
+      const resp=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        kind:'challenge',category,
+        context:`Return only short challenge names. No instructions, subtitles, colons, or explanations. Category: ${category}. Entry format: ${media}. Existing name seed: ${seed||'none'}. Existing rules context: ${rules||'none'}.`
+      })});
+      const data=await resp.json().catch(()=>({}));
+      let ideas=Array.isArray(data.ideas)?data.ideas.map(cleanTitle).filter(Boolean):[];
+      ideas=unique([...ideas,...fallbackFor(category)]).slice(0,3);
+      renderIdeas(box,target,ideas,'title');
+    }catch(e){
+      renderIdeas(box,target,fallbackFor(category).slice(0,3),'title');
+    }finally{btn.disabled=false;btn.textContent=original}
+  };
+
+  function significantTokens(seed){return String(seed||'').toLowerCase().match(/[a-z0-9']{4,}/g)||[]}
+  function safeCaptionIdeas(rawIdeas,seed){
+    const tokens=significantTokens(seed);
+    const cleaned=unique((rawIdeas||[]).map(x=>String(x||'').replace(/^\s*(clear|energetic|scroll[- ]stopping|caption option)\s*[:\-–—]\s*/i,'').trim()).filter(Boolean));
+    if(!tokens.length)return cleaned.slice(0,3);
+    return cleaned.filter(x=>tokens.some(t=>x.toLowerCase().includes(t))).slice(0,3);
+  }
+  window.suggestCaptionV1022=async function(btn,which){
+    if(which!=='cc'){return window.suggestCaption?.(btn,which)}
+    const box=document.getElementById('ccCaptionSugBox'),target=document.getElementById('ccCaption');if(!box||!target)return;
+    const seed=target.value.trim();
+    if(!seed){
+      box.innerHTML='<div class="fc-v1022-ember-note">Add a few accurate words about what appears in your entry first. Ember will polish your wording without inventing details.</div>';
+      target.focus();return;
+    }
+    const original=btn.textContent;btn.disabled=true;btn.textContent='Polishing…';box.innerHTML='';
+    try{
+      const title=document.getElementById('ccTitle')?.value.trim()||'';
+      const resp=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        kind:'caption',category:ccState.category||'',
+        context:`Polish this caption without adding any people, places, actions, objects, emotions, or facts that are not already stated: "${seed}". Challenge: ${title||'untitled'}. Entry format: ${ccState.mediaType||'entry'}.`
+      })});
+      const data=await resp.json().catch(()=>({}));
+      const ideas=safeCaptionIdeas(Array.isArray(data.ideas)?data.ideas:[],seed);
+      if(!ideas.length){
+        box.innerHTML='<div class="fc-v1022-ember-note">Ember could not improve that caption without adding details. Your original wording is safer.</div>';
+      }else renderIdeas(box,target,ideas,'caption');
+    }catch(e){
+      box.innerHTML='<div class="fc-v1022-ember-note">Ember could not be reached. Your caption has not been changed.</div>';
+    }finally{btn.disabled=false;btn.textContent=original}
+  };
+
+  // Enforce the host-only note state even if older CSS or restored drafts try to expose it.
+  function syncHostNote(){
+    const note=document.getElementById('ccHostOnlyNote');if(!note)return;
+    const competing=ccState.competeSelf!==false;
+    note.hidden=competing;
+    note.style.display=competing?'none':'';
+  }
+  const priorSet=window.uxSetCompeteSelf;
+  window.uxSetCompeteSelf=function(value){const r=priorSet?.apply(this,arguments);syncHostNote();return r};
+  const priorShow=window.uxCcShowStep;
+  window.uxCcShowStep=function(value){const r=priorShow?.apply(this,arguments);syncHostNote();return r};
+  document.addEventListener('DOMContentLoaded',syncHostNote,{once:true});
+  if(document.readyState!=='loading')syncHostNote();
+})();
+</script>
+<script id="fc-v1022-challenge-creation-clarity-marker">
+window.__fcChallengeCreationClarity={build:'v1022',stepOneLanguage:'set-the-challenge',titleSuggestions:'short titles only',captionSuggestions:'seed required; no invented details',hostStateFix:true,timingCopy:'concrete',suddenDeathCopy:'revealed together for runoff'};
 </script>
 
 </body>
