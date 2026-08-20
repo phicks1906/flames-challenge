@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1027 — Update Activation Fix</title>
+<title>FlamesChallenge v1028 — Titles, Boost & Championships</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1027 · update-activation-fix" />
-<meta name="fc-whatsnew" content="The Update button now closes the banner immediately, clears stale app caches, and opens the newest deployed index directly on iPhone and installed-app sessions." />
+<meta name="fc-build" content="v1028 · titles-boost-championships" />
+<meta name="fc-whatsnew" content="Titles now opens with your rank, Boost, Championship-line position, time remaining, and the next action that can move you forward." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -7134,6 +7134,68 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
 }
 </style>
 
+
+<style id="fc-v1028-titles-css">
+/* v1028 — Titles answers position, qualification, and next action before showing the full board. */
+#leaderboardViewSection .section-head{margin-bottom:10px}
+#leaderboardViewSection .section-sub{max-width:48ch}
+.lb-category-tabs{margin:0 0 12px;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.lb-category-tabs::-webkit-scrollbar{display:none}
+.lb-category-tabs .ch-tab{flex:0 0 auto;white-space:nowrap}
+.lb-section-label{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:17px 2px 8px;text-transform:uppercase;letter-spacing:.12em;font-size:10px;font-weight:850;color:var(--text)}
+.lb-section-label small{font-size:9px;font-weight:650;letter-spacing:.04em;text-transform:none;color:var(--text-muted)}
+
+.lb-race-card{position:relative;overflow:hidden;border:1px solid var(--border-bright);border-radius:20px;background:linear-gradient(145deg,#171310 0%,#0d0c0b 72%);margin:0 0 12px;padding:17px;box-shadow:0 14px 36px rgba(0,0,0,.24)}
+.lb-race-card::after{content:"";position:absolute;right:-78px;bottom:-92px;width:210px;height:210px;border-radius:50%;background:radial-gradient(circle,rgba(255,106,44,.16),transparent 68%);pointer-events:none}
+.lb-race-card.qualified{border-color:rgba(255,200,87,.5);background:linear-gradient(145deg,rgba(255,200,87,.11),#0d0c0b 70%)}
+.lb-race-card.leading{border-color:rgba(255,106,44,.58);background:linear-gradient(145deg,rgba(255,106,44,.14),#0d0c0b 72%)}
+.lb-race-card.champion{border-color:rgba(255,200,87,.72);background:linear-gradient(145deg,rgba(255,200,87,.19),rgba(90,45,8,.10) 48%,#0d0c0b)}
+.lb-race-card.live{border-color:rgba(255,106,44,.7);box-shadow:0 0 30px rgba(255,80,30,.12)}
+.lb-race-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;position:relative;z-index:1}
+.lb-race-eyebrow{font-size:9px;font-weight:850;letter-spacing:.15em;text-transform:uppercase;color:var(--text-muted);margin-bottom:5px}
+.lb-race-status{font-family:var(--font-bricolage);font-size:22px;line-height:1.05;font-weight:850;letter-spacing:-.025em;color:var(--text)}
+.lb-race-status span{color:var(--gold)}
+.lb-race-pill{flex:0 0 auto;border:1px solid var(--border-bright);border-radius:999px;padding:6px 9px;font-size:9px;font-weight:850;letter-spacing:.09em;text-transform:uppercase;color:var(--text-dim);background:rgba(255,255,255,.035)}
+.lb-race-card.qualified .lb-race-pill,.lb-race-card.champion .lb-race-pill{color:var(--gold);border-color:rgba(255,200,87,.42);background:rgba(255,200,87,.08)}
+.lb-race-card.leading .lb-race-pill,.lb-race-card.live .lb-race-pill{color:var(--ember-bright);border-color:rgba(255,106,44,.44);background:rgba(255,106,44,.08)}
+.lb-race-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:15px 0 12px;position:relative;z-index:1}
+.lb-race-metric{min-width:0;padding:10px 7px;border:1px solid var(--border);border-radius:13px;background:rgba(255,255,255,.025)}
+.lb-race-metric b{display:block;font-family:var(--font-anton);font-size:22px;line-height:1;color:var(--text);font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lb-race-metric b.gold{color:var(--gold)}
+.lb-race-metric span{display:block;margin-top:5px;color:var(--text-muted);font-size:8px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lb-race-track{height:6px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;position:relative;z-index:1}
+.lb-race-track i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--ember),var(--gold));box-shadow:0 0 12px rgba(255,106,44,.35)}
+.lb-race-line{display:flex;justify-content:space-between;gap:12px;margin-top:7px;font-size:10px;color:var(--text-muted);position:relative;z-index:1}
+.lb-race-line strong{color:var(--text-dim)}
+.lb-race-next{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;padding-top:13px;border-top:1px solid var(--border);position:relative;z-index:1}
+.lb-race-copy{min-width:0}
+.lb-race-copy b{display:block;font-size:12px;color:var(--text);margin-bottom:3px}
+.lb-race-copy span{display:block;font-size:11.5px;line-height:1.4;color:var(--text-muted)}
+.lb-race-actions{display:flex;gap:7px;flex:0 0 auto}
+.lb-race-btn{border:1px solid rgba(255,106,44,.48);background:rgba(255,106,44,.09);color:var(--ember-bright);border-radius:999px;padding:9px 12px;font:800 10.5px/1 var(--font-dm);white-space:nowrap;cursor:pointer}
+.lb-race-btn.primary{border:0;color:white;background:linear-gradient(135deg,var(--ember),var(--flame));box-shadow:0 6px 18px rgba(255,75,35,.18)}
+.lb-race-btn:active{transform:scale(.98)}
+
+.lb-how-compact{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.lb-how-compact .lb-how-item{margin:0!important;padding:11px!important;border:1px solid var(--border);border-radius:13px;background:rgba(255,255,255,.025);align-items:flex-start}
+.lb-how-num{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;flex:0 0 24px;border:1px solid rgba(255,106,44,.45);color:var(--ember-bright);font-size:10px;font-weight:850}
+.lb-how-compact strong{display:block;font-size:11.5px;line-height:1.3;margin-bottom:3px}
+.lb-how-compact span{display:block;color:var(--text-muted);font-size:10.5px;line-height:1.4}
+
+.bd-standing{margin:-3px 0 13px;text-align:center;color:var(--text-muted);font-size:11.5px;line-height:1.4}
+.bd-standing b{color:var(--text)}
+
+@media(max-width:520px){
+  .lb-race-card{padding:15px}
+  .lb-race-status{font-size:20px}
+  .lb-race-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .lb-race-next{align-items:flex-start;flex-direction:column}
+  .lb-race-actions{width:100%}
+  .lb-race-btn{flex:1;text-align:center;padding:10px 9px}
+  .lb-how-compact{grid-template-columns:1fr}
+}
+</style>
+
 </head>
 <body>
 <!-- v690 — View-as-member banner. Deliberately loud and impossible to miss: the
@@ -7580,36 +7642,16 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
   <div class="section">
     <div class="section-head">
       <div>
-        <h2 class="section-title">Your path to the crown</h2>
-        <p class="section-sub">Win challenges. Earn Boost. Finish top three. Fight for the crown. · <a class="lb-how-link" onclick="toggleLbHow()">How it works</a></p>
+        <h2 class="section-title">Titles & Championships</h2>
+        <p class="section-sub">Your monthly position, what moves it, and what to do next. · <a class="lb-how-link" onclick="toggleLbHow()">Rules</a></p>
       </div>
     </div>
     <div class="lb-how-card" id="lbHowCard" style="display:none">
-      <div class="lb-how-body" id="lbHowBody">
-        <div class="lb-how-item">
-          <div class="lb-how-icon">🏆</div>
-          <div><strong>Win challenges, earn Boost</strong> — Every win earns Boost based on who you beat: stronger opponents and bigger turnouts are worth more. Beating a Spark earns 1; taking down a G.O.A.T. earns 24. Tap any Boost number to see exactly how it was earned.</div>
-        </div>
-        <div class="lb-how-item">
-          <div class="lb-how-icon">🥇</div>
-          <div><strong>Make the top 3</strong> — The race is ranked by Boost, not win count — five easy wins won't outrank one hard one. The gold Championship Line marks who qualifies; tied Boost shares the spot, and everyone tied advances.</div>
-        </div>
-        <div class="lb-how-item">
-          <div class="lb-how-icon">⚡</div>
-          <div><strong>Championship Week</strong> — On the last day of the month, every category's top 3 are invited at once. Four days to enter, three days to vote, and on the seventh night every crown drops together at 8 PM ET.</div>
-        </div>
-        <div class="lb-how-item">
-          <div class="lb-how-icon">👑</div>
-          <div><strong>Take the title</strong> — Win Championship Night to become that category's Champion — the highest title on the platform. Leading the race is a start; the crown is won on the Night.</div>
-        </div>
-        <div class="lb-how-item">
-          <div class="lb-how-icon">🌟</div>
-          <div><strong>Hall of Fame</strong> — Titles are recorded forever. Win the same one again and it stacks — "2x Champion," "3x Champion" — and championships raise your ladder rank, from Spark all the way to G.O.A.T.</div>
-        </div>
-        <div class="lb-how-item">
-          <div class="lb-how-icon">🔄</div>
-          <div><strong>Fresh every month</strong> — The race resets on the 1st. Day-one players and veterans start level; only Hall of Fame is forever.</div>
-        </div>
+      <div class="lb-how-body lb-how-compact" id="lbHowBody">
+        <div class="lb-how-item"><div class="lb-how-num">1</div><div><strong>Win public challenges.</strong><span>Each win earns Boost from opponent strength and voter turnout.</span></div></div>
+        <div class="lb-how-item"><div class="lb-how-num">2</div><div><strong>Finish above the Championship Line.</strong><span>The top three distinct Boost totals qualify. Everyone tied at the line advances.</span></div></div>
+        <div class="lb-how-item"><div class="lb-how-num">3</div><div><strong>Win the Championship.</strong><span>Qualification gets you in. The Championship vote decides the title.</span></div></div>
+        <div class="lb-how-item"><div class="lb-how-num">4</div><div><strong>The race resets; titles remain.</strong><span>Monthly Boost returns to zero. Championship titles stay in the Hall of Fame.</span></div></div>
       </div>
     </div>
 
@@ -7618,16 +7660,17 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
          One category = one story: live championship → monthly race with the
          qualification line → that category's past championships. -->
     <div class="feed-tabs" style="margin-bottom:10px" id="lbMainTabs">
-      <button class="feed-tab active" data-lbtab="rankings">📅 This Month</button>
-      <button class="feed-tab" data-lbtab="halloffame">🌟 Hall of Fame</button>
+      <button class="feed-tab active" data-lbtab="rankings">This Month</button>
+      <button class="feed-tab" data-lbtab="halloffame">Hall of Fame</button>
     </div>
-    <!-- v752 — Past pill removed; archive lives inside the Championship tab now -->
-    <div id="lbChampCountdown" style="display:none;margin-bottom:10px"></div>
 
     <!-- RANKINGS TAB -->
     <div id="lbTabRankings">
+      <div class="ch-tabs lb-category-tabs" id="lbCategoryTabs"></div>
+      <div id="lbMyRace" aria-live="polite"></div>
+      <div id="lbChampCountdown" style="display:none;margin-bottom:10px"></div>
       <div id="lbChampionBanner" style="display:none"></div>
-      <div class="ch-tabs" id="lbCategoryTabs" style="margin-bottom:12px"></div>
+      <div class="lb-section-label"><span>Monthly standings</span><small>Boost determines position</small></div>
       <div class="leaderboard" id="lbList"></div>
       <div id="lbPastWrap"></div>
     </div>
@@ -14657,6 +14700,105 @@ function pickTitlesLanding(data) {
   } catch(e) { return CATEGORIES[0]; }
 }
 
+
+function _lbMonthKeyOffsetV1028(offset) {
+  const d = new Date();
+  d.setMonth(d.getMonth() + offset);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function renderMyRaceV1028(ctx) {
+  const el = document.getElementById('lbMyRace');
+  if (!el) return;
+  const { cat, fullRanked, qualCut, raceOn, daysLeft, liveCh, champion, champTitles } = ctx;
+  const myId = state.profile?.id;
+  if (!myId) { el.innerHTML = ''; return; }
+
+  const me = fullRanked.find(u => u.id === myId) || null;
+  const myIndex = me ? fullRanked.findIndex(u => u.id === myId) : -1;
+  let myRank = null;
+  if (myIndex >= 0) {
+    myRank = 1;
+    for (let i = 1; i <= myIndex; i++) {
+      if (fullRanked[i].catBoost !== fullRanked[i - 1].catBoost) myRank = i + 1;
+    }
+  }
+  const myBoost = me?.catBoost || 0;
+  const cutoffBoost = qualCut >= 0 ? (fullRanked[qualCut]?.catBoost || 0) : 0;
+  const qualified = raceOn && me && qualCut >= 0 && myIndex <= qualCut;
+  const leading = qualified && myRank === 1;
+  const currentChampion = champion?.id === myId;
+  const previousChampion = champTitles?.[`${cat}-${_lbMonthKeyOffsetV1028(-1)}`]?.userId === myId;
+  const liveStatus = liveCh ? computeChallengeStatus(liveCh) : '';
+
+  let variant = '', label = 'Monthly race', status = 'Enter the race', nextTitle = `Win a ${cat} challenge`, nextCopy = 'Your first public win puts Boost on the board.', action = 'Find challenges', actionKind = 'compete';
+  let lineValue = cutoffBoost ? cutoffBoost : '—';
+  let gapValue = cutoffBoost ? Math.max(0, cutoffBoost - myBoost) : 'Need a win';
+
+  if (currentChampion) {
+    variant = 'champion'; label = 'Title secured'; status = `${cat} <span>Champion</span>`;
+    nextTitle = 'Your title is permanent'; nextCopy = 'It is recorded in the Hall of Fame. The next monthly race starts fresh.';
+    action = 'Hall of Fame'; actionKind = 'hall'; gapValue = 'Crowned';
+  } else if (liveCh) {
+    variant = 'live'; label = 'Championship live';
+    status = liveStatus === 'voting' || liveStatus === 'sudden_death' ? 'The crown is being decided' : 'The finalists are entering';
+    nextTitle = liveStatus === 'voting' || liveStatus === 'sudden_death' ? 'Watch the live vote' : (previousChampion ? 'Defend your title' : 'Open Championship Night');
+    nextCopy = liveStatus === 'voting' || liveStatus === 'sudden_death' ? `${cat} voting is open now.` : 'See the finalists, deadline, and entry status.';
+    action = liveStatus === 'voting' || liveStatus === 'sudden_death' ? 'Watch & vote' : 'View Championship'; actionKind = 'live'; gapValue = 'Race closed';
+  } else if (leading) {
+    variant = 'leading'; label = 'Current position'; status = 'You lead the race';
+    nextTitle = 'Protect the lead'; nextCopy = `${daysLeft <= 1 ? 'Final day.' : `${daysLeft} days remain.`} Stronger wins can widen the gap.`;
+    action = 'Find challenges'; actionKind = 'compete'; gapValue = 0;
+  } else if (qualified) {
+    variant = 'qualified'; label = 'Current position'; status = 'Above the <span>Championship Line</span>';
+    nextTitle = 'Hold your qualifying position'; nextCopy = `${daysLeft <= 1 ? 'Final day.' : `${daysLeft} days remain.`} Ties at the line also qualify.`;
+    action = 'Find challenges'; actionKind = 'compete'; gapValue = 0;
+  } else if (me && raceOn) {
+    label = 'Current position'; status = 'Chasing the Championship Line';
+    const gap = Math.max(0, cutoffBoost - myBoost);
+    nextTitle = gap > 0 ? `Close a ${gap}-Boost gap` : 'One stronger win can move you in';
+    nextCopy = 'Boost rises with opponent strength and voter turnout—not win count alone.';
+    action = 'Find challenges'; actionKind = 'compete'; gapValue = gap || 'Tied line';
+  } else if (previousChampion) {
+    variant = 'champion'; label = 'Defending champion'; status = 'Your new title defense starts at zero';
+    nextTitle = 'Re-enter the monthly race'; nextCopy = `Titles remain forever, but ${cat} Boost resets each month.`;
+    action = 'Find challenges'; actionKind = 'compete'; gapValue = 'New race';
+  }
+
+  const progress = currentChampion || liveCh || qualified || leading ? 100 : cutoffBoost > 0 ? Math.max(4, Math.min(96, Math.round((myBoost / cutoffBoost) * 100))) : 0;
+  const rankText = myRank ? `#${myRank}` : '—';
+  const timeLabel = liveCh ? 'Championship live' : currentChampion ? 'Race complete' : daysLeft <= 0 ? 'Final day' : `${daysLeft}d remaining`;
+  const lineText = cutoffBoost || '—';
+  const gapText = typeof gapValue === 'number' ? gapValue : gapValue;
+
+  el.innerHTML = `<div class="lb-race-card ${variant}">
+    <div class="lb-race-top">
+      <div><div class="lb-race-eyebrow">${escapeHtml(cat)} · ${escapeHtml(label)}</div><div class="lb-race-status">${status}</div></div>
+      <div class="lb-race-pill">${currentChampion ? 'Champion' : liveCh ? 'Live now' : qualified ? 'Qualifying' : me ? 'In the race' : 'Unranked'}</div>
+    </div>
+    <div class="lb-race-metrics">
+      <div class="lb-race-metric"><b>${rankText}</b><span>Your rank</span></div>
+      <div class="lb-race-metric"><b class="gold">${myBoost}</b><span>Your Boost</span></div>
+      <div class="lb-race-metric"><b>${lineText}</b><span>Line Boost</span></div>
+      <div class="lb-race-metric"><b>${escapeHtml(String(gapText))}</b><span>${qualified ? 'Gap behind' : 'Gap to line'}</span></div>
+    </div>
+    <div class="lb-race-track"><i style="width:${progress}%"></i></div>
+    <div class="lb-race-line"><span>${currentChampion ? 'Title recorded in the Hall of Fame' : liveCh ? 'Monthly qualification is closed' : progress ? `${progress}% of current line` : 'Win once to establish a position'}</span><strong>${timeLabel}</strong></div>
+    <div class="lb-race-next">
+      <div class="lb-race-copy"><b>${escapeHtml(nextTitle)}</b><span>${escapeHtml(nextCopy)}</span></div>
+      <div class="lb-race-actions">
+        ${me ? '<button class="lb-race-btn" data-race-action="boost">Boost history</button>' : ''}
+        <button class="lb-race-btn primary" data-race-action="${actionKind}">${escapeHtml(action)}</button>
+      </div>
+    </div>
+  </div>`;
+
+  el.querySelector('[data-race-action="boost"]')?.addEventListener('click', () => openBoostSheet(myId, cat));
+  el.querySelector('[data-race-action="compete"]')?.addEventListener('click', () => switchView('challenges'));
+  el.querySelector('[data-race-action="live"]')?.addEventListener('click', () => { if (liveCh) openChallenge(liveCh); });
+  el.querySelector('[data-race-action="hall"]')?.addEventListener('click', () => document.querySelector('[data-lbtab="halloffame"]')?.click());
+}
+
 function renderLeaderboard() {
   const list = document.getElementById('lbList');
   const tabsEl = document.getElementById('lbCategoryTabs');
@@ -14729,22 +14871,17 @@ function renderLeaderboard() {
 
   // ── Rank users for this category ──
   const users = data.users || [];
-  const ranked = [...users]
+  const fullRanked = [...users]
     .map(u => ({
       ...u,
       catWins: cat === 'All' ? (u.monthly || 0) : (u.monthlyByCategory[cat] || 0),
       catAllTime: cat === 'All' ? (u.wins || 0) : (u.byCategory[cat] || 0),
       catLosses: u.monthlyLosses || 0,
+      catBoost: u.boostMonthByCat?.[cat] || 0,
     }))
-    .filter(u => u.catWins > 0) // wins are the GATE — you must have won something
-    // v772 — Boost is the STANDING. Five farmed Spark wins rank below one win
-    // over a strong field; that's the whole reason Boost exists. Wins then
-    // all-time break exact Boost ties for display order only (tied Boost
-    // shares the rank — and shares the championship spot).
-    .sort((a, b) => (b.boostMonthByCat?.[cat] || 0) - (a.boostMonthByCat?.[cat] || 0)
-      || b.catWins - a.catWins || b.catAllTime - a.catAllTime)
-    .slice(0, 10);
-  ranked.forEach(u => { u.catBoost = u.boostMonthByCat?.[cat] || 0; });
+    .filter(u => u.catWins > 0)
+    .sort((a, b) => b.catBoost - a.catBoost || b.catWins - a.catWins || b.catAllTime - a.catAllTime);
+  const ranked = fullRanked.slice(0, 10);
 
   // ── Champion banner ──
   // Leader = current #1 on rolling 30-day board
@@ -14843,20 +14980,25 @@ function renderLeaderboard() {
   // Only on category views, only while this category's championship hasn't launched.
   const _raceOn = !liveCh // v766 — a live championship means the race already ended
     && !(state.champLaunches || []).some(l => l.month === curMonth && l.category === cat && !l.is_sponsored);
-  const _monthWinners = ranked.filter(u => u.catWins > 0).length;
+  const _monthWinners = fullRanked.length;
   // v772 — top 3 DISTINCT Boost values qualify; everyone tied at a qualifying
   // value advances (shared spot). The cut index = last row whose Boost is
   // within the top-3 distinct values.
   let _qualCut = -1;
   if (_raceOn && _monthWinners > 0) {
-    const distinct = [...new Set(ranked.map(u => u.catBoost))].slice(0, 3);
-    for (let k = ranked.length - 1; k >= 0; k--) {
-      if (distinct.includes(ranked[k].catBoost)) { _qualCut = k; break; }
+    const distinct = [...new Set(fullRanked.map(u => u.catBoost))].slice(0, 3);
+    for (let k = fullRanked.length - 1; k >= 0; k--) {
+      if (distinct.includes(fullRanked[k].catBoost)) { _qualCut = k; break; }
     }
   }
-  const _thirdWins = _qualCut >= 0 ? ranked[_qualCut].catWins : null;
+  const _thirdWins = _qualCut >= 0 ? fullRanked[_qualCut].catWins : null;
   const _lastDayLb = new Date(now2.getFullYear(), now2.getMonth() + 1, 0);
   const _daysLeftLb = Math.max(0, Math.ceil((_lastDayLb - now2) / 86400000));
+
+  renderMyRaceV1028({
+    cat, fullRanked, qualCut: _qualCut, raceOn: _raceOn, daysLeft: _daysLeftLb,
+    liveCh, champion, champTitles
+  });
 
   ranked.forEach((u, i) => {
     const isYou = state.profile && u.id === state.profile.id;
@@ -14878,7 +15020,7 @@ function renderLeaderboard() {
         ${lbAvatar}
         <div style="min-width:0">
           <div class="lb-name">${hofNameHTML(u.id, escapeHtml(u.name))}${isYou ? ' (you)' : ''}${isChamp ? ' <span class="lb-champ-tag">👑 Champ</span>' : reigningChampChipHTML(u.id)}${isLeader && !isChamp ? ' <span class="lb-leader-tag">🔥 Leader</span>' : ''}</div>
-          <div class="lb-boostline" data-boost-uid="${u.id}" title="How this was earned">⚡ <b>${u.catBoost}</b> Boost<span class="lb-boost-info">ⓘ</span> <span class="lb-sub">· ${u.catWins}–${u.catLosses} this month${(_qualCut >= 0 && i > _qualCut) ? ` · <span class="lb-back">${(ranked[_qualCut].catBoost - u.catBoost)} Boost back</span>` : ''}</span></div>
+          <div class="lb-boostline" data-boost-uid="${u.id}" title="How this was earned">⚡ <b>${u.catBoost}</b> Boost<span class="lb-boost-info">ⓘ</span> <span class="lb-sub">· ${u.catWins}–${u.catLosses} this month${(_qualCut >= 0 && i > _qualCut) ? ` · <span class="lb-back">${(fullRanked[_qualCut].catBoost - u.catBoost)} Boost back</span>` : ''}</span></div>
           ${renderLadderChip(u.id, { showSpark: true, size: 15 })}
         </div>
       </div>
@@ -14889,7 +15031,7 @@ function renderLeaderboard() {
     const followBtn = row.querySelector('[data-lb-follow]');
     if (followBtn) followBtn.addEventListener('click', async e => { e.stopPropagation(); await lbToggleFollow(followBtn); });
     list.appendChild(row);
-    if (_qualCut >= 0 && i === _qualCut) {
+    if (_qualCut >= 0 && i === Math.min(_qualCut, ranked.length - 1)) {
       const line = document.createElement('div');
       line.className = 'lb-qual-line';
       line.innerHTML = `<i></i><span>🏆 CHAMPIONSHIP LINE · ${_daysLeftLb <= 1 ? 'LAST DAY' : _daysLeftLb + ' DAYS'}</span><i></i>`;
@@ -17988,10 +18130,10 @@ async function openBoostSheet(userId, cat) {
       <div class="bd-av">${avatarInner(u?.avatar)}</div>
       <div><div class="bd-name">${escapeHtml(name)}</div><div class="bd-month">${cat ? escapeHtml(cat) + ' · ' : ''}${monthLabel}</div></div>
     </div>
-    <div class="bd-total"><div class="bd-total-num">${total}</div><div class="bd-total-lbl">BOOST · ${wins} WIN${wins === 1 ? '' : 'S'}</div></div>
+    <div class="bd-total"><div class="bd-total-num">${total}</div><div class="bd-total-lbl">MONTHLY BOOST · ${wins} WIN${wins === 1 ? '' : 'S'}</div></div><div class="bd-standing"><b>This number sets the monthly ${cat ? escapeHtml(cat) + ' ' : ''}standing.</b><br>Each row below shows exactly what that win added.</div>
     <div class="bd-ember">${emberFace(24, pose)}<span>${line}</span></div>
     ${wins ? `<div class="bd-sec">HOW IT ADDS UP</div>${winRows}` : ''}
-    <div class="bd-rule">${emberFace(24, 'point')}<span><b>Boost rewards who you beat, not how often.</b> Every opponent is worth points by their ladder tier — a Spark is 1, a G.O.A.T. is 24. Big turnout adds more. Championships don't earn Boost; Boost is how you get to one.</span></div>`;
+    <div class="bd-rule">${emberFace(24, 'point')}<span><b>Boost is the monthly standing—not a lifetime score.</b> Public challenge wins add opponent points and turnout points. Championship wins award titles instead of Boost.</span></div>`;
 }
 
 function closeCelebration() {
