@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1017 — Session Boundary & Landing Cleanup</title>
+<title>FlamesChallenge v1018 — Public Feed Detection Fix</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1017 · session-boundary-landing-cleanup" />
-<meta name="fc-whatsnew" content="Authenticated sessions now fully dismiss the public landing, bottom navigation switches correctly, and the public proof section is shorter and more visual." />
+<meta name="fc-build" content="v1018 · public-feed-detection-fix" />
+<meta name="fc-whatsnew" content="Public challenges now load with the actual challenge schema, voting-stage challenges no longer depend on signed-in entry state, and public query failures expose useful diagnostics." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -27795,10 +27795,18 @@ document.addEventListener('click', (e) => {
     const parts=String(raw||'Challenge').split(/\s*(?::|—|\s-\s)\s*/).filter(Boolean);
     return {name:parts[0]||'Challenge',prompt:parts.slice(1).join(' — ')};
   }
+  // v1018: public phase detection must not call computeChallengeStatus().
+  // That signed-in helper depends on state.entryCounts, which is still empty before
+  // anonymous entries load and incorrectly labels valid voting challenges voided.
   function statusOf(ch){
-    try{return computeChallengeStatus(ch);}catch(e){}
-    const now=Date.now(), s=ch.submission_deadline?new Date(ch.submission_deadline).getTime():0, v=ch.voting_end?new Date(ch.voting_end).getTime():0;
-    if(s&&now<s)return 'submitting'; if(v&&now<v)return 'voting'; return 'closed';
+    const now=Date.now();
+    if(ch?.sd_phase==='submitting') return 'sd_submitting';
+    if(ch?.sd_phase==='voting') return ch.voting_end && now < new Date(ch.voting_end).getTime() ? 'sudden_death' : 'closed';
+    const s=ch?.submission_deadline?new Date(ch.submission_deadline).getTime():0;
+    const v=ch?.voting_end?new Date(ch.voting_end).getTime():0;
+    if(s&&now<s)return 'submitting';
+    if(v&&now<v)return 'voting';
+    return 'closed';
   }
   function countdown(date){
     if(!date)return '';
@@ -27908,16 +27916,27 @@ document.addEventListener('click', (e) => {
       if(token===publicLoadToken&&publicResolvedToken!==token)renderPublicFallback('slow');
     },3200);
     try{
+      // v1018: voting_start is not part of the challenge records created by this app.
+      // Requesting it made both the joined query and its fallback fail before any
+      // public rows could be returned.
+      const publicFields='id,title,category,media_type,submission_deadline,voting_end,created_at,is_public,creator_id,is_championship';
       let chResult=await db.from('challenges')
-        .select('id,title,category,media_type,submission_deadline,voting_start,voting_end,created_at,is_public,creator_id,is_championship,creator:profiles!challenges_creator_id_fkey(id,name,avatar)')
+        .select(`${publicFields},creator:profiles!challenges_creator_id_fkey(id,name,avatar)`)
         .eq('is_public',true).order('created_at',{ascending:false}).limit(18);
       if(chResult.error){
+        console.warn('public challenge query with creator join failed; retrying without profile join',chResult.error);
         chResult=await db.from('challenges')
-          .select('id,title,category,media_type,submission_deadline,voting_start,voting_end,created_at,is_public,creator_id,is_championship')
+          .select(publicFields)
           .eq('is_public',true).order('created_at',{ascending:false}).limit(18);
       }
-      if(chResult.error)throw chResult.error;if(token!==publicLoadToken)return;
-      publicChallenges=(chResult.data||[]).filter(ch=>['submitting','voting','sudden_death'].includes(statusOf(ch)));
+      if(chResult.error){
+        window.__fcPublicFeedDebug={ok:false,stage:'challenges',message:chResult.error.message||String(chResult.error),code:chResult.error.code||'',details:chResult.error.details||'',hint:chResult.error.hint||''};
+        throw chResult.error;
+      }
+      if(token!==publicLoadToken)return;
+      const publicRows=chResult.data||[];
+      publicChallenges=publicRows.filter(ch=>['submitting','voting','sudden_death'].includes(statusOf(ch)));
+      window.__fcPublicFeedDebug={ok:true,rowsReturned:publicRows.length,activeRows:publicChallenges.length,loadedAt:new Date().toISOString()};
       const ids=publicChallenges.map(c=>c.id);
       publicEntries=[];
       if(ids.length){
@@ -27934,7 +27953,7 @@ document.addEventListener('click', (e) => {
       publicResolvedToken=token;clearTimeout(publicLoadTimer);renderPublicLanding();
     }catch(err){
       if(token!==publicLoadToken)return;
-      publicResolvedToken=token;clearTimeout(publicLoadTimer);console.warn('public landing load',err);renderPublicFallback('unavailable');
+      publicResolvedToken=token;clearTimeout(publicLoadTimer);console.error('public landing load failed',window.__fcPublicFeedDebug||err,err);renderPublicFallback('unavailable');
     }
   }
   function entriesFor(ch){return publicEntries.filter(e=>String(e.challenge_id)===String(ch.id));}
@@ -28085,6 +28104,16 @@ document.addEventListener('click', (e) => {
 })();
 </script>
 
+
+<script id="fc-v1018-public-feed-detection-marker">
+// v1018 audit hook: run window.fcPublicFeedDiagnostics() in the browser console
+// after opening the logged-out landing page to inspect the latest public query.
+window.fcPublicFeedDiagnostics = function(){
+  const result = window.__fcPublicFeedDebug || {ok:false,message:'The public feed has not run yet.'};
+  console.table(result);
+  return result;
+};
+</script>
 
 <script id="fc-v1017-session-boundary-js">
 (() => {
