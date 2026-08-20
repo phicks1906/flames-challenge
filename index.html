@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1029 — Titles Screen Correction</title>
+<title>FlamesChallenge v1030 — Championship Leaderboard Redesign</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1029 · titles-screen-correction" />
-<meta name="fc-whatsnew" content="Titles now opens with your rank, Boost, Championship-line position, time remaining, and the next action that can move you forward." />
+<meta name="fc-build" content="v1030 · championship-leaderboard-redesign" />
+<meta name="fc-whatsnew" content="Titles now leads with the category Championship race, current qualifiers, cutoff, and a clearly labeled personal position." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -7665,7 +7665,7 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
     <div class="section-head">
       <div>
         <h2 class="section-title">Titles & Championships</h2>
-        <p class="section-sub">Win challenges. Earn Boost. Finish above your category’s qualification line. · <a class="lb-how-link" onclick="toggleLbHow()">Rules</a></p>
+        <p class="section-sub">Boost earned from challenge wins determines the standings. The top three Boost levels qualify; ties at the cutoff advance. · <a class="lb-how-link" onclick="toggleLbHow()">Rules</a></p>
       </div>
     </div>
     <div class="lb-how-card" id="lbHowCard" style="display:none">
@@ -7692,7 +7692,7 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
       <div id="lbMyRace" aria-live="polite"></div>
       <div id="lbChampCountdown" style="display:none;margin-bottom:10px"></div>
       <div id="lbChampionBanner" style="display:none"></div>
-      <div class="lb-section-label"><span>Monthly standings</span><small>Boost determines position</small></div>
+      <div class="lb-section-label"><span>Full standings</span><small>Boost determines position</small></div>
       <div class="leaderboard" id="lbList"></div>
       <div id="lbPastWrap"></div>
     </div>
@@ -29291,6 +29291,183 @@ window.__fcVotingExperienceIntegrity={build:'v1024',liveTallies:'superseded by v
 </script>
 <script id="fc-v1025-sudden-death-parity-marker">
 window.__fcSuddenDeathParity={build:'v1025',regularAndChampionships:'same new-entry runoff',submissionVisibility:'hidden until reveal',runoffTallies:'live',secondTie:'co-winners',noSubmissions:'co-winners',oneSubmission:'default winner',manualReview:false,extension:false};
+</script>
+
+
+<style id="fc-v1030-championship-leaderboard-css">
+/* v1030 — the category Championship race is the primary object; personal stats are secondary. */
+#leaderboardViewSection .section-head{margin-bottom:10px}
+#leaderboardViewSection .section-sub{max-width:58ch}
+#leaderboardViewSection #lbChampCountdown{display:none!important}
+#leaderboardViewSection .lb-section-label{margin-top:16px}
+
+.fc-champ-race-v1030{position:relative;overflow:hidden;margin:0 0 12px;border:1px solid rgba(255,198,94,.34);border-radius:22px;background:linear-gradient(145deg,rgba(43,31,10,.92),rgba(17,14,10,.98) 66%);box-shadow:0 18px 42px rgba(0,0,0,.28)}
+.fc-champ-race-v1030::after{content:"";position:absolute;right:-100px;top:-100px;width:260px;height:260px;border-radius:50%;background:radial-gradient(circle,rgba(255,165,45,.14),transparent 68%);pointer-events:none}
+.fc-champ-race-head{position:relative;z-index:1;padding:16px 17px 13px;border-bottom:1px solid rgba(255,255,255,.08)}
+.fc-champ-race-kicker{font-size:10px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);margin-bottom:5px}
+.fc-champ-race-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.fc-champ-race-title{font-size:24px;line-height:1.08;font-weight:900;color:var(--text)}
+.fc-champ-race-time{flex:0 0 auto;border:1px solid rgba(255,198,94,.28);border-radius:999px;padding:7px 10px;font-size:11px;font-weight:800;color:var(--gold);white-space:nowrap;background:rgba(255,198,94,.07)}
+.fc-champ-race-rule{margin-top:7px;color:var(--text-dim);font-size:12px;line-height:1.45}
+.fc-champ-race-rule strong{color:var(--text)}
+.fc-champ-cutoff{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:11px;padding:10px 11px;border-radius:12px;background:rgba(255,255,255,.045);font-size:11px;color:var(--text-dim)}
+.fc-champ-cutoff b{font-size:13px;color:var(--gold)}
+.fc-champ-leaders{position:relative;z-index:1;padding:8px 12px 13px}
+.fc-champ-leader-row{display:grid;grid-template-columns:42px minmax(0,1fr) auto;align-items:center;gap:10px;padding:11px 5px;border-bottom:1px solid rgba(255,255,255,.07)}
+.fc-champ-leader-row:last-child{border-bottom:0}
+.fc-champ-place{font-family:var(--font-display);font-size:23px;color:var(--gold);text-align:center;line-height:1}
+.fc-champ-person{display:flex;align-items:center;gap:10px;min-width:0;cursor:pointer}
+.fc-champ-person .lb-avatar{width:42px;height:42px;flex:0 0 42px}
+.fc-champ-person-copy{min-width:0}
+.fc-champ-name{font-size:14px;font-weight:850;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fc-champ-record{font-size:11px;color:var(--text-muted);margin-top:3px}
+.fc-champ-boost{text-align:right}
+.fc-champ-boost b{display:block;font-family:var(--font-display);font-size:22px;color:var(--gold);line-height:1}
+.fc-champ-boost span{display:block;margin-top:4px;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted)}
+.fc-champ-cutoff-tag{display:inline-flex;margin-top:5px;padding:3px 6px;border-radius:999px;background:rgba(255,198,94,.12);color:var(--gold);font-size:8px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
+.fc-champ-open-row{opacity:.66}
+.fc-champ-open-row .fc-champ-place{color:var(--text-muted)}
+.fc-champ-open-icon{width:42px;height:42px;border:1px dashed rgba(255,255,255,.18);border-radius:50%;display:grid;place-items:center;color:var(--text-muted);font-size:18px}
+.fc-champ-empty-name{font-size:13px;font-weight:750;color:var(--text-dim)}
+.fc-champ-empty-copy{font-size:10.5px;color:var(--text-muted);margin-top:2px}
+
+#leaderboardViewSection #lbMyRace{margin:0 0 12px}
+.fc-my-position-v1030{border:1px solid var(--border);border-radius:18px;background:linear-gradient(145deg,#151311,#0d0c0b);padding:14px 15px}
+.fc-my-position-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
+.fc-my-position-label{font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:var(--ember)}
+.fc-my-position-status{font-size:10px;font-weight:850;padding:5px 8px;border-radius:999px;border:1px solid var(--border-bright);color:var(--text-dim);white-space:nowrap}
+.fc-my-position-main{font-size:18px;font-weight:900;color:var(--text);line-height:1.25}
+.fc-my-position-meta{margin-top:5px;font-size:12px;line-height:1.45;color:var(--text-dim)}
+.fc-my-position-meta b{color:var(--gold)}
+.fc-my-position-next{margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.08);font-size:12.5px;font-weight:800;color:var(--text)}
+.fc-my-position-actions{display:flex;gap:8px;margin-top:11px}
+.fc-my-position-actions button{appearance:none;border:1px solid var(--border-bright);background:rgba(255,255,255,.03);color:var(--text);border-radius:12px;padding:10px 12px;font-size:12px;font-weight:800;cursor:pointer}
+.fc-my-position-actions button.primary{flex:1;border-color:transparent;background:linear-gradient(135deg,var(--ember),#ff392b);color:#fff}
+
+#leaderboardViewSection .lb-banner-leader{display:none!important}
+#leaderboardViewSection #lbChampionBanner:empty{display:none!important}
+#leaderboardViewSection .lb-section-label span::after{content:""}
+
+@media(max-width:520px){
+  #leaderboardViewSection .section-title{font-size:29px;line-height:1.03}
+  #leaderboardViewSection .section-sub{font-size:14.5px;line-height:1.48}
+  .fc-champ-race-head{padding:14px 14px 12px}
+  .fc-champ-race-title{font-size:21px}
+  .fc-champ-race-time{font-size:10px;padding:6px 8px}
+  .fc-champ-leaders{padding:6px 10px 11px}
+  .fc-champ-leader-row{grid-template-columns:36px minmax(0,1fr) auto;gap:8px;padding:10px 3px}
+  .fc-champ-place{font-size:20px}
+  .fc-champ-person .lb-avatar,.fc-champ-open-icon{width:38px;height:38px;flex-basis:38px}
+  .fc-champ-name{font-size:13px}
+  .fc-champ-boost b{font-size:20px}
+  .fc-my-position-v1030{padding:13px}
+  .fc-my-position-actions{flex-wrap:wrap}
+  .fc-my-position-actions button{min-height:42px}
+}
+</style>
+
+<script id="fc-v1030-championship-leaderboard-js">
+(function(){
+  function esc(v){ return typeof escapeHtml === 'function' ? escapeHtml(String(v ?? '')) : String(v ?? '').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+  function ordinal(n){ const x=Number(n)||0; const mod100=x%100; const suffix=(mod100>=11&&mod100<=13)?'th':({1:'st',2:'nd',3:'rd'}[x%10]||'th'); return `${x}${suffix}`; }
+  function monthDaysLeft(){ const now=new Date(); const next=new Date(now.getFullYear(),now.getMonth()+1,1); return Math.max(0,Math.ceil((next-now)/86400000)); }
+  function currentCategory(){ return (window.state && CATEGORIES.includes(state.lbCategory)) ? state.lbCategory : (CATEGORIES?.[0] || 'Art'); }
+  function categoryRows(cat){
+    const users=state?.leaderboardData?.users || [];
+    return [...users].map(u=>({
+      ...u,
+      catWins:u.monthlyByCategory?.[cat]||0,
+      catLosses:u.monthlyLosses||0,
+      catAllTime:u.byCategory?.[cat]||0,
+      catBoost:u.boostMonthByCat?.[cat]||0
+    })).filter(u=>u.catWins>0).sort((a,b)=>b.catBoost-a.catBoost||b.catWins-a.catWins||b.catAllTime-a.catAllTime);
+  }
+  function raceData(){
+    const cat=currentCategory();
+    const rows=categoryRows(cat);
+    const levels=[...new Set(rows.map(u=>u.catBoost))];
+    const qualifyingLevels=levels.slice(0,3);
+    const qualifiers=rows.filter(u=>qualifyingLevels.includes(u.catBoost));
+    const cutoff=qualifyingLevels.length ? qualifyingLevels[qualifyingLevels.length-1] : null;
+    const placeByBoost=new Map(levels.map((b,i)=>[b,i+1]));
+    return {cat,rows,levels,qualifyingLevels,qualifiers,cutoff,placeByBoost,days:monthDaysLeft()};
+  }
+  function avatar(u){
+    try { return `<div class="lb-avatar">${avatarInner(u.avatar)}</div>`; }
+    catch(e){ return `<div class="lb-avatar" style="display:grid;place-items:center">👤</div>`; }
+  }
+  function renderLeaders(d){
+    const tabs=document.getElementById('lbCategoryTabs');
+    if(!tabs) return;
+    let host=document.getElementById('fcChampRaceV1030');
+    if(!host){ host=document.createElement('section'); host.id='fcChampRaceV1030'; host.className='fc-champ-race-v1030'; tabs.insertAdjacentElement('afterend',host); }
+    const liveCh=(state.challenges||[]).find(ch=>ch.is_championship&&ch.category===d.cat&&['submitting','voting','sudden_death'].includes(computeChallengeStatus(ch)));
+    const timeText=liveCh?'Championship live':d.days<=0?'Final day':`${d.days} day${d.days===1?'':'s'} remaining`;
+    const cutoffText=d.cutoff==null?'Not established yet':`${d.cutoff} Boost`;
+    let rows='';
+    d.qualifiers.forEach((u,idx)=>{
+      const place=d.placeByBoost.get(u.catBoost)||idx+1;
+      const isYou=state.profile?.id===u.id;
+      const isCutoff=d.cutoff!=null&&u.catBoost===d.cutoff;
+      rows+=`<div class="fc-champ-leader-row">
+        <div class="fc-champ-place">${ordinal(place)}</div>
+        <div class="fc-champ-person" data-fc-leader-id="${esc(u.id)}">${avatar(u)}<div class="fc-champ-person-copy"><div class="fc-champ-name">${esc(u.name)}${isYou?' <span style="color:var(--ember)">(you)</span>':''}</div><div class="fc-champ-record">${u.catWins}–${u.catLosses} this month${isCutoff?'<br><span class="fc-champ-cutoff-tag">Current cutoff</span>':''}</div></div></div>
+        <div class="fc-champ-boost"><b>${u.catBoost}</b><span>Boost</span></div>
+      </div>`;
+    });
+    const occupiedDistinct=d.qualifyingLevels.length;
+    for(let place=occupiedDistinct+1;place<=3;place++){
+      rows+=`<div class="fc-champ-leader-row fc-champ-open-row"><div class="fc-champ-place">${ordinal(place)}</div><div class="fc-champ-person"><div class="fc-champ-open-icon">＋</div><div class="fc-champ-person-copy"><div class="fc-champ-empty-name">No qualifier yet</div><div class="fc-champ-empty-copy">This position is still open.</div></div></div><div class="fc-champ-boost"><b>—</b><span>Boost</span></div></div>`;
+    }
+    if(!rows){ rows='<div style="padding:24px 16px;text-align:center;color:var(--text-dim)"><strong style="display:block;color:var(--text);margin-bottom:5px">No leader yet</strong>The first public win takes the lead.</div>'; }
+    host.innerHTML=`<div class="fc-champ-race-head"><div class="fc-champ-race-kicker">${esc(d.cat)} · Championship race</div><div class="fc-champ-race-title-row"><div class="fc-champ-race-title">Current leaders</div><div class="fc-champ-race-time">${esc(timeText)}</div></div><div class="fc-champ-race-rule"><strong>Top three Boost levels qualify.</strong> Everyone tied at the cutoff advances.</div><div class="fc-champ-cutoff"><span>Current qualification cutoff</span><b>${esc(cutoffText)}</b></div></div><div class="fc-champ-leaders">${rows}</div>`;
+    host.querySelectorAll('[data-fc-leader-id]').forEach(el=>el.addEventListener('click',()=>{ const id=el.dataset.fcLeaderId; if(id) openUserProfile(id); }));
+  }
+  function renderMyPosition(d){
+    const el=document.getElementById('lbMyRace'); if(!el) return;
+    const myId=state.profile?.id; if(!myId){ el.innerHTML=''; return; }
+    const me=d.rows.find(u=>u.id===myId)||null;
+    const myBoost=me?.catBoost||0;
+    const myPlace=me?(d.placeByBoost.get(me.catBoost)||null):null;
+    const qualified=!!(me&&myPlace&&myPlace<=3);
+    let main='', meta='', next='', pill='Not ranked';
+    if(!me){
+      main=`Not ranked · ${myBoost} Boost`;
+      meta=d.cutoff==null?'The qualification cutoff has not been established yet.':`Current cutoff: <b>${d.cutoff} Boost</b>`;
+      next=d.cutoff==null?`Win a ${esc(d.cat)} challenge to take the lead.`:`You need ${Math.max(0,d.cutoff-myBoost)} Boost to qualify.`;
+    }else if(qualified){
+      pill='Qualifying';
+      main=`${ordinal(myPlace)} place · ${myBoost} Boost`;
+      meta=`Current cutoff: <b>${d.cutoff} Boost</b>`;
+      next=myBoost===d.cutoff?'You are tied at the cutoff and currently qualify.':'You are currently above the qualification cutoff.';
+    }else{
+      pill='Chasing';
+      main=`${ordinal(myPlace)} place · ${myBoost} Boost`;
+      meta=`Current cutoff: <b>${d.cutoff} Boost</b>`;
+      next=`You need ${Math.max(0,(d.cutoff||0)-myBoost)} more Boost to qualify.`;
+    }
+    el.innerHTML=`<div class="fc-my-position-v1030"><div class="fc-my-position-head"><div class="fc-my-position-label">Your position in ${esc(d.cat)}</div><div class="fc-my-position-status">${esc(pill)}</div></div><div class="fc-my-position-main">${main}</div><div class="fc-my-position-meta">${meta}</div><div class="fc-my-position-next">${next}</div><div class="fc-my-position-actions">${me?'<button data-fc-my-action="boost">Boost history</button>':''}<button class="primary" data-fc-my-action="find">Find ${esc(d.cat)} challenges</button></div></div>`;
+    el.querySelector('[data-fc-my-action="boost"]')?.addEventListener('click',()=>openBoostSheet(myId,d.cat));
+    el.querySelector('[data-fc-my-action="find"]')?.addEventListener('click',()=>openCategoryChallengesV1029(d.cat));
+  }
+  function postRender(){
+    if(!document.getElementById('leaderboardViewSection')) return;
+    const d=raceData();
+    renderLeaders(d);
+    renderMyPosition(d);
+    const cd=document.getElementById('lbChampCountdown'); if(cd) cd.style.display='none';
+    const leaderBanner=document.querySelector('#lbChampionBanner .lb-banner-leader'); if(leaderBanner) leaderBanner.remove();
+    const banner=document.getElementById('lbChampionBanner'); if(banner&&!banner.children.length){ banner.style.display='none'; }
+    const label=document.querySelector('#leaderboardViewSection .lb-section-label span'); if(label) label.textContent=`Full ${d.cat} standings`;
+    const small=document.querySelector('#leaderboardViewSection .lb-section-label small'); if(small) small.textContent='Boost determines position';
+  }
+  if(typeof window.renderLeaderboard==='function'){
+    const base=window.renderLeaderboard;
+    window.renderLeaderboard=function(){ const r=base.apply(this,arguments); try{postRender();}catch(e){console.warn('v1030 titles post-render',e);} return r; };
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',()=>{ try{postRender();}catch(e){} });
+  else { try{postRender();}catch(e){} }
+})();
 </script>
 
 </body>
