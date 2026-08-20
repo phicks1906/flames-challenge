@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1044 — Walkthrough Lifecycle & Feed Card Consistency</title>
+<title>FlamesChallenge v1045 — Ember System Consolidation</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1044 · walkthrough-lifecycle-feed-card-consistency" />
-<meta name="fc-whatsnew" content="How FlamesChallenge Works now opens as one stable full-screen overlay, always restores navigation when closed, and feed challenge cards use one consistent bordered layout." />
+<meta name="fc-build" content="v1045 · ember-system-consolidation" />
+<meta name="fc-whatsnew" content="Ember now uses one screen-aware system with Full, Important only, and Off guidance controls, contextual Ask Ember prompts, and recorded competition context." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -8874,7 +8874,7 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
         <textarea id="seTextEntry" maxlength="500" placeholder="Write your entry..."></textarea>
       </div>
       <div class="cc-field" id="seCaptionField">
-        <label for="seCaption">Caption <span class="hint">(optional)</span><button type="button" class="fc-sug-btn" onclick="suggestCaption(this,'se')">✨ Suggest</button></label>
+        <label for="seCaption">Caption <span class="hint">(optional)</span><button type="button" class="fc-sug-btn" onclick="suggestCaption(this,'se')">Polish with Ember</button></label>
         <input id="seCaption" type="text" maxlength="120" placeholder="Add a caption..." />
         <div class="fc-sug-box" id="seCaptionSugBox"></div>
       </div>
@@ -31831,6 +31831,251 @@ html[data-theme="light"] body #challengesGrid > .fcc-challenge-wrap:not(.champ-g
     directSettingsWalkthroughBinding:true,
     consistentFeedCardShells:true,
     compactChallengeInfo:true
+  };
+})();
+</script>
+
+
+<style id="fc-v1045-ember-system-css">
+/* v1045 — one product-wide Ember system. Ask Ember stays available in every
+   guidance mode; only proactive/interpreting surfaces are gated. */
+body[data-fc-ember-guidance="important"] #emberHomeCard,
+body[data-fc-ember-guidance="important"] #emberCompeteCard,
+body[data-fc-ember-guidance="important"] .fc-v1036-ember,
+body[data-fc-ember-guidance="important"] .fc-score-ember-v1032,
+body[data-fc-ember-guidance="important"] .fc-score-sheet-ember-v1032,
+body[data-fc-ember-guidance="important"] .bd-ember,
+body[data-fc-ember-guidance="off"] #emberHomeCard,
+body[data-fc-ember-guidance="off"] #emberCompeteCard,
+body[data-fc-ember-guidance="off"] .fc-v1036-ember,
+body[data-fc-ember-guidance="off"] .fc-score-ember-v1032,
+body[data-fc-ember-guidance="off"] .fc-score-sheet-ember-v1032,
+body[data-fc-ember-guidance="off"] .bd-ember,
+body[data-fc-ember-guidance="off"] .celeb-bow{
+  display:none!important;
+}
+.fc-ember-guidance-row{cursor:pointer}
+.fc-ember-guidance-sheet{width:min(520px,calc(100vw - 24px));max-height:min(82dvh,760px);overflow:auto;text-align:left}
+.fc-ember-guidance-sheet .fc-eg-kicker{font-size:10px;font-weight:900;letter-spacing:.15em;text-transform:uppercase;color:var(--ember-bright);margin-bottom:6px}
+.fc-ember-guidance-sheet h2{font-family:var(--font-bricolage);font-size:28px;line-height:1.05;margin:0 0 8px}
+.fc-ember-guidance-sheet>p{font-size:14px;color:var(--text-dim);line-height:1.5;margin:0 0 18px}
+.fc-eg-options{display:grid;gap:10px}
+.fc-eg-option{appearance:none;width:100%;display:grid;grid-template-columns:42px minmax(0,1fr) auto;gap:12px;align-items:center;text-align:left;padding:14px;border:1px solid var(--border);border-radius:16px;background:var(--surface-2);color:var(--text);cursor:pointer}
+.fc-eg-option.on{border-color:rgba(255,106,44,.62);box-shadow:0 0 0 2px rgba(255,106,44,.12);background:linear-gradient(145deg,rgba(255,106,44,.10),var(--surface-2))}
+.fc-eg-icon{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;background:var(--overlay-2);font-size:20px}
+.fc-eg-copy b{display:block;font-size:14px;margin-bottom:3px}.fc-eg-copy span{display:block;font-size:12px;color:var(--text-dim);line-height:1.4}
+.fc-eg-check{font-size:12px;font-weight:900;color:var(--ember-bright);min-width:54px;text-align:right}
+.fc-ember-context-action{appearance:none;display:inline-flex;align-items:center;gap:7px;border:1px solid rgba(255,106,44,.35);background:rgba(255,106,44,.08);color:var(--ember-bright);border-radius:999px;padding:8px 11px;font-size:11px;font-weight:850;cursor:pointer}
+.fc-ember-context-action .fc-ember-mini{width:22px;height:22px;border-radius:7px;overflow:hidden;display:grid;place-items:center}
+.fc-ember-context-action .fc-ember-mini .ember-prod{width:22px!important;height:22px!important;min-width:22px!important}
+#fcEmberChallengeAction{margin:10px 14px 14px}
+#fcEmberTitlesAction{margin:8px 0 2px}
+#profileSheet .fc-v1036-ember[data-fc-ember-clickable="1"]{cursor:pointer}
+#profileSheet .fc-v1036-ember[data-fc-ember-clickable="1"]:after{content:'Ask Ember →';display:block;color:var(--ember-bright);font-size:10px;font-weight:900;margin-left:auto;white-space:nowrap}
+.ember-assistant-sheet .ember-quick-prompts button{min-height:52px;text-align:left;line-height:1.25}
+.ember-assistant-sheet .ember-surface-label{display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:5px 8px;border:1px solid var(--border);border-radius:999px;color:var(--text-muted);font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase}
+@media(max-width:520px){
+  .fc-ember-guidance-sheet{width:100vw;max-height:100dvh;border-radius:0!important;padding-top:calc(26px + env(safe-area-inset-top,0px))!important}
+  .fc-eg-option{grid-template-columns:38px minmax(0,1fr);padding:13px}.fc-eg-check{grid-column:2;text-align:left;min-width:0}
+  #profileSheet .fc-v1036-ember[data-fc-ember-clickable="1"]:after{display:none}
+}
+</style>
+
+<script id="fc-v1045-ember-system-js">
+(function(){
+  'use strict';
+  const MODES = ['full','important','off'];
+  const MODE_KEY = 'fc_ember_guidance_mode';
+  const MODE_META = 'fc_ember_guidance';
+  const labels = {full:'Full',important:'Important only',off:'Off'};
+  let mode = 'full';
+
+  function safeMode(v){ return MODES.includes(String(v||'').toLowerCase()) ? String(v).toLowerCase() : null; }
+  function readLocal(){ try{return safeMode(localStorage.getItem(MODE_KEY));}catch(e){return null;} }
+  function applyMode(v){
+    mode = safeMode(v) || 'full';
+    try{localStorage.setItem(MODE_KEY,mode);}catch(e){}
+    document.body.dataset.fcEmberGuidance = mode;
+    const st=document.getElementById('fcEmberGuidanceState'); if(st) st.textContent=labels[mode];
+    document.querySelectorAll('[data-fc-eg-mode]').forEach(btn=>{
+      const on=btn.dataset.fcEgMode===mode; btn.classList.toggle('on',on); btn.setAttribute('aria-pressed',on?'true':'false');
+      const c=btn.querySelector('.fc-eg-check'); if(c)c.textContent=on?'Selected':'';
+    });
+    return mode;
+  }
+  window.fcGetEmberGuidanceMode=()=>mode;
+  window.fcShouldShowEmber=(kind='routine')=> mode==='full' || (mode==='important' && kind==='important');
+
+  async function persistMode(v){
+    applyMode(v);
+    try{
+      if(window.db?.auth?.updateUser && state?.profile?.id){
+        await db.auth.updateUser({data:{[MODE_META]:mode}});
+      }
+    }catch(e){ console.warn('ember guidance preference sync',e); }
+  }
+  window.fcSetEmberGuidanceMode=persistMode;
+
+  async function hydrateMode(){
+    const local=readLocal();
+    if(local) applyMode(local); else applyMode('full');
+    try{
+      if(window.db?.auth?.getUser){
+        const {data}=await db.auth.getUser();
+        const remote=safeMode(data?.user?.user_metadata?.[MODE_META]);
+        if(remote && !local) applyMode(remote);
+      }
+    }catch(e){}
+  }
+
+  function ensureGuidanceSheet(){
+    if(document.getElementById('emberGuidanceModal')) return;
+    const wrap=document.createElement('div');
+    wrap.className='modal-backdrop'; wrap.id='emberGuidanceModal';
+    wrap.addEventListener('click',e=>{if(e.target===wrap)wrap.classList.remove('open')});
+    wrap.innerHTML=`<div class="modal fc-ember-guidance-sheet"><button class="modal-close-x" aria-label="Close">×</button><div class="fc-eg-kicker">Ember guidance</div><h2>Choose how often Ember steps in.</h2><p>Ask Ember is always available. This setting controls proactive guidance around the product.</p><div class="fc-eg-options">
+      <button class="fc-eg-option" data-fc-eg-mode="full" type="button"><span class="fc-eg-icon">🔥</span><span class="fc-eg-copy"><b>Full</b><span>Contextual next actions, score interpretation, and important competition moments.</span></span><span class="fc-eg-check"></span></button>
+      <button class="fc-eg-option" data-fc-eg-mode="important" type="button"><span class="fc-eg-icon">⚡</span><span class="fc-eg-copy"><b>Important only</b><span>Keep winner, qualification, sudden-death, and major status guidance. Hide routine reads.</span></span><span class="fc-eg-check"></span></button>
+      <button class="fc-eg-option" data-fc-eg-mode="off" type="button"><span class="fc-eg-icon">○</span><span class="fc-eg-copy"><b>Off</b><span>No proactive Ember cards. You can still open Ask Ember whenever you want.</span></span><span class="fc-eg-check"></span></button>
+    </div><button class="btn btn-primary" data-fc-eg-done style="width:100%;margin-top:16px">Done</button></div>`;
+    document.body.appendChild(wrap);
+    wrap.querySelector('.modal-close-x').onclick=()=>wrap.classList.remove('open');
+    wrap.querySelector('[data-fc-eg-done]').onclick=()=>wrap.classList.remove('open');
+    wrap.querySelectorAll('[data-fc-eg-mode]').forEach(btn=>btn.onclick=()=>persistMode(btn.dataset.fcEgMode));
+    applyMode(mode);
+  }
+  window.fcOpenEmberGuidance=function(){ensureGuidanceSheet();document.getElementById('profileModal')?.classList.remove('open');document.getElementById('emberGuidanceModal')?.classList.add('open');applyMode(mode);};
+
+  function installSettingsRow(){
+    if(document.getElementById('fcEmberGuidanceRow')) return;
+    const theme=document.getElementById('themeToggleRow'); if(!theme)return;
+    const row=document.createElement('div');
+    row.className='theme-toggle-row fc-ember-guidance-row'; row.id='fcEmberGuidanceRow'; row.setAttribute('role','button'); row.tabIndex=0;
+    row.innerHTML=`<div class="theme-toggle-label"><span class="theme-toggle-icon">🔥</span><span>Ember guidance</span></div><div class="theme-toggle-state" id="fcEmberGuidanceState">${labels[mode]}</div>`;
+    row.onclick=fcOpenEmberGuidance; row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fcOpenEmberGuidance();}};
+    theme.insertAdjacentElement('afterend',row);
+  }
+
+  function surface(){
+    if(document.getElementById('createChallengeSheet')?.classList.contains('open')) return 'create';
+    if(document.getElementById('submitEntrySheet')?.classList.contains('open')) return 'entry';
+    if(document.getElementById('challengeDetailSheet')?.classList.contains('open')) return 'challenge';
+    if(document.getElementById('profileSheet')?.classList.contains('open')) return 'profile';
+    const visible=[...document.querySelectorAll('.app-section')].find(el=>getComputedStyle(el).display!=='none');
+    if(visible?.id==='leaderboardViewSection') return 'titles';
+    if(visible?.id==='challengesViewSection') return 'compete';
+    if(visible?.id==='feedViewSection') return 'home';
+    return visible?.id||'home';
+  }
+  window.fcEmberSurface=surface;
+
+  function promptSet(s){
+    const ch=state?.currentChallenge; const status=ch?computeChallengeStatus(ch):'';
+    if(s==='create') return [
+      ['Make this challenge clearer.','Make this challenge clearer'],['Help me make the prompt more competitive.','Improve the prompt'],['What rules should I clarify?','Check the rules'],['Will this challenge be eligible for Championship Score?','Score eligibility']
+    ];
+    if(s==='entry') return [
+      ['Help me improve this entry without inventing details.','Improve my entry'],['What does this challenge ask for?','Explain the prompt'],['What happens after I submit?','What happens next?'],['How does voting work here?','Voting']
+    ];
+    if(s==='challenge'){
+      if(status==='submitting') return [['What should happen next in this challenge?','What happens next?'],['Explain the rules and Championship Score eligibility.','Rules & Score'],['How can I improve or promote this challenge?','Improve / promote'],['What would make a strong entry here?','Strong entry']];
+      if(status==='voting'||status==='sudden_death') return [['Read this live competition for me.','Read the race'],['How does voting work in this challenge?','Voting'],['What happens if this ends tied?','Tie / sudden death'],['How will this result affect Championship Score?','Score impact']];
+      return [['Explain this result from the recorded totals.','Explain result'],['How did this affect Championship Score?','Score impact'],['What happens next for the winner?','Winner next step'],['What can I learn from this challenge?','What to learn']];
+    }
+    if(s==='titles') return [['How do I qualify from my current position?','Qualification gap'],['What is driving my Championship Score?','My Score'],['What is my strongest scoring win?','Strongest win'],['Explain Opponent Points and Turnout Points.','Score formula']];
+    if(s==='profile') return [['Summarize this competitive profile.','Competitive read'],['What is the strongest recorded win?','Strongest win'],['What should improve next?','Improve next'],['How does the Championship tier progress?','Tier progress']];
+    if(s==='compete') return [['Which loaded challenge is the best match for my interests?','Best match'],['Where can I vote right now?','Vote now'],['Which open challenge should I enter?','Enter now'],['How can I improve my current entry?','Improve entry']];
+    return [['What should I do next?','What next?'],['What matches my interests right now?','My interests'],['How does Championship Score work?','Championship Score'],['Help me create a strong challenge.','Create better']];
+  }
+
+  function surfaceCopy(s){
+    const ch=state?.currentChallenge;
+    const map={
+      create:['CREATE','Build a stronger challenge.','I can help sharpen the title, prompt, rules, and entry wording without inventing details.'],
+      entry:['ENTRY','Make the work clearer.','I can help interpret the prompt, polish your wording, and explain what happens after submission.'],
+      challenge:['CHALLENGE',ch?.title?`Read “${ch.title}.”`:'Read this competition.','I can explain this phase, recorded race state, rules, Score eligibility, or a useful next move.'],
+      titles:['TITLES','Understand the Championship race.','I can explain recorded Score, qualification position, strongest wins, Opponent Points, and Turnout Points.'],
+      profile:['PROFILE','Read the competitive identity.','I can interpret the recorded competitive history, strongest results, Championship tier, and what stands out.'],
+      compete:['COMPETE','Find the right competition.','I can use your saved interests and currently loaded challenges to help you choose where to enter or vote.'],
+      home:['HOME','Use what is live now.','I can use your current screen, saved interests, and recorded competition status to point out a useful next action.']
+    };
+    return map[s]||map.home;
+  }
+
+  function refreshAskEmber(){
+    const s=surface(), copy=surfaceCopy(s), quick=document.querySelector('#emberModal .ember-quick-prompts');
+    const kicker=document.querySelector('#emberModal .ember-kicker'), h=document.querySelector('#emberModal .ember-welcome h3'), line=document.getElementById('emberContextLine');
+    if(kicker)kicker.textContent=copy[0]; if(h)h.textContent=copy[1]; if(line)line.textContent=copy[2];
+    if(quick){
+      quick.innerHTML=promptSet(s).map(([q,label])=>`<button type="button" data-fc-ember-q="${escapeHtml(q)}">${escapeHtml(label)}</button>`).join('');
+      quick.querySelectorAll('[data-fc-ember-q]').forEach(b=>b.onclick=()=>askEmberQuick(b.dataset.fcEmberQ));
+    }
+    const welcome=document.querySelector('#emberModal .ember-welcome>div:last-child');
+    let tag=document.querySelector('#emberModal .ember-surface-label');
+    if(welcome&&!tag){tag=document.createElement('span');tag.className='ember-surface-label';welcome.appendChild(tag);} if(tag)tag.textContent=`Current context · ${copy[0].toLowerCase()}`;
+  }
+  window.fcRefreshAskEmber=refreshAskEmber;
+
+  // Expand the recorded context supplied to the existing ask-ember endpoint.
+  const priorBuild=window.buildEmberContext;
+  window.buildEmberContext=function(){
+    const base=typeof priorBuild==='function'?priorBuild():{};
+    const s=surface(); const uid=state?.profile?.id; const now=new Date(); const month=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    const ledger=Object.values(state?.boostByChallenge||{}).filter(r=>uid&&String(r.winner_id)===String(uid)&&r.month===month);
+    const byCategory={}; ledger.forEach(r=>{const c=r.category||'Other';const x=byCategory[c]||(byCategory[c]={score:0,wins:0,opponentPoints:0,turnoutPoints:0});x.score+=Number(r.total_boost||0);x.wins++;x.opponentPoints+=Number(r.opponent_pts||0);x.turnoutPoints+=Number(r.vote_pts||0);});
+    let tier=null; try{const t=getLadderStatus?.(uid);if(t)tier={name:t.name,championshipWins:t.champCount,next:t.nextName||null,progressPct:t.pct??null};}catch(e){}
+    const entries=(state?.currentEntries||[]).filter(e=>e?.moderation_status!=='rejected');
+    return {...base,emberSystem:{version:'v1045',guidanceMode:mode,recordedCompetitionClaimsOnly:true},surface:s,monthlyChampionshipScore:{month,byCategory},championshipTier:tier,challenge:base.challenge?{...base.challenge,entries:entries.map(e=>({id:e.id,userId:e.user_id||null,votes:Number(e.votes||e.vote_count||0)}))}:base.challenge};
+  };
+
+  const priorOpen=window.openEmber;
+  window.openEmber=function(){
+    if(typeof priorOpen==='function')priorOpen();
+    requestAnimationFrame(refreshAskEmber);
+  };
+  window.fcOpenEmberWithQuestion=function(q){openEmber();setTimeout(()=>{const input=document.getElementById('emberInput');if(input&&q)input.value=q;},80);};
+
+  function askButton(id,label,question){
+    let b=document.getElementById(id); if(b)return b;
+    b=document.createElement('button');b.type='button';b.id=id;b.className='fc-ember-context-action';
+    b.innerHTML=`<span class="fc-ember-mini">${emberFace(22,'attentive')}</span><span>${label}</span>`;
+    b.onclick=()=>fcOpenEmberWithQuestion(question||'What matters on this screen?'); return b;
+  }
+  function decorateContextualAccess(){
+    const details=document.getElementById('fcChallengeInfoV1043');
+    if(details&&!document.getElementById('fcEmberChallengeAction')){
+      const b=askButton('fcEmberChallengeAction','Ask Ember about this challenge','What matters next in this challenge?'); details.insertAdjacentElement('afterend',b);
+    }
+    const titles=document.querySelector('#leaderboardViewSection .section-sub');
+    if(titles&&!document.getElementById('fcEmberTitlesAction')) titles.insertAdjacentElement('afterend',askButton('fcEmberTitlesAction','Ask Ember about this race','How do I qualify from my current position?'));
+    const p=document.querySelector('#profileSheet .fc-v1036-ember');
+    if(p&&!p.dataset.fcEmberClickable){p.dataset.fcEmberClickable='1';p.tabIndex=0;p.setAttribute('role','button');p.onclick=()=>fcOpenEmberWithQuestion('Summarize the strongest facts in this competitive profile.');p.onkeydown=e=>{if(e.key==='Enter'){p.click();}};}
+  }
+
+  // Existing Home/Compete guidance renderers still choose the recommendation,
+  // but this observer enforces the user's centralized guidance preference.
+  function enforceMode(){applyMode(mode);decorateContextualAccess();}
+  const observer=new MutationObserver(()=>requestAnimationFrame(enforceMode));
+  document.addEventListener('DOMContentLoaded',()=>{
+    ensureGuidanceSheet(); installSettingsRow(); hydrateMode().finally(enforceMode);
+    observer.observe(document.body,{subtree:true,childList:true});
+  },{once:true});
+  if(document.readyState!=='loading'){
+    ensureGuidanceSheet();installSettingsRow();hydrateMode().finally(enforceMode);observer.observe(document.body,{subtree:true,childList:true});
+  }
+  window.addEventListener('pageshow',()=>{installSettingsRow();enforceMode();});
+
+  // Re-run contextual access after screen renderers most likely to replace nodes.
+  ['renderChallengeDetail','renderLeaderboard','renderProfileTab','renderFeed','renderChallenges'].forEach(name=>{
+    const fn=window[name]; if(typeof fn!=='function')return;
+    window[name]=function(){const r=fn.apply(this,arguments);requestAnimationFrame(()=>requestAnimationFrame(decorateContextualAccess));return r;};
+  });
+
+  window.__fcEmberSystemV1045={
+    version:'v1045',modes:['full','important','off'],askAlwaysAvailable:true,screenAwarePrompts:true,
+    recordedCompetitionContext:true,routineInterventionsMaxPerScreen:1,creativeAssistance:true,
+    contextualSurfaces:['home','compete','create','entry','challenge','titles','profile'],
+    userMetadataPreference:MODE_META
   };
 })();
 </script>
