@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1016 — Public Browse Polish</title>
+<title>FlamesChallenge v1017 — Session Boundary & Landing Cleanup</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1016 · public-browse-polish" />
-<meta name="fc-whatsnew" content="Reliable public-browser close control, safe-area header correction, and photo-led category examples." />
+<meta name="fc-build" content="v1017 · session-boundary-landing-cleanup" />
+<meta name="fc-whatsnew" content="Authenticated sessions now fully dismiss the public landing, bottom navigation switches correctly, and the public proof section is shorter and more visual." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -6850,6 +6850,39 @@ body.fc-public-browser-open{overflow:hidden!important}
 }
 @media(max-width:350px){.fc-category-photo-grid{grid-template-columns:1fr}.fc-category-photo-card{min-height:150px}}
 </style>
+
+<style id="fc-v1017-session-boundary-css">
+/* v1017 — signed-in app and public landing are mutually exclusive */
+body.fc-authenticated #authView{display:none!important;visibility:hidden!important;pointer-events:none!important}
+body.fc-authenticated #appView{display:block!important;visibility:visible!important;pointer-events:auto!important}
+body.fc-authenticated #fcPublicLanding{display:none!important}
+body.fc-authenticated #fcPublicBrowser{display:none!important}
+
+/* Replace the long white-document section with one compact competition panel. */
+.fc-public-competition-proof{
+  margin-top:clamp(40px,6vw,68px);padding:clamp(20px,4vw,32px);
+  border:1px solid rgba(255,255,255,.10);border-radius:24px;
+  background:linear-gradient(145deg,rgba(32,19,14,.78),rgba(10,9,9,.96));
+  box-shadow:0 20px 54px rgba(0,0,0,.28)
+}
+.fc-public-proof-kicker{font:850 11px var(--font-dm);letter-spacing:.18em;color:#ff985a;margin-bottom:17px}
+.fc-public-proof-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.fc-public-proof-grid article{display:flex;gap:12px;min-width:0;padding:14px;border:1px solid rgba(255,255,255,.08);border-radius:16px;background:rgba(5,5,5,.38)}
+.fc-public-proof-grid article>span{width:30px;height:30px;flex:0 0 auto;display:grid;place-items:center;border-radius:50%;background:rgba(255,91,38,.11);border:1px solid rgba(255,112,52,.30);color:#ff9358;font:900 10px var(--font-dm)}
+.fc-public-proof-grid b{display:block;color:#fff;font-family:var(--font-bricolage);font-size:18px;line-height:1.1;margin:1px 0 5px}
+.fc-public-proof-grid p{margin:0;color:#a99d95;font-size:13px;line-height:1.42}
+.fc-public-final-compact{padding:clamp(38px,6vw,62px) 0 4px!important}
+.fc-public-final-compact h2{font-size:clamp(31px,5vw,48px)!important;margin-bottom:10px!important}
+.fc-public-final-compact p{max-width:520px!important;margin-bottom:19px!important}
+.fc-public-final-actions{display:flex;justify-content:center;align-items:center;gap:14px;flex-wrap:wrap}
+.fc-public-final-link{min-height:46px;padding:0 8px;border:0;background:transparent;color:#e4d7ce;font:800 14px var(--font-dm);text-decoration:underline;text-underline-offset:5px;cursor:pointer}
+@media(max-width:760px){
+  .fc-public-proof-grid{grid-template-columns:1fr}
+  .fc-public-competition-proof{margin-top:34px;padding:17px}
+  .fc-public-proof-grid article{padding:13px}
+}
+</style>
+
 </head>
 <body>
 <!-- v690 — View-as-member banner. Deliberately loud and impossible to miss: the
@@ -27820,8 +27853,15 @@ document.addEventListener('click', (e) => {
           <div class="fc-public-section-head"><div><div class="fc-public-section-kicker">LIVE CHALLENGES</div><h2>See what is open now.</h2></div><p>Photography, music, cooking, writing, fitness, comedy, style, sports, and more.</p></div>
           <div class="fc-public-more" id="fcPublicMore"><div class="fc-public-ch-card fc-public-card-skeleton"><div class="fc-public-ch-media"></div><div class="fc-public-ch-body"><div class="fc-public-skel-line short"></div><div class="fc-public-skel-line title"></div><div class="fc-public-skel-line"></div></div></div></div>
         </section>
-        <section class="fc-public-proof"><div><b>Real work</b><span>People submit photos, videos, audio, or text—not just a reaction.</span></div><div><b>One vote</b><span>Each person chooses one entry and can change that choice before voting closes.</span></div><div><b>Clear result</b><span>A challenge needs real competition before a winner can be recorded.</span></div><div><b>Your record</b><span>Wins and entries build a visible competitive history over time.</span></div></section>
-        <section class="fc-public-final"><h2>Your work belongs in the competition.</h2><p>Enter something already live or create the prompt everyone else has to beat.</p><button class="fc-public-primary" type="button" data-public-auth="signup">Create your account</button></section>
+        <section class="fc-public-competition-proof" aria-label="What makes FlamesChallenge a competition">
+          <div class="fc-public-proof-kicker">WHAT MAKES THIS A COMPETITION</div>
+          <div class="fc-public-proof-grid">
+            <article><span>01</span><div><b>Real entries</b><p>Photos, video, audio, and writing—not reactions.</p></div></article>
+            <article><span>02</span><div><b>One decision</b><p>Each person gets one vote and can change it before voting closes.</p></div></article>
+            <article><span>03</span><div><b>A real winner</b><p>A result requires at least two entrants. Most votes wins.</p></div></article>
+          </div>
+        </section>
+        <section class="fc-public-final fc-public-final-compact"><h2>Ready to compete?</h2><p>Browse freely. Create an account only when you are ready to enter, vote, or start a challenge.</p><div class="fc-public-final-actions"><button class="fc-public-primary" type="button" id="fcPublicBrowseBottom">Explore challenges</button><button class="fc-public-final-link" type="button" data-public-auth="signup">Create account</button></div></section>
       </main>`;
     auth.prepend(landing);
     const card=auth.querySelector('.auth-card');
@@ -27834,6 +27874,7 @@ document.addEventListener('click', (e) => {
     ensureFirstUseDOM();
     auth.querySelectorAll('[data-public-auth]').forEach(b=>b.addEventListener('click',()=>openAuthSheet(b.dataset.publicAuth)));
     document.getElementById('fcPublicBrowse')?.addEventListener('click',openPublicBrowser);
+    document.getElementById('fcPublicBrowseBottom')?.addEventListener('click',openPublicBrowser);
   }
   function ensureFirstUseDOM(){
     if(document.getElementById('fcFirstUseSheet'))return;
@@ -28041,6 +28082,82 @@ document.addEventListener('click', (e) => {
   }
   window.fcOpenPublicBrowser=openPublicBrowser;
   window.fcOpenPublicAuth=openAuthSheet;
+})();
+</script>
+
+
+<script id="fc-v1017-session-boundary-js">
+(() => {
+  'use strict';
+  const authEl = () => document.getElementById('authView');
+  const appEl = () => document.getElementById('appView');
+  const signedIn = () => !!(window.state && state.session);
+
+  function closePublicLayers(){
+    const auth = authEl();
+    const app = appEl();
+    document.body.classList.add('fc-authenticated');
+    document.body.classList.remove('fc-public-browser-open');
+    if(auth){
+      auth.classList.remove('fc-public-auth','fc-auth-sheet-open');
+      auth.style.setProperty('display','none','important');
+      auth.style.opacity='';
+      auth.setAttribute('aria-hidden','true');
+    }
+    if(app){
+      app.style.setProperty('display','block','important');
+      app.style.opacity='';
+      app.setAttribute('aria-hidden','false');
+    }
+    const browser=document.getElementById('fcPublicBrowser');
+    if(browser){browser.classList.remove('open');browser.setAttribute('aria-hidden','true');}
+  }
+
+  function preparePublicAuth(){
+    document.body.classList.remove('fc-authenticated');
+    const auth=authEl(), app=appEl();
+    if(auth){auth.style.removeProperty('display');auth.removeAttribute('aria-hidden');}
+    if(app){app.style.removeProperty('display');app.removeAttribute('aria-hidden');}
+  }
+
+  const priorShowApp = window.showApp;
+  window.showApp = function(){
+    closePublicLayers();
+    const result = priorShowApp?.apply(this, arguments);
+    requestAnimationFrame(closePublicLayers);
+    setTimeout(closePublicLayers, 180);
+    setTimeout(closePublicLayers, 700);
+    return result;
+  };
+
+  const priorShowAuth = window.showAuth;
+  window.showAuth = function(){
+    if(signedIn()){
+      closePublicLayers();
+      return;
+    }
+    preparePublicAuth();
+    return priorShowAuth?.apply(this, arguments);
+  };
+
+  const priorSwitchView = window.switchView;
+  window.switchView = function(view){
+    if(signedIn()) closePublicLayers();
+    return priorSwitchView?.apply(this, arguments);
+  };
+
+  // Session restoration can begin on the public landing before Supabase finishes.
+  // Keep the boundary synced through that short transition without permanent polling.
+  let checks=0;
+  const boundaryTimer=setInterval(()=>{
+    checks++;
+    if(signedIn()) closePublicLayers();
+    if(checks>=20) clearInterval(boundaryTimer);
+  },250);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&signedIn())closePublicLayers();});
+  window.addEventListener('pageshow',()=>{if(signedIn())closePublicLayers();});
+
+  if(signedIn()) closePublicLayers();
 })();
 </script>
 
