@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1028 — Titles, Boost & Championships</title>
+<title>FlamesChallenge v1029 — Titles Screen Correction</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,7 +21,7 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1028 · titles-boost-championships" />
+<meta name="fc-build" content="v1029 · titles-screen-correction" />
 <meta name="fc-whatsnew" content="Titles now opens with your rank, Boost, Championship-line position, time remaining, and the next action that can move you forward." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
@@ -7136,7 +7136,7 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
 
 
 <style id="fc-v1028-titles-css">
-/* v1028 — Titles answers position, qualification, and next action before showing the full board. */
+/* v1029 — Titles uses the selected category as the single source of truth. */
 #leaderboardViewSection .section-head{margin-bottom:10px}
 #leaderboardViewSection .section-sub{max-width:48ch}
 .lb-category-tabs{margin:0 0 12px;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
@@ -7193,6 +7193,28 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
   .lb-race-actions{width:100%}
   .lb-race-btn{flex:1;text-align:center;padding:10px 9px}
   .lb-how-compact{grid-template-columns:1fr}
+}
+</style>
+
+
+<style id="fc-v1029-titles-correction-css">
+/* v1029 — one category, one source of truth. */
+#uxTitleFocus{display:none!important}
+#leaderboardViewSection .section-sub{max-width:44ch}
+#leaderboardViewSection #lbCategoryTabs{margin-top:4px;margin-bottom:12px}
+#leaderboardViewSection .lb-race-card{margin-bottom:10px}
+#leaderboardViewSection .lb-race-metric span{white-space:normal;line-height:1.25;min-height:20px}
+#leaderboardViewSection .lb-race-line{align-items:flex-start}
+#leaderboardViewSection .lb-race-line span{max-width:65%;line-height:1.35}
+#leaderboardViewSection #lbChampCountdown{margin-top:2px!important;margin-bottom:14px!important}
+#leaderboardViewSection .lb-section-label{margin-top:15px}
+@media(max-width:520px){
+  #leaderboardViewSection .section-title{font-size:31px;line-height:1.02}
+  #leaderboardViewSection .section-sub{font-size:15px;line-height:1.5}
+  #leaderboardViewSection .lb-race-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  #leaderboardViewSection .lb-race-metric{padding:12px 10px}
+  #leaderboardViewSection .lb-race-metric b{font-size:25px}
+  #leaderboardViewSection .lb-race-next{gap:10px}
 }
 </style>
 
@@ -7643,7 +7665,7 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
     <div class="section-head">
       <div>
         <h2 class="section-title">Titles & Championships</h2>
-        <p class="section-sub">Your monthly position, what moves it, and what to do next. · <a class="lb-how-link" onclick="toggleLbHow()">Rules</a></p>
+        <p class="section-sub">Win challenges. Earn Boost. Finish above your category’s qualification line. · <a class="lb-how-link" onclick="toggleLbHow()">Rules</a></p>
       </div>
     </div>
     <div class="lb-how-card" id="lbHowCard" style="display:none">
@@ -14731,9 +14753,9 @@ function renderMyRaceV1028(ctx) {
   const previousChampion = champTitles?.[`${cat}-${_lbMonthKeyOffsetV1028(-1)}`]?.userId === myId;
   const liveStatus = liveCh ? computeChallengeStatus(liveCh) : '';
 
-  let variant = '', label = 'Monthly race', status = 'Enter the race', nextTitle = `Win a ${cat} challenge`, nextCopy = 'Your first public win puts Boost on the board.', action = 'Find challenges', actionKind = 'compete';
-  let lineValue = cutoffBoost ? cutoffBoost : '—';
-  let gapValue = cutoffBoost ? Math.max(0, cutoffBoost - myBoost) : 'Need a win';
+  let variant = '', label = 'Monthly race', status = 'Not ranked yet', nextTitle = `Win a ${cat} challenge`, nextCopy = 'Your first public win earns Boost and puts you into the standings.', action = `Find ${cat} challenges`, actionKind = 'compete';
+  let lineValue = cutoffBoost ? cutoffBoost : 'Not set';
+  let gapValue = cutoffBoost ? Math.max(0, cutoffBoost - myBoost) : '—';
 
   if (currentChampion) {
     variant = 'champion'; label = 'Title secured'; status = `${cat} <span>Champion</span>`;
@@ -14765,7 +14787,7 @@ function renderMyRaceV1028(ctx) {
     action = 'Find challenges'; actionKind = 'compete'; gapValue = 'New race';
   }
 
-  const progress = currentChampion || liveCh || qualified || leading ? 100 : cutoffBoost > 0 ? Math.max(4, Math.min(96, Math.round((myBoost / cutoffBoost) * 100))) : 0;
+  const progress = currentChampion || liveCh || qualified || leading ? 100 : cutoffBoost > 0 ? Math.max(0, Math.min(96, Math.round((myBoost / cutoffBoost) * 100))) : 0;
   const rankText = myRank ? `#${myRank}` : '—';
   const timeLabel = liveCh ? 'Championship live' : currentChampion ? 'Race complete' : daysLeft <= 0 ? 'Final day' : `${daysLeft}d remaining`;
   const lineText = cutoffBoost || '—';
@@ -14774,16 +14796,16 @@ function renderMyRaceV1028(ctx) {
   el.innerHTML = `<div class="lb-race-card ${variant}">
     <div class="lb-race-top">
       <div><div class="lb-race-eyebrow">${escapeHtml(cat)} · ${escapeHtml(label)}</div><div class="lb-race-status">${status}</div></div>
-      <div class="lb-race-pill">${currentChampion ? 'Champion' : liveCh ? 'Live now' : qualified ? 'Qualifying' : me ? 'In the race' : 'Unranked'}</div>
+      <div class="lb-race-pill">${currentChampion ? 'Champion' : liveCh ? 'Live now' : qualified ? 'Qualifying' : me ? 'In the race' : 'Not ranked'}</div>
     </div>
     <div class="lb-race-metrics">
       <div class="lb-race-metric"><b>${rankText}</b><span>Your rank</span></div>
       <div class="lb-race-metric"><b class="gold">${myBoost}</b><span>Your Boost</span></div>
-      <div class="lb-race-metric"><b>${lineText}</b><span>Line Boost</span></div>
-      <div class="lb-race-metric"><b>${escapeHtml(String(gapText))}</b><span>${qualified ? 'Gap behind' : 'Gap to line'}</span></div>
+      <div class="lb-race-metric"><b>${lineText}</b><span>Qualification line</span></div>
+      <div class="lb-race-metric"><b>${escapeHtml(String(gapText))}</b><span>${qualified ? 'Boost above line' : 'Boost needed'}</span></div>
     </div>
     <div class="lb-race-track"><i style="width:${progress}%"></i></div>
-    <div class="lb-race-line"><span>${currentChampion ? 'Title recorded in the Hall of Fame' : liveCh ? 'Monthly qualification is closed' : progress ? `${progress}% of current line` : 'Win once to establish a position'}</span><strong>${timeLabel}</strong></div>
+    <div class="lb-race-line"><span>${currentChampion ? 'Title recorded in the Hall of Fame' : liveCh ? 'Monthly qualification is closed' : cutoffBoost > 0 ? `${progress}% of qualification line` : 'Qualification line is not established yet'}</span><strong>${timeLabel}</strong></div>
     <div class="lb-race-next">
       <div class="lb-race-copy"><b>${escapeHtml(nextTitle)}</b><span>${escapeHtml(nextCopy)}</span></div>
       <div class="lb-race-actions">
@@ -14794,9 +14816,19 @@ function renderMyRaceV1028(ctx) {
   </div>`;
 
   el.querySelector('[data-race-action="boost"]')?.addEventListener('click', () => openBoostSheet(myId, cat));
-  el.querySelector('[data-race-action="compete"]')?.addEventListener('click', () => switchView('challenges'));
+  el.querySelector('[data-race-action="compete"]')?.addEventListener('click', () => openCategoryChallengesV1029(cat));
   el.querySelector('[data-race-action="live"]')?.addEventListener('click', () => { if (liveCh) openChallenge(liveCh); });
   el.querySelector('[data-race-action="hall"]')?.addEventListener('click', () => document.querySelector('[data-lbtab="halloffame"]')?.click());
+}
+
+function openCategoryChallengesV1029(cat) {
+  state.cFilter = 'active';
+  state.cSearch = String(cat || '').trim();
+  document.querySelectorAll('#chTabs .ch-tab').forEach(x => x.classList.toggle('active', x.dataset.cfilter === 'active'));
+  const input = document.getElementById('chSearchInput');
+  if (input) input.value = state.cSearch;
+  switchView('challenges');
+  requestAnimationFrame(() => renderChallenges());
 }
 
 function renderLeaderboard() {
@@ -14819,7 +14851,7 @@ function renderLeaderboard() {
     const now = new Date();
     const month = now.getMonth();
     const year = now.getFullYear();
-    const lastDay = new Date(year, month + 1, 0); // last day of current month
+    const nextMonth = new Date(year, month + 1, 1); // exact start of next month
     const hasLaunchedThisMonth = (state.champLaunches || []).some(l => {
       const [ly, lm] = l.month.split('-').map(Number);
       return ly === year && lm === month + 1 && !l.is_sponsored;
@@ -14828,7 +14860,7 @@ function renderLeaderboard() {
       countdownEl.style.display = 'none';
       countdownEl.dataset.active = '';
     } else {
-      const daysLeft = Math.ceil((lastDay - now) / 86400000);
+      const daysLeft = Math.max(0, Math.ceil((nextMonth - now) / 86400000));
       const label = daysLeft === 0
         ? 'Launches today!'
         : daysLeft === 1
@@ -14841,7 +14873,7 @@ function renderLeaderboard() {
       countdownEl.innerHTML = `<div class="champ-charge">
         <div class="cc-top"><span class="cc-l">⚡ Championship</span><span class="cc-r">${label}</span></div>
         <div class="cc-bar"><i style="width:${pct}%"></i></div>
-        <div class="cc-sub"><span>Month in progress</span><span>Top 3 per category qualify</span></div>
+        <div class="cc-sub"><span>Month in progress</span><span>Top 3 Boost levels qualify · ties advance</span></div>
       </div>`;
       countdownEl.style.display = 'block';
       countdownEl.dataset.active = '1';
@@ -14992,8 +15024,8 @@ function renderLeaderboard() {
     }
   }
   const _thirdWins = _qualCut >= 0 ? fullRanked[_qualCut].catWins : null;
-  const _lastDayLb = new Date(now2.getFullYear(), now2.getMonth() + 1, 0);
-  const _daysLeftLb = Math.max(0, Math.ceil((_lastDayLb - now2) / 86400000));
+  const _nextMonthLb = new Date(now2.getFullYear(), now2.getMonth() + 1, 1);
+  const _daysLeftLb = Math.max(0, Math.ceil((_nextMonthLb - now2) / 86400000));
 
   renderMyRaceV1028({
     cat, fullRanked, qualCut: _qualCut, raceOn: _raceOn, daysLeft: _daysLeftLb,
@@ -16707,9 +16739,11 @@ let _lbcAutoExpandDone = false;
 const _lbcOpenRows = new Set(); // survives re-renders: 'cat:Music' / 'past:<launchId>'
 
 function renderPastChampsSection(filterCat) {
+  const recordedIds = new Set((state.hofData || []).map(h => h.challengeId).filter(Boolean));
   const launches = (state.champLaunches || [])
     .filter(l => !l.is_sponsored)
     .filter(l => !filterCat || filterCat === 'All' || l.category === filterCat)
+    .filter(l => l.challenge_id && recordedIds.has(l.challenge_id))
     .sort((a, b) => (b.month || '').localeCompare(a.month || '') || (b.category || '').localeCompare(a.category || ''));
   const scoped = filterCat && filterCat !== 'All';
   if (!launches.length) {
@@ -16717,7 +16751,7 @@ function renderPastChampsSection(filterCat) {
     // an empty archive just means no championship has ever run; stay quiet.
     return scoped
       ? `<div class="lbc-sec"><span class="lbc-sec-title">📜 Past ${escapeHtml(filterCat)} Championships</span></div>
-         <div class="lbc-rows"><div style="padding:14px;font-size:13px;color:var(--text-muted);text-align:center">No ${escapeHtml(filterCat)} championship has run yet.</div></div>`
+         <div class="lbc-rows"><div style="padding:14px;font-size:13px;color:var(--text-muted);text-align:center">No recorded ${escapeHtml(filterCat)} champion yet.</div></div>`
       : '';
   }
 
@@ -16768,7 +16802,7 @@ function renderPastChampsSection(filterCat) {
     ? `<button class="lbc-more" data-lbc-showall-past>${_lbcShowAllPast ? 'Show fewer ▴' : `Show older ▾ (${launches.length - PAST_CHAMPS_PREVIEW} more)`}</button>`
     : '';
 
-  return `<div class="lbc-sec"><span class="lbc-sec-title">📜 Past ${scoped ? escapeHtml(filterCat) + ' ' : ''}Championships</span><span class="lbc-sec-note">${launches.length} total</span></div>
+  return `<div class="lbc-sec"><span class="lbc-sec-title">📜 Past ${scoped ? escapeHtml(filterCat) + ' ' : ''}Champions</span><span class="lbc-sec-note">${launches.length} total</span></div>
     <div class="lbc-rows">${rows}${moreBtn}</div>`;
 }
 
@@ -27583,7 +27617,7 @@ document.addEventListener('click', (e) => {
   }
   if(typeof renderLeaderboard==='function'){
     const baseRenderLeaderboard=renderLeaderboard;
-    renderLeaderboard=function(){ const r=baseRenderLeaderboard.apply(this,arguments); requestAnimationFrame(uxRenderTitleFocus); return r; };
+    renderLeaderboard=function(){ const r=baseRenderLeaderboard.apply(this,arguments); requestAnimationFrame(()=>document.getElementById('uxTitleFocus')?.remove()); return r; };
   }
 
   /* ---------- Zero-state actions ---------- */
