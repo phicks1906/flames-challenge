@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1026 — Update Checker Correction</title>
+<title>FlamesChallenge v1027 — Update Activation Fix</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1026 · update-checker-correction" />
-<meta name="fc-whatsnew" content="Update detection now compares the deployed version number correctly, stops false update alerts, and remembers a dismissed real update for 24 hours." />
+<meta name="fc-build" content="v1027 · update-activation-fix" />
+<meta name="fc-whatsnew" content="The Update button now closes the banner immediately, clears stale app caches, and opens the newest deployed index directly on iPhone and installed-app sessions." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -9540,6 +9540,15 @@ const SUPABASE_KEY = "sb_publishable_ut_0vQ_1HLXXV8YMKikGhg_ecy7cAqf";
 // there is exactly one place to bump. The fallback only fires if the tag is
 // somehow missing; it should never be what ships.
 const APP_VERSION = (document.querySelector('meta[name="fc-build"]')?.content || 'v795').trim();
+// v1027 — clear the one-shot update request after the new shell actually loads.
+try {
+  const requested = JSON.parse(sessionStorage.getItem('fc_update_requested') || 'null');
+  const currentVersion = String(APP_VERSION).match(/v?\d+(?:\.\d+)*/i)?.[0]?.toLowerCase().replace(/^v/, '') || '';
+  const requestedVersion = String(requested?.version || '').match(/v?\d+(?:\.\d+)*/i)?.[0]?.toLowerCase().replace(/^v/, '') || '';
+  if (requestedVersion && requestedVersion === currentVersion) {
+    sessionStorage.removeItem('fc_update_requested');
+  }
+} catch (e) {}
 
 /* ---------- UPDATE CHECK (v1010) ----------
    The previous checker required the host to return HTTP 206 for a Range
@@ -9722,24 +9731,66 @@ function showUpdateBanner(build, news) {
     _updateBannerUp = false;
     _lastUpdateCheck = Date.now();
   };
-  bar.querySelector('.fcu-go').onclick = async () => { const btn = bar.querySelector('.fcu-go'); btn.disabled = true; btn.textContent = 'Updating…'; await applyUpdate(); };
+  bar.querySelector('.fcu-go').onclick = async () => {
+    const btn = bar.querySelector('.fcu-go');
+    btn.disabled = true;
+    btn.textContent = 'Updating…';
+    await applyUpdate(build, bar);
+  };
 }
-async function applyUpdate() {
-  const withTimeout = (p, ms) => Promise.race([p, new Promise(r => setTimeout(r, ms))]);
-  const u = new URL(location.href); u.searchParams.set('_u', Date.now());
-  const go = () => { try { location.replace(u.toString()); } catch (e) { location.href = u.toString(); } };
-  const hardStop = setTimeout(go, 3500);
+async function applyUpdate(offeredBuild, visibleBar) {
+  // v1027 — iOS can suspend a long async cache-cleanup chain before the final
+  // navigation runs. Close the banner immediately, then use a guarded direct
+  // navigation to the deployed index. Cache/SW cleanup gets a short window but
+  // can never prevent the update navigation.
+  const offeredId = _versionId(offeredBuild) || 'latest';
+  const withTimeout = (p, ms, fallback) => Promise.race([
+    Promise.resolve(p).catch(() => fallback),
+    new Promise(resolve => setTimeout(() => resolve(fallback), ms))
+  ]);
+
+  try { sessionStorage.setItem('fc_update_requested', JSON.stringify({ version: offeredId, at: Date.now() })); } catch (e) {}
+  try { localStorage.removeItem(UPDATE_DISMISS_KEY); } catch (e) {}
+
+  const bar = visibleBar || document.getElementById('fcUpdateBar');
+  if (bar) bar.remove();
+  _updateBannerUp = false;
+  _lastUpdateCheck = Date.now();
+  try { if (typeof toast === 'function') toast('Updating FlamesChallenge…'); } catch (e) {}
+
+  let navigated = false;
+  const go = () => {
+    if (navigated) return;
+    navigated = true;
+    const target = new URL('/index.html', location.origin);
+    target.searchParams.set('_fc_update', offeredId);
+    target.searchParams.set('_fc_refresh', String(Date.now()));
+    try { window.location.assign(target.toString()); }
+    catch (e) { window.location.href = target.toString(); }
+  };
+
+  // Navigation is guaranteed even if Safari stalls service-worker or Cache API
+  // calls. A short delay lets cleanup finish without making the button look dead.
+  const navigationFallback = setTimeout(go, 900);
   try {
-    if (navigator.serviceWorker) {
-      const reg=await navigator.serviceWorker.getRegistration();
-      if(reg?.waiting) try{reg.waiting.postMessage({type:'SKIP_WAITING'});}catch(e){}
+    if ('serviceWorker' in navigator) {
+      const regs = await withTimeout(navigator.serviceWorker.getRegistrations(), 450, []);
+      for (const reg of (regs || [])) {
+        try { reg.waiting?.postMessage({ type: 'SKIP_WAITING' }); } catch (e) {}
+        try { reg.update(); } catch (e) {}
+        try { reg.unregister(); } catch (e) {}
+      }
     }
-    if (window.caches) { const keys = await withTimeout(caches.keys(), 1500) || []; await withTimeout(Promise.all(keys.map(k => caches.delete(k))), 1500); }
-  } catch (e) { console.warn('cache clear failed', e); }
-  try {
-    if (navigator.serviceWorker) { const regs = await withTimeout(navigator.serviceWorker.getRegistrations(), 1500) || []; await withTimeout(Promise.all(regs.map(r => r.unregister())), 1500); }
-  } catch (e) { console.warn('sw unregister failed', e); }
-  clearTimeout(hardStop); go();
+    if ('caches' in window) {
+      const keys = await withTimeout(caches.keys(), 450, []);
+      await withTimeout(Promise.allSettled((keys || []).map(key => caches.delete(key))), 450, []);
+    }
+  } catch (e) {
+    console.warn('update cleanup skipped', e);
+  } finally {
+    clearTimeout(navigationFallback);
+    go();
+  }
 }
 setTimeout(() => checkForUpdate(true), 2500);
 setInterval(() => checkForUpdate(false), UPDATE_CHECK_MS);
