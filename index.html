@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1030 — Championship Leaderboard Redesign</title>
+<title>FlamesChallenge v1031 — Single-File Updates &amp; Titles Race Continuity</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1030 · championship-leaderboard-redesign" />
-<meta name="fc-whatsnew" content="Titles now leads with the category Championship race, current qualifiers, cutoff, and a clearly labeled personal position." />
+<meta name="fc-build" content="v1031 · single-file-updates-titles-race-continuity" />
+<meta name="fc-whatsnew" content="Updates now use index.html only, and each category’s Championship leaders, standings, and your position are one connected race view." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -9627,7 +9627,7 @@ try {
 function _fcuEsc(t){return String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 const UPDATE_CHECK_MS = 15 * 60 * 1000;
 const UPDATE_READ_LIMIT = 48 * 1024;
-const UPDATE_MANIFEST_PATH = '/version.json';
+// v1031 — index.html is the only version source. No version.json is required.
 const UPDATE_DISMISS_KEY = 'fc_update_dismissed_v1026';
 const UPDATE_DISMISS_MS = 24 * 60 * 60 * 1000;
 let _lastUpdateCheck = 0;
@@ -9690,19 +9690,9 @@ async function _readBuildHead(res) {
   } finally { try { await reader.cancel(); } catch (e) {} }
 }
 async function _fetchVersionManifest(){
-  const url=new URL(UPDATE_MANIFEST_PATH,location.origin);
-  url.searchParams.set('_fc_update',Date.now());
-  const res=await fetch(url.toString(),{cache:'no-store',credentials:'same-origin',headers:{'Cache-Control':'no-cache','Pragma':'no-cache'}});
-  if(!res.ok) throw new Error('version manifest HTTP '+res.status);
-  const data=await res.json();
-  // v1026 — compare the semantic version, not the descriptive build slug.
-  // The old order preferred data.build (for example
-  // "sudden-death-championship-parity") over data.version ("v1025"),
-  // which made the current release look different from itself forever.
-  const build=String(data.version||'').trim();
-  if(!build) throw new Error('version manifest missing version');
-  const note=Array.isArray(data.notes) ? data.notes[0] : '';
-  return {build,news:String(data.whatsNew||data.news||note||'').trim()};
+  // Backward-compatible function name; v1031 reads the deployed build tag
+  // directly from index.html so releases require only one file.
+  return _fetchBuildTag();
 }
 async function _fetchBuildTag() {
   const url = new URL('/index.html', location.origin);
@@ -9743,9 +9733,8 @@ async function checkForUpdate(force=false, options={}) {
   _lastUpdateCheck = now;
   _updateCheckInFlight = (async () => {
     try {
-      let remote=null;
-      try{ remote=await _fetchVersionManifest(); }
-      catch(manifestError){ remote=await _fetchBuildTag(); }
+      // v1031 — one source of truth: the deployed index.html build tag.
+      const remote=await _fetchBuildTag();
       const remoteId=_versionId(remote?.build);
       const localId=_versionId(APP_VERSION);
       if (remoteId && localId && remoteId !== localId) {
@@ -29467,6 +29456,146 @@ window.__fcSuddenDeathParity={build:'v1025',regularAndChampionships:'same new-en
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',()=>{ try{postRender();}catch(e){} });
   else { try{postRender();}catch(e){} }
+})();
+</script>
+
+
+<style id="fc-v1031-titles-race-continuity-css">
+/* v1031 — one connected Championship race instead of separate top/bottom boards. */
+#lbTabRankings #fcChampRaceV1030,
+#lbTabRankings #lbMyRace,
+#lbTabRankings #lbChampCountdown,
+#lbTabRankings #lbChampionBanner,
+#lbTabRankings .lb-section-label,
+#lbTabRankings #lbList{display:none!important}
+
+.fc-titles-race-v1031{margin:0 0 14px;border:1px solid rgba(255,190,78,.30);border-radius:22px;overflow:hidden;background:linear-gradient(150deg,rgba(35,25,11,.95),rgba(13,12,11,.99) 64%);box-shadow:0 18px 44px rgba(0,0,0,.30)}
+.fc-tr-head{padding:16px 17px 14px;border-bottom:1px solid rgba(255,255,255,.08);background:radial-gradient(circle at 88% 4%,rgba(255,154,34,.15),transparent 42%)}
+.fc-tr-kicker{font-size:10px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:var(--gold)}
+.fc-tr-titleline{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-top:6px}
+.fc-tr-title{font-size:23px;line-height:1.08;font-weight:900;color:var(--text)}
+.fc-tr-time{flex:0 0 auto;padding:6px 9px;border:1px solid rgba(255,195,88,.28);border-radius:999px;background:rgba(255,195,88,.07);font-size:10.5px;font-weight:850;color:var(--gold);white-space:nowrap}
+.fc-tr-rule{margin-top:7px;font-size:12px;line-height:1.45;color:var(--text-dim)}
+.fc-tr-rule strong{color:var(--text)}
+.fc-tr-cutoff{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:11px;padding:10px 11px;border-radius:12px;background:rgba(255,255,255,.045);font-size:11px;color:var(--text-dim)}
+.fc-tr-cutoff b{font-size:12.5px;color:var(--gold);text-align:right}
+
+.fc-tr-board{padding:7px 12px 3px}
+.fc-tr-board-label{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 4px 6px;font-size:9px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted)}
+.fc-tr-board-label span:last-child{letter-spacing:.06em;text-transform:none;font-weight:750}
+.fc-tr-row{display:grid;grid-template-columns:38px minmax(0,1fr) auto;align-items:center;gap:9px;padding:11px 4px;border-top:1px solid rgba(255,255,255,.07)}
+.fc-tr-rank{font-family:var(--font-display);font-size:21px;line-height:1;color:var(--gold);text-align:center}
+.fc-tr-person{display:flex;align-items:center;gap:9px;min-width:0;cursor:pointer}
+.fc-tr-person .lb-avatar{width:38px;height:38px;flex:0 0 38px}
+.fc-tr-name{font-size:13.5px;font-weight:850;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fc-tr-record{margin-top:3px;font-size:10.5px;color:var(--text-muted)}
+.fc-tr-score{text-align:right}
+.fc-tr-score b{display:block;font-family:var(--font-display);font-size:20px;line-height:1;color:var(--gold)}
+.fc-tr-score span{display:block;margin-top:4px;font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted)}
+.fc-tr-qualifier{display:inline-flex;margin-top:4px;padding:3px 6px;border-radius:999px;background:rgba(255,195,88,.11);font-size:8px;font-weight:900;letter-spacing:.07em;text-transform:uppercase;color:var(--gold)}
+.fc-tr-open{margin:8px 4px 10px;padding:10px 11px;border:1px dashed rgba(255,255,255,.13);border-radius:12px;font-size:11.5px;line-height:1.42;color:var(--text-dim)}
+.fc-tr-empty{padding:23px 16px 21px;text-align:center}
+.fc-tr-empty-icon{font-size:27px;margin-bottom:7px}
+.fc-tr-empty strong{display:block;font-size:15px;color:var(--text);margin-bottom:5px}
+.fc-tr-empty span{display:block;font-size:12px;line-height:1.5;color:var(--text-dim)}
+
+.fc-tr-you{margin:5px 12px 13px;padding:13px 14px;border:1px solid rgba(255,92,45,.27);border-radius:16px;background:linear-gradient(145deg,rgba(35,20,15,.74),rgba(18,15,13,.94))}
+.fc-tr-you-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.fc-tr-you-label{font-size:9.5px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:var(--ember)}
+.fc-tr-you-pill{padding:5px 8px;border:1px solid var(--border-bright);border-radius:999px;font-size:9.5px;font-weight:850;color:var(--text-dim);white-space:nowrap}
+.fc-tr-you-main{margin-top:8px;font-size:17px;font-weight:900;color:var(--text)}
+.fc-tr-you-copy{margin-top:4px;font-size:11.5px;line-height:1.45;color:var(--text-dim)}
+.fc-tr-you-actions{display:flex;gap:8px;margin-top:11px}
+.fc-tr-you-actions button{min-height:41px;padding:9px 12px;border:1px solid var(--border-bright);border-radius:12px;background:rgba(255,255,255,.03);color:var(--text);font-size:11.5px;font-weight:850}
+.fc-tr-you-actions .primary{flex:1;border-color:transparent;background:linear-gradient(135deg,var(--ember),#ff392b);color:#fff}
+
+#lbPastWrap{margin-top:4px}
+@media(max-width:520px){
+  .fc-tr-head{padding:14px 14px 12px}
+  .fc-tr-title{font-size:21px}
+  .fc-tr-time{font-size:10px;padding:6px 8px}
+  .fc-tr-board{padding-inline:10px}
+  .fc-tr-row{grid-template-columns:34px minmax(0,1fr) auto;gap:8px;padding:10px 3px}
+  .fc-tr-rank{font-size:19px}
+  .fc-tr-person .lb-avatar{width:36px;height:36px;flex-basis:36px}
+  .fc-tr-name{font-size:13px}
+  .fc-tr-score b{font-size:19px}
+  .fc-tr-you{margin-inline:10px;padding:12px}
+}
+</style>
+
+<script id="fc-v1031-titles-race-continuity-js">
+(function(){
+  'use strict';
+  const esc=v=>typeof escapeHtml==='function'?escapeHtml(String(v??'')):String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const ord=n=>{n=Number(n)||0;const m=n%100;return `${n}${m>=11&&m<=13?'th':({1:'st',2:'nd',3:'rd'}[n%10]||'th')}`};
+  function daysLeft(){const n=new Date(),x=new Date(n.getFullYear(),n.getMonth()+1,1);return Math.max(0,Math.ceil((x-n)/86400000));}
+  function category(){
+    const active=document.querySelector('#lbCategoryTabs [data-lb-cat].active');
+    const visible=active?.dataset?.lbCat;
+    if(visible&&Array.isArray(CATEGORIES)&&CATEGORIES.includes(visible)){state.lbCategory=visible;return visible;}
+    if(state?.lbCategory&&CATEGORIES.includes(state.lbCategory))return state.lbCategory;
+    return CATEGORIES?.[0]||'Art';
+  }
+  function rowsFor(cat){
+    const users=state?.leaderboardData?.users||[];
+    return users.map(u=>({...u,
+      catWins:Number(u.monthlyByCategory?.[cat]||0),
+      catLosses:Number(u.monthlyLosses||0),
+      catBoost:Number(u.boostMonthByCat?.[cat]||0),
+      catAllTime:Number(u.byCategory?.[cat]||0)
+    })).filter(u=>u.catWins>0).sort((a,b)=>b.catBoost-a.catBoost||b.catWins-a.catWins||b.catAllTime-a.catAllTime);
+  }
+  function avatar(u){try{return `<div class="lb-avatar">${avatarInner(u.avatar)}</div>`}catch(e){return '<div class="lb-avatar" style="display:grid;place-items:center">👤</div>'}}
+  function openCategory(cat){
+    state.cFilter='active';state.cSearch=String(cat||'').trim();
+    document.querySelectorAll('#chTabs .ch-tab').forEach(x=>x.classList.toggle('active',x.dataset.cfilter==='active'));
+    const input=document.getElementById('chSearchInput');if(input)input.value=state.cSearch;
+    switchView('challenges');requestAnimationFrame(()=>typeof renderChallenges==='function'&&renderChallenges());
+  }
+  function render(){
+    const tabs=document.getElementById('lbCategoryTabs');
+    const rankTab=document.getElementById('lbTabRankings');
+    if(!tabs||!rankTab||rankTab.style.display==='none'||!state?.leaderboardData)return;
+    const cat=category(),rows=rowsFor(cat),levels=[...new Set(rows.map(u=>u.catBoost))];
+    const levelRank=new Map(levels.map((v,i)=>[v,i+1]));
+    const cutoff=levels.length>=3?levels[2]:null;
+    const openLevels=Math.max(0,3-levels.length);
+    const remaining=daysLeft();
+    let host=document.getElementById('fcTitlesUnifiedV1031');
+    if(!host){host=document.createElement('section');host.id='fcTitlesUnifiedV1031';host.className='fc-titles-race-v1031';tabs.insertAdjacentElement('afterend',host);}
+    let board='';
+    if(!rows.length){
+      board=`<div class="fc-tr-empty"><div class="fc-tr-empty-icon">🏆</div><strong>No ${esc(cat)} leader yet</strong><span>The first public ${esc(cat)} win earns Boost and starts this month’s Championship race.</span></div>`;
+    }else{
+      board=`<div class="fc-tr-board"><div class="fc-tr-board-label"><span>Current standings</span><span>Boost determines position</span></div>`;
+      rows.slice(0,10).forEach(u=>{
+        const place=levelRank.get(u.catBoost)||1,isYou=state.profile?.id===u.id,qualifies=place<=3;
+        board+=`<div class="fc-tr-row"><div class="fc-tr-rank">${ord(place)}</div><div class="fc-tr-person" data-fc-v1031-user="${esc(u.id)}">${avatar(u)}<div style="min-width:0"><div class="fc-tr-name">${esc(u.name)}${isYou?' <span style="color:var(--ember)">(you)</span>':''}</div><div class="fc-tr-record">${u.catWins}–${u.catLosses} this month${qualifies?'<br><span class="fc-tr-qualifier">Qualifying</span>':''}</div></div></div><div class="fc-tr-score"><b>${u.catBoost}</b><span>Boost</span></div></div>`;
+      });
+      if(openLevels>0)board+=`<div class="fc-tr-open">${openLevels===1?'One qualification level is still open.':`${openLevels} qualification levels are still open.`} New Boost totals can fill them before month-end.</div>`;
+      board+='</div>';
+    }
+    const me=rows.find(u=>u.id===state.profile?.id)||null,myBoost=me?.catBoost||0,myPlace=me?(levelRank.get(me.catBoost)||null):null;
+    let pill='Not ranked',main=`Not ranked · ${myBoost} Boost`,copy='';
+    if(me){pill=myPlace<=3?'Qualifying':'In the race';main=`${ord(myPlace)} place · ${myBoost} Boost`;copy=myPlace<=3?'You are currently in a qualifying Boost level.':cutoff!=null?`${Math.max(0,cutoff-myBoost)} more Boost reaches the current cutoff.`:'More wins can move you into the top three Boost levels.';}
+    else if(!rows.length)copy=`One ${cat} win would put you on the board and take the early lead.`;
+    else if(cutoff!=null)copy=`The current cutoff is ${cutoff} Boost. Your first win puts Boost on the board.`;
+    else copy='The qualification cutoff is still forming. Your first win puts you into the standings.';
+    const cutoffText=cutoff==null?(levels.length?`${openLevels} open qualification level${openLevels===1?'':'s'}`:'Not established yet'):`${cutoff} Boost`;
+    host.innerHTML=`<div class="fc-tr-head"><div class="fc-tr-kicker">${esc(cat)} · Championship race</div><div class="fc-tr-titleline"><div class="fc-tr-title">Leaders & standings</div><div class="fc-tr-time">${remaining===0?'Final day':`${remaining} day${remaining===1?'':'s'} remaining`}</div></div><div class="fc-tr-rule"><strong>Top three Boost levels qualify.</strong> Everyone tied at the cutoff advances.</div><div class="fc-tr-cutoff"><span>Current qualification cutoff</span><b>${esc(cutoffText)}</b></div></div>${board}<div class="fc-tr-you"><div class="fc-tr-you-head"><div class="fc-tr-you-label">Your position in ${esc(cat)}</div><div class="fc-tr-you-pill">${esc(pill)}</div></div><div class="fc-tr-you-main">${esc(main)}</div><div class="fc-tr-you-copy">${esc(copy)}</div><div class="fc-tr-you-actions">${me?'<button data-fc-v1031-action="boost">Boost history</button>':''}<button class="primary" data-fc-v1031-action="find">Find ${esc(cat)} challenges</button></div></div>`;
+    host.querySelectorAll('[data-fc-v1031-user]').forEach(el=>el.addEventListener('click',()=>{if(el.dataset.fcV1031User)openUserProfile(el.dataset.fcV1031User)}));
+    host.querySelector('[data-fc-v1031-action="boost"]')?.addEventListener('click',()=>openBoostSheet(state.profile.id,cat));
+    host.querySelector('[data-fc-v1031-action="find"]')?.addEventListener('click',()=>openCategory(cat));
+    const sub=document.querySelector('#leaderboardViewSection .section-sub');
+    if(sub)sub.innerHTML='Challenge wins earn Boost. The top three Boost levels in each category qualify; ties at the cutoff advance. · <button class="link-btn" onclick="toggleLbHow()">Rules</button>';
+  }
+  const prior=window.renderLeaderboard;
+  if(typeof prior==='function')window.renderLeaderboard=function(){const r=prior.apply(this,arguments);requestAnimationFrame(render);return r};
+  document.addEventListener('click',e=>{if(e.target.closest('#lbCategoryTabs [data-lb-cat]'))setTimeout(render,0)});
+  const tabs=document.getElementById('lbCategoryTabs');
+  if(tabs)new MutationObserver(()=>requestAnimationFrame(render)).observe(tabs,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>requestAnimationFrame(render));else requestAnimationFrame(render);
 })();
 </script>
 
