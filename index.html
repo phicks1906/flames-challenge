@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1022 — Challenge Creation Clarity & State Fix</title>
+<title>FlamesChallenge v1023 — Challenge Creation Final Polish</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,7 +21,7 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1022 · challenge-creation-clarity-state-fix" />
+<meta name="fc-build" content="v1023 · challenge-creation-final-polish" />
 <meta name="fc-whatsnew" content="Challenge creation now uses clearer language, concise context-aware Ember title ideas, honest caption assistance, a corrected host-only state, concrete timing guidance, and plain-language sudden-death rules." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
@@ -7023,6 +7023,66 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
 }
 </style>
 
+
+<style id="fc-v1023-challenge-creation-final-polish-css">
+/* v1023 — safe-area phase header, concept-preserving title polish, compact audience. */
+#createChallengeSheet .cc-sheet-header{
+  position:sticky!important;
+  top:0!important;
+  z-index:30!important;
+  display:block!important;
+  min-height:0!important;
+  padding:calc(8px + env(safe-area-inset-top,0px)) 18px 10px!important;
+  background:rgba(7,7,7,.985)!important;
+  backdrop-filter:blur(22px)!important;
+}
+#createChallengeSheet .cc-sheet-title-row{display:flex;align-items:center;gap:12px;min-height:44px}
+#createChallengeSheet .cc-sheet-title-row h2{flex:1;margin:0;font-size:18px!important}
+#createChallengeSheet .cc-sheet-title-row .cc-close{flex:0 0 auto}
+#createChallengeSheet .cc-sheet-inner{padding:0 18px calc(18px + env(safe-area-inset-bottom,0px))!important}
+#createChallengeSheet .cc-native-form{padding-top:14px!important}
+#createChallengeSheet .cc-native-progress{
+  position:relative!important;top:auto!important;z-index:1!important;
+  margin:8px 0 0!important;padding:0!important;background:none!important;
+  gap:5px!important;
+}
+#createChallengeSheet .cc-native-progress-item{min-width:42px!important;gap:3px!important}
+#createChallengeSheet .cc-native-progress-item span{width:26px!important;height:26px!important}
+#createChallengeSheet .cc-native-progress-item b{font-size:8px!important;line-height:1.1!important}
+#createChallengeSheet .fc-sug-btn:disabled{opacity:.42;box-shadow:none!important;cursor:not-allowed}
+#createChallengeSheet .fc-v1023-polish-note{
+  padding:12px 13px;border:1px solid rgba(255,126,67,.20);border-radius:12px;
+  background:rgba(255,94,38,.045);color:#a99c94;font-size:12px;line-height:1.45
+}
+#createChallengeSheet .fc-sug-chip.fc-v1023-polished-title .fc-sug-kind{color:#ff9860}
+#createChallengeSheet .cc-visibility-grid{
+  display:grid!important;grid-template-columns:1fr 1fr!important;gap:6px!important;
+  padding:5px!important;border:1px solid rgba(255,255,255,.11)!important;
+  border-radius:15px!important;background:#100f0e!important;
+}
+#createChallengeSheet .cc-visibility-grid .cc-pill{
+  min-height:46px!important;height:46px!important;padding:0 12px!important;
+  display:grid!important;place-items:center!important;text-align:center!important;
+  border:0!important;border-radius:11px!important;background:transparent!important;
+  box-shadow:none!important;color:#a99e97!important;
+}
+#createChallengeSheet .cc-visibility-grid .cc-pill strong{font-size:14px!important;margin:0!important;white-space:nowrap}
+#createChallengeSheet .cc-visibility-grid .cc-pill.selected{
+  color:#fff!important;background:linear-gradient(135deg,#ff7d31,#ff3827)!important;
+  box-shadow:0 6px 18px rgba(255,70,36,.18)!important;
+}
+#createChallengeSheet .cc-visibility-help{margin-top:9px;color:#948981;font-size:12px;line-height:1.45;padding:0 2px}
+@media(max-width:520px){
+  #createChallengeSheet .cc-native-progress-item{min-width:36px!important}
+  #createChallengeSheet .cc-native-progress-item b{display:block!important;font-size:8px!important}
+  #createChallengeSheet .cc-visibility-grid{grid-template-columns:1fr 1fr!important}
+}
+@media(max-width:350px){
+  #createChallengeSheet .cc-native-progress-item b{font-size:7px!important}
+  #createChallengeSheet .cc-native-progress-item{min-width:31px!important}
+}
+</style>
+
 </head>
 <body>
 <!-- v690 — View-as-member banner. Deliberately loud and impossible to miss: the
@@ -7560,20 +7620,22 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
 <!-- CREATE CHALLENGE SHEET -->
 <div class="cc-sheet" id="createChallengeSheet">
   <div class="cc-sheet-header">
-    <button class="cc-close" onclick="closeCreateChallenge()" aria-label="Close">×</button>
-    <h2>New Challenge</h2>
+    <div class="cc-sheet-title-row">
+      <button class="cc-close" onclick="closeCreateChallenge()" aria-label="Close">×</button>
+      <h2>New Challenge</h2>
+    </div>
+    <div class="cc-native-progress" aria-label="Challenge creation progress">
+      <button type="button" class="cc-native-progress-item active" data-cc-progress="1" onclick="uxCcShowStep(1)"><span>1</span><b>Challenge</b></button>
+      <i></i>
+      <button type="button" class="cc-native-progress-item" data-cc-progress="2" onclick="uxCcShowStep(2)"><span>2</span><b>Entry</b></button>
+      <i></i>
+      <button type="button" class="cc-native-progress-item" data-cc-progress="3" onclick="uxCcShowStep(3)"><span>3</span><b>Timing</b></button>
+      <i></i>
+      <button type="button" class="cc-native-progress-item" data-cc-progress="4" onclick="uxCcShowStep(4)"><span>4</span><b>Launch</b></button>
+    </div>
   </div>
   <div class="cc-sheet-inner">
     <form id="createChallengeForm" class="cc-form cc-native-form" data-ux-stepped="1" novalidate>
-      <div class="cc-native-progress" aria-label="Challenge creation progress">
-        <button type="button" class="cc-native-progress-item active" data-cc-progress="1" onclick="uxCcShowStep(1)"><span>1</span><b>Challenge</b></button>
-        <i></i>
-        <button type="button" class="cc-native-progress-item" data-cc-progress="2" onclick="uxCcShowStep(2)"><span>2</span><b>Your entry</b></button>
-        <i></i>
-        <button type="button" class="cc-native-progress-item" data-cc-progress="3" onclick="uxCcShowStep(3)"><span>3</span><b>Timing</b></button>
-        <i></i>
-        <button type="button" class="cc-native-progress-item" data-cc-progress="4" onclick="uxCcShowStep(4)"><span>4</span><b>Launch</b></button>
-      </div>
 
       <div class="cc-native-heading">
         <div class="cc-step-title" id="uxCcStepHeading">Step 1 of 4 · Set the challenge</div>
@@ -7584,7 +7646,7 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
       <section class="cc-step active" data-ux-step="1">
         <div class="cc-step-body">
           <div class="cc-field">
-            <label for="ccTitle">Challenge name <span class="hint">Keep it short and clear</span><button type="button" class="fc-sug-btn" onclick="suggestChallengeTitleV1022(this)">Ask Ember</button></label>
+            <label for="ccTitle">Challenge name <span class="hint">Keep it short and clear</span><button type="button" class="fc-sug-btn" id="ccTitlePolishBtn" onclick="polishChallengeTitleV1023(this)" disabled>Polish with Ember</button></label>
             <input id="ccTitle" type="text" maxlength="80" required placeholder="e.g. Best Sunset Photo This Week" />
             <div class="fc-sug-box" id="ccTitleSugBox"></div>
           </div>
@@ -7709,10 +7771,11 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
         <div class="cc-step-body">
           <div class="cc-field">
             <label>Who can enter and vote?</label>
-            <div class="cc-visibility-grid cc-pills" id="ccVisPills">
-              <button type="button" class="cc-pill selected" data-vis="public"><span>PUBLIC</span><strong>Everyone</strong><small>Visible in live challenges and open to the community.</small></button>
-              <button type="button" class="cc-pill" data-vis="private"><span>PRIVATE</span><strong>Invited people</strong><small>Only selected groups and individuals can participate.</small></button>
+            <div class="cc-visibility-grid cc-pills" id="ccVisPills" role="group" aria-label="Challenge audience">
+              <button type="button" class="cc-pill selected" data-vis="public"><strong>Everyone</strong></button>
+              <button type="button" class="cc-pill" data-vis="private"><strong>Invited people</strong></button>
             </div>
+            <div class="cc-visibility-help" id="ccVisibilityHelp">Visible in Live Challenges. Any member can enter and vote.</div>
           </div>
 
           <div class="cc-field" id="ccInviteField" style="display:none">
@@ -28560,7 +28623,7 @@ window.__fcLandingDeduplication={
 </script>
 
 <script id="fc-v1021-native-challenge-creation-marker">
-window.__fcNativeChallengeCreation={build:'v1022',steps:['challenge','entry','timing','audience-and-launch'],draftAutosave:true,finalPreview:true,videoHandling:'original upload with duration guidance; no audio-damaging browser re-encode',clarityAndStateFix:true};
+window.__fcNativeChallengeCreation={build:'v1023',steps:['challenge','entry','timing','audience-and-launch'],draftAutosave:true,finalPreview:true,videoHandling:'original upload with duration guidance; no audio-damaging browser re-encode',clarityAndStateFix:true};
 </script>
 
 
@@ -28680,6 +28743,90 @@ window.__fcNativeChallengeCreation={build:'v1022',steps:['challenge','entry','ti
 </script>
 <script id="fc-v1022-challenge-creation-clarity-marker">
 window.__fcChallengeCreationClarity={build:'v1022',stepOneLanguage:'set-the-challenge',titleSuggestions:'short titles only',captionSuggestions:'seed required; no invented details',hostStateFix:true,timingCopy:'concrete',suddenDeathCopy:'revealed together for runoff'};
+</script>
+
+
+<script id="fc-v1023-challenge-creation-final-polish-js">
+(function(){
+  'use strict';
+  const endpoint = typeof SUGGEST_ENDPOINT !== 'undefined'
+    ? SUGGEST_ENDPOINT
+    : 'https://sioalvawzayfphwzqctq.supabase.co/functions/v1/suggest-content';
+  const byId=id=>document.getElementById(id);
+  const stop=new Set(['a','an','and','at','best','challenge','contest','for','in','my','of','on','our','the','this','to','with','your']);
+  function words(s){return String(s||'').toLowerCase().match(/[a-z0-9']+/g)||[]}
+  function conceptWords(s){return words(s).filter(w=>w.length>2&&!stop.has(w))}
+  function titleCase(s){return String(s||'').trim().replace(/\s+/g,' ').replace(/\b[a-z]/g,m=>m.toUpperCase())}
+  function clean(raw){
+    let s=String(raw||'').replace(/\p{Extended_Pictographic}/gu,'').replace(/^\s*(polished option|option\s*\d*)\s*[:\-–—]\s*/i,'').trim();
+    s=s.split(/\r?\n/)[0].replace(/^['\"“”]+|['\"“”]+$/g,'').replace(/[.!?]+$/,'').trim();
+    if(s.length>64)s=s.slice(0,64).replace(/\s+\S*$/,'').trim();
+    return s;
+  }
+  function preservesConcept(candidate,seed){
+    const required=conceptWords(seed), got=words(candidate);
+    if(!required.length)return false;
+    return required.every(token=>got.some(w=>w===token||w===token+'s'||token===w+'s'));
+  }
+  function unique(list){return [...new Set(list.map(clean).filter(Boolean))]}
+  function render(box,target,ideas){
+    box.innerHTML='';
+    ideas.forEach(idea=>{
+      const chip=document.createElement('button');chip.type='button';chip.className='fc-sug-chip fc-v1023-polished-title';
+      chip.innerHTML=`<span class="fc-sug-kind">Polished option</span><span>${escapeHtml(idea)}</span>`;
+      chip.onclick=()=>{target.value=idea.slice(0,target.maxLength||idea.length);target.dispatchEvent(new Event('input',{bubbles:true}));box.innerHTML=''};
+      box.appendChild(chip);
+    });
+    if(ideas.length){const tip=document.createElement('div');tip.className='fc-sug-note';tip.textContent='Each option keeps your original idea. Tap one to use it.';box.appendChild(tip)}
+  }
+  function syncPolishButton(){
+    const input=byId('ccTitle'),btn=byId('ccTitlePolishBtn');if(!input||!btn)return;
+    btn.disabled=!input.value.trim();
+  }
+  window.polishChallengeTitleV1023=async function(btn){
+    const box=byId('ccTitleSugBox'),target=byId('ccTitle');if(!box||!target)return;
+    const seed=target.value.trim();
+    if(!seed){box.innerHTML='<div class="fc-v1023-polish-note">Type your challenge idea first. Ember will improve the wording without changing the idea.</div>';target.focus();syncPolishButton();return}
+    const original=btn.textContent;btn.disabled=true;btn.textContent='Polishing…';box.innerHTML='';
+    try{
+      const resp=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        kind:'challenge',category:ccState.category||'',
+        context:`Polish this exact challenge name: "${seed}". Preserve every meaningful concept word and the same subject. Return up to three short title alternatives only. Do not switch topics, invent a new challenge, add instructions, add emojis, or rely on the selected category if it conflicts with the typed idea.`
+      })});
+      const data=await resp.json().catch(()=>({}));
+      const local=titleCase(seed);
+      let ideas=unique([local,...(Array.isArray(data.ideas)?data.ideas:[])]).filter(x=>preservesConcept(x,seed));
+      ideas=ideas.filter((x,i,a)=>i===0||x.toLowerCase()!==seed.toLowerCase()).slice(0,3);
+      if(!ideas.length&&local!==seed)ideas=[local];
+      if(!ideas.length){box.innerHTML='<div class="fc-v1023-polish-note">Ember did not find a cleaner version that preserved your idea. Your title was left unchanged.</div>'}
+      else render(box,target,ideas);
+    }catch(e){
+      const local=titleCase(seed);
+      if(local&&local!==seed)render(box,target,[local]);
+      else box.innerHTML='<div class="fc-v1023-polish-note">Ember could not be reached. Your title was left unchanged.</div>';
+    }finally{btn.textContent=original;syncPolishButton()}
+  };
+  function syncVisibilityHelp(){
+    const help=byId('ccVisibilityHelp');if(!help)return;
+    help.textContent=ccState.visibility==='private'
+      ? 'Only selected people and groups can enter and vote.'
+      : 'Visible in Live Challenges. Any member can enter and vote.';
+  }
+  function install(){
+    const title=byId('ccTitle');if(title&&!title.dataset.v1023Polish){title.dataset.v1023Polish='1';title.addEventListener('input',syncPolishButton)}
+    const vis=byId('ccVisPills');if(vis&&!vis.dataset.v1023Help){vis.dataset.v1023Help='1';vis.addEventListener('click',()=>setTimeout(syncVisibilityHelp,0))}
+    syncPolishButton();syncVisibilityHelp();
+  }
+  const priorShow=window.uxCcShowStep;
+  window.uxCcShowStep=function(){const r=priorShow?.apply(this,arguments);syncPolishButton();syncVisibilityHelp();return r};
+  const priorOpen=window.openCreateChallenge;
+  window.openCreateChallenge=async function(){const r=await priorOpen.apply(this,arguments);install();syncPolishButton();syncVisibilityHelp();return r};
+  document.addEventListener('DOMContentLoaded',install,{once:true});
+  if(document.readyState!=='loading')install();
+})();
+</script>
+<script id="fc-v1023-challenge-creation-final-polish-marker">
+window.__fcChallengeCreationFinalPolish={build:'v1023',phaseTracker:'safe-area header',emberTitleRole:'polish only; concept preserving',audienceControl:'compact segmented',nextPhase:'v1024 voting experience and integrity'};
 </script>
 
 </body>
