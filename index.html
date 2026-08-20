@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1045 — Ember System Consolidation</title>
+<title>FlamesChallenge v1046 — Ember Factual Intelligence</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1045 · ember-system-consolidation" />
-<meta name="fc-whatsnew" content="Ember now uses one screen-aware system with Full, Important only, and Off guidance controls, contextual Ask Ember prompts, and recorded competition context." />
+<meta name="fc-build" content="v1046 · ember-factual-intelligence" />
+<meta name="fc-whatsnew" content="Ember now answers competition rules and recorded Championship facts locally from the approved current system before using AI for open-ended help." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -24130,15 +24130,189 @@ async function removeUploadedMedia(path) {
   try { await db.storage.from('challenge-media').remove([path]); } catch (e) { /* best effort */ }
 }
 
+/* v1046 — authoritative local Ember fact engine.
+   Competition rules and recorded score facts are answered in-browser from the
+   same constants/state that render the product. The existing ask-ember Edge
+   Function remains unchanged and is used only when a question genuinely needs
+   open-ended/creative AI assistance. */
+const FC_EMBER_RULES_V1046 = Object.freeze({
+  scorePeriod: 'calendar_month',
+  scoreFormula: 'Opponent Points + Turnout Points',
+  opponentPoints: Object.freeze({Spark:1,Flame:2,Blaze:4,Inferno:6,Legend:10,Icon:14,Immortal:18,'G.O.A.T.':24}),
+  turnoutPoints: Object.freeze([{label:'250 or more',pts:22},{label:'100–249',pts:15},{label:'50–99',pts:10},{label:'25–49',pts:6},{label:'10–24',pts:3},{label:'Under 10',pts:0}]),
+  tierWins: Object.freeze({Spark:0,Flame:1,Blaze:5,Inferno:10,Legend:25,Icon:50,Immortal:75,'G.O.A.T.':100}),
+  qualifyingDistinctLevels: 3,
+  tiesAtCutoffAdvance: true
+});
+
+function fcEmberMonthKeyV1046(d=new Date()){
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+function fcEmberMonthLabelV1046(d=new Date()){
+  try{return d.toLocaleDateString(undefined,{month:'long',year:'numeric'});}catch(e){return fcEmberMonthKeyV1046(d);}
+}
+function fcEmberCurrentCategoryV1046(){
+  const active=document.querySelector('#lbCategoryTabs [data-lb-cat].active');
+  const cat=active?.dataset?.lbCat||state?.lbCategory;
+  return Array.isArray(CATEGORIES)&&CATEGORIES.includes(cat)?cat:null;
+}
+function fcEmberLedgerRowsV1046(userId,cat=null,month=fcEmberMonthKeyV1046()){
+  return Object.values(state?.boostByChallenge||{}).filter(r=>r&&String(r.winner_id)===String(userId)&&r.month===month&&(!cat||r.category===cat));
+}
+function fcEmberScorePartsV1046(userId,cat=null){
+  const rows=fcEmberLedgerRowsV1046(userId,cat);
+  return {
+    rows,
+    score:rows.reduce((n,r)=>n+Number(r.total_boost||0),0),
+    wins:rows.length,
+    opponent:rows.reduce((n,r)=>n+Number(r.opponent_pts||0),0),
+    turnout:rows.reduce((n,r)=>n+Number(r.vote_pts||0),0),
+    ballots:rows.reduce((n,r)=>{let d=r.detail||{};if(typeof d==='string'){try{d=JSON.parse(d)}catch(e){d={}}}return n+Number(d.totalBallots||0)},0)
+  };
+}
+function fcEmberScoreByCategoryV1046(userId){
+  const out={};
+  (Array.isArray(CATEGORIES)?CATEGORIES:[]).forEach(cat=>{out[cat]=fcEmberScorePartsV1046(userId,cat)});
+  return out;
+}
+function fcEmberRankedScoresV1046(cat){
+  const users=state?.leaderboardData?.users||[];
+  return users.map(u=>({id:u.id,name:u.name||'Competitor',...fcEmberScorePartsV1046(u.id,cat)}))
+    .filter(u=>u.score>0)
+    .sort((a,b)=>b.score-a.score||b.opponent-a.opponent||b.turnout-a.turnout||b.wins-a.wins||String(a.name).localeCompare(String(b.name)));
+}
+function fcEmberQualificationV1046(cat,userId){
+  const ranked=fcEmberRankedScoresV1046(cat);
+  const distinct=[...new Set(ranked.map(u=>u.score))].slice(0,3);
+  const me=ranked.find(u=>String(u.id)===String(userId))||{score:fcEmberScorePartsV1046(userId,cat).score};
+  const qualifies=me.score>0&&distinct.includes(me.score);
+  const cutoff=distinct.length>=3?distinct[2]:null;
+  const open=Math.max(0,3-distinct.length);
+  return {ranked,distinct,score:me.score||0,qualifies,cutoff,open,gap:cutoff==null?null:Math.max(0,cutoff-(me.score||0))};
+}
+function fcEmberChallengeScoreRowV1046(ch){
+  if(!ch?.id)return null;
+  return state?.boostByChallenge?.[ch.id]||Object.values(state?.boostByChallenge||{}).find(r=>String(r.challenge_id)===String(ch.id))||null;
+}
+function fcEmberChallengeEligibilityV1046(ch){
+  if(!ch)return null;
+  const status=computeChallengeStatus(ch);
+  const entries=(state?.currentEntries||[]).filter(e=>e?.moderation_status!=='rejected');
+  if(ch.is_championship)return {state:'ineligible',text:'Championship rounds do not add Championship Score.'};
+  if(ch.is_public===false)return {state:'ineligible',text:'Private challenges do not add Championship Score.'};
+  if(entries.length<2)return {state:'needs_competitor',text:'This challenge needs at least two competitors before it can become a valid scoring challenge.'};
+  const row=fcEmberChallengeScoreRowV1046(ch);
+  if(row)return {state:'scored',text:`This challenge awarded ${Number(row.total_boost||0)} Championship Score: ${Number(row.opponent_pts||0)} Opponent Points + ${Number(row.vote_pts||0)} Turnout Points.`};
+  if(status==='voting'||status==='sudden_death')return {state:'pending',text:'This challenge can earn Championship Score, but the exact value is frozen only after the final voting round closes.'};
+  if(status==='submitting')return {state:'eligible',text:'This public challenge has enough competitors to be Score-eligible if it ends with a decisive eligible winner.'};
+  return {state:'resolved',text:'Championship Score is recorded only for an eligible decisive public win. If no score ledger row exists, this result did not add Score.'};
+}
+function fcEmberStrongestWinV1046(userId){
+  let best=null;
+  for(const r of Object.values(state?.boostByChallenge||{})){
+    if(!r||String(r.winner_id)!==String(userId))continue;
+    if(!best||Number(r.total_boost||0)>Number(best.total_boost||0))best=r;
+  }
+  if(!best)return null;
+  const ch=(state?.challenges||[]).find(c=>String(c.id)===String(best.challenge_id)) || (state?.myRecord||[]).map(x=>x.challenge).find(c=>c&&String(c.id)===String(best.challenge_id));
+  return {row:best,title:ch?.title||'Completed challenge'};
+}
+function fcEmberNormalizeV1046(q){return String(q||'').toLowerCase().replace(/[’']/g,"'").replace(/[^a-z0-9.+ -]/g,' ').replace(/\s+/g,' ').trim();}
+function fcEmberRuleTablesV1046(kind){
+  if(kind==='opponent')return 'Opponent Points per defeated opponent: Spark 1, Flame 2, Blaze 4, Inferno 6, Legend 10, Icon 14, Immortal 18, G.O.A.T. 24. An opponent’s tier and point value are frozen when the challenge resolves.';
+  return 'Turnout Points use total unique valid ballots across all entries in the final voting round: under 10 = 0, 10–24 = 3, 25–49 = 6, 50–99 = 10, 100–249 = 15, and 250+ = 22.';
+}
+function fcEmberLocalAnswerV1046(question){
+  const q=fcEmberNormalizeV1046(question), uid=state?.profile?.id, cat=fcEmberCurrentCategoryV1046(), ch=state?.currentChallenge||null;
+  if(!q)return null;
+  const scoreWords=/(championship score|score formula|opponent points|turnout points|score work|score calculated|score reset|score period|rolling 30|30 day)/.test(q);
+  const qualifyWords=/(qualif|cutoff|advance|top 3|top three)/.test(q);
+  const strongestWords=/(strongest.*win|best.*win|signature.*win)/.test(q);
+  const tierWords=/(championship tier|tier progress|spark|flame|blaze|inferno|legend|immortal|g\.o\.a\.t|goat)/.test(q);
+  const eligibilityWords=/(eligible|eligibility|earn score|affect championship score|score impact|private challenge|no contest)/.test(q);
+  const tieWords=/(sudden death|tie|tied|co winner|co-winner)/.test(q);
+
+  if(/opponent points/.test(q)&&/turnout points/.test(q))return `${fcEmberRuleTablesV1046('opponent')}\n\n${fcEmberRuleTablesV1046('turnout')}\n\nOpponent Points + Turnout Points = Championship Score for each eligible public win.`;
+  if(/opponent points/.test(q))return fcEmberRuleTablesV1046('opponent');
+  if(/turnout|valid ballot/.test(q))return fcEmberRuleTablesV1046('turnout');
+
+  if(scoreWords && /(formula|work|calculated|rolling|30 day|period|reset)/.test(q)){
+    return `Championship Score runs by calendar month, not a rolling 30-day window. Each eligible public win earns Opponent Points + Turnout Points in that challenge’s category. Those win-level scores add together for your monthly category Score. At the start of a new calendar month, the monthly race starts fresh; your permanent competitive history and Championship tier remain.`;
+  }
+
+  if(qualifyWords){
+    let lead=`At month-end, the top three distinct Championship Score levels in each category qualify. Everyone tied at a qualifying cutoff Score advances.`;
+    if(uid&&cat){
+      const x=fcEmberQualificationV1046(cat,uid);
+      if(x.open>0){lead+=` In ${cat}, ${x.open===3?'all three qualifying Score levels are':x.open+' qualifying Score level'+(x.open===1?' is':'s are')} currently open. Your current ${cat} Score is ${x.score}.`;}
+      else if(x.qualifies){lead+=` In ${cat}, your current Score is ${x.score}, which is presently on a qualifying Score level.`;}
+      else if(x.cutoff!=null){lead+=` In ${cat}, your current Score is ${x.score}. The current third qualifying Score level is ${x.cutoff}${x.gap>0?`, so you are ${x.gap} Score below that current cutoff`:''}.`;}
+      lead+=' The race can still change until month-end.';
+    }
+    return lead;
+  }
+
+  if(strongestWords&&uid){
+    const b=fcEmberStrongestWinV1046(uid);
+    if(!b)return 'No recorded Championship Score win is available in the loaded score ledger yet.';
+    return `Your strongest recorded scoring win is “${b.title}” at ${Number(b.row.total_boost||0)} Score: ${Number(b.row.opponent_pts||0)} Opponent Points + ${Number(b.row.vote_pts||0)} Turnout Points.`;
+  }
+
+  if(tierWords){
+    let text='Championship tier is permanent career progression based on Championship wins: Spark 0, Flame 1, Blaze 5, Inferno 10, Legend 25, Icon 50, Immortal 75, and G.O.A.T. 100.';
+    if(uid){try{const t=getLadderStatus(uid);if(t)text+=` Your current tier is ${t.name} with ${t.champCount} Championship win${t.champCount===1?'':'s'}${t.nextName?`; ${Math.max(0,t.nextMin-t.champCount)} more to ${t.nextName}`:''}.`;}catch(e){}}
+    return text;
+  }
+
+  if(tieWords){
+    return 'If the final voting round ties, the tied finalists submit new hidden entries for a fresh runoff. The entries reveal together and live runoff totals remain visible. One submission wins by default; no submissions or another final tie produces co-winners. There is no manual administrator decision or discretionary extension.';
+  }
+
+  if(eligibilityWords&&ch){
+    return fcEmberChallengeEligibilityV1046(ch)?.text||null;
+  }
+
+  if(uid && /(my score|current score|driving my championship score|driving my score|score breakdown)/.test(q)){
+    if(cat){const x=fcEmberScorePartsV1046(uid,cat);return `Your ${fcEmberMonthLabelV1046()} ${cat} Championship Score is ${x.score}: ${x.opponent} Opponent Points + ${x.turnout} Turnout Points from ${x.wins} eligible win${x.wins===1?'':'s'}.`;}
+    const by=fcEmberScoreByCategoryV1046(uid);const nonzero=Object.entries(by).filter(([,x])=>x.score>0);if(!nonzero.length)return `You have no recorded Championship Score in ${fcEmberMonthLabelV1046()} yet.`;return `Your ${fcEmberMonthLabelV1046()} Championship Scores are: ${nonzero.map(([c,x])=>`${c} ${x.score}`).join(', ')}. Score is category-specific.`;
+  }
+
+  if(ch && /(how will this result affect championship score|how did this affect championship score|score impact)/.test(q))return fcEmberChallengeEligibilityV1046(ch)?.text||null;
+
+  // Generic Championship Score questions should still resolve locally after more
+  // specific patterns above, preventing stale server-side rules from surfacing.
+  if(/championship score/.test(q)){
+    return `Championship Score is a monthly, category-specific race. Eligible public wins earn Opponent Points + Turnout Points. At month-end, the top three distinct Score levels qualify, and everyone tied at the cutoff advances.`;
+  }
+  return null;
+}
+function fcEmberServerAnswerUnsafeV1046(text){
+  const t=String(text||'').toLowerCase();
+  return /rolling\s*30|30[- ]day window|prestige tab|after 30 days|top 3[^.]{0,80}earn points|top three[^.]{0,80}earn points/.test(t);
+}
+window.fcEmberLocalAnswerV1046=fcEmberLocalAnswerV1046;
+window.__fcEmberFactualV1046={version:'v1046',competitionFactsLocal:true,newEdgeFunctions:0,edgeFunctionChanges:0,aiFallback:'existing ask-ember only'};
+
 async function runEmber(input, ans, btn) {
   if (!input || !ans || !btn) return;
   const q = (input.value || '').trim();
   if (!q) return;
+
+  // v1046: competition facts are deterministic and local. They never depend on
+  // the AI endpoint remembering current FlamesChallenge mechanics.
+  const local = fcEmberLocalAnswerV1046(q);
+  if (local) {
+    ans.style.display = 'block';
+    ans.textContent = local;
+    input.value = '';
+    return;
+  }
+
   ans.style.display = 'block';
-  ans.innerHTML = `<div class="ember-thinking">${emberFace(28, 'think')}<span>Ember is reading the competition…</span></div>`;
+  ans.innerHTML = `<div class="ember-thinking">${emberFace(28, 'think')}<span>Ember is working on it…</span></div>`;
   btn.disabled = true;
   try {
-    dlog('ember', 'POST ask-ember', { q });
+    dlog('ember', 'POST ask-ember', { q, mode: 'open-ended-only' });
     const resp = await fetch('https://sioalvawzayfphwzqctq.supabase.co/functions/v1/ask-ember', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -24147,14 +24321,20 @@ async function runEmber(input, ans, btn) {
     dlog('ember', 'response', { status: resp.status, ok: resp.ok });
     const data = await resp.json().catch(() => ({}));
     if (resp.status === 429) {
-      ans.textContent = "Whoa, slow down a sec 🔥 Too many questions at once — try again in a minute.";
+      ans.textContent = "Too many questions at once — try again in a minute.";
       return;
     }
     if (!resp.ok) throw new Error((data.error || 'Request failed') + ' [' + resp.status + ']');
-    ans.textContent = (data.answer || '').replace(/\*\*/g, '').trim() || "I need a little more detail. Ask me about this screen, the rules, or your next move.";
+    const answer=(data.answer || '').replace(/\*\*/g, '').trim();
+    if(fcEmberServerAnswerUnsafeV1046(answer)){
+      const fallback=fcEmberLocalAnswerV1046(q);
+      ans.textContent=fallback||"I won't use an answer that conflicts with the current FlamesChallenge rules. Ask me the competition-rule part directly, or ask me for creative help with this screen.";
+      return;
+    }
+    ans.textContent = answer || "I need a little more detail. Ask me about this screen, the rules, or your next move.";
   } catch (e) {
     dlog('ember', 'error', { msg: e.message });
-    ans.textContent = "I'm having trouble reaching the fire right now — try again in a sec. 🔥";
+    ans.textContent = "I'm having trouble reaching creative assistance right now. Rules, scores, standings, and recorded competition facts still work locally.";
   } finally {
     btn.disabled = false;
     input.value = '';
@@ -32025,7 +32205,7 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
     const byCategory={}; ledger.forEach(r=>{const c=r.category||'Other';const x=byCategory[c]||(byCategory[c]={score:0,wins:0,opponentPoints:0,turnoutPoints:0});x.score+=Number(r.total_boost||0);x.wins++;x.opponentPoints+=Number(r.opponent_pts||0);x.turnoutPoints+=Number(r.vote_pts||0);});
     let tier=null; try{const t=getLadderStatus?.(uid);if(t)tier={name:t.name,championshipWins:t.champCount,next:t.nextName||null,progressPct:t.pct??null};}catch(e){}
     const entries=(state?.currentEntries||[]).filter(e=>e?.moderation_status!=='rejected');
-    return {...base,emberSystem:{version:'v1045',guidanceMode:mode,recordedCompetitionClaimsOnly:true},surface:s,monthlyChampionshipScore:{month,byCategory},championshipTier:tier,challenge:base.challenge?{...base.challenge,entries:entries.map(e=>({id:e.id,userId:e.user_id||null,votes:Number(e.votes||e.vote_count||0)}))}:base.challenge};
+    return {...base,emberSystem:{version:'v1046',guidanceMode:mode,recordedCompetitionClaimsOnly:true},surface:s,monthlyChampionshipScore:{month,byCategory},championshipTier:tier,challenge:base.challenge?{...base.challenge,entries:entries.map(e=>({id:e.id,userId:e.user_id||null,votes:Number(e.votes||e.vote_count||0)}))}:base.challenge};
   };
 
   const priorOpen=window.openEmber;
@@ -32072,10 +32252,33 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
   });
 
   window.__fcEmberSystemV1045={
-    version:'v1045',modes:['full','important','off'],askAlwaysAvailable:true,screenAwarePrompts:true,
+    version:'v1046',modes:['full','important','off'],askAlwaysAvailable:true,screenAwarePrompts:true,
     recordedCompetitionContext:true,routineInterventionsMaxPerScreen:1,creativeAssistance:true,
     contextualSurfaces:['home','compete','create','entry','challenge','titles','profile'],
     userMetadataPreference:MODE_META
+  };
+})();
+</script>
+
+<script id="fc-v1046-ember-factual-context-js">
+(function(){
+  'use strict';
+  const prior=window.buildEmberContext;
+  window.buildEmberContext=function(){
+    const base=typeof prior==='function'?prior():{};
+    return {...base,
+      emberSystem:{...(base.emberSystem||{}),version:'v1046',competitionFactsLocal:true,openEndedAiOnly:true},
+      authoritativeRules:{
+        scorePeriod:'calendar month',
+        scoreFormula:'Opponent Points + Turnout Points from eligible public wins in that category',
+        qualification:'top three distinct Championship Score levels at month-end; everyone tied at the cutoff advances',
+        opponentPoints:{Spark:1,Flame:2,Blaze:4,Inferno:6,Legend:10,Icon:14,Immortal:18,'G.O.A.T.':24},
+        turnoutPoints:{under10:0,'10-24':3,'25-49':6,'50-99':10,'100-249':15,'250+':22},
+        turnoutBasis:'total unique valid ballots across all entries in the final voting round',
+        championshipTierWins:{Spark:0,Flame:1,Blaze:5,Inferno:10,Legend:25,Icon:50,Immortal:75,'G.O.A.T.':100},
+        obsoleteTerms:['rolling 30-day Score','Prestige tab','Top-3 challenge placement earns Score']
+      }
+    };
   };
 })();
 </script>
