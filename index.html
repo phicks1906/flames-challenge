@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1025 — Sudden-Death Championship Parity</title>
+<title>FlamesChallenge v1026 — Update Checker Correction</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1025 · sudden-death-championship-parity" />
-<meta name="fc-whatsnew" content="Regular challenges and Championships now use the same sudden-death flow: tied finalists submit new hidden entries, receive notifications, reveal together for a fresh live runoff, and share the win if the runoff ties again." />
+<meta name="fc-build" content="v1026 · update-checker-correction" />
+<meta name="fc-whatsnew" content="Update detection now compares the deployed version number correctly, stops false update alerts, and remembers a dismissed real update for 24 hours." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -9554,13 +9554,35 @@ function _fcuEsc(t){return String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&l
 const UPDATE_CHECK_MS = 15 * 60 * 1000;
 const UPDATE_READ_LIMIT = 48 * 1024;
 const UPDATE_MANIFEST_PATH = '/version.json';
+const UPDATE_DISMISS_KEY = 'fc_update_dismissed_v1026';
+const UPDATE_DISMISS_MS = 24 * 60 * 60 * 1000;
 let _lastUpdateCheck = 0;
 let _updateBannerUp = false;
 let _updateCheckInFlight = null;
 
 function _versionId(value){
-  const m=String(value||'').match(/v\d+(?:\.\d+)*/i);
-  return m ? m[0].toLowerCase() : String(value||'').trim().toLowerCase();
+  const m=String(value||'').match(/\bv?(\d+(?:\.\d+)*)\b/i);
+  return m ? ('v' + m[1]).toLowerCase() : '';
+}
+function _dismissedUpdate(build){
+  const id=_versionId(build);
+  if(!id) return false;
+  try{
+    const item=JSON.parse(localStorage.getItem(UPDATE_DISMISS_KEY)||'null');
+    return !!(item && item.version===id && Number(item.until)>Date.now());
+  }catch(e){return false}
+}
+function _rememberDismissedUpdate(build){
+  const id=_versionId(build);
+  if(!id) return;
+  try{localStorage.setItem(UPDATE_DISMISS_KEY,JSON.stringify({version:id,until:Date.now()+UPDATE_DISMISS_MS}))}catch(e){}
+}
+function _clearDismissedUpdate(build){
+  const id=_versionId(build);
+  try{
+    const item=JSON.parse(localStorage.getItem(UPDATE_DISMISS_KEY)||'null');
+    if(!item || !id || item.version===id) localStorage.removeItem(UPDATE_DISMISS_KEY);
+  }catch(e){}
 }
 function _parseBuildTags(text) {
   const build = text.match(/<meta\s+name=["']fc-build["']\s+content=["']([^"']*)["']/i);
@@ -9599,9 +9621,14 @@ async function _fetchVersionManifest(){
   const res=await fetch(url.toString(),{cache:'no-store',credentials:'same-origin',headers:{'Cache-Control':'no-cache','Pragma':'no-cache'}});
   if(!res.ok) throw new Error('version manifest HTTP '+res.status);
   const data=await res.json();
-  const build=String(data.build||data.version||'').trim();
+  // v1026 — compare the semantic version, not the descriptive build slug.
+  // The old order preferred data.build (for example
+  // "sudden-death-championship-parity") over data.version ("v1025"),
+  // which made the current release look different from itself forever.
+  const build=String(data.version||'').trim();
   if(!build) throw new Error('version manifest missing version');
-  return {build,news:String(data.whatsNew||data.news||'').trim()};
+  const note=Array.isArray(data.notes) ? data.notes[0] : '';
+  return {build,news:String(data.whatsNew||data.news||note||'').trim()};
 }
 async function _fetchBuildTag() {
   const url = new URL('/index.html', location.origin);
@@ -9645,14 +9672,22 @@ async function checkForUpdate(force=false, options={}) {
       let remote=null;
       try{ remote=await _fetchVersionManifest(); }
       catch(manifestError){ remote=await _fetchBuildTag(); }
-      if (remote?.build && _versionId(remote.build) !== _versionId(APP_VERSION)) {
+      const remoteId=_versionId(remote?.build);
+      const localId=_versionId(APP_VERSION);
+      if (remoteId && localId && remoteId !== localId) {
+        if(!options.manual && _dismissedUpdate(remote.build)){
+          return {status:'dismissed',build:remote.build};
+        }
         showUpdateBanner(remote.build, remote.news);
         return { status: 'update-available', build: remote.build };
       }
+      // The deployed manifest and this page agree. Clear any stale dismissal
+      // record and do not let an old waiting service worker create a false alert.
+      if(remoteId && remoteId===localId) _clearDismissedUpdate(remote.build);
       const sw=await _probeServiceWorkerUpdate();
-      if(sw.waiting){
-        showUpdateBanner(remote?.build||'New version',remote?.news||'A newer app shell is ready.');
-        return {status:'update-available',build:remote?.build||'service-worker'};
+      if(sw.waiting && !remoteId){
+        showUpdateBanner('service-worker',remote?.news||'A newer app shell is ready.');
+        return {status:'update-available',build:'service-worker'};
       }
       return { status: 'current', build: remote?.build||APP_VERSION };
     } catch (e) {
@@ -9671,13 +9706,22 @@ window.fcManualUpdateCheck = async function(){
   return result;
 };
 function showUpdateBanner(build, news) {
+  // Never display an update prompt for the version already running.
+  const offeredId=_versionId(build), localId=_versionId(APP_VERSION);
+  if(offeredId && localId && offeredId===localId) return;
   if (_updateBannerUp || document.getElementById('fcUpdateBar')) return;
   _updateBannerUp = true;
   const bar = document.createElement('div');
   bar.id = 'fcUpdateBar';
+  bar.dataset.build=String(build||'');
   bar.innerHTML = `<div class="fcu-txt"><strong>Update available</strong><span>${_fcuEsc(news || 'A newer version is ready.')}</span></div><button class="fcu-go">Update</button><button class="fcu-later" aria-label="Dismiss">✕</button>`;
   document.body.appendChild(bar);
-  bar.querySelector('.fcu-later').onclick = () => { bar.remove(); _updateBannerUp = false; _lastUpdateCheck = Date.now(); };
+  bar.querySelector('.fcu-later').onclick = () => {
+    _rememberDismissedUpdate(build);
+    bar.remove();
+    _updateBannerUp = false;
+    _lastUpdateCheck = Date.now();
+  };
   bar.querySelector('.fcu-go').onclick = async () => { const btn = bar.querySelector('.fcu-go'); btn.disabled = true; btn.textContent = 'Updating…'; await applyUpdate(); };
 }
 async function applyUpdate() {
