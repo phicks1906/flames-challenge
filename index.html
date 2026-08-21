@@ -21,7 +21,7 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1070 · horizontal-carousel-gesture-recovery" />
+<meta name="fc-build" content="v1071 · rail-probe" />
 <meta name="fc-whatsnew" content="Restores native horizontal entry swiping by removing the vertical-only gesture lock from feed-card ancestors." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
@@ -33559,5 +33559,65 @@ window.__fcBuildV1065={build:'v1065',basedOn:'v1064',flyerRenderer:'exact v1056 
 </script>
 
 
+<script id="fc-v1071-rail-probe">
+/* v1071 — ON-DEVICE rail diagnostics. The horizontal entry rail scrolls and
+   snaps correctly in a desktop engine with this exact stylesheet (verified by
+   measurement: overflow present, snap active, touch-action auto up the whole
+   chain, programmatic scrollLeft moves). On the phone it doesn't pan at all.
+   That combination means the remaining difference is only observable on the
+   device, so this probe reports the device's own truth into the debug log:
+
+     [rail] geom      — scrollWidth/clientWidth (is there anything to scroll?)
+     [rail] ta-chain  — computed touch-action of the rail and every ancestor,
+                        AS COMPUTED BY IOS, which is the value that matters
+     [rail] hit       — which element actually receives a touch inside the
+                        rail's box (an invisible layer above it would show here)
+     [rail] ts/tm     — touchstart/touchmove arriving at the rail, with
+                        defaultPrevented (a rogue preventDefault shows here)
+     [rail] settle    — scrollLeft after the gesture ends
+
+   Passive listeners only; zero behaviour change. Remove after diagnosis. */
+(function(){
+  // Resolve dlog at call time and never throw: if the main script died before
+  // defining it, fall back to console so the probe still reports something.
+  function plog(tag,msg,data){
+    try{ if(typeof dlog==='function') return dlog(tag,msg,data); }catch(e){}
+    try{ console.log('['+tag+']',msg,data||''); }catch(e){}
+  }
+  function probeOnce(){
+    var sc=document.querySelector('#feedContainer .fcc-entries-scroll');
+    if(!sc || sc.dataset.probed) return;
+    sc.dataset.probed='1';
+    try{
+      plog('rail','geom',{sw:sc.scrollWidth,cw:sc.clientWidth,cards:sc.children.length});
+      var chain=[],e=sc;
+      while(e && e.tagName!=='HTML'){
+        var cs=getComputedStyle(e);
+        chain.push((e.id?'#'+e.id:(''+(e.className||e.tagName)).split(' ')[0])+':'+cs.touchAction+
+                   (cs.pointerEvents==='none'?'/PE-NONE':''));
+        e=e.parentElement;
+      }
+      plog('rail','ta-chain',{chain:chain.join(' > ')});
+      var r=sc.getBoundingClientRect();
+      var hit=document.elementFromPoint(r.left+r.width/2, r.top+r.height/2);
+      var inside=hit && (sc===hit || sc.contains(hit));
+      plog('rail','hit',{el:hit?((hit.id?'#'+hit.id:'')+'.'+((''+hit.className).split(' ')[0]||hit.tagName)):'null', insideRail:!!inside});
+    }catch(err){ plog('rail','probe-error',{m:String(err).slice(0,80)}); }
+    sc.addEventListener('touchstart',function(ev){
+      plog('rail','ts',{x:Math.round(ev.touches[0].clientX),sl:Math.round(sc.scrollLeft),dp:ev.defaultPrevented});
+    },{passive:true});
+    var tmLogged=0;
+    sc.addEventListener('touchmove',function(ev){
+      if(tmLogged++%5) return;   // sample, don't flood
+      plog('rail','tm',{x:Math.round(ev.touches[0].clientX),sl:Math.round(sc.scrollLeft),dp:ev.defaultPrevented});
+    },{passive:true});
+    sc.addEventListener('touchend',function(){
+      setTimeout(function(){ plog('rail','settle',{sl:Math.round(sc.scrollLeft)}); },350);
+    },{passive:true});
+  }
+  // Rails are re-rendered; keep watching cheaply.
+  setInterval(probeOnce, 1200);
+})();
+</script>
 </body>
 </html>
