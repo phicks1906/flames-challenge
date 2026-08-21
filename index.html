@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1060 — Entry Carousel & Count Recovery</title>
+<title>FlamesChallenge v1061 — v1056 Flyer Card Restoration</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1060 · entry-carousel-count-recovery" />
-<meta name="fc-whatsnew" content="Restores full swipeable entry carousels, removes fabricated preview tiles, unifies entry counts, and locks flyer cards to a poster-first layout." />
+<meta name="fc-build" content="v1061 · v1056-flyer-card-restoration" />
+<meta name="fc-whatsnew" content="Restores the approved v1056 flyer card exactly while preserving the current entry carousel and count fixes." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -23286,21 +23286,66 @@ function renderFlyerCard(p) {
   const isClickableUser = p.user_id && !isMine;
   const userClickAttr = isClickableUser ? `data-user-id="${p.user_id}" class="user-clickable"` : '';
   const plusBadge = needsFollowPlus(p.user_id) ? ' <span class="user-plus">+</span>' : '';
-  const ch = p.challenge_id ? state.challenges.find(c => c.id === p.challenge_id) : null;
 
-  return `<div class="post-card fc-flyer-card-v1060" data-pid="${p.id}">
-    <div class="fc-flyer-head-v1060"><span class="feed-poll-tag">📣 FLYER</span><span>${timeAgo(p.created_at)}</span></div>
-    <div class="fc-flyer-author-v1060">
-      <div ${userClickAttr}>${avatarInner(author.avatar)}</div>
-      <strong ${userClickAttr}>${escapeHtml(author.name)}${plusBadge}</strong>
-      ${isMine ? `<button class="post-card-menu" data-pid="${p.id}" aria-label="Delete post">⋯</button>` : `<button class="post-card-menu" data-report-type="post" data-report-id="${p.id}" data-report-text="${escapeHtml((p.content||'flyer').slice(0,200))}" aria-label="Report post">🚩</button>`}
-    </div>
-    ${p.media_url ? `<div class="flyer-stage" ${ch ? `data-flyer-viewer="${ch.id}"` : ''}>${p.media_type !== 'video' ? `<img src="${escapeHtml(p.media_url)}" class="flyer-stage-blur" aria-hidden="true" loading="lazy"><img src="${escapeHtml(p.media_url)}" alt="Challenge flyer" class="flyer-stage-fg" loading="lazy">` : `<video data-src="${escapeHtml(p.media_url)}" muted playsinline preload="none" data-lazy-video class="flyer-stage-fg" style="object-fit:cover!important"></video><div class="fc-flyer-play-v1060">▶</div>`}</div>` : `<div class="fc-flyer-missing-v1060">Flyer unavailable</div>`}
-    <div class="post-card-actions fc-flyer-actions-v1060">
-      <button class="flame-btn${iLiked ? ' liked' : ''}" data-like-post="${p.id}"><span class="flame-icon">🔥</span><span class="flame-count${likeCount > 0 ? ' likes-tappable' : ''}" ${likeCount > 0 ? `data-show-likes="post" data-show-likes-id="${p.id}"` : ''}>${likeCount}</span></button>
-      <button class="comment-btn" data-comment-post="${p.id}"><span class="comment-icon">💬</span><span class="comment-count">${state.postCommentCounts[p.id] || 0}</span></button>
-    </div>
-  </div>`;
+  // Find linked challenge
+  const ch = p.challenge_id ? state.challenges.find(c => c.id === p.challenge_id) : null;
+  const chStatus = ch ? computeChallengeStatus(ch) : null;
+  const isOpen = chStatus === 'submitting';
+  const isVoting = chStatus === 'voting';
+  const ctaText = isOpen ? '🔥 Enter this Challenge' : isVoting ? '🗳️ Vote Now' : ch ? '👀 View Challenge' : null;
+  const countdown = ch && isOpen ? `⏱ ${formatCountdown(ch.submission_deadline)}` :
+                    ch && isVoting ? `⏱ ${formatCountdown(ch.voting_end)}` : '';
+
+  return `
+    <div class="post-card" data-pid="${p.id}" style="padding:0;overflow:hidden;border:1px solid var(--border);border-left:3px solid rgba(255,45,31,0.85);">
+      <!-- Header row -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px;">
+        <span class="feed-poll-tag" style="color:var(--flame);">📣 FLYER</span>
+        <span style="font-size:12px;color:var(--text-muted);">${timeAgo(p.created_at)}</span>
+      </div>
+
+      <!-- Posted by row -->
+      <div style="display:flex;align-items:center;gap:10px;padding:0 14px 10px;">
+        <div style="width:32px;height:32px;border-radius:50%;overflow:hidden;flex-shrink:0;background:linear-gradient(135deg,var(--ember),var(--coral));display:grid;place-items:center;font-size:14px;" ${userClickAttr}>${avatarInner(author.avatar)}</div>
+        <span style="font-size:13px;font-weight:600;color:var(--text);" ${userClickAttr}>${escapeHtml(author.name)}${plusBadge}</span>
+        ${isMine ? `<button class="post-card-menu" data-pid="${p.id}" style="margin-left:auto;" aria-label="Delete post">⋯</button>` : `<button class="post-card-menu" data-report-type="post" data-report-id="${p.id}" data-report-text="${escapeHtml((p.content||'flyer').slice(0,200))}" style="margin-left:auto;" aria-label="Report post">🚩</button>`}
+      </div>
+
+      <!-- Flyer hero + facts + CTA. See the note above renderFlyerCard. -->
+      ${ch ? `
+      <div class="flyer-stage" data-flyer-viewer="${ch.id}">
+        ${p.media_url && p.media_type !== 'video'
+          ? `<img src="${escapeHtml(p.media_url)}" class="flyer-stage-blur" aria-hidden="true" loading="lazy">
+             <img src="${escapeHtml(p.media_url)}" alt="Challenge flyer" class="flyer-stage-fg" loading="lazy">`
+          : p.media_url
+            ? `<video data-src="${escapeHtml(p.media_url)}" muted playsinline preload="none" data-lazy-video class="flyer-stage-fg" style="object-fit:cover!important"></video>
+               <div style="position:absolute;inset:0;display:grid;place-items:center;font-size:34px;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.6);pointer-events:none">▶</div>`
+            : `<div class="flyer-stage-fg" style="display:grid;place-items:center;font-size:40px;background:linear-gradient(160deg,#2a130a,#7a2d10)">🔥</div>`}
+      </div>
+      <div class="flyer-card-body">
+        <div class="flyer-preview-cat">${escapeHtml(ch.category || '')}</div>
+        <div class="flyer-card-title">${escapeHtml(ch.title)}</div>
+        ${countdown ? `<div class="flyer-preview-meta">${countdown}</div>` : ''}
+        <button class="btn btn-primary flyer-preview-cta" data-flyer-viewer="${ch.id}">${ctaText}</button>
+      </div>`
+      : `<div class="flyer-card-body">
+           <div class="flyer-card-title">Challenge unavailable</div>
+           <div class="flyer-preview-meta">This flyer's challenge is no longer around.</div>
+         </div>`}
+      ${!ch && p.content ? `<div style="padding:10px 14px;font-size:14px;color:var(--text);">${formatBody(p.content)}</div>` : ''}
+
+      <!-- Actions -->
+      <div class="post-card-actions" style="padding:4px 14px 12px;">
+        <button class="flame-btn${iLiked ? ' liked' : ''}" data-like-post="${p.id}">
+          <span class="flame-icon">🔥</span>
+          <span class="flame-count${likeCount > 0 ? ' likes-tappable' : ''}" ${likeCount > 0 ? `data-show-likes="post" data-show-likes-id="${p.id}"` : ''}>${likeCount}</span>
+        </button>
+        <button class="comment-btn" data-comment-post="${p.id}">
+          <span class="comment-icon">💬</span>
+          <span class="comment-count">${state.postCommentCounts[p.id] || 0}</span>
+        </button>
+      </div>
+    </div>`;
 }
 
 /* ---------- v802 · CHALLENGE CARD (step 4) ----------
@@ -33363,16 +33408,11 @@ window.__fcBuildV1058={build:'v1058-superseded-challenge-stage',phase:'Productio
 #feedContainer .feed-challenge-card>.chc-top,#feedContainer .feed-challenge-card>.chc-title,#feedContainer .feed-challenge-card>.chc-prompt,#feedContainer .feed-challenge-card>.chc-meta,#feedContainer .feed-challenge-card>.chc-cta,
 #challengesGrid .feed-challenge-card>.chc-top,#challengesGrid .feed-challenge-card>.chc-title,#challengesGrid .feed-challenge-card>.chc-prompt{margin-left:14px!important;margin-right:14px!important}
 #challengesGrid .fc-compete-card-foot-v1059{margin-top:0!important}
-/* Flyer is its own approved content type: poster first, no duplicate title/action panel. */
-.fc-flyer-card-v1060{padding:0!important;overflow:hidden!important;border:1px solid var(--border)!important;border-radius:18px!important;background:var(--surface)!important}
-.fc-flyer-head-v1060{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px}.fc-flyer-head-v1060>span:last-child{font-size:12px;color:var(--text-muted)}
-.fc-flyer-author-v1060{display:flex;align-items:center;gap:10px;padding:0 14px 10px}.fc-flyer-author-v1060>div{width:34px;height:34px;border-radius:50%;overflow:hidden;display:grid;place-items:center;background:var(--surface-2)}.fc-flyer-author-v1060>div img{width:100%;height:100%;object-fit:cover}.fc-flyer-author-v1060 strong{font-size:14px;color:var(--text)}.fc-flyer-author-v1060 .post-card-menu{margin-left:auto}
-.fc-flyer-card-v1060 .flyer-stage{aspect-ratio:4/5!important;margin:0!important;border-radius:0!important}
-.fc-flyer-play-v1060{position:absolute;inset:0;display:grid;place-items:center;font-size:34px;color:white;text-shadow:0 2px 8px rgba(0,0,0,.6);pointer-events:none}
-.fc-flyer-actions-v1060{padding:8px 14px 12px!important}.fc-flyer-missing-v1060{padding:28px;text-align:center;color:var(--text-muted)}
+/* v1061 — flyer card restored exactly from v1056. */
+
 </style>
-<script id="fc-v1060-build-marker">
-window.__fcBuildV1060={build:'v1060',phase:'Production Hardening',focus:'restore swipeable entry rails and unify visible-entry counts',basedOn:'v1059',feedChallengeCarouselRestored:true,competeCarouselRestored:true,challengeDetailCountUnified:true,fabricatedPreviewRemoved:true,flyerPosterFirst:true,winnerChanged:false,homeChanged:false,titlesChanged:false,createFlowChanged:false,navigationChanged:false,scoringRulesChanged:false,levelThresholdsChanged:false,moderationFunctionChanged:false,newEdgeFunctions:0,edgeFunctionChanges:0,sqlChanges:0};
+<script id="fc-v1061-build-marker">
+window.__fcBuildV1061={build:'v1061',phase:'Production Hardening',focus:'restore flyer card exactly from v1056',basedOn:'v1060',v1056FlyerRendererRestored:true,v1060FlyerOverridesRemoved:true,entryCarouselPreserved:true,countRecoveryPreserved:true,homeChanged:false,competeChanged:false,titlesChanged:false,createFlowChanged:false,navigationChanged:false,scoringRulesChanged:false,levelThresholdsChanged:false,moderationFunctionChanged:false,newEdgeFunctions:0,edgeFunctionChanges:0,sqlChanges:0};
 </script>
 </body>
 </html>
