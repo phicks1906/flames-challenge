@@ -21,7 +21,7 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1071.1 · rail-probe" />
+<meta name="fc-build" content="v1072 · rail-smooth-fix" />
 <meta name="fc-whatsnew" content="Restores native horizontal entry swiping by removing the vertical-only gesture lock from feed-card ancestors." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
@@ -4009,7 +4009,13 @@ html[data-theme="light"] .ps-heat-card { background: #1a1008; }
      in the card that isn't the card's own text, and it has to start on the same
      line as the title or the card reads as off-centre. */
   scroll-padding-left: 16px;
-  scroll-behavior: smooth;
+  /* v1072 — scroll-behavior:smooth REMOVED. On-device probe (v1071) proved the
+     gesture arrives intact: touchstart and 140px of horizontal touchmove reach
+     the rail, nothing preventDefaults, touch-action is auto up the whole chain
+     — and scrollLeft never moves. Chromium pans this fine; iOS WebKit has a
+     known bad interaction between CSS smooth scrolling and mandatory snap on
+     touch-driven scrolls. The rule was redundant anyway: the only programmatic
+     scroll (dot taps) already passes behavior:'smooth' in scrollTo(). */
   display: flex;
   flex-wrap: nowrap; /* critical — prevent wrapping to grid */
   gap: 8px;
