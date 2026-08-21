@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1067 — Horizontal Viewer Recovery</title>
+<title>FlamesChallenge v1069 — Native Entry Carousel Snap</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1067 · horizontal-viewer-recovery" />
-<meta name="fc-whatsnew" content="Restores native horizontal entry swiping while preserving the reliable update check and compact viewer height." />
+<meta name="fc-build" content="v1069 · native-entry-carousel-snap" />
+<meta name="fc-whatsnew" content="Restores native horizontal entry swiping with full-width slides and mandatory CSS scroll snapping." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -7349,13 +7349,6 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
 }
 .fc-admin-preview-v1049 strong{color:#78d7ff}
 
-/* v1067 — Feed viewer only: compact height + native horizontal swiping.
-   The v1066 gesture override and JavaScript settle routine interfered with
-   iOS gesture ownership inside the vertically scrollable sheet. */
-#feedViewerModal{height:auto!important;min-height:0!important;max-height:90dvh!important;overflow:hidden!important}
-#feedViewerModal #fvScrollRegion{flex:0 1 auto!important;min-height:0!important;overflow-y:auto!important}
-#feedViewerModal #fvEntries{scroll-snap-type:x mandatory!important;scroll-padding-inline:0!important;touch-action:auto!important;overscroll-behavior-x:auto!important}
-#feedViewerModal #fvEntries>.fc-v1024-fv-slide{flex:0 0 100%!important;width:100%!important;min-width:100%!important;scroll-snap-align:start!important;scroll-snap-stop:always!important}
 
 </style>
 </head>
@@ -9381,7 +9374,7 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
   <!-- v805 — min 62vh / max 90vh. A fixed 88vh left a big empty body on sparse
        challenges; no floor let it collapse into a tray. Between those it sizes
        to content. -->
-  <div id="feedViewerModal" style="background:var(--surface);border-radius:var(--radius) var(--radius) 0 0;width:100%;height:auto;max-height:90dvh;display:flex;flex-direction:column;position:relative;overflow:hidden;animation:slideUp 0.3s cubic-bezier(0.16,1,0.3,1);border-top:3px solid var(--ember);box-shadow:0 -8px 40px rgba(255,106,44,0.18);padding-bottom:0;">
+  <div id="feedViewerModal" style="background:var(--surface);border-radius:var(--radius) var(--radius) 0 0;width:100%;min-height:62vh;max-height:90vh;display:flex;flex-direction:column;position:relative;animation:slideUp 0.3s cubic-bezier(0.16,1,0.3,1);border-top:3px solid var(--ember);box-shadow:0 -8px 40px rgba(255,106,44,0.18);padding-bottom:0;">
     <!-- Drag handle -->
     <div style="display:flex;justify-content:center;padding:10px 0 4px;flex-shrink:0;">
       <div style="width:36px;height:4px;border-radius:2px;background:var(--border-bright);opacity:0.6;"></div>
@@ -9406,10 +9399,10 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
          entry. Same root cause this codebase already fixed once for feed cards
          (overflow:hidden traps scroll unless the scroll region is a distinct
          box) — action bar is now a true flex sibling, always visible. -->
-    <div id="fvScrollRegion" style="flex:0 1 auto;min-height:0;overflow-y:auto;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;">
+    <div id="fvScrollRegion" style="flex:1;min-height:0;overflow-y:auto;">
       <!-- Horizontal snap-scroll entries -->
       <div style="position:relative;">
-        <div id="fvEntries" style="display:flex;flex-direction:row;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;gap:0;touch-action:auto;"></div>
+        <div id="fvEntries" style="display:flex;flex-direction:row;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scroll-snap-stop:always;-webkit-overflow-scrolling:touch;scrollbar-width:none;gap:0;"></div>
         <!-- Counter + dots -->
         <div id="fvCounter" style="text-align:center;font-size:13px;font-weight:700;color:var(--ember);padding:8px 0 12px;letter-spacing:0.04em;"></div>
         <div id="fvDots" style="display:none;"></div>
@@ -9853,8 +9846,8 @@ try {
 (function fcReportManualUpdateResultV1066(){
   let request = null;
   try {
-    request = JSON.parse(sessionStorage.getItem('fc_manual_update_check_v1067') || sessionStorage.getItem('fc_manual_update_check_v1066') || 'null');
-    if (request) { sessionStorage.removeItem('fc_manual_update_check_v1067'); sessionStorage.removeItem('fc_manual_update_check_v1066'); }
+    request = JSON.parse(sessionStorage.getItem('fc_manual_update_check_v1069') || sessionStorage.getItem('fc_manual_update_check_v1068') || sessionStorage.getItem('fc_manual_update_check_v1067') || sessionStorage.getItem('fc_manual_update_check_v1066') || 'null');
+    if (request) { sessionStorage.removeItem('fc_manual_update_check_v1069'); sessionStorage.removeItem('fc_manual_update_check_v1068'); sessionStorage.removeItem('fc_manual_update_check_v1067'); sessionStorage.removeItem('fc_manual_update_check_v1066'); }
   } catch (e) {}
   if (!request) return;
   const from = String(request.from || '').match(/v?\d+(?:\.\d+)*/i)?.[0]?.toLowerCase().replace(/^v/, '') || '';
@@ -10020,7 +10013,7 @@ window.fcCheckForUpdate = () => checkForUpdate(true,{manual:true});
 window.fcManualUpdateCheck = async function(){
   try { if (typeof toast === 'function') toast('Checking for updates…'); } catch (e) {}
   try {
-    sessionStorage.setItem('fc_manual_update_check_v1067', JSON.stringify({ from: APP_VERSION, at: Date.now() }));
+    sessionStorage.setItem('fc_manual_update_check_v1069', JSON.stringify({ from: APP_VERSION, at: Date.now() }));
   } catch (e) {}
 
   let navigated = false;
@@ -25219,7 +25212,7 @@ let _fvChallenge = null;
 let _fvVoteCounts = {}; // entryId → count
 let _fvEntries = [];    // entries loaded by openFeedViewer — used by standings
 
-// v1067 — native horizontal swiping; CSS snap handles alignment without JS gesture interception.
+// v1068 — restored exact v1065 native horizontal viewer behavior; no touch interception.
 async function openFeedViewer(chId, startEntryId = null) {
   const ch = state.challenges.find(c => c.id === chId) || state.currentChallenge;
   if (!ch) return;
@@ -25804,7 +25797,7 @@ function renderFvEntry(entry, ch, canVote, myVoteEntryId, status) {
     ? `${lbu.wins||0}W · ${lbu.losses||0}L${catWins > 0 ? ` · ${catWins} this month` : ''}`
     : '';
 
-  return `<div class="fc-v1024-fv-slide${iVoted ? ' selected' : ''}" data-fv-entry-id="${entry.id}" style="flex:0 0 100%;width:100%;scroll-snap-align:start;scroll-snap-stop:always;min-width:0;box-sizing:border-box;">
+  return `<div class="fc-v1024-fv-slide${iVoted ? ' selected' : ''}" data-fv-entry-id="${entry.id}" style="flex:0 0 100%;width:100%;scroll-snap-align:center;min-width:0;box-sizing:border-box;">
     ${mediaHtml}
     <div style="padding:12px 14px 16px;">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
@@ -33517,6 +33510,96 @@ window.__fcBuildV1061={build:'v1061',phase:'Production Hardening',focus:'restore
 </style>
 <script id="fc-v1065-build-marker">
 window.__fcBuildV1065={build:'v1065',basedOn:'v1064',flyerRenderer:'exact v1056 shell restored',flyerFullBleedRemoved:true,winnerCardInsetPreserved:true,winnerMediaMaxHeight:300,winnerMediaAspect:'16:9',otherFeedCardsChanged:false,navigationChanged:false,backendChanged:false};
+</script>
+
+
+<style id="fc-v1069-native-entry-snap-css">
+/* v1069 — CSS-only native entry carousels. No touch listeners, no preventDefault,
+   and no JavaScript snap correction. The scrolling parent owns mandatory x snap;
+   every real entry is one full-width snap page. */
+
+/* Older ancestors declared pan-y only, which prevents a descendant from ever
+   starting a horizontal gesture on iOS. Allow both axes and let Safari direction-lock. */
+.feed-container,
+.fcc-challenge-wrap .fcc-feed-drawer {
+  touch-action: pan-x pan-y !important;
+}
+
+/* Home feed + Compete entry rails. */
+.fcc-entries-scroll {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  width: 100% !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  scroll-snap-type: x mandatory !important;
+  scroll-behavior: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  touch-action: pan-x pan-y !important;
+  overscroll-behavior-x: contain !important;
+  scrollbar-width: none !important;
+}
+.fcc-entries-scroll::-webkit-scrollbar { display: none !important; }
+.fcc-entry-card {
+  flex: 0 0 100% !important;
+  width: 100% !important;
+  min-width: 100% !important;
+  max-width: none !important;
+  scroll-snap-align: center !important;
+  scroll-snap-stop: always !important;
+}
+
+/* Feed entry viewer sheet. Its vertical body must not restrict the nested x pager. */
+#fvScrollRegion { touch-action: auto !important; }
+#fvEntries {
+  display: flex !important;
+  flex-direction: row !important;
+  width: 100% !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  scroll-snap-type: x mandatory !important;
+  scroll-behavior: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  touch-action: pan-x pan-y !important;
+  overscroll-behavior-x: contain !important;
+  scrollbar-width: none !important;
+}
+#fvEntries::-webkit-scrollbar { display: none !important; }
+#fvEntries > .fc-v1024-fv-slide {
+  flex: 0 0 100% !important;
+  width: 100% !important;
+  min-width: 100% !important;
+  max-width: 100% !important;
+  scroll-snap-align: center !important;
+  scroll-snap-stop: always !important;
+}
+
+/* Full challenge detail entry pager. */
+.cd-entries-grid {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  width: 100% !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  scroll-snap-type: x mandatory !important;
+  scroll-behavior: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  touch-action: pan-x pan-y !important;
+  overscroll-behavior-x: contain !important;
+  scrollbar-width: none !important;
+}
+.cd-entries-grid::-webkit-scrollbar { display: none !important; }
+.cd-entries-grid > .cd-entry {
+  flex: 0 0 100% !important;
+  width: 100% !important;
+  min-width: 100% !important;
+  max-width: 100% !important;
+  scroll-snap-align: center !important;
+  scroll-snap-stop: always !important;
+}
+</style>
+<script id="fc-v1069-build-marker">
+window.__fcBuildV1069={build:'v1069',basedOn:'v1068',nativeCssOnly:true,scrollSnapType:'x mandatory',slideWidth:'100%',scrollSnapAlign:'center',javascriptGestureInterception:false,feedEntryRail:true,feedViewer:true,challengeDetail:true,navigationChanged:false,backendChanged:false};
 </script>
 
 </body>
