@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1064 — Flyer Stage Version Correction</title>
+<title>FlamesChallenge v1065 — Flyer Revert & Winner Media Recovery</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1064 · flyer-stage-fullwidth-version-correction" />
-<meta name="fc-whatsnew" content="Keeps the approved v1056 flyer content and actions while restoring its full-width, borderless feed presentation." />
+<meta name="fc-build" content="v1065 · flyer-revert-winner-media-recovery" />
+<meta name="fc-whatsnew" content="Restores the approved v1056 flyer card and returns winner media to a compact, non-stretched stage." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -23297,7 +23297,7 @@ function renderFlyerCard(p) {
                     ch && isVoting ? `⏱ ${formatCountdown(ch.voting_end)}` : '';
 
   return `
-    <div class="post-card fc-flyer-fullbleed-v1062" data-pid="${p.id}" style="padding:0;overflow:hidden;">
+    <div class="post-card" data-pid="${p.id}" style="padding:0;overflow:hidden;border:1px solid var(--border);border-left:3px solid rgba(255,45,31,0.85);">
       <!-- Header row -->
       <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px;">
         <span class="feed-poll-tag" style="color:var(--flame);">📣 FLYER</span>
@@ -23313,7 +23313,7 @@ function renderFlyerCard(p) {
 
       <!-- Flyer hero + facts + CTA. See the note above renderFlyerCard. -->
       ${ch ? `
-      <div class="flyer-stage${p.media_url && p.media_type !== 'video' ? ' fc-flyer-image-stage-v1063' : ''}" data-flyer-viewer="${ch.id}">
+      <div class="flyer-stage" data-flyer-viewer="${ch.id}">
         ${p.media_url && p.media_type !== 'video'
           ? `<img src="${escapeHtml(p.media_url)}" class="flyer-stage-blur" aria-hidden="true" loading="lazy">
              <img src="${escapeHtml(p.media_url)}" alt="Challenge flyer" class="flyer-stage-fg" loading="lazy">`
@@ -33415,55 +33415,42 @@ window.__fcBuildV1058={build:'v1058-superseded-challenge-stage',phase:'Productio
 window.__fcBuildV1061={build:'v1061',phase:'Production Hardening',focus:'restore flyer card exactly from v1056',basedOn:'v1060',v1056FlyerRendererRestored:true,v1060FlyerOverridesRemoved:true,entryCarouselPreserved:true,countRecoveryPreserved:true,homeChanged:false,competeChanged:false,titlesChanged:false,createFlowChanged:false,navigationChanged:false,scoringRulesChanged:false,levelThresholdsChanged:false,moderationFunctionChanged:false,newEdgeFunctions:0,edgeFunctionChanges:0,sqlChanges:0};
 </script>
 
-<style id="fc-v1062-fullbleed-flyer">
-/* v1062 — flyer-only full-bleed treatment.
-   Keep the approved v1056 flyer content, status logic, CTA, reactions, and 4:5
-   poster stage. Only remove the outer card shell and let this content type break
-   through the feed's 18px side inset. Other posts and challenge cards are not
-   included in this selector. */
-#feedContainer > .post-card.fc-flyer-fullbleed-v1062 {
-  width: calc(100% + 36px) !important;
-  max-width: none !important;
-  margin-left: -18px !important;
-  margin-right: -18px !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  overflow: hidden !important;
-  background: var(--surface) !important;
-}
-#feedContainer > .post-card.fc-flyer-fullbleed-v1062 .flyer-stage {
-  border-radius: 0 !important;
-}
-</style>
 
-<style id="fc-v1063-flyer-image-fullwidth">
-/* v1063 — flyer image only.
-   The v1062 shell was already full-bleed, but an older global feed rule still
-   forced every .flyer-stage to 1:1. Let image flyers use their intrinsic poster
-   ratio at full feed width. Winner and ordinary challenge cards are untouched. */
-#feedContainer > .post-card.fc-flyer-fullbleed-v1062 .flyer-stage.fc-flyer-image-stage-v1063 {
-  aspect-ratio: auto !important;
-  height: auto !important;
-  max-height: none !important;
-  background: transparent !important;
+<style id="fc-v1065-flyer-winner-recovery">
+/* v1065 — exact v1056 flyer shell restored. Winner remains a normal inset feed card;
+   only its media stage is shortened and ratio-safe so it no longer appears stretched. */
+#feedContainer > .fc-winner-card-v1058 {
+  width:auto !important;
+  max-width:none !important;
+  margin-left:0 !important;
+  margin-right:0 !important;
+  border-radius:18px !important;
+  overflow:hidden !important;
 }
-#feedContainer > .post-card.fc-flyer-fullbleed-v1062 .flyer-stage.fc-flyer-image-stage-v1063 .flyer-stage-blur {
-  display: none !important;
+.fc-winner-media-v1058 {
+  width:100% !important;
+  max-height:300px !important;
+  aspect-ratio:16 / 9 !important;
+  display:grid !important;
+  place-items:center !important;
+  overflow:hidden !important;
+  background:#0f0d0c !important;
 }
-#feedContainer > .post-card.fc-flyer-fullbleed-v1062 .flyer-stage.fc-flyer-image-stage-v1063 > img.flyer-stage-fg {
-  position: relative !important;
-  width: 100% !important;
-  height: auto !important;
-  max-height: none !important;
-  object-fit: contain !important;
+.fc-winner-media-v1058 > img,
+.fc-winner-media-v1058 > video,
+.fc-winner-media-v1058 .fc-winner-video-v1058,
+.fc-winner-media-v1058 .fc-winner-video-v1058 > video {
+  width:100% !important;
+  height:100% !important;
+  max-height:300px !important;
+  aspect-ratio:auto !important;
+  object-fit:cover !important;
+  display:block !important;
 }
 </style>
-<script id="fc-v1063-build-marker">
-window.__fcBuildV1063={build:'v1063',focus:'flyer poster intrinsic full-width stage only',basedOn:'v1062',flyerOuterFullBleedPreserved:true,flyerImageSquareOverrideRemoved:true,winnerCardChanged:false,otherFeedCardsChanged:false,navigationChanged:false,backendChanged:false};
+<script id="fc-v1065-build-marker">
+window.__fcBuildV1065={build:'v1065',basedOn:'v1064',flyerRenderer:'exact v1056 shell restored',flyerFullBleedRemoved:true,winnerCardInsetPreserved:true,winnerMediaMaxHeight:300,winnerMediaAspect:'16:9',otherFeedCardsChanged:false,navigationChanged:false,backendChanged:false};
 </script>
-<script id="fc-v1064-build-marker">
-window.__fcBuildV1064={build:'v1064',basedOn:'v1063',correction:'authoritative build metadata now matches deployed flyer-stage fix',championshipLogicChanged:false,navigationChanged:false,backendChanged:false};
-</script>
+
 </body>
 </html>
