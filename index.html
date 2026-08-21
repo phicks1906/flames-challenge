@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1069 — Native Entry Carousel Snap</title>
+<title>FlamesChallenge v1070 — Horizontal Carousel Gesture Recovery</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1069 · native-entry-carousel-snap" />
-<meta name="fc-whatsnew" content="Restores native horizontal entry swiping with full-width slides and mandatory CSS scroll snapping." />
+<meta name="fc-build" content="v1070 · horizontal-carousel-gesture-recovery" />
+<meta name="fc-whatsnew" content="Restores native horizontal entry swiping by removing the vertical-only gesture lock from feed-card ancestors." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -7351,6 +7351,52 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
 
 
 </style>
+
+<style id="fc-v1070-horizontal-carousel-gesture-recovery">
+/* v1070 — ROOT CAUSE: .feed-container and .fcc-feed-drawer were locked to
+   touch-action: pan-y. Touch-action is intersected through ancestors, so that
+   vertical-only lock prevented every descendant entry rail from receiving a
+   horizontal pan, regardless of its own scroll-snap/flex rules. Restore both
+   axes on those ancestors and leave the proven native carousel untouched. */
+.feed-container,
+.fcc-challenge-wrap,
+.fcc-challenge-wrap .fcc-feed-drawer,
+.fcc-feed-drawer {
+  touch-action: auto !important;
+}
+
+/* Native CSS-only entry rails. No touch listeners and no preventDefault. */
+.fcc-entries-scroll {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  -webkit-overflow-scrolling: touch !important;
+  touch-action: auto !important;
+  scroll-snap-type: x mandatory !important;
+  overscroll-behavior-x: contain !important;
+}
+.fcc-entries-scroll > .fcc-entry-card {
+  flex: 0 0 100% !important;
+  min-width: 100% !important;
+  width: 100% !important;
+  scroll-snap-align: start !important;
+  scroll-snap-stop: always !important;
+}
+
+/* Keep the full-screen viewer on its original native v1065 behavior. */
+#fvScrollRegion { touch-action: auto !important; }
+#fvEntries { touch-action: auto !important; }
+#fvEntries > .fc-v1024-fv-slide {
+  flex: 0 0 100% !important;
+  min-width: 100% !important;
+  width: 100% !important;
+  scroll-snap-align: center !important;
+}
+</style>
+<script id="fc-v1070-build-marker">
+window.__fcBuildV1070={build:'v1070',basedOn:'v1069',rootCause:'ancestor touch-action pan-y blocked descendant horizontal pans',broadV1069OverrideRemoved:true,nativeCssOnly:true,javascriptGestureInterception:false,navigationChanged:false,backendChanged:false};
+</script>
 </head>
 <body>
 <!-- v690 — View-as-member banner. Deliberately loud and impossible to miss: the
@@ -9846,8 +9892,8 @@ try {
 (function fcReportManualUpdateResultV1066(){
   let request = null;
   try {
-    request = JSON.parse(sessionStorage.getItem('fc_manual_update_check_v1069') || sessionStorage.getItem('fc_manual_update_check_v1068') || sessionStorage.getItem('fc_manual_update_check_v1067') || sessionStorage.getItem('fc_manual_update_check_v1066') || 'null');
-    if (request) { sessionStorage.removeItem('fc_manual_update_check_v1069'); sessionStorage.removeItem('fc_manual_update_check_v1068'); sessionStorage.removeItem('fc_manual_update_check_v1067'); sessionStorage.removeItem('fc_manual_update_check_v1066'); }
+    request = JSON.parse(sessionStorage.getItem('fc_manual_update_check_v1070') || sessionStorage.getItem('fc_manual_update_check_v1069') || sessionStorage.getItem('fc_manual_update_check_v1068') || sessionStorage.getItem('fc_manual_update_check_v1067') || sessionStorage.getItem('fc_manual_update_check_v1066') || 'null');
+    if (request) { sessionStorage.removeItem('fc_manual_update_check_v1070'); sessionStorage.removeItem('fc_manual_update_check_v1069'); sessionStorage.removeItem('fc_manual_update_check_v1068'); sessionStorage.removeItem('fc_manual_update_check_v1067'); sessionStorage.removeItem('fc_manual_update_check_v1066'); }
   } catch (e) {}
   if (!request) return;
   const from = String(request.from || '').match(/v?\d+(?:\.\d+)*/i)?.[0]?.toLowerCase().replace(/^v/, '') || '';
@@ -10013,7 +10059,7 @@ window.fcCheckForUpdate = () => checkForUpdate(true,{manual:true});
 window.fcManualUpdateCheck = async function(){
   try { if (typeof toast === 'function') toast('Checking for updates…'); } catch (e) {}
   try {
-    sessionStorage.setItem('fc_manual_update_check_v1069', JSON.stringify({ from: APP_VERSION, at: Date.now() }));
+    sessionStorage.setItem('fc_manual_update_check_v1070', JSON.stringify({ from: APP_VERSION, at: Date.now() }));
   } catch (e) {}
 
   let navigated = false;
@@ -33512,95 +33558,6 @@ window.__fcBuildV1061={build:'v1061',phase:'Production Hardening',focus:'restore
 window.__fcBuildV1065={build:'v1065',basedOn:'v1064',flyerRenderer:'exact v1056 shell restored',flyerFullBleedRemoved:true,winnerCardInsetPreserved:true,winnerMediaMaxHeight:300,winnerMediaAspect:'16:9',otherFeedCardsChanged:false,navigationChanged:false,backendChanged:false};
 </script>
 
-
-<style id="fc-v1069-native-entry-snap-css">
-/* v1069 — CSS-only native entry carousels. No touch listeners, no preventDefault,
-   and no JavaScript snap correction. The scrolling parent owns mandatory x snap;
-   every real entry is one full-width snap page. */
-
-/* Older ancestors declared pan-y only, which prevents a descendant from ever
-   starting a horizontal gesture on iOS. Allow both axes and let Safari direction-lock. */
-.feed-container,
-.fcc-challenge-wrap .fcc-feed-drawer {
-  touch-action: pan-x pan-y !important;
-}
-
-/* Home feed + Compete entry rails. */
-.fcc-entries-scroll {
-  display: flex !important;
-  flex-wrap: nowrap !important;
-  width: 100% !important;
-  overflow-x: auto !important;
-  overflow-y: hidden !important;
-  scroll-snap-type: x mandatory !important;
-  scroll-behavior: auto !important;
-  -webkit-overflow-scrolling: touch !important;
-  touch-action: pan-x pan-y !important;
-  overscroll-behavior-x: contain !important;
-  scrollbar-width: none !important;
-}
-.fcc-entries-scroll::-webkit-scrollbar { display: none !important; }
-.fcc-entry-card {
-  flex: 0 0 100% !important;
-  width: 100% !important;
-  min-width: 100% !important;
-  max-width: none !important;
-  scroll-snap-align: center !important;
-  scroll-snap-stop: always !important;
-}
-
-/* Feed entry viewer sheet. Its vertical body must not restrict the nested x pager. */
-#fvScrollRegion { touch-action: auto !important; }
-#fvEntries {
-  display: flex !important;
-  flex-direction: row !important;
-  width: 100% !important;
-  overflow-x: auto !important;
-  overflow-y: hidden !important;
-  scroll-snap-type: x mandatory !important;
-  scroll-behavior: auto !important;
-  -webkit-overflow-scrolling: touch !important;
-  touch-action: pan-x pan-y !important;
-  overscroll-behavior-x: contain !important;
-  scrollbar-width: none !important;
-}
-#fvEntries::-webkit-scrollbar { display: none !important; }
-#fvEntries > .fc-v1024-fv-slide {
-  flex: 0 0 100% !important;
-  width: 100% !important;
-  min-width: 100% !important;
-  max-width: 100% !important;
-  scroll-snap-align: center !important;
-  scroll-snap-stop: always !important;
-}
-
-/* Full challenge detail entry pager. */
-.cd-entries-grid {
-  display: flex !important;
-  flex-wrap: nowrap !important;
-  width: 100% !important;
-  overflow-x: auto !important;
-  overflow-y: hidden !important;
-  scroll-snap-type: x mandatory !important;
-  scroll-behavior: auto !important;
-  -webkit-overflow-scrolling: touch !important;
-  touch-action: pan-x pan-y !important;
-  overscroll-behavior-x: contain !important;
-  scrollbar-width: none !important;
-}
-.cd-entries-grid::-webkit-scrollbar { display: none !important; }
-.cd-entries-grid > .cd-entry {
-  flex: 0 0 100% !important;
-  width: 100% !important;
-  min-width: 100% !important;
-  max-width: 100% !important;
-  scroll-snap-align: center !important;
-  scroll-snap-stop: always !important;
-}
-</style>
-<script id="fc-v1069-build-marker">
-window.__fcBuildV1069={build:'v1069',basedOn:'v1068',nativeCssOnly:true,scrollSnapType:'x mandatory',slideWidth:'100%',scrollSnapAlign:'center',javascriptGestureInterception:false,feedEntryRail:true,feedViewer:true,challengeDetail:true,navigationChanged:false,backendChanged:false};
-</script>
 
 </body>
 </html>
