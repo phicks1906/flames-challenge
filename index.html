@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1049 — Production Hardening I</title>
+<title>FlamesChallenge v1051 — Focused Navigation & Contextual Guidance</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,7 +21,7 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1049 · production-hardening-1" />
+<meta name="fc-build" content="v1051 · focused-navigation-contextual-guidance" />
 <meta name="fc-whatsnew" content="Ember now answers competition rules and recorded Championship facts locally from the approved current system before using AI for open-ended help." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
@@ -7623,7 +7623,7 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
     <span class="bnav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m3.5 8.2 4.6 3.2L12 5l3.9 6.4 4.6-3.2-1.7 10.1H5.2z"/><path d="M5.6 21h12.8"/></svg></span>
     <span class="bnav-label">Titles</span>
   </button>
-  <button class="bnav-btn" data-view="you" onclick="openOwnCompetitiveProfile()" aria-label="You">
+  <button class="bnav-btn" data-view="you" onclick="switchView('you')" aria-label="You">
     <span class="bnav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5.5 20c.6-4.2 2.8-6.3 6.5-6.3s5.9 2.1 6.5 6.3"/></svg></span>
     <span class="bnav-label">You</span>
   </button>
@@ -7820,7 +7820,7 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
     <div class="section-head">
       <div>
         <h2 class="section-title">Titles & Championships</h2>
-        <p class="section-sub">Championship Score measures the strength of eligible wins. Score = Opponent Points + Turnout Points. · <a class="lb-how-link" onclick="toggleLbHow()">How scoring works</a></p>
+        <p class="section-sub">Monthly standings, Championship qualification, champions, and Hall of Fame history. · <a class="lb-how-link" onclick="toggleLbHow()">How Championship Score works</a></p>
       </div>
     </div>
     <div class="lb-how-card" id="lbHowCard" style="display:none">
@@ -33024,6 +33024,360 @@ window.__fcBuildV1047={build:'v1047',phase:'Competition Clarity, Rules & Trust',
   };
   window.closeCreatorInsightsV1048=function(){sheet()?.classList.remove('open');document.body.style.overflow=''};
 })();
+</script>
+
+
+
+<style id="fc-v1051-focused-navigation-css">
+/* v1051 — one dominant purpose per top-level destination, with the minimum
+   contextual guidance needed to understand and act on that purpose. */
+
+/* Personal dashboards and duplicated destination content are removed, not merely
+   pushed lower. Contextual guidance remains where it changes the user's decision. */
+#feedView #fcPurposeCard,
+#feedView #emberHomeCard,
+#feedView #fcHomeLive,
+#feedView .heat-check,
+#challengesViewSection #emberCompeteCard,
+#leaderboardViewSection #fcEmberTitlesAction,
+#leaderboardViewSection .fc-score-ember-v1032,
+#leaderboardViewSection .fc-score-you-v1032,
+#leaderboardViewSection #lbPastWrap,
+#lbTabHallOfFame .hof-stand{
+  display:none!important;
+}
+
+.fc-screen-head-v1051{
+  display:flex;align-items:flex-end;justify-content:space-between;gap:14px;
+  margin:8px 0 14px;padding:0 2px;
+}
+.fc-screen-head-v1051 h1{
+  margin:0;font-family:var(--font-display);font-size:34px;line-height:1;color:var(--text);
+}
+.fc-screen-head-v1051 p{
+  margin:7px 0 0;max-width:35rem;font-size:13px;line-height:1.45;color:var(--text-dim);
+}
+.fc-screen-head-actions-v1051{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap}
+.fc-screen-head-action-v1051{
+  appearance:none;flex:0 0 auto;padding:8px 11px;border:1px solid var(--border);
+  border-radius:999px;background:var(--surface);color:var(--text-dim);
+  font-size:11px;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent;
+}
+.fc-screen-head-action-v1051:active{transform:scale(.98)}
+#feedView .feed-wrap{padding-top:10px}
+#feedView .feed-tabs{margin-top:0}
+#challengesViewSection .ch-header{margin-bottom:13px}
+#leaderboardViewSection .section-head{margin-bottom:12px}
+#leaderboardViewSection .section-sub{max-width:38rem}
+
+/* One compact orientation/action module on Home. This replaces both the career
+   dashboard and the duplicate live-challenge shelf. */
+.fc-next-action-v1051{
+  display:none;position:relative;overflow:hidden;margin:12px 0 16px;padding:14px;
+  border:1px solid rgba(255,106,44,.30);border-radius:18px;
+  background:linear-gradient(145deg,rgba(255,106,44,.12),var(--surface) 58%);
+  box-shadow:0 10px 26px rgba(0,0,0,.08);cursor:pointer;
+}
+.fc-next-action-v1051.show{display:grid;grid-template-columns:minmax(0,1fr) 76px;gap:13px;align-items:center}
+.fc-next-action-copy-v1051{min-width:0}
+.fc-next-action-label-v1051{font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:var(--ember);margin-bottom:6px}
+.fc-next-action-title-v1051{font-size:17px;line-height:1.18;font-weight:850;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fc-next-action-meta-v1051{margin-top:5px;font-size:12px;line-height:1.35;color:var(--text-dim)}
+.fc-next-action-cta-v1051{display:inline-flex;align-items:center;gap:5px;margin-top:10px;color:var(--ember);font-size:12px;font-weight:900}
+.fc-next-action-media-v1051{width:76px;height:76px;border-radius:13px;overflow:hidden;background:var(--surface-2);border:1px solid var(--border);display:grid;place-items:center;color:var(--text-muted)}
+.fc-next-action-media-v1051 img,.fc-next-action-media-v1051 video{width:100%;height:100%;object-fit:cover;display:block}
+.fc-next-action-media-v1051 svg{width:32px;height:32px;fill:none;stroke:currentColor;stroke-width:1.8}
+
+/* Compete retains a compact Score signal because eligibility changes the decision
+   to enter. It is not a personal-progress module and not a full scoring lesson. */
+#challengesGrid > [data-cid] > .fc-score-eligibility-v1032.fc-score-signal-v1051{
+  display:inline-flex!important;align-items:center;align-self:flex-start;max-width:calc(100% - 28px);
+  margin:8px 14px 2px;padding:5px 9px;border-radius:999px;font-size:10px;line-height:1.2;
+  font-weight:850;letter-spacing:.025em;box-shadow:none!important;
+}
+#challengesGrid > [data-cid] > .fc-score-eligibility-v1032.fc-score-signal-v1051::after{
+  content:'  ⓘ';font-size:10px;opacity:.72;
+}
+
+/* Current-month standings are interface content, not a forced dark poster. */
+body.theme-light .fc-score-race-v1032,
+html[data-theme="light"] body .fc-score-race-v1032{
+  color-scheme:light;
+  --text:#211b17;--text-dim:#655b53;--text-muted:#8b8178;--gold:#b97800;
+  background:var(--surface)!important;border-color:var(--border)!important;
+  box-shadow:0 10px 28px rgba(62,43,31,.09)!important;
+}
+body.theme-light .fc-score-head-v1032,
+html[data-theme="light"] body .fc-score-head-v1032{
+  background:linear-gradient(145deg,#fffaf5,#fff)!important;border-bottom-color:var(--border)!important;
+}
+body.theme-light .fc-score-time-v1032,
+html[data-theme="light"] body .fc-score-time-v1032,
+body.theme-light .fc-score-row-v1032,
+html[data-theme="light"] body .fc-score-row-v1032{border-color:var(--border)!important}
+body.theme-light .fc-score-cutoff-v1032,
+html[data-theme="light"] body .fc-score-cutoff-v1032{border-top-color:var(--border)!important}
+body.theme-light .fc-score-row-v1032.is-you,
+html[data-theme="light"] body .fc-score-row-v1032.is-you{
+  background:#fff3ed!important;border-color:rgba(231,83,36,.28)!important;
+}
+body.theme-light .fc-score-metric-v1032,
+html[data-theme="light"] body .fc-score-metric-v1032{
+  background:var(--surface-2)!important;border-color:var(--border)!important;color:var(--text)!important;
+}
+body.theme-light .fc-score-metric-v1032.total,
+html[data-theme="light"] body .fc-score-metric-v1032.total{
+  background:#fff8e8!important;border-color:#e7c889!important;
+}
+body.theme-light .fc-score-open-row-v1033,
+html[data-theme="light"] body .fc-score-open-row-v1033{background:transparent!important}
+body.theme-light .fc-score-open-name-v1033,
+html[data-theme="light"] body .fc-score-open-name-v1033{color:var(--text-dim)!important}
+body.theme-light .fc-score-open-sub-v1033,
+html[data-theme="light"] body .fc-score-open-sub-v1033{color:var(--text-muted)!important}
+body.theme-light .fc-score-metric-v1033-empty b,
+html[data-theme="light"] body .fc-score-metric-v1033-empty b{color:var(--text-muted)!important}
+
+/* You is a true primary destination. The existing proven profile renderer is reused,
+   but the sheet behaves as a page: no close control and the bottom nav remains usable. */
+#profileSheet.fc-own-profile-page-v1051{
+  z-index:110!important;inset:0!important;padding-bottom:calc(78px + env(safe-area-inset-bottom,0px));
+}
+#profileSheet.fc-own-profile-page-v1051 .cd-close{display:none!important}
+#profileSheet.fc-own-profile-page-v1051 .cd-sheet-header{padding-left:18px!important}
+#profileSheet.fc-own-profile-page-v1051 .cd-sheet-inner{
+  padding-bottom:calc(138px + env(safe-area-inset-bottom,0px))!important;
+}
+body.fc-you-page-v1051 #bottomNav{
+  display:flex!important;visibility:visible!important;pointer-events:auto!important;z-index:120!important;
+}
+body.fc-you-page-v1051 #profileSheet.fc-own-profile-page-v1051{display:block!important}
+
+/* Challenge detail still owns the full contextual rules/Score explanation. */
+#fcScoreEligibilityDetailV1033 .fc-score-eligibility-v1032{display:inline-flex!important}
+
+@media(max-width:540px){
+  .fc-screen-head-v1051{align-items:flex-start;margin-top:2px}
+  .fc-screen-head-v1051 h1{font-size:31px}
+  .fc-screen-head-v1051 p{font-size:12.5px}
+  .fc-screen-head-actions-v1051{gap:5px}
+  .fc-screen-head-action-v1051{padding:7px 9px;font-size:10px}
+  .fc-next-action-v1051.show{grid-template-columns:minmax(0,1fr) 68px;padding:13px}
+  .fc-next-action-media-v1051{width:68px;height:68px}
+}
+</style>
+
+<script id="fc-v1051-focused-navigation-js">
+(function(){
+  'use strict';
+  const CONTRACTS={
+    feed:{name:'Home',purpose:'See what is happening and the one most useful action now.',owns:['activity','following feed','one next action','posts and polls'],excludes:['career dashboard','challenge catalog','standings dashboard']},
+    challenges:{name:'Compete',purpose:'Find a challenge, understand its phase, and act.',owns:['search','phase filters','challenge cards','compact Score eligibility'],excludes:['career record','Hall of Fame progress','personal standings dashboard']},
+    leaderboard:{name:'Titles',purpose:'See monthly standings, qualification, champions, and Hall of Fame history.',owns:['standings','qualification','public title history'],excludes:['profile dashboard','active-challenge list','creator activity']},
+    you:{name:'You',purpose:'See and manage your complete competitive identity.',owns:['tier','record','monthly Score','Championship history','active competition','settings'],excludes:['global challenge discovery','global standings']}
+  };
+
+  const baseSwitchView=window.switchView;
+  const baseOpenUserProfile=window.openUserProfile;
+  const baseCloseProfileSheet=window.closeProfileSheet;
+  let returnToYouAfterProfile=false;
+
+  function esc(v){return typeof escapeHtml==='function'?escapeHtml(String(v??'')):String(v??'').replace(/[&<>"']/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]))}
+  function byId(id){return document.getElementById(id)}
+  function statusOf(ch){try{return ch?.computedStatus||computeChallengeStatus(ch)}catch(e){return 'submitting'}}
+  function deadlineOf(ch,status){
+    const iso=status==='submitting'||status==='sd_submitting'?ch?.submission_deadline:ch?.voting_end;
+    if(!iso)return '';
+    const ms=Date.parse(iso)-Date.now();if(!Number.isFinite(ms))return '';
+    if(ms<=0)return 'Ending now';
+    const mins=Math.max(1,Math.floor(ms/60000)),d=Math.floor(mins/1440),h=Math.floor((mins%1440)/60),m=mins%60;
+    const value=d?`${d}d ${h}h`:h?`${h}h ${m}m`:`${m}m`;
+    return `${status==='submitting'||status==='sd_submitting'?'Entries close':'Voting ends'} in ${value}`;
+  }
+  function isMine(ch){return !!state?.profile?.id&&String(ch?.creator_id||ch?.creator?.id||ch?.user_id)===String(state.profile.id)}
+  function myEntry(ch){try{return typeof fcCardMyEntry==='function'?fcCardMyEntry(ch):(state.feedEntries||[]).find(e=>String(e.challenge_id)===String(ch.id)&&String(e.user_id)===String(state.profile?.id))}catch(e){return null}}
+  function hasVoted(ch){try{return typeof fcCardHasVoted==='function'?fcCardHasVoted(ch):false}catch(e){return false}}
+  function actionFor(ch,status){
+    try{if(typeof fcCardAction==='function')return fcCardAction(ch,status)}catch(e){}
+    if(status==='submitting')return {label:isMine(ch)?'Manage challenge':myEntry(ch)?'Edit your entry':'Enter challenge',mode:'view'};
+    if(status==='voting'||status==='sudden_death')return {label:hasVoted(ch)?'View voting':'Vote now',mode:'view'};
+    return {label:'View challenge',mode:'view'};
+  }
+  function runAction(ch,action){
+    try{if(typeof runChallengeCardAction==='function')return runChallengeCardAction(ch,action.mode)}catch(e){}
+    if(typeof openChallenge==='function')openChallenge(ch);
+  }
+  function thumbFor(ch){
+    const entries=[...(state?.feedEntries||[]),...(state?.currentEntries||[])];
+    const e=entries.find(x=>String(x.challenge_id)===String(ch.id)&&x.moderation_status!=='rejected'&&(x.thumbnail_url||x.poster_url||x.media_url));
+    let url=e&&(e.thumbnail_url||e.poster_url||e.media_url);
+    if(!url)url=ch.cover_url||ch.image_url||ch.thumbnail_url||'';
+    if(url){
+      const type=String(e?.media_type||ch.media_type||'').toLowerCase();
+      if(type==='video')return `<video src="${esc(url)}#t=0.1" muted playsinline preload="metadata"></video>`;
+      return `<img src="${esc(url)}" alt="" loading="lazy">`;
+    }
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v4c0 4-1.8 6-4 6s-4-2-4-6V4Z"/><path d="M8 6H5v2c0 2.2 1.2 3.5 3 4M16 6h3v2c0 2.2-1.2 3.5-3 4M12 14v4M9 21h6M10 18h4"/></svg>';
+  }
+
+  function removeDestinationDuplicates(){
+    ['fcPurposeCard','emberHomeCard','fcHomeLive','emberCompeteCard','fcEmberTitlesAction'].forEach(id=>byId(id)?.remove());
+    document.querySelector('#feedView .heat-check')?.remove();
+    document.querySelectorAll('#leaderboardViewSection .fc-score-ember-v1032,#leaderboardViewSection .fc-score-you-v1032,#lbTabHallOfFame .hof-stand').forEach(el=>el.remove());
+  }
+
+  function installHomeHeader(){
+    const wrap=document.querySelector('#feedView .feed-wrap'),tabs=wrap?.querySelector('.feed-tabs');
+    if(!wrap||!tabs)return;
+    let head=byId('fcHomeHeadV1051');
+    if(!head){
+      head=document.createElement('header');head.id='fcHomeHeadV1051';head.className='fc-screen-head-v1051';
+      head.innerHTML='<div><h1>Home</h1><p>Activity, updates, and the next thing that needs your attention.</p></div><div class="fc-screen-head-actions-v1051"><button type="button" data-home-help>How it works</button><button type="button" data-home-polls>Polls</button></div>';
+      head.querySelectorAll('button').forEach(b=>b.className='fc-screen-head-action-v1051');
+      head.querySelector('[data-home-help]').onclick=()=>{if(typeof fcOpenHowItWorks==='function')fcOpenHowItWorks();else if(typeof startTour==='function')startTour()};
+      head.querySelector('[data-home-polls]').onclick=()=>switchView('polls');
+      tabs.insertAdjacentElement('beforebegin',head);
+    }
+    let card=byId('fcNextActionV1051');
+    if(!card){card=document.createElement('section');card.id='fcNextActionV1051';card.className='fc-next-action-v1051';tabs.insertAdjacentElement('afterend',card)}
+    document.querySelector('#challengesViewSection .ux-polls-link')?.remove();
+  }
+
+  function nextActionCandidate(){
+    if(!state?.profile)return null;
+    const active=(state.challenges||[]).filter(ch=>{
+      const s=statusOf(ch);return ['submitting','voting','sudden_death','sd_submitting'].includes(s)&&(ch.is_public!==false||isMine(ch));
+    }).map(ch=>{
+      const s=statusOf(ch),entry=myEntry(ch),voted=hasVoted(ch),mine=isMine(ch),action=actionFor(ch,s);
+      let priority=0,label='Your next action';
+      if(entry&&entry.moderation_status&& !['clear','approved'].includes(entry.moderation_status)){priority=120;label='ENTRY STATUS';action.label='View entry status';action.mode='view'}
+      else if((s==='voting'||s==='sudden_death')&&!voted){priority=110;label='VOTING IS OPEN'}
+      else if(s==='sd_submitting'&&entry){priority=105;label='SUDDEN DEATH'}
+      else if(s==='submitting'&&mine){priority=90;label='YOUR CHALLENGE IS OPEN'}
+      else if(s==='submitting'&&entry){priority=80;label='YOUR ENTRY IS IN'}
+      else if(s==='submitting'){priority=70;label='OPEN CHALLENGE'}
+      else if(s==='voting'||s==='sudden_death'){priority=45;label='LIVE VOTING'}
+      const end=s==='submitting'||s==='sd_submitting'?ch.submission_deadline:ch.voting_end;
+      if(end){const hrs=(Date.parse(end)-Date.now())/3600000;if(hrs>0&&hrs<12)priority+=15;else if(hrs>0&&hrs<36)priority+=7}
+      return {ch,s,entry,action,priority,label};
+    }).sort((a,b)=>b.priority-a.priority);
+    return active[0]||null;
+  }
+
+  function renderNextAction(){
+    const card=byId('fcNextActionV1051');if(!card)return;
+    const row=nextActionCandidate();
+    if(!row){card.classList.remove('show');card.innerHTML='';card.onclick=null;return}
+    const {ch,s,entry,action,label}=row;
+    const phase=s==='submitting'?'Entries open':s==='sd_submitting'?'Sudden-death entries':s==='sudden_death'?'Sudden-death voting':'Voting';
+    const pending=entry&&entry.moderation_status&&!['clear','approved'].includes(entry.moderation_status);
+    const meta=pending?'Your entry is awaiting review. Only you and moderators can see it.':[phase,deadlineOf(ch,s)].filter(Boolean).join(' · ');
+    card.innerHTML=`<div class="fc-next-action-copy-v1051"><div class="fc-next-action-label-v1051">${esc(label)}</div><div class="fc-next-action-title-v1051">${esc(ch.title||'Challenge')}</div><div class="fc-next-action-meta-v1051">${esc(meta)}</div><div class="fc-next-action-cta-v1051">${esc(action.label||'View challenge')} <span aria-hidden="true">→</span></div></div><div class="fc-next-action-media-v1051">${thumbFor(ch)}</div>`;
+    card.classList.add('show');card.onclick=()=>runAction(ch,action);
+  }
+
+  function compactScoreSignals(){
+    document.querySelectorAll('#challengesGrid > [data-cid]').forEach(card=>{
+      const badge=card.querySelector(':scope > .fc-score-eligibility-v1032');if(!badge)return;
+      badge.classList.add('fc-score-signal-v1051');
+      const anchor=card.querySelector('.chc-prompt')||card.querySelector('.chc-title');
+      if(anchor&&badge.previousElementSibling!==anchor)anchor.insertAdjacentElement('afterend',badge);
+    });
+  }
+
+  function normalizeLabels(){
+    const competeSub=document.querySelector('#challengesViewSection .section-sub');
+    if(competeSub)competeSub.textContent='Find an open challenge, vote on live work, or review a decided result.';
+    const titleSub=document.querySelector('#leaderboardViewSection .section-sub');
+    if(titleSub)titleSub.innerHTML='Monthly standings, Championship qualification, champions, and Hall of Fame history. · <button class="link-btn" onclick="toggleLbHow()">How Championship Score works</button>';
+  }
+
+  function setNavActive(view){
+    document.querySelectorAll('.bnav-btn').forEach(b=>b.classList.toggle('active',b.dataset.view===view));
+    document.querySelectorAll('.nav-link').forEach(l=>l.classList.toggle('active',l.dataset.view===view));
+  }
+  function hidePrimarySections(){
+    ['feedView','challengesViewSection','pollsViewSection','leaderboardViewSection','adminViewSection'].forEach(id=>{const el=byId(id);if(el)el.style.display='none'});
+  }
+  function markOwnProfilePage(){
+    const sheet=byId('profileSheet');if(!sheet)return;
+    sheet.classList.add('open','fc-own-profile-page-v1051');
+    document.body.classList.add('fc-you-page-v1051');
+    const close=sheet.querySelector('.cd-close');if(close)close.setAttribute('aria-hidden','true');
+    const title=byId('psHeaderName');if(title)title.textContent='You';
+    const settings=byId('psSettingsBtn');if(settings)settings.style.display='grid';
+  }
+  function leaveOwnProfilePage(close=true){
+    const sheet=byId('profileSheet');if(!sheet)return;
+    const wasOwn=sheet.classList.contains('fc-own-profile-page-v1051');
+    sheet.classList.remove('fc-own-profile-page-v1051');document.body.classList.remove('fc-you-page-v1051');
+    sheet.querySelector('.cd-close')?.removeAttribute('aria-hidden');
+    if(wasOwn&&close&&typeof baseCloseProfileSheet==='function')baseCloseProfileSheet();
+  }
+  async function openOwnProfilePage(){
+    if(!state?.profile?.id){if(typeof openProfile==='function')openProfile();return}
+    try{if(typeof fcCleanupHowItWorks==='function')fcCleanupHowItWorks()}catch(e){}
+    byId('profileModal')?.classList.remove('open');
+    state.currentView='you';setNavActive('you');hidePrimarySections();
+    const sheet=byId('profileSheet');
+    if(sheet?.classList.contains('fc-own-profile-page-v1051')&&sheet.classList.contains('open')){sheet.scrollTo({top:0,behavior:'smooth'});return}
+    markOwnProfilePage();
+    try{if(typeof baseOpenUserProfile==='function')await baseOpenUserProfile(state.profile.id);else if(typeof openProfile==='function')openProfile()}
+    finally{markOwnProfilePage();requestAnimationFrame(()=>sheet?.scrollTo({top:0,behavior:'auto'}))}
+  }
+
+  window.switchView=function(view){
+    if(view==='you'){openOwnProfilePage();return}
+    leaveOwnProfilePage(true);
+    return typeof baseSwitchView==='function'?baseSwitchView.apply(this,arguments):undefined;
+  };
+  window.openOwnCompetitiveProfile=()=>window.switchView('you');
+
+  window.openUserProfile=async function(userId){
+    if(state?.profile?.id&&String(userId)===String(state.profile.id)){window.switchView('you');return}
+    if(document.body.classList.contains('fc-you-page-v1051')){returnToYouAfterProfile=true;leaveOwnProfilePage(true)}
+    return typeof baseOpenUserProfile==='function'?baseOpenUserProfile.apply(this,arguments):undefined;
+  };
+  window.closeProfileSheet=function(){
+    const sheet=byId('profileSheet');
+    if(sheet?.classList.contains('fc-own-profile-page-v1051'))return; // destination stays mounted behind detail sheets
+    const result=typeof baseCloseProfileSheet==='function'?baseCloseProfileSheet.apply(this,arguments):undefined;
+    if(returnToYouAfterProfile){returnToYouAfterProfile=false;setTimeout(()=>window.switchView('you'),0)}
+    return result;
+  };
+
+  function enforce(){
+    removeDestinationDuplicates();installHomeHeader();normalizeLabels();compactScoreSignals();renderNextAction();
+  }
+
+  ['renderFeed','renderFeedHello','renderChallenges','renderLeaderboard','renderHallOfFame'].forEach(name=>{
+    const fn=window[name];if(typeof fn!=='function')return;
+    window[name]=function(){const r=fn.apply(this,arguments);requestAnimationFrame(enforce);return r};
+  });
+  const grid=byId('challengesGrid');
+  if(grid)new MutationObserver(()=>requestAnimationFrame(compactScoreSignals)).observe(grid,{childList:true,subtree:true});
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(enforce,0),{once:true});else enforce();
+
+  window.__fcScreenArchitectureV1051={contracts:CONTRACTS,refresh:enforce,renderNextAction,openYou:openOwnProfilePage};
+})();
+</script>
+
+<script id="fc-v1051-build-marker">
+window.__fcBuildV1051={
+  build:'v1051',
+  phase:'Production Hardening & Release Readiness — Information Architecture',
+  focus:'focused navigation with contextual guidance',
+  productionReviewed:'v1049 deployed site reviewed before build',
+  home:'activity plus one next action',
+  compete:'challenge discovery plus compact Score eligibility',
+  titles:'standings, qualification and public title history',
+  profile:'true primary destination with persistent bottom navigation',
+  tierAndHallOfFameMechanicsChanged:false,
+  moderationWorkflowChanged:false,
+  backendChanges:false,
+  newEdgeFunctions:0,
+  edgeFunctionChanges:0
+};
 </script>
 
 
