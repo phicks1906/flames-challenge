@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1053 — Emergency Navigation Recovery</title>
+<title>FlamesChallenge v1054 — Progressive Guidance & Level System</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,7 +21,7 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1053 · emergency-navigation-recovery" />
+<meta name="fc-build" content="v1054 · progressive-guidance-level-system" />
 <meta name="fc-whatsnew" content="Restores the last known working navigation architecture while the focused-screen redesign is rebuilt and fully regression-tested." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
@@ -9442,8 +9442,8 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
 <div class="modal-backdrop" id="badgeLegendSheet" onclick="if(event.target===this)closeBadgeLegend()">
   <div class="modal" style="max-width:380px">
     <button class="modal-close-x" onclick="closeBadgeLegend()">×</button>
-    <h2 style="margin-bottom:4px">🏆 The Badge Ladder</h2>
-    <div style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Every player has a badge. Win championships to climb.</div>
+    <h2 style="margin-bottom:4px">Levels & Hall of Fame</h2>
+    <div style="font-size:13px;color:var(--text-muted);margin-bottom:16px">One visible level determines the Opponent Points you are worth.</div>
     <div id="badgeLegendList" style="display:flex;flex-direction:column;gap:10px;max-height:60vh;overflow-y:auto"></div>
   </div>
 </div>
@@ -11230,6 +11230,9 @@ async function loadAppData() {
       state.myVotes[v.poll_id] = v.option_index;
     }
   });
+  // v1054: Hall of Fame titles are part of the visible level used by
+  // Opponent Points, so load them before rebuilding the leaderboard/score ledger.
+  await loadChampionshipData();
   await loadLeaderboard();
   await loadChallenges();
   await loadPosts();
@@ -11237,7 +11240,6 @@ async function loadAppData() {
   await loadFeedActivity();
   await loadMentionableProfiles();
   await loadMyRecord();
-  await loadChampionshipData();
   try { maybeShowCoronation(); } catch (e) {}
   try { maybeChampRaceToast(); } catch (e) {}
   state.loading = false;
@@ -11663,6 +11665,47 @@ async function loadLeaderboard() {
   } catch (e) { console.warn('boost ledger load', e); }
   state.boostByChallenge = boostByChallenge;
 
+  // v1054: reconstruct the visible level each participant held immediately
+  // before every resolved challenge. This keeps Opponent Points auditable:
+  // regular wins drive Spark–Inferno, Championship titles drive Legend–GOAT,
+  // and the value is frozen at resolution rather than borrowed from today's badge.
+  const levelSnapshotByChallenge = {};
+  const regularWinsForLevels = {};
+  const champWinsForLevels = {};
+  const hofEvents=(state.hofData||[]).map(r=>({
+    userId:r.userId,
+    at:new Date(r.createdAt||chInfo[r.challengeId]?.votingEnd||0).getTime()||0
+  })).sort((a,b)=>a.at-b.at);
+  let hofPtr=0;
+  function resolveLevelWinners(chId,entries){
+    const info=chInfo[chId]||{},went=(info.sdRound||0)>0||!!info.suddenDeath;
+    if(!went&&entries.length<2)return [];
+    let max=0,tops=[];
+    entries.forEach(e=>{const v=(allVotesByEntry[e.id]||[]).length;if(v>max){max=v;tops=[e]}else if(v===max&&v>0)tops.push(e)});
+    if(went&&entries.length===1&&max===0)return [entries[0].user_id];
+    if(went&&entries.length>1&&max===0)return [...new Set(entries.map(e=>e.user_id).filter(Boolean))];
+    if(max>0&&tops.length===1)return [tops[0].user_id];
+    if(max>0&&tops.length>1&&went)return [...new Set(tops.map(e=>e.user_id).filter(Boolean))];
+    return [];
+  }
+  Object.keys(entriesByCh).sort((a,b)=>new Date(chInfo[a]?.votingEnd||0)-new Date(chInfo[b]?.votingEnd||0)).forEach(chId=>{
+    const at=new Date(chInfo[chId]?.votingEnd||0).getTime()||0;
+    while(hofPtr<hofEvents.length&&hofEvents[hofPtr].at<at){const ev=hofEvents[hofPtr++];champWinsForLevels[ev.userId]=(champWinsForLevels[ev.userId]||0)+1;}
+    const entries=entriesByCh[chId]||[]; const snap={};
+    [...new Set(entries.map(e=>e.user_id).filter(Boolean))].forEach(uid=>{
+      snap[uid]=visibleLevelKeyForCounts(regularWinsForLevels[uid]||0,champWinsForLevels[uid]||0);
+    });
+    levelSnapshotByChallenge[chId]=snap;
+    const info=chInfo[chId]||{};
+    if(!info.isChampionship&&info.isPublic!==false){
+      resolveLevelWinners(chId,entries).forEach(uid=>regularWinsForLevels[uid]=(regularWinsForLevels[uid]||0)+1);
+    }
+    while(hofPtr<hofEvents.length&&hofEvents[hofPtr].at<=at){const ev=hofEvents[hofPtr++];champWinsForLevels[ev.userId]=(champWinsForLevels[ev.userId]||0)+1;}
+  });
+  while(hofPtr<hofEvents.length){const ev=hofEvents[hofPtr++];champWinsForLevels[ev.userId]=(champWinsForLevels[ev.userId]||0)+1;}
+  state._fcLevelSnapshotByChallengeV1054=levelSnapshotByChallenge;
+  state._fcRegularWinsAllTimeV1054=regularWinsForLevels;
+
   Object.entries(entriesByCh).forEach(([chId, entries]) => {
     const cat = chInfo[chId]?.category || 'Other';
 
@@ -11729,7 +11772,7 @@ async function loadLeaderboard() {
         ensureUser(e.user_id); lossesByUser[e.user_id].allTime++;
       });
 
-      // -- Championship Score snapshot (formula v2). Public, non-Championship
+      // -- Championship Score snapshot (formula v3 visible-level opponent values). Public, non-Championship
       // decisive wins earn Opponent Points + Turnout Points. Turnout is based on
       // UNIQUE valid ballots across the final round, not votes on the winner alone.
       // Legacy rows are upgraded in place: frozen opponent points remain unchanged;
@@ -11742,32 +11785,18 @@ async function loadLeaderboard() {
         ? existingScoreRow.detail : {};
       const formulaVersion = Number(existingDetail.formulaVersion || 1);
       const scoreEligible = !chInfo[chId]?.isChampionship && chInfo[chId]?.isPublic !== false;
-      if (scoreEligible && (!existingScoreRow || formulaVersion < 2)) {
+      if (scoreEligible && (!existingScoreRow || formulaVersion < 3)) {
         const opponents = [...new Set(entries.filter(e => e.user_id !== uid).map(e => e.user_id))];
         const isNewScoreRow = !existingScoreRow;
-        const snap = isNewScoreRow
-          ? computeBoostSnapshot(opponents, totalValidBallots)
-          : (() => {
-              const opponentPts = Number(existingScoreRow.opponent_pts || 0);
-              const votePts = boostVotePts(totalValidBallots);
-              const detail = {
-                ...existingDetail,
-                totalBallots: totalValidBallots,
-                turnoutBasis: 'total_valid_ballots',
-                formulaVersion: 2,
-                voteTier: votePts,
-                turnoutTier: votePts,
-              };
-              return { opponentPts, votePts, totalBoost: opponentPts + votePts, detail };
-            })();
+        const snap = computeBoostSnapshot(opponents, totalValidBallots, levelSnapshotByChallenge[chId] || {});
         const _d = new Date(chInfo[chId]?.votingEnd || Date.now());
         // Upset broadcasts only happen when the score row is first created. A
         // formula migration must never rebroadcast an old result.
-        const _winnerIdx = ladderIndexForChampCount(champCountOf(uid));
+        const _winnerIdx = levelIndexForKey((levelSnapshotByChallenge[chId]||{})[uid] || tierKeyForUser(uid));
         let _upset = null;
         if (isNewScoreRow) {
           (snap.detail.opponents || []).forEach(o => {
-            const _oIdx = LADDER.findIndex(l => l.key === o.tier);
+            const _oIdx = levelIndexForKey(o.tier);
             if (_oIdx - _winnerIdx >= BOOST_CFG.upsetTierGap) {
               if (!_upset || _oIdx > _upset.idx) _upset = { opponentId: o.opponent_id, tier: o.tier, idx: _oIdx };
             }
@@ -11834,7 +11863,7 @@ async function loadLeaderboard() {
     }
   });
 
-  // -- Persist new Championship Score snapshots and formula-v2 upgrades.
+  // -- Persist new Championship Score snapshots and formula-v3 level upgrades.
   // challenge_id remains the unique ledger key. No schema migration is needed;
   // formula version and total ballots live inside the existing detail JSON.
   if (boostToWrite.length) {
@@ -11920,6 +11949,7 @@ async function loadLeaderboard() {
     ...p,
     isReal: true,
     wins: winsByUser[p.id]?.allTime || 0,
+    regularWins: regularWinsForLevels[p.id] || 0,
     losses: lossesByUser[p.id]?.allTime || 0,
     monthly: winsByUser[p.id]?.monthly || 0,
     monthlyLosses: lossesByUser[p.id]?.monthly || 0,
@@ -14643,14 +14673,13 @@ function renderHeatCheck() {
   // V3 status line: coin + tier + progress text
   const slEl = document.getElementById('hcStatusLine');
   if (slEl && ls) {
-    const coin = ls.isFounder
-      ? `${LADDER_BADGE_BASE}founder.png`
-      : `${LADDER_BADGE_BASE}${ls.key}.png`;
-    const tierName = ls.isFounder ? 'Founder' : ls.name;
+    const coin = `${LADDER_BADGE_BASE}${ls.key}.png`;
+    const tierName = ls.name;
+    const unit=ls.isHallOfFame?'Championship title':'eligible win';
     let progTxt;
-    if (ls.isMaxed) progTxt = `${ls.champCount} championships · max rank`;
-    else if (ls.champCount < 1) progTxt = `0 championships · win 1 to reach ${ls.nextName}`;
-    else progTxt = `${ls.champCount} championship${ls.champCount === 1 ? '' : 's'} · ${ls.nextMin - ls.champCount} more to reach ${ls.nextName}`;
+    if (ls.isMaxed) progTxt = `${ls.metricCount} ${unit}${ls.metricCount===1?'':'s'} · highest level`;
+    else progTxt = `${ls.metricCount} ${unit}${ls.metricCount===1?'':'s'} · ${Math.max(0,ls.nextMin-ls.metricCount)} more to ${ls.nextName}`;
+    if(ls.isFounder)progTxt+=` · Founder`;
     slEl.innerHTML = `
       <img class="hc-sl-coin" src="${coin}" alt="">
       <div class="hc-sl-info">
@@ -16590,22 +16619,18 @@ const BOOST_CFG = {
   // Upset = you beat someone at least this many ladder stages above you.
   upsetTierGap: 2,
 };
-// Ladder stage index (0=Spark ... 7=GOAT) from a championship count
-function ladderIndexForChampCount(n) {
-  let idx = 0;
-  for (let k = LADDER.length - 1; k >= 0; k--) { if (n >= LADDER[k].min) { idx = k; break; } }
-  return idx;
+// Visible-level helpers. Legacy names remain for compatibility with older UI,
+// but Championship Score v3 resolves a user through tierKeyForUser().
+function ladderIndexForChampCount(n){return levelIndexForKey(visibleLevelKeyForCounts(0,n));}
+function tierKeyForChampCount(n){return visibleLevelKeyForCounts(0,n);}
+function champCountOf(userId){return (state.hofData||[]).filter(r=>r.userId===userId).length;}
+function regularWinCountOf(userId){
+  if(state._fcRegularWinsAllTimeV1054&&state._fcRegularWinsAllTimeV1054[userId]!=null)return Number(state._fcRegularWinsAllTimeV1054[userId])||0;
+  const u=(state.leaderboardData?.users||[]).find(x=>x.id===userId);
+  return Number(u?.regularWins??u?.wins??0)||0;
 }
-// Tier key from a raw championship count (mirrors LADDER thresholds, server-agnostic)
-function tierKeyForChampCount(n) {
-  let key = LADDER[0].key;
-  for (let k = LADDER.length - 1; k >= 0; k--) { if (n >= LADDER[k].min) { key = LADDER[k].key; break; } }
-  return key;
-}
-// Championship count for a user from loaded HOF data (same source as getLadderStatus)
-function champCountOf(userId) {
-  return (state.hofData || []).filter(r => r.userId === userId).length;
-}
+function tierKeyForUser(userId){return visibleLevelKeyForCounts(regularWinCountOf(userId),champCountOf(userId));}
+function levelIndexForUser(userId){return levelIndexForKey(tierKeyForUser(userId));}
 function boostVotePts(ballotCount) {
   for (const t of BOOST_CFG.voteTiers) if (ballotCount >= t.min) return t.pts;
   return 0;
@@ -16683,18 +16708,19 @@ function boostBreakdownHTML(challengeId) {
 // Compute a Championship Score snapshot for a resolved challenge.
 // Opponent tiers are read at resolution and frozen. Turnout uses the number of
 // unique valid ballots recorded across every final-round entry.
-function computeBoostSnapshot(opponents, totalValidBallots) {
+function computeBoostSnapshot(opponents, totalValidBallots, levelSnapshot = {}) {
   const detail = {
     opponents: [],
     voteTier: null,              // retained for backwards compatibility
     turnoutTier: null,
     totalBallots: Number(totalValidBallots || 0),
     turnoutBasis: 'total_valid_ballots',
-    formulaVersion: 2,
+    levelBasis: 'visible_level_at_resolution',
+    formulaVersion: 3,
   };
   let opponentPts = 0;
   opponents.forEach(oid => {
-    const tier = tierKeyForChampCount(champCountOf(oid));
+    const tier = levelSnapshot[oid] || tierKeyForUser(oid);
     const pts = BOOST_CFG.opponentPts[tier] || 0;
     opponentPts += pts;
     detail.opponents.push({ opponent_id: oid, tier, pts });
@@ -17173,114 +17199,18 @@ function hofTitleLabel(titlesMap, userId) {
 }
 
 function renderHallOfFame() {
-  const el = document.getElementById('lbHofContent');
-  if (!el) return;
-  const log = getHofLog();
-  const myId = state.profile?.id;
-
-  // ── Founders section (always shown) ──
-  const founderProfiles = FOUNDERS.map(fid => {
-    const p = (state.leaderboardData?.users || []).find(u => u.id === fid);
-    return p || { id: fid, name: fid === '24c26d06-52c9-4134-8589-a2889d7ddfc0' ? 'Admin' : 'ehicks23', avatar: '🔥' };
-  });
-  const foundersHtml = `
-    <div style="margin-bottom:20px">
-      <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--gold);margin-bottom:10px">👑 FOUNDERS</div>
-      ${founderProfiles.map(p => `
-        <div class="lb-hof-row" style="margin-bottom:8px;align-items:center">
-          <div class="lb-hof-avatar">${honoredAvatarHTML(p.id, avatarInner(p.avatar), 32)}</div>
-          <div class="lb-hof-name">${escapeHtml(p.name)}${p.id === myId ? ' <span style="color:var(--ember);font-size:11px">(you)</span>' : ''}</div>
-          ${renderLadderChip(p.id)}
-        </div>`).join('')}
-    </div>`;
-
-  // ── Earned legends (threshold: 5+ championship wins) ──
-  const winCounts = {};
-  log.forEach(r => {
-    if (!winCounts[r.userId]) winCounts[r.userId] = { ...r, count: 0 };
-    winCounts[r.userId].count++;
-  });
-  const tiers = [
-    { min: 20, key: 'goat',     label: '🐐 G.O.A.T.',  badge: 'goat' },
-    { min: 15, key: 'immortal', label: '🔱 Immortal',   badge: 'immortal' },
-    { min: 10, key: 'icon',     label: '⚡ Icon',       badge: 'icon' },
-    { min: 5,  key: 'legend',   label: '🌟 Legend',     badge: 'legend' },
-  ];
-  let legendsHtml = '';
-  tiers.forEach(tier => {
-    const members = Object.values(winCounts)
-      .filter(u => u.count >= tier.min && (tiers.find(t => t.min > tier.min)?.min > u.count || tier.min === 20))
-      .sort((a, b) => b.count - a.count);
-    if (!members.length) return;
-    legendsHtml += `<div style="margin-bottom:16px">
-      <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:8px">${tier.label}</div>
-      ${members.map(u => `<div class="lb-hof-row">
-        <div class="lb-hof-avatar">${honoredAvatarHTML(u.userId, avatarInner(u.avatar), 32)}</div>
-        <div class="lb-hof-name">${escapeHtml(u.name)}${u.userId === myId ? ' <span style="color:var(--ember);font-size:11px">(you)</span>' : ''} <span style="font-size:11px;color:var(--text-muted)">${u.count} titles</span></div>
-        ${renderLadderChip(u.userId)}
-      </div>`).join('')}
-    </div>`;
-  });
-  if (!legendsHtml) {
-    legendsHtml = `<div style="text-align:center;padding:20px 0 28px;color:var(--text-muted);font-size:13px">
-      No earned Hall of Fame honors yet.<br>Win 5 championships to earn your first honor.
-    </div>`;
-  }
-  const legendsSection = `<div style="margin-bottom:24px">
-    <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--gold);margin-bottom:10px">🏛️ HALL OF FAME HONORS</div>
-    ${legendsHtml}
-  </div>`;
-
-  // ── Monthly history (record of every champion) ──
-  const titlesMap = computeHofTitles(log);
-  const byMonth = {};
-  log.forEach(r => { if (!byMonth[r.month]) byMonth[r.month] = []; byMonth[r.month].push(r); });
-  const months = Object.keys(byMonth).sort().reverse();
-  const historyHtml = months.length ? `
-    <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:10px">📜 CHAMPIONSHIP HISTORY</div>
-    ${months.map(m => {
-      const [yr, mo] = m.split('-');
-      const label = new Date(parseInt(yr), parseInt(mo)-1, 1).toLocaleString('default', { month: 'long', year: 'numeric' });
-      const rows = byMonth[m].filter(r => r.category !== 'All').map(r => {
-        const isYou = state.profile && r.userId === state.profile.id;
-        const titleCount = titlesMap[r.userId]?.catCounts[r.category] || 1;
-        const nxLabel = titleCount > 1 ? ` <span class="lb-hof-nx">${titleCount}x</span>` : '';
-        return `<div class="lb-hof-row">
-          <div class="lb-hof-cat">${r.category}</div>
-          <div class="lb-hof-avatar">${honoredAvatarHTML(r.userId, avatarInner(r.avatar), 32)}</div>
-          <div class="lb-hof-name">${escapeHtml(r.name)}${isYou ? ' <span style="color:var(--ember);font-size:11px">(you)</span>' : ''}${nxLabel}</div>
-        </div>`;
-      }).join('');
-      return `<div class="lb-hof-month">
-        <div class="lb-hof-month-label">👑 ${label}</div>
-        ${rows || '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">No champions recorded</div>'}
-      </div>`;
-    }).join('')}` : '';
-
-  // Standing card: crest on a fire glow, tier in gold, championships + progress
-  // to the next honor. Honor thresholds: Legend 5 → Icon 10 → Immortal 15 → GOAT 20.
-  const myTier = hofTierOf(myId);
-  const myChampCount = log.filter(r => r.userId === myId).length;
-  const HONOR_STEPS = [[5, 'Legend'], [10, 'Icon'], [15, 'Immortal'], [20, 'GOAT']];
-  const nextStep = HONOR_STEPS.find(([n]) => myChampCount < n);
-  const nextPct = nextStep ? Math.round((myChampCount / nextStep[0]) * 100) : 100;
-  const nextTxt = nextStep
-    ? `${nextStep[0] - myChampCount} championship${nextStep[0] - myChampCount === 1 ? '' : 's'} to ${nextStep[1]}`
-    : 'Highest honor achieved';
-  const heroTier = myTier ? myTier.label : 'Hall of Fame';
-  const heroCrest = myTier
-    ? hofWreath({ metal: hofMetalForTier(myTier), crown: true, center: myTier.isFounder ? '' : String(myChampCount), ribbon: myTier.label, size: 116 })
-    : hofWreath({ metal: 'gold', crown: true, center: '', ribbon: 'HALL OF FAME', size: 116 });
-  const crestHero = `<div class="hof-stand">
-    <div class="hs-crest">${heroCrest}</div>
-    <div class="hs-info">
-      <div class="hs-tier">${escapeHtml(heroTier)}</div>
-      <div class="hs-stat"><b>${myChampCount}</b> championship${myChampCount === 1 ? '' : 's'} won</div>
-      <div class="hs-bar"><i style="width:${nextPct}%"></i></div>
-      <div class="hs-next">${nextTxt}</div>
-    </div>
-  </div>`;
-  el.innerHTML = crestHero + foundersHtml + legendsSection + historyHtml;
+  const el=document.getElementById('lbHofContent');if(!el)return;
+  const log=getHofLog(),myId=state.profile?.id;
+  const counts={};log.forEach(r=>{if(!counts[r.userId])counts[r.userId]={...r,count:0};counts[r.userId].count++;});
+  const myCount=counts[myId]?.count||0,myLevel=getLadderStatus(myId),hofLevel=myLevel?.isHallOfFame?myLevel:null;
+  const next=HOF_LEVELS.find(x=>myCount<x.min),remaining=next?next.min-myCount:0;
+  const record=`<section class="fc-hof-record-v1054"><div><small>YOUR CHAMPIONSHIP RECORD</small><strong>${myCount} title${myCount===1?'':'s'} won</strong><span>${hofLevel?`${hofLevel.name} · worth ${hofLevel.points} Opponent Points`:remaining?`${remaining} more Championship title${remaining===1?'':'s'} to enter the Hall of Fame as a Legend`:'Hall of Fame record'}</span></div><div class="fc-hof-record-actions-v1054"><button type="button" onclick="openBadgeLegend()">Levels & point values</button>${myLevel?.isFounder?'<span>Founder</span>':''}</div></section>`;
+  let groups='';[...HOF_LEVELS].reverse().forEach((lvl,i,arr)=>{const upper=i===0?Infinity:arr[i-1].min;const members=Object.values(counts).filter(u=>u.count>=lvl.min&&u.count<upper).sort((a,b)=>b.count-a.count);if(!members.length)return;groups+=`<section class="fc-hof-group-v1054"><h4>${lvl.name}<span>${lvl.min}+ titles · ${lvl.points} Opponent Points</span></h4>${members.map(u=>`<div class="lb-hof-row"><div class="lb-hof-avatar">${honoredAvatarHTML(u.userId,avatarInner(u.avatar),32)}</div><div class="lb-hof-name">${escapeHtml(u.name)}${u.userId===myId?' <em>(you)</em>':''}<small>${u.count} Championship title${u.count===1?'':'s'}</small></div>${renderLadderChip(u.userId,{includeFounder:false})}</div>`).join('')}</section>`;});
+  if(!groups)groups='<div class="fc-hof-empty-v1054"><b>No Hall of Fame inductees yet.</b><span>The first competitor to win 5 Championships becomes a Legend.</span></div>';
+  const byMonth={};log.forEach(r=>{if(r.category==='All')return;(byMonth[r.month]||(byMonth[r.month]=[])).push(r);});
+  const history=Object.keys(byMonth).sort().reverse().map(m=>{const [y,mo]=m.split('-'),label=new Date(Number(y),Number(mo)-1,1).toLocaleString('default',{month:'long',year:'numeric'});return `<div class="lb-hof-month"><div class="lb-hof-month-label">${label}</div>${byMonth[m].map(r=>`<div class="lb-hof-row"><div class="lb-hof-cat">${escapeHtml(r.category)}</div><div class="lb-hof-avatar">${avatarInner(r.avatar)}</div><div class="lb-hof-name">${escapeHtml(r.name)}${r.userId===myId?' <em>(you)</em>':''}</div></div>`).join('')}</div>`;}).join('');
+  const founders=FOUNDERS.map(fid=>{const p=(state.leaderboardData?.users||[]).find(u=>u.id===fid)||{id:fid,name:fid===FOUNDERS[0]?'Admin':'ehicks23',avatar:'🔥'};return `<div class="lb-hof-row"><div class="lb-hof-avatar">${avatarInner(p.avatar)}</div><div class="lb-hof-name">${escapeHtml(p.name)}${p.id===myId?' <em>(you)</em>':''}<small>Permanent platform recognition</small></div><span class="ladder-chip ladder-chip-founder"><img class="hof-badge-img" src="${LADDER_BADGE_BASE}founder.png" width="22" height="22" alt="">Founder</span></div>`;}).join('');
+  el.innerHTML=record+`<div class="fc-hof-section-title-v1054">HALL OF FAME INDUCTEES</div>${groups}`+(history?`<div class="fc-hof-section-title-v1054">CHAMPIONSHIP HISTORY</div>${history}`:'')+`<div class="fc-hof-section-title-v1054">FOUNDERS OF FLAMESCHALLENGE</div>${founders}`;
 }
 
 // Returns the Nx Champion label for a given user to show on their profile
@@ -18621,29 +18551,42 @@ const FOUNDERS = [
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
-// UNIFIED CHAMPIONSHIP LADDER (v590) — one metric, 8 stages, sequential by
-// construction. Replaces the old dual system: win-weighted-score Phoenix
-// chips (Spark/Flame/Blaze/Inferno) + separate championship-count HOF
-// medallions (Legend/Icon/Immortal/GOAT). Regular wins no longer drive rank
-// at all — only championships won. Win count still shown elsewhere as a
-// personal record (profile stats, Heat Check tiles), just doesn't gate rank.
-// Founder is NOT a ladder stage — permanent, exactly 2 people, shown
-// separately alongside whatever ladder stage that person has also earned.
-// Real medallion art (Adobe Stock griffin seal, tinted per-tier) lives in
-// Supabase Storage — Assets/Badges/{tier}.png — zero HTML file bloat.
+// VISIBLE COMPETITIVE LEVEL SYSTEM (v1054)
+// Spark → Inferno is earned through eligible regular challenge wins.
+// Legend → G.O.A.T. is Hall of Fame progression earned through Championship
+// titles. Once a competitor reaches Legend, the Hall of Fame level permanently
+// supersedes the regular badge. The one visible badge is also the frozen
+// Opponent Point value used when a challenge resolves.
+// Founder remains a separate permanent designation, not a competitive level.
 let _hofUid = 0;
 const LADDER = [
-  { key:'spark',    name:'Spark',    min:0   },
-  { key:'flame',    name:'Flame',    min:1   },
-  { key:'blaze',    name:'Blaze',    min:5   },
-  { key:'inferno',  name:'Inferno',  min:10  },
-  { key:'legend',   name:'Legend',   min:25  },
-  { key:'icon',     name:'Icon',     min:50  },
-  { key:'immortal', name:'Immortal', min:75  },
-  { key:'goat',     name:'G.O.A.T.', min:100 },
+  { key:'spark',    name:'Spark',    min:0,  source:'regular',      points:1  },
+  { key:'flame',    name:'Flame',    min:1,  source:'regular',      points:2  },
+  { key:'blaze',    name:'Blaze',    min:5,  source:'regular',      points:4  },
+  { key:'inferno',  name:'Inferno',  min:10, source:'regular',      points:6  },
+  { key:'legend',   name:'Legend',   min:5,  source:'championship', points:10 },
+  { key:'icon',     name:'Icon',     min:10, source:'championship', points:14 },
+  { key:'immortal', name:'Immortal', min:15, source:'championship', points:18 },
+  { key:'goat',     name:'G.O.A.T.', min:20, source:'championship', points:24 },
 ];
+const REGULAR_LEVELS = LADDER.filter(x => x.source === 'regular');
+const HOF_LEVELS = LADDER.filter(x => x.source === 'championship');
+function levelStatusForCounts(regularWins=0, champCount=0, isFounder=false){
+  regularWins=Math.max(0,Number(regularWins)||0); champCount=Math.max(0,Number(champCount)||0);
+  const pool=champCount>=HOF_LEVELS[0].min?HOF_LEVELS:REGULAR_LEVELS;
+  let localIndex=0;
+  for(let i=pool.length-1;i>=0;i--){if((pool[i].source==='championship'?champCount:regularWins)>=pool[i].min){localIndex=i;break;}}
+  const stage=pool[localIndex],next=pool[localIndex+1]||null;
+  const metricCount=stage.source==='championship'?champCount:regularWins;
+  const pct=next?Math.max(0,Math.min(100,Math.round(((metricCount-stage.min)/(next.min-stage.min))*100))):100;
+  return {key:stage.key,name:stage.name,stageIndex:LADDER.findIndex(x=>x.key===stage.key)+1,
+    source:stage.source,isHallOfFame:stage.source==='championship',points:stage.points,
+    regularWins,champCount,metricCount,metricLabel:stage.source==='championship'?'Championship titles':'eligible challenge wins',
+    nextName:next?.name||null,nextMin:next?.min??null,pct,isMaxed:!next,isFounder};
+}
+function levelIndexForKey(key){return Math.max(0,LADDER.findIndex(x=>x.key===key));}
+function visibleLevelKeyForCounts(regularWins,champCount){return levelStatusForCounts(regularWins,champCount).key;}
 const LADDER_BADGE_BASE = 'https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/Assets/Badges/';
-
 /* ---------- CELEBRATION OVERLAYS (v757) ----------
    Full-screen moments for the three peaks: qualified → champion → HOF stage
    induction. Driven by unseen champ_qualified / champ_won notifications on app
@@ -18868,23 +18811,7 @@ async function maybeShowCelebration() {
 // number, ordered thresholds), not a special-cased gate.
 function getLadderStatus(userId) {
   if (!userId) return null;
-  const isFounder = FOUNDERS.includes(userId);
-  const champCount = (state.hofData || []).filter(r => r.userId === userId).length;
-  let idx = 0;
-  for (let k = LADDER.length - 1; k >= 0; k--) {
-    if (champCount >= LADDER[k].min) { idx = k; break; }
-  }
-  const stage = LADDER[idx];
-  const next = idx < LADDER.length - 1 ? LADDER[idx + 1] : null;
-  const pct = next
-    ? Math.max(0, Math.min(100, Math.round(((champCount - stage.min) / (next.min - stage.min)) * 100)))
-    : 100;
-  return {
-    key: stage.key, name: stage.name, stageIndex: idx + 1,
-    champCount, displayCount: Math.min(champCount, 100),
-    nextName: next ? next.name : null, nextMin: next ? next.min : null,
-    pct, isMaxed: !next, isFounder,
-  };
+  return levelStatusForCounts(getRegularWins(userId), champCountOf(userId), FOUNDERS.includes(userId));
 }
 
 // Unified chip — identical shape/markup at every stage; only the badge image
@@ -18896,14 +18823,12 @@ function getLadderStatus(userId) {
 // (e.g. dashboard identity line); default hides it inline to avoid noise.
 function renderLadderChip(userId, opts = {}) {
   if (!userId) return '';
-  const ls = getLadderStatus(userId);
-  if (!ls) return '';
-  const s = opts.size || 22;
-  if (ls.isFounder) {
-    return `<span class="ladder-chip ladder-chip-founder" title="Founder"><img class="hof-badge-img" src="${LADDER_BADGE_BASE}founder.png" width="${s}" height="${s}" alt="">Founder</span>`;
-  }
-  if (ls.champCount < 1 && !opts.showSpark) return '';
-  return `<span class="ladder-chip ladder-chip-${ls.key}" title="${ls.name} · ${ls.champCount} championship${ls.champCount === 1 ? '' : 's'}"><img class="hof-badge-img" src="${LADDER_BADGE_BASE}${ls.key}.png" width="${s}" height="${s}" alt="">${ls.name}</span>`;
+  const ls = getLadderStatus(userId); if (!ls) return '';
+  const size=opts.size||22;
+  const showPrimary=ls.isFounder||!(ls.key==='spark'&&!opts.showSpark);
+  const primary=showPrimary?`<span class="ladder-chip ladder-chip-${ls.key}" title="${ls.name} · worth ${ls.points} Opponent Point${ls.points===1?'':'s'}"><img class="hof-badge-img" src="${LADDER_BADGE_BASE}${ls.key}.png" width="${size}" height="${size}" alt="">${ls.name}</span>`:'';
+  const founder=ls.isFounder&&opts.includeFounder!==false?`<span class="ladder-chip ladder-chip-founder" title="Founder · permanent designation"><img class="hof-badge-img" src="${LADDER_BADGE_BASE}founder.png" width="${size}" height="${size}" alt="">Founder</span>`:'';
+  return primary+founder;
 }
 
 // ===== HOF CREST + WREATH RING (generated SVG — no image assets, scales, low egress) =====
@@ -18951,11 +18876,11 @@ function _hofCrossed(cx,cy,m){
 // Founder — deliberately rare, same boundary as before, now sourced from the
 // single LADDER config instead of separate hardcoded thresholds.
 function hofTierOf(userId){
-  if(!userId) return null;
-  if(typeof FOUNDERS!=='undefined' && FOUNDERS.includes(userId)) return {tier:'founder',label:'FOUNDER',center:'',isFounder:true};
-  const ls = getLadderStatus(userId);
-  if (!ls || ls.stageIndex < 5) return null;
-  return { tier: ls.key, label: ls.name.toUpperCase(), center: String(ls.displayCount) };
+  if(!userId)return null;
+  const ls=getLadderStatus(userId);
+  if(ls?.isHallOfFame)return {tier:ls.key,label:ls.name.toUpperCase(),center:String(ls.champCount),isFounder:false};
+  if(typeof FOUNDERS!=='undefined'&&FOUNDERS.includes(userId))return {tier:'founder',label:'FOUNDER',center:'',isFounder:true};
+  return null;
 }
 // Wraps a name in the gold-gradient treatment for Founders/HOF (Legend+) —
 // same population that gets the laurel wreath. escapedName must already be
@@ -24551,7 +24476,9 @@ const FC_COMPETITION_RULES_V1047 = Object.freeze({
     scoreFormula: 'Opponent Points + Turnout Points',
     opponentPoints: Object.freeze({Spark:1,Flame:2,Blaze:4,Inferno:6,Legend:10,Icon:14,Immortal:18,'G.O.A.T.':24}),
     turnoutPoints: Object.freeze([{label:'250 or more',pts:22},{label:'100–249',pts:15},{label:'50–99',pts:10},{label:'25–49',pts:6},{label:'10–24',pts:3},{label:'Under 10',pts:0}]),
-    tierWins: Object.freeze({Spark:0,Flame:1,Blaze:5,Inferno:10,Legend:25,Icon:50,Immortal:75,'G.O.A.T.':100}),
+    regularLevelWins: Object.freeze({Spark:0,Flame:1,Blaze:5,Inferno:10}),
+    hallOfFameTitles: Object.freeze({Legend:5,Icon:10,Immortal:15,'G.O.A.T.':20}),
+    visibleLevelDeterminesOpponentPoints: true,
     qualifyingDistinctLevels: 3,
     tiesAtCutoffAdvance: true,
     eligibility: 'Championship Score is awarded only for a decisive eligible public challenge win with at least two eligible competitors. Private challenges, Championships, no-contests, and unresolved ties do not add monthly Score.',
@@ -24676,7 +24603,7 @@ function fcEmberLocalAnswerV1046(question){
   if(/turnout|valid ballot/.test(q))return fcEmberRuleTablesV1046('turnout');
 
   if(scoreWords && /(formula|work|calculated|rolling|30 day|period|reset)/.test(q)){
-    return `Championship Score runs by calendar month, not a rolling 30-day window. Each eligible public win earns Opponent Points + Turnout Points in that challenge’s category. Those win-level scores add together for your monthly category Score. At the start of a new calendar month, the monthly race starts fresh; your permanent competitive history and Championship tier remain.`;
+    return `Championship Score runs by calendar month, not a rolling 30-day window. Each eligible public win earns Opponent Points + Turnout Points in that challenge’s category. Those win-level scores add together for your monthly category Score. At the start of a new calendar month, the monthly race starts fresh; your permanent competitive history and visible level remain.`;
   }
 
   if(qualifyWords){
@@ -24698,8 +24625,8 @@ function fcEmberLocalAnswerV1046(question){
   }
 
   if(tierWords){
-    let text='Championship tier is permanent career progression based on Championship wins: Spark 0, Flame 1, Blaze 5, Inferno 10, Legend 25, Icon 50, Immortal 75, and G.O.A.T. 100.';
-    if(uid){try{const t=getLadderStatus(uid);if(t)text+=` Your current tier is ${t.name} with ${t.champCount} Championship win${t.champCount===1?'':'s'}${t.nextName?`; ${Math.max(0,t.nextMin-t.champCount)} more to ${t.nextName}`:''}.`;}catch(e){}}
+    let text='Eligible public challenge wins move competitors through Spark, Flame, Blaze, and Inferno. Five Championship titles permanently move a competitor into the Hall of Fame as a Legend; 10 titles earns Icon, 15 earns Immortal, and 20 earns G.O.A.T. The visible level determines Opponent Points.';
+    if(uid){try{const t=getLadderStatus(uid);if(t)text+=` Your current level is ${t.name}, worth ${t.points} Opponent Point${t.points===1?'':'s'}${t.nextName?`; ${Math.max(0,t.nextMin-t.metricCount)} more ${t.isHallOfFame?'Championship title':'eligible challenge win'}${Math.max(0,t.nextMin-t.metricCount)===1?'':'s'} to ${t.nextName}`:''}.`;}catch(e){}}
     return text;
   }
 
@@ -25111,38 +25038,21 @@ function closeFollowingSheet() {
 // ── Championship ladder (v590) ───────────────────────────────────────────────
 // Everyone has exactly one badge — their highest ladder stage. Founder is
 // permanent and separate (see renderLadderChip / getLadderStatus above).
-// All-time regular wins for a user — accurate for self, monthly proxy for others
+// Eligible regular wins only. Championships, private contests and no-contests
+// do not advance Spark–Inferno.
 function getRegularWins(userId) {
-  if (userId === state.profile?.id && state.myWLT) return state.myWLT.wins || 0;
-  return (state.leaderboardData?.users || []).find(u => u.id === userId)?.wins || 0;
+  if(state._fcRegularWinsAllTimeV1054&&state._fcRegularWinsAllTimeV1054[userId]!=null)return Number(state._fcRegularWinsAllTimeV1054[userId])||0;
+  const u=(state.leaderboardData?.users||[]).find(x=>x.id===userId);
+  return Number(u?.regularWins??0)||0;
 }
 
 
 // ── Badge legend — tap any badge to learn the ladder (iOS has no tooltips) ───
 function openBadgeLegend() {
-  const list = document.getElementById('badgeLegendList');
-  if (!list) return;
-  const medal = (key, size = 42) => `<img class="hof-badge-img" src="${LADDER_BADGE_BASE}${key}.png" width="${size}" height="${size}" alt="">`;
-  const descs = {
-    spark:    'Where everyone starts.',
-    flame:    'Your first championship.',
-    blaze:    '5 championships.',
-    inferno:  '10 championships.',
-    legend:   '25 championships. Legacy begins.',
-    icon:     '50 championships. A cultural force.',
-    immortal: '75 championships. Beyond human.',
-    goat:     '100+ championships. The apex — the count keeps climbing, the tier caps here.',
-  };
-  const rows = LADDER.map(t => ({ badge: medal(t.key), name: t.name, desc: descs[t.key] }));
-  rows.push({ badge: medal('founder'), name: 'Founder', desc: 'Built this platform before anyone else was here. Permanent — not earned through play.' });
-  list.innerHTML = rows.map(r => `
-    <div style="display:flex;align-items:center;gap:12px;padding:8px 4px;border-bottom:1px solid var(--border)">
-      <div style="width:56px;flex-shrink:0;text-align:center;overflow:visible;">${r.badge || '🏛️'}</div>
-      <div style="flex:1;min-width:0;">
-        <div style="font-weight:700;font-size:14px;color:var(--text);">${r.name}</div>
-        <div style="font-size:12px;color:var(--text-muted);margin-top:1px;">${r.desc}</div>
-      </div>
-    </div>`).join('');
+  const list=document.getElementById('badgeLegendList');if(!list)return;
+  const medal=(key,size=42)=>`<img class="hof-badge-img" src="${LADDER_BADGE_BASE}${key}.png" width="${size}" height="${size}" alt="">`;
+  const row=t=>`<div class="fc-level-row-v1054"><div class="fc-level-icon-v1054">${medal(t.key)}</div><div><b>${t.name}</b><span>${t.source==='regular'?`${t.min} eligible challenge win${t.min===1?'':'s'}`:`${t.min} Championship title${t.min===1?'':'s'} · Hall of Fame`}</span></div><strong>${t.points} pt${t.points===1?'':'s'}</strong></div>`;
+  list.innerHTML=`<div class="fc-level-explain-v1054"><b>How progression works</b><span>Win eligible public challenges to rise from Spark to Inferno. Win 5 Championships to enter the Hall of Fame as a Legend. From that point forward, your badge progresses only through Hall of Fame levels. The badge shown beside your name is the value opponents earn for defeating you.</span></div><div class="fc-level-section-v1054"><small>REGULAR COMPETITION LEVELS</small>${REGULAR_LEVELS.map(row).join('')}</div><div class="fc-level-section-v1054"><small>HALL OF FAME LEVELS</small>${HOF_LEVELS.map(row).join('')}</div><div class="fc-level-founder-v1054">${medal('founder',34)}<div><b>Founder</b><span>A separate permanent designation. It does not replace the earned competitive level.</span></div></div>`;
   document.getElementById('badgeLegendSheet').classList.add('open');
 }
 function closeBadgeLegend() {
@@ -26891,8 +26801,8 @@ function renderProfileEmber(prof, isMe, theirStats) {
 
   // My stats vs theirs (use championship count — the ladder metric — as the
   // truest competitive measure, fall back to win count when both are champ-less)
-  const myScore    = getLadderStatus(state.profile.id)?.champCount || 0;
-  const theirScore = getLadderStatus(prof.id)?.champCount || 0;
+  const myScore    = getLadderStatus(state.profile.id)?.stageIndex || 0;
+  const theirScore = getLadderStatus(prof.id)?.stageIndex || 0;
   const myWins     = getRegularWins(state.profile.id);
   const theirWins  = theirStats.wins || 0;
   const name = (prof.name || 'they').split(' ')[0];
@@ -31425,10 +31335,12 @@ html[data-theme="light"] .fc-v1036-archive{
     }
     const hc=document.getElementById('psHeatCard');if(!hc)return;
     hc.className='ps-heat-card fc-v1036-competitive-card';hc.style.display='grid';
-    const ls=champ.ls||{key:'spark',name:'Spark',champCount:0,pct:0,nextName:'Flame',nextMin:1,isMaxed:false};
+    const ls=champ.ls||levelStatusForCounts(0,0,false);
     const badge=`${LADDER_BADGE_BASE}${ls.key||'spark'}.png`;
-    const remaining=Math.max(0,Number(ls.nextMin||0)-Number(ls.champCount||0));
-    const next=ls.isMaxed?'Highest Championship tier':`${remaining} more Championship${remaining===1?'':'s'} to ${ls.nextName}`;
+    const remaining=Math.max(0,Number(ls.nextMin||0)-Number(ls.metricCount||0));
+    const next=ls.isMaxed?'Highest FlamesChallenge level':`${remaining} more ${ls.isHallOfFame?'Championship title':'eligible challenge win'}${remaining===1?'':'s'} to ${ls.nextName}`;
+    const levelEyebrow=ls.isHallOfFame?'Hall of Fame · Current level':'Competition · Current level';
+    const levelCountLabel=ls.isHallOfFame?'Championship titles':'Eligible challenge wins';
     const scoreHtml=scores.map(r=>`<button type="button" class="fc-v1036-score-pill${r.score?' has-score':''}" data-v1036-score-cat="${esc(r.cat)}"><small>${esc(r.cat)}</small><b>${r.score}</b><span>${r.opponent} opponent + ${r.turnout} turnout</span></button>`).join('');
     let strongestHtml='<div class="fc-v1036-empty">No eligible scoring win is recorded all time.</div>';
     if(best){
@@ -31439,7 +31351,7 @@ html[data-theme="light"] .fc-v1036-archive{
     const read=factualRead(record,scores,champ,best);
     hc.innerHTML=`
       <section class="fc-v1036-card fc-v1036-tier-card">
-        <div class="fc-v1036-tier-hero"><img class="fc-v1036-tier-badge" src="${badge}" alt=""><div><div class="fc-v1036-eyebrow">Career · Current tier</div><div class="fc-v1036-tier-name">${esc(ls.name||'Spark')}</div><div class="fc-v1036-tier-copy">${esc(next)}</div></div><div class="fc-v1036-tier-count"><b>${Number(ls.champCount||0)}</b><span>Career Championship wins</span></div></div>
+        <div class="fc-v1036-tier-hero"><img class="fc-v1036-tier-badge" src="${badge}" alt=""><div><div class="fc-v1036-eyebrow">${esc(levelEyebrow)}</div><div class="fc-v1036-tier-name">${esc(ls.name||'Spark')}</div><div class="fc-v1036-tier-copy">${esc(next)}</div></div><div class="fc-v1036-tier-count"><b>${Number(ls.metricCount||0)}</b><span>${esc(levelCountLabel)}</span></div></div>
         <div class="fc-v1036-progress"><i style="width:${Math.max(0,Math.min(100,Number(ls.pct||0)))}%"></i></div>
       </section>
       <section class="fc-v1036-card">
@@ -32241,7 +32153,7 @@ html[data-theme="light"] body #challengesGrid > .fcc-challenge-wrap:not(.champ-g
     else if (step === 1) body.innerHTML = `<div class="fc-hw-step-label">APPEARANCE</div><h3>Choose how the app looks.</h3><p>Your authenticated competition screens follow this choice. Login, re-login, and account recovery always remain dark.</p>${themeChoices()}`;
     else if (step === 2) body.innerHTML = `<div class="fc-hw-step-label">INTERESTS</div><h3>Choose what belongs in your lanes.</h3><p>Select at least one category. Your interests determine what leads Discover and which challenges and creators are suggested.</p>${interestChoices()}`;
     else if (step === 3) body.innerHTML = `<div class="fc-hw-step-label">DISCOVER</div><h3>Your feed begins with what you chose.</h3><p>Discover prioritizes live competitions in your saved categories. Following creators adds their activity, and you can change interests later in Settings.</p><div class="fc-hw-card"><b>Interests set the direction</b><span>They are the explicit signal used for category matches, suggested challenges, and creator recommendations.</span></div><div class="fc-hw-card"><b>Voting improves what comes next</b><span>Your votes create a record of what you engage with and give you live results to return to.</span></div>`;
-    else if (step === 4) body.innerHTML = `<div class="fc-hw-step-label">WIN & ADVANCE</div><h3>Wins build Championship Score and competitive identity.</h3><p class="fc-hw-formula">Opponent Points + Turnout Points = Championship Score</p><p>Eligible public wins add Score in that category. The top three distinct monthly Score levels qualify for the Championship, and ties at the cutoff advance.</p><div class="fc-hw-card"><b>Results stay visible</b><span>Wins, losses, Score, Championship appearances, and titles become part of the competitor profile.</span></div>`;
+    else if (step === 4) body.innerHTML = `<div class="fc-hw-step-label">WIN & ADVANCE</div><h3>Wins affect two different systems.</h3><p class="fc-hw-formula">Opponent Points + Turnout Points = Championship Score</p><p>Championship Score is the monthly qualification race. Your visible level is permanent career progression: eligible challenge wins move you from Spark to Inferno; 5 Championship titles move you into the Hall of Fame as a Legend.</p><button type="button" class="fc-hw-inline-help-v1054" onclick="openBadgeLegend()">See all levels & point values →</button><div class="fc-hw-card"><b>Your visible level matters</b><span>It is shown beside your name and determines the Opponent Points another competitor earns for defeating you.</span></div>`;
     else if (step === 5) body.innerHTML = `<div class="fc-hw-step-label">MEET EMBER</div><h3>Your competition guide.</h3><div class="fc-hw-ember-intro">${emberArt(78,'attentive')}<div><h4>Ember helps you compete with context.</h4><p>Ask Ember to explain rules and phases, interpret scores and results, improve a challenge or entry, and point out useful next actions.</p></div></div><div class="fc-hw-ember-limits"><div><b>Ember can:</b><span>explain, interpret, improve, and guide using the current screen and recorded activity.</span></div><div><b>Ember cannot:</b><span>decide winners, change votes, or invent scores, results, or rules.</span></div></div>`;
     else {
       const rec = actionOptions();
@@ -32616,7 +32528,7 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
       return [['Explain this result from the recorded totals.','Explain result'],['How did this affect Championship Score?','Score impact'],['What happens next for the winner?','Winner next step'],['What can I learn from this challenge?','What to learn']];
     }
     if(s==='titles') return [['How do I qualify from my current position?','Qualification gap'],['What is driving my Championship Score?','My Score'],['What is my strongest scoring win?','Strongest win'],['Explain Opponent Points and Turnout Points.','Score formula']];
-    if(s==='profile') return [['Summarize this competitive profile.','Competitive read'],['What is the strongest recorded win?','Strongest win'],['What should improve next?','Improve next'],['How does the Championship tier progress?','Tier progress']];
+    if(s==='profile') return [['Summarize this competitive profile.','Competitive read'],['What is the strongest recorded win?','Strongest win'],['What should improve next?','Improve next'],['How do levels and the Hall of Fame work?','Levels & Hall of Fame']];
     if(s==='compete') return [['Which loaded challenge is the best match for my interests?','Best match'],['Where can I vote right now?','Vote now'],['Which open challenge should I enter?','Enter now'],['How can I improve my current entry?','Improve entry']];
     return [['What should I do next?','What next?'],['What matches my interests right now?','My interests'],['How does Championship Score work?','Championship Score'],['Help me create a strong challenge.','Create better']];
   }
@@ -32628,7 +32540,7 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
       entry:['ENTRY','Make the work clearer.','I can help interpret the prompt, polish your wording, and explain what happens after submission.'],
       challenge:['CHALLENGE',ch?.title?`Read “${ch.title}.”`:'Read this competition.','I can explain this phase, recorded race state, rules, Score eligibility, or a useful next move.'],
       titles:['TITLES','Understand the Championship race.','I can explain recorded Score, qualification position, strongest wins, Opponent Points, and Turnout Points.'],
-      profile:['PROFILE','Read the competitive identity.','I can interpret the recorded competitive history, strongest results, Championship tier, and what stands out.'],
+      profile:['PROFILE','Read the competitive identity.','I can interpret the recorded competitive history, strongest results, visible level, Hall of Fame record, and what stands out.'],
       compete:['COMPETE','Find the right competition.','I can use your saved interests and currently loaded challenges to help you choose where to enter or vote.'],
       home:['HOME','Use what is live now.','I can use your current screen, saved interests, and recorded competition status to point out a useful next action.']
     };
@@ -32656,9 +32568,9 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
     const s=surface(); const uid=state?.profile?.id; const now=new Date(); const month=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
     const ledger=Object.values(state?.boostByChallenge||{}).filter(r=>uid&&String(r.winner_id)===String(uid)&&r.month===month);
     const byCategory={}; ledger.forEach(r=>{const c=r.category||'Other';const x=byCategory[c]||(byCategory[c]={score:0,wins:0,opponentPoints:0,turnoutPoints:0});x.score+=Number(r.total_boost||0);x.wins++;x.opponentPoints+=Number(r.opponent_pts||0);x.turnoutPoints+=Number(r.vote_pts||0);});
-    let tier=null; try{const t=getLadderStatus?.(uid);if(t)tier={name:t.name,championshipWins:t.champCount,next:t.nextName||null,progressPct:t.pct??null};}catch(e){}
+    let level=null; try{const t=getLadderStatus?.(uid);if(t)level={name:t.name,source:t.source,opponentPoints:t.points,eligibleChallengeWins:t.regularWins,championshipTitles:t.champCount,next:t.nextName||null,progressPct:t.pct??null};}catch(e){}
     const entries=(state?.currentEntries||[]).filter(e=>e?.moderation_status!=='rejected');
-    return {...base,emberSystem:{version:'v1046',guidanceMode:mode,recordedCompetitionClaimsOnly:true},surface:s,monthlyChampionshipScore:{month,byCategory},championshipTier:tier,challenge:base.challenge?{...base.challenge,entries:entries.map(e=>({id:e.id,userId:e.user_id||null,votes:Number(e.votes||e.vote_count||0)}))}:base.challenge};
+    return {...base,emberSystem:{version:'v1054',guidanceMode:mode,recordedCompetitionClaimsOnly:true},surface:s,monthlyChampionshipScore:{month,byCategory},visibleLevel:level,challenge:base.challenge?{...base.challenge,entries:entries.map(e=>({id:e.id,userId:e.user_id||null,votes:Number(e.votes||e.vote_count||0)}))}:base.challenge};
   };
 
   const priorOpen=window.openEmber;
@@ -32728,7 +32640,9 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
         opponentPoints:{Spark:1,Flame:2,Blaze:4,Inferno:6,Legend:10,Icon:14,Immortal:18,'G.O.A.T.':24},
         turnoutPoints:{under10:0,'10-24':3,'25-49':6,'50-99':10,'100-249':15,'250+':22},
         turnoutBasis:'total unique valid ballots across all entries in the final voting round',
-        championshipTierWins:{Spark:0,Flame:1,Blaze:5,Inferno:10,Legend:25,Icon:50,Immortal:75,'G.O.A.T.':100},
+        regularLevelWins:{Spark:0,Flame:1,Blaze:5,Inferno:10},
+        hallOfFameTitles:{Legend:5,Icon:10,Immortal:15,'G.O.A.T.':20},
+        visibleLevelDeterminesOpponentPoints:true,
         obsoleteTerms:['rolling 30-day Score','Prestige tab','Top-3 challenge placement earns Score']
       }
     };
@@ -33041,20 +32955,100 @@ window.__fcBuildV1049={
 };
 </script>
 
-<script id="fc-v1053-emergency-recovery-marker">
-window.__fcBuildV1053={
-  build:'v1053',
-  phase:'Production Hardening & Release Readiness — Emergency Navigation Recovery',
-  basedOn:'v1049 last known working production build',
-  removed:['v1050 single-purpose screen patch','v1051 focused navigation patch','v1052 navigation freeze hotfix'],
-  purpose:'restore reliable navigation before rebuilding the information architecture from a stable base',
-  tierAndHallOfFameMechanicsChanged:false,
-  moderationWorkflowChanged:false,
-  analyticsChanged:false,
+<script id="fc-v1054-base-marker">
+window.__fcBuildV1054Base={
+  build:'v1054',
+  phase:'Production Hardening & Release Readiness',
+  basedOn:'v1053 stable emergency recovery',
+  navigationArchitectureChanged:false,
+  focus:['progressive disclosure','compact challenge detail','visible level clarity','Hall of Fame separation'],
   backendChanges:false,
   newEdgeFunctions:0,
   edgeFunctionChanges:0
 };
 </script>
+
+<style id="fc-v1054-progressive-guidance-css">
+/* v1054 — teach in layers: interface state, one short cue, deeper help on demand. */
+.fc-level-explain-v1054{padding:12px;border:1px solid var(--border);border-radius:14px;background:var(--surface-2);margin-bottom:14px}.fc-level-explain-v1054 b,.fc-level-explain-v1054 span{display:block}.fc-level-explain-v1054 b{font-size:13px;color:var(--text);margin-bottom:5px}.fc-level-explain-v1054 span{font-size:11.5px;line-height:1.48;color:var(--text-dim)}
+.fc-level-section-v1054{margin-top:14px}.fc-level-section-v1054>small{display:block;margin:0 0 6px;font-size:9px;font-weight:900;letter-spacing:.13em;color:var(--text-muted)}
+.fc-level-row-v1054{display:grid;grid-template-columns:46px minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 2px;border-bottom:1px solid var(--border)}.fc-level-icon-v1054{display:grid;place-items:center}.fc-level-row-v1054 b,.fc-level-row-v1054 span{display:block}.fc-level-row-v1054 b{font-size:13px;color:var(--text)}.fc-level-row-v1054 span{font-size:10.5px;color:var(--text-dim);margin-top:2px}.fc-level-row-v1054>strong{font-size:11px;color:var(--gold);white-space:nowrap}
+.fc-level-founder-v1054{display:flex;gap:10px;align-items:center;margin-top:14px;padding:11px;border:1px solid rgba(255,166,63,.25);border-radius:13px;background:rgba(255,166,63,.06)}.fc-level-founder-v1054 b,.fc-level-founder-v1054 span{display:block}.fc-level-founder-v1054 b{font-size:12px;color:var(--text)}.fc-level-founder-v1054 span{font-size:10.5px;line-height:1.4;color:var(--text-dim);margin-top:2px}
+.fc-hw-inline-help-v1054{appearance:none;border:0;background:none;color:var(--ember-bright);padding:0;margin:2px 0 12px;font-size:12px;font-weight:850;text-align:left}
+#fcEmberChallengeAction{display:none!important}
+#challengeDetailSheet #fcCompetitionClarityV1047{display:none!important}
+#challengeDetailSheet .fvj-detail{display:none!important}
+#challengeDetailSheet .cd-hero{padding-bottom:14px!important}
+#challengeDetailSheet #cdHero .cd-rules{display:none!important}#challengeDetailSheet #fcChallengeInfoV1043 .cd-rules{display:block!important}
+.fc-challenge-brief-v1054{margin:10px 0 8px;padding:12px 13px;border:1px solid var(--border);border-radius:15px;background:var(--surface);box-shadow:var(--shadow-card)}
+.fc-challenge-brief-top-v1054{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.fc-challenge-brief-state-v1054{font-size:9px;font-weight:900;letter-spacing:.13em;text-transform:uppercase;color:var(--ember)}.fc-challenge-brief-time-v1054{font-size:10px;font-weight:800;color:var(--text-muted);white-space:nowrap}.fc-challenge-brief-v1054 strong{display:block;margin-top:3px;font-size:15px;line-height:1.2;color:var(--text)}.fc-challenge-brief-v1054 p{margin:5px 0 0;font-size:11.5px;line-height:1.42;color:var(--text-dim)}
+.fc-challenge-actions-v1054{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}.fc-challenge-actions-v1054 button{appearance:none;min-height:36px;padding:8px 10px;border:1px solid var(--border-bright);border-radius:11px;background:var(--surface-2);color:var(--text);font-size:10.5px;font-weight:850}.fc-challenge-actions-v1054 button.primary{border-color:transparent;background:linear-gradient(135deg,var(--ember),#ff392b);color:#fff}.fc-challenge-actions-v1054 button.help{color:var(--ember-bright)}
+#challengeDetailSheet #fcChallengeInfoV1043.fc-v1054-rule-panel{margin:7px 0 9px!important}#challengeDetailSheet #fcChallengeInfoV1043.fc-v1054-rule-panel>summary{display:none!important}#challengeDetailSheet #fcChallengeInfoV1043.fc-v1054-rule-panel:not([open]){display:none!important}
+#challengeDetailSheet .cd-entries-header{display:none!important}#challengeDetailSheet .cd-entry-nav{margin:10px 0 8px!important;padding:8px 10px!important;min-height:54px!important}.cd-entry-nav-status span{display:none!important}.cd-entry-nav-status strong{font-size:13px!important}
+#challengeDetailSheet #cdSubmitBtnWrap{padding:6px 0!important}#challengeDetailSheet #cdAddEntryBtn{min-height:43px!important}
+.fc-level-help-row-v1054{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 10px}.fc-level-help-row-v1054 button{appearance:none;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--text-dim);padding:7px 10px;font-size:10.5px;font-weight:800}.fc-level-help-row-v1054 button:first-child{color:var(--ember-bright);border-color:rgba(255,106,44,.3)}
+/* Titles standings are information, not a permanent dark event stage. */
+body.theme-light .fc-score-race-v1032,html[data-theme="light"] body .fc-score-race-v1032{background:var(--surface)!important;border-color:var(--border)!important;box-shadow:0 9px 26px rgba(50,35,22,.08)!important}
+body.theme-light .fc-score-head-v1032,html[data-theme="light"] body .fc-score-head-v1032{background:linear-gradient(145deg,#fff,#f7f3ee)!important;border-color:var(--border)!important}
+body.theme-light .fc-score-table-v1032,html[data-theme="light"] body .fc-score-table-v1032{background:var(--surface)!important}
+body.theme-light .fc-score-row-v1032,html[data-theme="light"] body .fc-score-row-v1032{border-color:var(--border)!important;background:var(--surface)!important}
+body.theme-light .fc-score-row-v1032.is-you,html[data-theme="light"] body .fc-score-row-v1032.is-you{background:rgba(255,106,44,.07)!important}
+body.theme-light .fc-score-metric-v1032,body.theme-light .fc-score-cutoff-v1032,body.theme-light .fc-score-you-v1032,html[data-theme="light"] body .fc-score-metric-v1032,html[data-theme="light"] body .fc-score-cutoff-v1032,html[data-theme="light"] body .fc-score-you-v1032{background:var(--surface-2)!important;border-color:var(--border)!important}
+.fc-hof-record-v1054{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:14px;border:1px solid var(--border);border-radius:16px;background:var(--surface);margin-bottom:18px}.fc-hof-record-v1054 small,.fc-hof-record-v1054 strong,.fc-hof-record-v1054 span{display:block}.fc-hof-record-v1054 small{font-size:9px;font-weight:900;letter-spacing:.13em;color:var(--gold)}.fc-hof-record-v1054 strong{margin-top:5px;font-size:19px;color:var(--text)}.fc-hof-record-v1054 span{margin-top:3px;font-size:11px;line-height:1.4;color:var(--text-dim)}.fc-hof-record-actions-v1054{display:flex;flex-direction:column;align-items:flex-end;gap:7px}.fc-hof-record-actions-v1054 button{appearance:none;border:1px solid var(--border);border-radius:999px;background:var(--surface-2);color:var(--ember-bright);padding:7px 9px;font-size:9.5px;font-weight:850}.fc-hof-record-actions-v1054>span{padding:5px 8px;border:1px solid rgba(255,166,63,.3);border-radius:999px;color:var(--gold);font-size:9px;font-weight:900}.fc-hof-section-title-v1054{margin:18px 0 8px;font-size:9px;font-weight:900;letter-spacing:.14em;color:var(--text-muted)}.fc-hof-group-v1054{margin-bottom:14px}.fc-hof-group-v1054 h4{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:0 0 5px;font-size:13px;color:var(--gold)}.fc-hof-group-v1054 h4 span{font-size:9px;font-weight:700;color:var(--text-muted)}.fc-hof-group-v1054 .lb-hof-name small,.fc-hof-record-v1054 em,.fc-hof-group-v1054 em,.lb-hof-month em{display:block;margin-top:2px;font-size:9px;font-style:normal;color:var(--text-muted)}.fc-hof-empty-v1054{padding:18px;text-align:center;border:1px dashed var(--border);border-radius:14px;color:var(--text-dim)}.fc-hof-empty-v1054 b,.fc-hof-empty-v1054 span{display:block}.fc-hof-empty-v1054 b{font-size:13px;color:var(--text)}.fc-hof-empty-v1054 span{margin-top:4px;font-size:11px;line-height:1.4}
+@media(max-width:520px){.fc-challenge-brief-v1054{margin-inline:0}.fc-challenge-actions-v1054 button{flex:1 1 auto}.fc-level-row-v1054{grid-template-columns:42px minmax(0,1fr) auto}}
+</style>
+<script id="fc-v1054-progressive-guidance-js">
+(function(){
+  'use strict';
+  const esc=v=>typeof escapeHtml==='function'?escapeHtml(String(v??'')):String(v??'');
+  function left(d){if(!d)return '';const ms=new Date(d)-Date.now();if(ms<=0)return 'Ending now';const m=Math.ceil(ms/60000);if(m<60)return `${m}m left`;const h=Math.floor(m/60),mm=m%60;if(h<48)return `${h}h${mm?` ${mm}m`:''} left`;const days=Math.ceil(h/24);return `${days}d left`;}
+  function statusCopy(ch,status){
+    const entries=(state.currentEntries||[]).filter(e=>e.moderation_status!=='rejected');const me=state.profile?.id;const mine=entries.find(e=>e.user_id===me);const mod=mine?.moderation_status||'';const pending=['pending','flagged','escalated'].includes(mod);
+    if(status==='submitting'){
+      if(pending)return {k:'Entry under review',t:left(ch.submission_deadline),h:'Only visible to you',p:'Review normally finishes quickly. You can still edit or withdraw before entries close.',primary:'edit',mine};
+      if(mine)return {k:'Entries open',t:left(ch.submission_deadline),h:'Your entry is live',p:'You can edit or withdraw it until entries close.',primary:'edit',mine};
+      return {k:'Entries open',t:left(ch.submission_deadline),h:'Submit before the deadline',p:`${entries.length} approved entr${entries.length===1?'y':'ies'} so far. Voting begins after entries close.`,primary:'enter'};
+    }
+    if(status==='voting'||status==='sudden_death')return {k:status==='sudden_death'?'Sudden-death voting':'Voting is open',t:left(ch.voting_end),h:'Choose the strongest entry',p:'You have one ballot and can change it until voting closes.',primary:'vote'};
+    if(status==='sd_submitting')return {k:'Sudden-death entries',t:left(ch.sd_submit_end),h:'Tied finalists are submitting new work',p:'New entries reveal together for a fresh runoff.',primary:mine?'edit':null,mine};
+    if(status==='voided')return {k:'No contest',t:'Final',h:'No winner was awarded',p:'Fewer than two eligible competitors remained when entries closed.'};
+    return {k:'Final result',t:'Final',h:'Voting is complete',p:'Review the winner, final totals, and any Championship Score awarded.',primary:'results'};
+  }
+  function toggleRules(btn){const d=document.getElementById('fcChallengeInfoV1043');if(!d)return openCompetitionRules?.('overview');const show=!d.open;d.open=show;d.classList.add('fc-v1054-rule-panel');btn.textContent=show?'Hide rules':'Rules & scoring';if(show)d.scrollIntoView({behavior:'smooth',block:'nearest'});}
+  function renderBrief(){
+    const sheet=document.getElementById('challengeDetailSheet'),hero=document.getElementById('cdHero'),ch=state.currentChallenge;if(!sheet||!hero||!ch)return;
+    document.getElementById('fcChallengeBriefV1054')?.remove();
+    const status=computeChallengeStatus(ch),d=statusCopy(ch,status),box=document.createElement('section');box.id='fcChallengeBriefV1054';box.className='fc-challenge-brief-v1054';
+    if(status==='submitting'&&ch.is_public!==false&&!ch.is_championship){const approved=(state.currentEntries||[]).filter(e=>!e.moderation_status||e.moderation_status==='clear'||e.moderation_status==='approved');const mine=approved.some(e=>e.user_id===state.profile?.id);const ids=[...new Set(approved.map(e=>e.user_id).filter(id=>id&&(!mine||id!==state.profile?.id)))];const value=ids.reduce((n,id)=>n+Number(getLadderStatus(id)?.points||0),0);d.p+=` Current field value: ${value} Opponent Point${value===1?'':'s'} before turnout.`;}
+    let primary='';if(d.primary==='edit')primary='<button class="primary" data-v1054-action="edit">Edit entry</button>';else if(d.primary==='enter')primary='<button class="primary" data-v1054-action="enter">Enter challenge</button>';else if(d.primary==='vote')primary='<button class="primary" data-v1054-action="vote">Vote now</button>';else if(d.primary==='results')primary='<button class="primary" data-v1054-action="results">View results</button>';
+    const promote=(ch.is_public&&['submitting','voting'].includes(status))?'<button data-v1054-action="promote">Promote</button>':'';
+    const insights=(ch.creator_id===state.profile?.id||ch.creator?.id===state.profile?.id)?'<button data-v1054-action="insights">Insights</button>':'';
+    box.innerHTML=`<div class="fc-challenge-brief-top-v1054"><div><div class="fc-challenge-brief-state-v1054">${esc(d.k)}</div><strong>${esc(d.h)}</strong></div><div class="fc-challenge-brief-time-v1054">${esc(d.t)}</div></div><p>${esc(d.p)}</p><div class="fc-challenge-actions-v1054">${primary}${promote}${insights}<button class="help" data-v1054-action="rules">Rules & scoring</button><button class="help" data-v1054-action="ember">Ask Ember</button></div>`;
+    hero.insertAdjacentElement('afterend',box);
+    box.querySelector('[data-v1054-action="edit"]')?.addEventListener('click',()=>openSubmitEntry(d.mine));
+    box.querySelector('[data-v1054-action="enter"]')?.addEventListener('click',()=>openSubmitEntry());
+    box.querySelector('[data-v1054-action="vote"]')?.addEventListener('click',()=>document.getElementById('cdEntriesGrid')?.scrollIntoView({behavior:'smooth',block:'start'}));
+    box.querySelector('[data-v1054-action="results"]')?.addEventListener('click',()=>document.getElementById('cdResultsPanel')?.scrollIntoView({behavior:'smooth',block:'start'}));
+    box.querySelector('[data-v1054-action="promote"]')?.addEventListener('click',()=>openPromote('challenge',ch));
+    box.querySelector('[data-v1054-action="insights"]')?.addEventListener('click',()=>openCreatorInsightsV1048(ch.id));
+    box.querySelector('[data-v1054-action="rules"]')?.addEventListener('click',e=>toggleRules(e.currentTarget));
+    box.querySelector('[data-v1054-action="ember"]')?.addEventListener('click',()=>fcOpenEmberWithQuestion?.('What matters next in this challenge?'));
+    const info=document.getElementById('fcChallengeInfoV1043');if(info){info.classList.add('fc-v1054-rule-panel');info.open=false;}
+    const share=document.getElementById('cdShareBtn');if(share)share.style.display='none';
+    const all=(state.currentEntries||[]).filter(e=>e.moderation_status!=='rejected');const count=all.filter(e=>!e.moderation_status||e.moderation_status==='clear'||e.moderation_status==='approved').length;const privatePreview=all.some(e=>e.user_id===state.profile?.id&&['pending','flagged','escalated'].includes(e.moderation_status));
+    const counter=document.getElementById('cdEntriesCounter');if(counter){const m=(counter.textContent.match(/(\d+)\s+of\s+(\d+)/i)||[]);counter.textContent=m[1]?(privatePreview?`${count} live · preview ${m[1]} of ${m[2]}`:`${count} entr${count===1?'y':'ies'} · ${m[1]} of ${m[2]}`):`${count} entr${count===1?'y':'ies'}`;}
+  }
+  function addTitlesHelp(){const sub=document.querySelector('#leaderboardViewSection .section-sub');if(!sub)return;let row=document.getElementById('fcLevelHelpRowV1054');if(!row){row=document.createElement('div');row.id='fcLevelHelpRowV1054';row.className='fc-level-help-row-v1054';row.innerHTML='<button type="button">Levels & Hall of Fame</button><button type="button">How monthly qualification works</button>';sub.insertAdjacentElement('afterend',row);row.children[0].onclick=openBadgeLegend;row.children[1].onclick=()=>{if(typeof toggleLbHow==='function')toggleLbHow();};}}
+  function decorateProfileLevel(){const card=document.querySelector('#profileSheet .fc-v1036-tier-card');if(!card||card.dataset.v1054LevelHelp)return;card.dataset.v1054LevelHelp='1';card.setAttribute('role','button');card.tabIndex=0;card.title='See all levels and Hall of Fame rules';card.addEventListener('click',openBadgeLegend);card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openBadgeLegend();}});}
+  const priorDetail=window.renderChallengeDetail;if(typeof priorDetail==='function')window.renderChallengeDetail=function(){const r=priorDetail.apply(this,arguments);setTimeout(renderBrief,90);return r;};
+  const priorLeaderboard=window.renderLeaderboard;if(typeof priorLeaderboard==='function')window.renderLeaderboard=function(){const r=priorLeaderboard.apply(this,arguments);requestAnimationFrame(addTitlesHelp);return r;};
+  const priorProfile=window.renderProfileTab;if(typeof priorProfile==='function')window.renderProfileTab=function(){const r=priorProfile.apply(this,arguments);requestAnimationFrame(decorateProfileLevel);return r;};
+  const priorLocal=window.fcEmberLocalAnswerV1046;window.fcEmberLocalAnswerV1046=function(q){const x=String(q||'').toLowerCase();if(/tier|level|spark|flame|blaze|inferno|legend|icon|immortal|g\.?o\.?a\.?t|hall of fame/.test(x)){const uid=state.profile?.id,ls=uid?getLadderStatus(uid):null;let own='';if(ls)own=` Your visible level is ${ls.name}, worth ${ls.points} Opponent Point${ls.points===1?'':'s'}.`;return `FlamesChallenge has one visible level. Eligible public challenge wins move competitors through Spark, Flame, Blaze, and Inferno. Five Championship titles permanently move a competitor into the Hall of Fame as a Legend; 10 titles earns Icon, 15 earns Immortal, and 20 earns G.O.A.T. Once inducted, the badge never returns to the regular ladder. The visible badge determines Opponent Points: Spark 1, Flame 2, Blaze 4, Inferno 6, Legend 10, Icon 14, Immortal 18, G.O.A.T. 24.${own}`;}return typeof priorLocal==='function'?priorLocal(q):null;};
+  const priorCtx=window.buildEmberContext;window.buildEmberContext=function(){const base=typeof priorCtx==='function'?priorCtx():{};const ls=state.profile?.id?getLadderStatus(state.profile.id):null;return {...base,levelSystem:{version:'v1054',visibleBadgeIsOpponentValue:true,regularLevels:REGULAR_LEVELS,hallOfFameLevels:HOF_LEVELS,current:ls?{name:ls.name,source:ls.source,points:ls.points,regularWins:ls.regularWins,championshipTitles:ls.champCount,next:ls.nextName}:null,founderIsSeparate:true}};};
+  document.addEventListener('DOMContentLoaded',()=>{addTitlesHelp();decorateProfileLevel();setTimeout(renderBrief,160)},{once:true});if(document.readyState!=='loading'){addTitlesHelp();decorateProfileLevel();setTimeout(renderBrief,160)}
+  window.__fcBuildV1054={build:'v1054',phase:'Production Hardening',focus:'progressive guidance + visible level system',newEdgeFunctions:0,edgeFunctionChanges:0,sqlChanges:0};
+})();
+</script>
+
 </body>
 </html>
