@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1056 — Focused Home Modules</title>
+<title>FlamesChallenge v1057 — Home Top Alignment & Feed Card Recovery</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1056 · focused-home-modules" />
-<meta name="fc-whatsnew" content="Restores the last known working navigation architecture while the focused-screen redesign is rebuilt and fully regression-tested." />
+<meta name="fc-build" content="v1057 · home-top-alignment-feed-card-recovery" />
+<meta name="fc-whatsnew" content="Aligns Home action modules and restores clean challenge and winner feed cards without changing navigation or competition mechanics." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -22734,7 +22734,7 @@ function renderFeed() {
         // Fallback: fighters not loaded — keep the simple pinned card (gold-treated)
         return `<div class="fcc-challenge-wrap champ-gold" data-cid="${ch.id}" onclick="openChallenge((state.challenges||[]).find(c=>c.id==='${ch.id}'))">
           <div class="feed-challenge-card" style="padding:16px;cursor:pointer;">
-            ${buildChallengeCardShell(ch)}
+            ${buildChallengeCardShell(ch,'feed')}
           </div>
         </div>`;
       }).join('');
@@ -23557,7 +23557,7 @@ function fcCardGuidanceV1055(ch,status,entryCount,isCreator){
   if(status==='closed')return 'Voting is complete. Open the challenge to see the winner and final totals.';
   return '';
 }
-function buildChallengeCardShell(ch) {
+function buildChallengeCardShell(ch, surface = 'compete') {
   const creator = ch.creator || { name: 'Unknown' };
   const entryCount = state.entryCounts[ch.id] || 0;
   const entryWord = entryCount === 1 ? 'entry' : 'entries';
@@ -23593,7 +23593,7 @@ function buildChallengeCardShell(ch) {
   const showPill = status !== 'closed';
   const action = fcCardAction(ch, status);
   const ctaCls = action.ghost ? ' chc-ghost' : '';
-  const guidance=fcCardGuidanceV1055(ch,status,Number(entryCount)||0,isCreator);
+  const guidance=surface==='compete'?fcCardGuidanceV1055(ch,status,Number(entryCount)||0,isCreator):'';
 
   return `
     <div class="chc-top">
@@ -23620,7 +23620,7 @@ function renderFeedChallengeCard(ch) {
   const isChampionship = !!(ch.title && ch.title.startsWith('⚡'));
   return `<div class="fcc-challenge-wrap${isChampionship ? ' champ-gold' : ''}" data-cid="${ch.id}">
     <div class="feed-challenge-card" data-fcc-cid="${ch.id}">
-      ${buildChallengeCardShell(ch)}
+      ${buildChallengeCardShell(ch,'feed')}
     </div>
   </div>`;
 }
@@ -23684,65 +23684,36 @@ function renderFeedWinnerCard({ challenge, entry }) {
   const clickable = s.id && !isMine;
   const userAttr = clickable ? `data-user-id="${s.id}" class="user-clickable"` : '';
   const plus = needsFollowPlus(s.id) ? ' <span class="user-plus">+</span>' : '';
+  const levelChip = (typeof renderLadderChip==='function' && s.id) ? renderLadderChip(s.id) : '';
 
-  // Winning entry media — always show something
   let mediaHtml = '';
   if (entry.media_type === 'photo' && entry.media_url) {
-    mediaHtml = `<img src="${escapeHtml(entry.media_url)}" style="width:100%;max-height:300px;object-fit:cover;display:block;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}">`;
+    mediaHtml = `<img src="${escapeHtml(entry.media_url)}" alt="Winning entry" loading="lazy" data-entry-open="${challenge.id}" data-entry-id="${entry.id}">`;
   } else if (entry.media_type === 'video' && entry.media_url) {
-    mediaHtml = entry.poster_url
-      ? `<div style="position:relative;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><video data-src="${escapeHtml(entry.media_url)}" ${_videoPosterAttr(entry.media_url, entry.poster_url)} muted playsinline preload="none" data-lazy-video style="width:100%;max-height:300px;object-fit:cover;display:block;pointer-events:none;"></video><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.3);font-size:48px;">▶</div></div>`
-      : entry.poster_url
-        ? `<div style="position:relative;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><video data-src="${escapeHtml(entry.media_url)}" ${_videoPosterAttr(entry.media_url, entry.poster_url)} muted playsinline preload="none" data-lazy-video style="width:100%;max-height:300px;object-fit:cover;display:block;pointer-events:none;"></video><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:48px;pointer-events:none;">▶</div></div>`
-        : `<div style="position:relative;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><video data-src="${escapeHtml(entry.media_url)}" muted playsinline preload="none" data-lazy-video style="width:100%;max-height:300px;object-fit:cover;display:block;"></video><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:48px;pointer-events:none;">▶</div></div>`;
+    mediaHtml = `<div class="fc-winner-video-v1057" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><video data-src="${escapeHtml(entry.media_url)}" ${_videoPosterAttr(entry.media_url, entry.poster_url)} muted playsinline preload="none" data-lazy-video></video><span aria-hidden="true">▶</span></div>`;
   } else if (entry.media_type === 'audio' && entry.media_url) {
-    mediaHtml = `<div style="padding:16px;background:var(--surface-2);display:flex;align-items:center;gap:12px;cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><span style="font-size:36px">🎙️</span><audio src="${escapeHtml(entry.media_url)}" controls preload="metadata" style="flex:1;height:36px"></audio></div>`;
+    mediaHtml = `<div class="fc-winner-audio-v1057" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><span aria-hidden="true">♪</span><audio src="${escapeHtml(entry.media_url)}" controls preload="metadata"></audio></div>`;
   } else {
-    // No media — show caption or category placeholder
     const catIcons = {Art:'🎨',Photography:'📷',Music:'🎵',Writing:'✍️',Cooking:'🍳',Style:'👗',Sports:'🏆',Fitness:'💪',Comedy:'😂'};
     const icon = catIcons[challenge.category] || '🏆';
-    const caption = entry.caption ? `<div style="font-size:14px;color:var(--text);padding:0 16px 16px;line-height:1.5">${escapeHtml(entry.caption)}</div>` : '';
-    mediaHtml = `<div style="padding:24px 16px;text-align:center;background:var(--surface-2);cursor:pointer;" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><div style="font-size:48px;margin-bottom:8px">${icon}</div>${caption}</div>`;
+    mediaHtml = `<div class="fc-winner-text-v1057" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><span aria-hidden="true">${icon}</span>${entry.caption?`<p>${escapeHtml(entry.caption)}</p>`:''}</div>`;
   }
 
-  return `
-    <div class="feed-activity-card winner" data-cid="${challenge.id}" style="padding:0;overflow:hidden;">
+  const score=(state.boostByChallenge||{})[challenge.id];
+  const scoreHtml=score&&Number(score.total_boost)>0?`<div class="fc-winner-score-v1057"><strong>+${Number(score.total_boost)} Championship Score</strong><span>${Number(score.opponent_pts||0)} Opponent + ${Number(score.vote_pts||0)} Turnout</span></div>`:'';
 
-      <!-- winner-curtain-wrap: position:relative, overflow:hidden — curtain panels sit inside -->
-      <div class="winner-curtain-wrap">
-
-        <!-- Winner content — always rendered so wrap has real height -->
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 0;">
-          <span class="feed-poll-tag" style="color:var(--gold);">🏁 WINNER <span style="opacity:0.55">·</span> ${escapeHtml((challenge.category||'Other').toUpperCase())}</span>
-          <span style="font-size:12px;color:var(--text-muted);">${timeAgo(challenge.voting_end)}</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:14px;padding:12px 14px 14px;background:linear-gradient(135deg,rgba(255,200,87,0.12),rgba(255,106,44,0.08));">
-          <div style="width:60px;height:60px;border-radius:50%;border:3px solid var(--gold);overflow:hidden;flex-shrink:0;background:linear-gradient(135deg,var(--ember),var(--coral));display:grid;place-items:center;font-size:24px;" ${userAttr}>
-            ${avatarInner(s.avatar)}
-          </div>
-          <div style="flex:1;min-width:0;">
-            <div style="font-family:var(--font-anton);font-size:22px;letter-spacing:0.02em;color:var(--text);line-height:1.1;" ${userAttr}>
-              ${escapeHtml(s.name.toUpperCase())}${reigningChampChipHTML(s.id)}${isMine ? ' <span style="color:var(--ember);font-size:13px;font-family:var(--font-body);">(you)</span>' : ''}${plus}
-            </div>
-            <div style="font-size:13px;color:var(--gold);font-weight:600;margin-top:3px;">🥇 ${escapeHtml(challenge.title)}</div>
-            ${boostBreakdownHTML(challenge.id)}
-          </div>
-          <div style="font-size:28px;flex-shrink:0;">🎉</div>
-        </div>
-        ${mediaHtml}
-
-        <!-- CSS curtain panels with fire texture — slide apart on .revealed -->
-        <div class="winner-curtain-left"></div>
-        <div class="winner-curtain-right"></div>
-        <!-- Single ambient fire video — lazy loaded (src set in JS), fades over winner on reveal -->
-        <video class="curtain-ambient-video"
-          data-src="https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/Assets/curtain.mp4"
-          autoplay loop playsinline muted preload="none"
-          style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:3;opacity:0;pointer-events:none;transition:opacity 0.4s ease;"></video>
-        <div class="winner-reveal-label">🏆 WINNER</div>
+  return `<article class="feed-activity-card winner fc-winner-card-v1057" data-cid="${challenge.id}">
+    <header class="fc-winner-head-v1057"><span>WINNER · ${escapeHtml((challenge.category||'Other').toUpperCase())}</span><time>${timeAgo(challenge.voting_end)}</time></header>
+    <div class="fc-winner-summary-v1057">
+      <div class="fc-winner-avatar-v1057" ${userAttr}>${avatarInner(s.avatar)}</div>
+      <div class="fc-winner-copy-v1057">
+        <div class="fc-winner-name-v1057" ${userAttr}>${escapeHtml(s.name)}${isMine?' <span>(you)</span>':''}${plus} ${levelChip}</div>
+        <div class="fc-winner-challenge-v1057">${escapeHtml(challenge.title)}</div>
+        ${scoreHtml}
       </div>
-
-    </div>`;
+    </div>
+    <div class="fc-winner-media-v1057">${mediaHtml}</div>
+  </article>`;
 }
 
 
@@ -28696,24 +28667,31 @@ document.addEventListener('click', (e) => {
       run:best.action.run
     };
   }
+  function emberHomeThumbV1057(ch, pose){
+    const source=[...(state.feedEntries||[]),...(state.currentEntries||[]),...(state.entries||[]),...(state.myEntries||[])];
+    const e=source.find(item=>String(item?.challenge_id)===String(ch?.id) && !['rejected'].includes(String(item?.moderation_status||'')));
+    const url=(e&&(e.thumbnail_url||e.poster_url)) || ch?.cover_url || ch?.image_url || ch?.thumbnail_url || '';
+    if(url) return `<img src="${escapeHtml(url)}" alt="" loading="lazy">`;
+    return `<div class="fc-home-ember-fill-v1057">${emberFace(76,pose)}</div>`;
+  }
   function paintGuidance(el,move){
     if(!el||!move) return;
     el.classList.toggle('challenge-recommendation', !!move.challenge);
-    el.style.display = move.challenge ? 'grid' : 'flex';
+    el.classList.add('fc-home-next-module-v1057');
+    el.style.display='block';
     if(move.challenge){
       const action=String(move.action||'');
       const isVoting=/vote|voting/i.test(action);
       const isPromote=/promote/i.test(action);
       const isEdit=/edit/i.test(action);
-      const cue=isVoting?'Voting is open':isPromote?'Your challenge needs attention':isEdit?'Your entry can still be changed':'Open for entries';
-      const body=isVoting?move.relation:(move.task||move.relation||'');
-      const secondary=isVoting?'':(move.relation||'');
-      el.innerHTML=`<div class="ember-guidance-art">${emberFace(54,move.pose)}</div><div class="ember-guidance-main"><div class="ember-rec-purpose-v1055">YOUR NEXT MOVE</div><div class="ember-rec-kicker">${escapeHtml(cue)}</div><div class="ember-rec-type">${escapeHtml(move.category)} · ${escapeHtml(move.media)}</div><strong class="ember-rec-title">${escapeHtml(move.displayTitle || 'Untitled challenge')}</strong><p class="ember-rec-description">${escapeHtml(body)}</p>${secondary?`<div class="ember-rec-relation">${escapeHtml(secondary)}</div>`:''}<div class="ember-rec-meta">${escapeHtml(move.meta)}</div></div><button type="button" class="ember-guidance-action" data-ember-guidance-action>${escapeHtml(move.action)} <span aria-hidden="true">→</span></button>`;
+      const cue=isVoting?'Voting is open':isPromote?'Needs your attention':isEdit?'Your entry is editable':'Open for entries';
+      const concise=isVoting?move.relation:(move.relation||move.task||'');
+      el.innerHTML=`<div class="fc-home-module-head-v1057"><div><div class="fc-home-module-kicker-v1057">YOUR NEXT MOVE</div><h2>Do this next</h2></div></div><article class="fc-home-action-row-v1057"><div class="fc-home-action-media-v1057">${emberHomeThumbV1057(move.challenge,move.pose)}</div><div class="fc-home-action-copy-v1057"><div class="fc-home-action-type-v1057">${escapeHtml(move.category)} · ${escapeHtml(move.media)} · ${escapeHtml(cue)}</div><strong class="fc-home-action-title-v1057">${escapeHtml(move.displayTitle||'Untitled challenge')}</strong><div class="fc-home-action-meta-v1057">${escapeHtml(concise)}${move.meta?`<span>${escapeHtml(move.meta)}</span>`:''}</div><button type="button" class="fc-home-action-link-v1057" data-ember-guidance-action>${escapeHtml(move.action)} →</button></div></article>`;
       const actionBtn=el.querySelector('[data-ember-guidance-action]');
       if(actionBtn) actionBtn.onclick=(event)=>{event.stopPropagation();move.run();};
       el.onclick=(event)=>{if(!event.target.closest('[data-ember-guidance-action]'))move.run();};
     }else{
-      el.innerHTML=`<div class="ember-guidance-art">${emberFace(46,move.pose)}</div><div class="ember-guidance-main"><div class="ember-rec-purpose-v1055">YOUR NEXT MOVE</div><strong>${escapeHtml(move.title)}</strong><p>${escapeHtml(move.text)}</p></div><button type="button" class="ember-guidance-action" data-ember-guidance-action>${escapeHtml(move.action)} <span aria-hidden="true">→</span></button>`;
+      el.innerHTML=`<div class="fc-home-module-head-v1057"><div><div class="fc-home-module-kicker-v1057">YOUR NEXT MOVE</div><h2>Do this next</h2></div></div><article class="fc-home-action-row-v1057"><div class="fc-home-action-media-v1057"><div class="fc-home-ember-fill-v1057">${emberFace(76,move.pose)}</div></div><div class="fc-home-action-copy-v1057"><strong class="fc-home-action-title-v1057">${escapeHtml(move.title)}</strong><div class="fc-home-action-meta-v1057">${escapeHtml(move.text)}</div><button type="button" class="fc-home-action-link-v1057" data-ember-guidance-action>${escapeHtml(move.action)} →</button></div></article>`;
       const actionBtn=el.querySelector('[data-ember-guidance-action]');
       if(actionBtn) actionBtn.onclick=(event)=>{event.stopPropagation();move.run();};
       el.onclick=(event)=>{if(!event.target.closest('[data-ember-guidance-action]'))move.run();};
@@ -28736,7 +28714,7 @@ document.addEventListener('click', (e) => {
     paintGuidance(home,move);
     if(home){
       home.dataset.fcStableGuidance='1';
-      home.style.display = move.challenge ? 'grid' : 'flex';
+      home.style.display='block';
     }
     if(typeof window.fcRenderHomeLiveShelf==='function') queueMicrotask(()=>window.fcRenderHomeLiveShelf());
     emberGuidanceHasPainted=true;
@@ -33241,13 +33219,17 @@ html[data-theme="light"] body .fc-score-race-v1032 .fc-score-metric-v1032{box-sh
 
 
 
-<style id="fc-v1056-focused-home-css">
-/* v1056 — Home answers two questions before the feed: what needs my attention, and what is live now. Personal career progress belongs on You. */
+
+<style id="fc-v1057-home-feed-recovery-css">
+/* v1057 — only the Home action modules and ordinary feed challenge/winner cards. */
 #feedView .heat-check{display:none!important}
 
-/* The two action modules share one visual family instead of reading as unrelated products. */
-#feedView #emberHomeCard.challenge-recommendation,
+/* Home: Your Next Move and Live Now share the same module shell and row anatomy. */
+#feedView #emberHomeCard.fc-home-next-module-v1057,
 #feedView #fcHomeLive{
+  display:block!important;
+  grid-template-columns:none!important;
+  gap:0!important;
   margin:0 0 14px!important;
   padding:16px!important;
   border:1px solid var(--border)!important;
@@ -33255,77 +33237,85 @@ html[data-theme="light"] body .fc-score-race-v1032 .fc-score-metric-v1032{box-sh
   background:var(--surface)!important;
   box-shadow:var(--shadow-card)!important;
 }
-#feedView #emberHomeCard.challenge-recommendation::after{display:none!important}
-#feedView #emberHomeCard.challenge-recommendation .ember-rec-purpose-v1055,
-#feedView #fcHomeLive .fc-home-live-kicker{
-  font-size:9px!important;
-  line-height:1.2!important;
-  font-weight:950!important;
-  letter-spacing:.14em!important;
-  text-transform:uppercase!important;
-  color:var(--ember)!important;
-}
-#feedView #fcHomeLive h2{font-size:19px!important;color:var(--text)!important}
-#feedView #fcHomeLive .fc-home-live-all{color:var(--ember)!important}
-#feedView #fcHomeLive .fc-home-live-card{
-  background:var(--surface-2)!important;
-  border-color:var(--border)!important;
-  box-shadow:none!important;
-}
-#feedView #fcHomeLive .fc-home-live-media{
-  background:var(--surface)!important;
-  border-color:var(--border)!important;
-}
+#feedView #emberHomeCard.fc-home-next-module-v1057::after{display:none!important}
+.fc-home-module-head-v1057,
+#feedView #fcHomeLive .fc-home-live-head{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:10px}
+.fc-home-module-kicker-v1057,
+#feedView #fcHomeLive .fc-home-live-kicker{font-size:9px;line-height:1.2;font-weight:950;letter-spacing:.14em;text-transform:uppercase;color:var(--ember)}
+.fc-home-module-head-v1057 h2,#feedView #fcHomeLive h2{font-size:19px!important;line-height:1.1!important;color:var(--text)!important;margin:3px 0 0!important}
+#feedView #fcHomeLive .fc-home-live-all{color:var(--ember)!important;font-size:12px!important;font-weight:850!important}
+.fc-home-action-row-v1057,
+#feedView #fcHomeLive .fc-home-live-card{display:grid!important;grid-template-columns:76px minmax(0,1fr)!important;gap:11px!important;align-items:stretch!important;padding:9px!important;border:1px solid var(--border)!important;border-radius:15px!important;background:var(--surface-2)!important;box-shadow:none!important;cursor:pointer!important}
+.fc-home-action-media-v1057,
+#feedView #fcHomeLive .fc-home-live-media{width:76px!important;height:76px!important;border-radius:11px!important;overflow:hidden!important;background:var(--surface)!important;border:1px solid var(--border)!important;display:grid!important;place-items:center!important}
+.fc-home-action-media-v1057 img,.fc-home-action-media-v1057 video,
+#feedView #fcHomeLive .fc-home-live-media img,#feedView #fcHomeLive .fc-home-live-media video{width:100%!important;height:100%!important;object-fit:cover!important;display:block!important}
+.fc-home-ember-fill-v1057{width:100%;height:100%;display:grid;place-items:center;overflow:hidden;background:#171310}
+.fc-home-ember-fill-v1057 .ember-prod{width:76px!important;height:76px!important;border-radius:0!important}
+.fc-home-action-copy-v1057{min-width:0;display:flex;flex-direction:column;align-items:flex-start;justify-content:center}
+.fc-home-action-type-v1057,#feedView #fcHomeLive .fc-home-live-type{font-size:9px!important;line-height:1.2!important;font-weight:850!important;letter-spacing:.09em!important;text-transform:uppercase!important;color:var(--text-muted)!important}
+.fc-home-action-title-v1057,#feedView #fcHomeLive .fc-home-live-title{display:block;font-size:16px!important;line-height:1.16!important;font-weight:850!important;color:var(--text)!important;margin:3px 0 2px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.fc-home-action-meta-v1057,#feedView #fcHomeLive .fc-home-live-meta{font-size:11px!important;line-height:1.35!important;color:var(--text-dim)!important;margin:0!important}
+.fc-home-action-meta-v1057 span{display:block;color:var(--text-muted);margin-top:1px}
+.fc-home-action-link-v1057,#feedView #fcHomeLive .fc-home-live-action{appearance:none;border:0;background:none;padding:0!important;margin-top:5px!important;color:var(--ember)!important;font:850 11.5px/1.2 var(--font-body)!important;cursor:pointer!important;text-align:left!important}
 
-/* Following is a feed context, not a cryptic ring legend. */
-#feedView .following-avatar-row{
-  margin:0 0 8px!important;
-  padding:12px 0 10px!important;
-  border-bottom:1px solid var(--border)!important;
-}
+/* Following context only; the flyer and all post cards are untouched. */
+#feedView .following-avatar-row{margin:0 0 8px!important;padding:12px 0 10px!important;border-bottom:1px solid var(--border)!important}
 .fc-following-head-v1056{padding:0 16px 7px}
 .fc-following-kicker-v1056{font-size:9px;font-weight:950;letter-spacing:.14em;color:var(--ember);text-transform:uppercase}
 .fc-following-head-v1056 p{margin:4px 0 0;font-size:11.5px;line-height:1.42;color:var(--text-dim)}
-#feedView #followingTooltip,
-#feedView .following-legend{display:none!important}
+#feedView #followingTooltip,#feedView .following-legend{display:none!important}
+
+/* Ordinary challenge feed cards: remove Compete-only teaching and restore a compact hierarchy. */
+#feedContainer .chc-guidance-v1055{display:none!important}
+#feedContainer .feed-challenge-card .chc-title{font-size:18px!important;line-height:1.18!important;margin:11px 0 9px!important;display:-webkit-box!important;-webkit-line-clamp:2!important;-webkit-box-orient:vertical!important;overflow:hidden!important}
+#feedContainer .feed-challenge-card .chc-owner{display:none!important}
+#feedContainer .feed-challenge-card .chc-meta{font-size:11.5px!important;gap:7px 9px!important;row-gap:5px!important;margin-top:10px!important}
+#feedContainer .feed-challenge-card .chc-rt{flex-basis:100%!important;margin-left:0!important;justify-content:flex-end!important;text-align:right!important}
+#feedContainer .feed-challenge-card .chc-cta{min-height:44px!important;margin-top:11px!important;padding:11px 12px!important;font-size:14px!important}
+
+/* Winner activity: standard information hierarchy, media first, no floating celebration collage. */
+#feedContainer > .fc-winner-card-v1057{padding:0!important;background:var(--surface)!important}
+.fc-winner-head-v1057{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 14px;border-bottom:1px solid var(--border)}
+.fc-winner-head-v1057 span{font-size:10px;font-weight:900;letter-spacing:.11em;color:var(--gold);text-transform:uppercase}
+.fc-winner-head-v1057 time{font-size:11px;color:var(--text-muted);white-space:nowrap}
+.fc-winner-summary-v1057{display:flex;align-items:center;gap:11px;padding:13px 14px}
+.fc-winner-avatar-v1057{width:48px;height:48px;flex:0 0 48px;border-radius:50%;overflow:hidden;display:grid;place-items:center;background:var(--surface-2);border:2px solid var(--gold)}
+.fc-winner-avatar-v1057 img{width:100%;height:100%;object-fit:cover}
+.fc-winner-copy-v1057{min-width:0;flex:1}
+.fc-winner-name-v1057{font-size:16px;font-weight:850;line-height:1.15;color:var(--text);display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.fc-winner-name-v1057>span{font-size:11px;color:var(--ember)}
+.fc-winner-challenge-v1057{font-size:13px;font-weight:750;line-height:1.3;color:var(--text-dim);margin-top:3px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.fc-winner-score-v1057{margin-top:7px;padding:8px 10px;border-radius:10px;background:rgba(255,200,87,.10);border:1px solid rgba(255,200,87,.22);display:flex;align-items:baseline;gap:5px;flex-wrap:wrap}
+.fc-winner-score-v1057 strong{font-size:11.5px;color:var(--gold)}
+.fc-winner-score-v1057 span{font-size:10.5px;color:var(--text-dim)}
+.fc-winner-media-v1057{width:100%;background:#0f0d0c;overflow:hidden}
+.fc-winner-media-v1057>img,.fc-winner-media-v1057 video{width:100%;max-height:360px;aspect-ratio:16/10;object-fit:cover;display:block}
+.fc-winner-video-v1057{position:relative;cursor:pointer}
+.fc-winner-video-v1057>span{position:absolute;inset:0;display:grid;place-items:center;font-size:38px;color:#fff;background:rgba(0,0,0,.22);pointer-events:none}
+.fc-winner-audio-v1057{display:flex;align-items:center;gap:10px;padding:16px;background:var(--surface-2)}
+.fc-winner-audio-v1057>span{font-size:28px}.fc-winner-audio-v1057 audio{flex:1;min-width:0}
+.fc-winner-text-v1057{padding:24px 16px;text-align:center;background:var(--surface-2);cursor:pointer}.fc-winner-text-v1057>span{font-size:42px}.fc-winner-text-v1057 p{margin:8px 0 0;color:var(--text);line-height:1.45}
 
 @media(max-width:520px){
-  #feedView #emberHomeCard.challenge-recommendation,
-  #feedView #fcHomeLive{padding:14px!important;border-radius:18px!important}
-  #feedView #emberHomeCard.challenge-recommendation{grid-template-columns:48px minmax(0,1fr)!important}
-  #feedView #emberHomeCard.challenge-recommendation .ember-guidance-action{grid-column:1/-1!important;width:100%!important;justify-content:center!important;min-height:42px!important}
+  #feedView #emberHomeCard.fc-home-next-module-v1057,#feedView #fcHomeLive{padding:14px!important;border-radius:18px!important}
+  .fc-home-action-row-v1057,#feedView #fcHomeLive .fc-home-live-card{grid-template-columns:70px minmax(0,1fr)!important}
+  .fc-home-action-media-v1057,#feedView #fcHomeLive .fc-home-live-media{width:70px!important;height:70px!important}
+  .fc-home-ember-fill-v1057 .ember-prod{width:70px!important;height:70px!important}
 }
 </style>
-<script id="fc-v1056-focused-home-js">
+<script id="fc-v1057-home-feed-recovery-js">
 (function(){
   'use strict';
-  function enforceFocusedHomeV1056(){
-    const progress=document.querySelector('#feedView .heat-check');
-    if(progress){
-      progress.setAttribute('aria-hidden','true');
-      progress.hidden=true;
-    }
-    const liveKicker=document.querySelector('#fcHomeLive .fc-home-live-kicker');
-    if(liveKicker)liveKicker.textContent='LIVE NOW';
-    const tooltip=document.getElementById('followingTooltip');
-    if(tooltip)tooltip.style.display='none';
+  function enforceV1057(){
+    const progress=document.querySelector('#feedView .heat-check');if(progress){progress.hidden=true;progress.setAttribute('aria-hidden','true');}
+    const liveKicker=document.querySelector('#fcHomeLive .fc-home-live-kicker');if(liveKicker)liveKicker.textContent='LIVE NOW';
+    const tooltip=document.getElementById('followingTooltip');if(tooltip)tooltip.style.display='none';
   }
   const priorFeed=window.renderFeed;
-  if(typeof priorFeed==='function')window.renderFeed=function(){
-    const result=priorFeed.apply(this,arguments);
-    requestAnimationFrame(enforceFocusedHomeV1056);
-    return result;
-  };
-  const row=document.getElementById('followingAvatarRow');
-  if(row)new MutationObserver(enforceFocusedHomeV1056).observe(row,{attributes:true,childList:true,subtree:true,attributeFilter:['style','class']});
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(enforceFocusedHomeV1056,250),{once:true});
-  else setTimeout(enforceFocusedHomeV1056,250);
-  window.__fcBuildV1056={
-    build:'v1056',phase:'Production Hardening',focus:'Home module hierarchy and following-ring clarity',
-    basedOn:'v1055',homeOnly:true,navigationChanged:false,competeChanged:false,titlesChanged:false,
-    createFlowChanged:false,scoringRulesChanged:false,levelThresholdsChanged:false,moderationChanged:false,
-    newEdgeFunctions:0,edgeFunctionChanges:0,sqlChanges:0
-  };
+  if(typeof priorFeed==='function')window.renderFeed=function(){const r=priorFeed.apply(this,arguments);requestAnimationFrame(enforceV1057);return r;};
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(enforceV1057,250),{once:true});else setTimeout(enforceV1057,250);
+  window.__fcBuildV1057={build:'v1057',phase:'Production Hardening',focus:'Home top-module alignment and feed-card recovery',basedOn:'v1056',homeTopChanged:true,feedChallengePresentationChanged:true,winnerPresentationChanged:true,flyerChanged:false,navigationChanged:false,competeChanged:false,titlesChanged:false,createFlowChanged:false,scoringRulesChanged:false,levelThresholdsChanged:false,moderationChanged:false,newEdgeFunctions:0,edgeFunctionChanges:0,sqlChanges:0};
 })();
 </script>
 
