@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1070 — Horizontal Carousel Gesture Recovery</title>
+<title>FlamesChallenge v1071 — Reliable iPhone Entry Swipes</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,7 +21,7 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1072 · rail-smooth-fix" />
+<meta name="fc-build" content="v1071 · reliable-iphone-entry-swipes" />
 <meta name="fc-whatsnew" content="Restores native horizontal entry swiping by removing the vertical-only gesture lock from feed-card ancestors." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
@@ -4009,13 +4009,7 @@ html[data-theme="light"] .ps-heat-card { background: #1a1008; }
      in the card that isn't the card's own text, and it has to start on the same
      line as the title or the card reads as off-centre. */
   scroll-padding-left: 16px;
-  /* v1072 — scroll-behavior:smooth REMOVED. On-device probe (v1071) proved the
-     gesture arrives intact: touchstart and 140px of horizontal touchmove reach
-     the rail, nothing preventDefaults, touch-action is auto up the whole chain
-     — and scrollLeft never moves. Chromium pans this fine; iOS WebKit has a
-     known bad interaction between CSS smooth scrolling and mandatory snap on
-     touch-driven scrolls. The rule was redundant anyway: the only programmatic
-     scroll (dot taps) already passes behavior:'smooth' in scrollTo(). */
+  scroll-behavior: smooth;
   display: flex;
   flex-wrap: nowrap; /* critical — prevent wrapping to grid */
   gap: 8px;
@@ -7400,8 +7394,8 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
   scroll-snap-align: center !important;
 }
 </style>
-<script id="fc-v1070-build-marker">
-window.__fcBuildV1070={build:'v1070',basedOn:'v1069',rootCause:'ancestor touch-action pan-y blocked descendant horizontal pans',broadV1069OverrideRemoved:true,nativeCssOnly:true,javascriptGestureInterception:false,navigationChanged:false,backendChanged:false};
+<script id="fc-v1071-build-marker">
+window.__fcBuildV1071={build:'v1071',basedOn:'v1070',fix:'normal iPhone horizontal swipes advance exactly one entry instead of snapping back',preventDefault:false,nativeVerticalScrollPreserved:true,navigationChanged:false,backendChanged:false};
 </script>
 </head>
 <body>
@@ -9898,8 +9892,8 @@ try {
 (function fcReportManualUpdateResultV1066(){
   let request = null;
   try {
-    request = JSON.parse(sessionStorage.getItem('fc_manual_update_check_v1070') || sessionStorage.getItem('fc_manual_update_check_v1069') || sessionStorage.getItem('fc_manual_update_check_v1068') || sessionStorage.getItem('fc_manual_update_check_v1067') || sessionStorage.getItem('fc_manual_update_check_v1066') || 'null');
-    if (request) { sessionStorage.removeItem('fc_manual_update_check_v1070'); sessionStorage.removeItem('fc_manual_update_check_v1069'); sessionStorage.removeItem('fc_manual_update_check_v1068'); sessionStorage.removeItem('fc_manual_update_check_v1067'); sessionStorage.removeItem('fc_manual_update_check_v1066'); }
+    request = JSON.parse(sessionStorage.getItem('fc_manual_update_check_v1071') || sessionStorage.getItem('fc_manual_update_check_v1070') || sessionStorage.getItem('fc_manual_update_check_v1069') || sessionStorage.getItem('fc_manual_update_check_v1068') || sessionStorage.getItem('fc_manual_update_check_v1067') || sessionStorage.getItem('fc_manual_update_check_v1066') || 'null');
+    if (request) { sessionStorage.removeItem('fc_manual_update_check_v1071'); sessionStorage.removeItem('fc_manual_update_check_v1070'); sessionStorage.removeItem('fc_manual_update_check_v1069'); sessionStorage.removeItem('fc_manual_update_check_v1068'); sessionStorage.removeItem('fc_manual_update_check_v1067'); sessionStorage.removeItem('fc_manual_update_check_v1066'); }
   } catch (e) {}
   if (!request) return;
   const from = String(request.from || '').match(/v?\d+(?:\.\d+)*/i)?.[0]?.toLowerCase().replace(/^v/, '') || '';
@@ -10065,7 +10059,7 @@ window.fcCheckForUpdate = () => checkForUpdate(true,{manual:true});
 window.fcManualUpdateCheck = async function(){
   try { if (typeof toast === 'function') toast('Checking for updates…'); } catch (e) {}
   try {
-    sessionStorage.setItem('fc_manual_update_check_v1070', JSON.stringify({ from: APP_VERSION, at: Date.now() }));
+    sessionStorage.setItem('fc_manual_update_check_v1071', JSON.stringify({ from: APP_VERSION, at: Date.now() }));
   } catch (e) {}
 
   let navigated = false;
@@ -18217,10 +18211,7 @@ function toggleDebugLog() {
   if (_debugLogOn && !panel) {
     panel = document.createElement('div');
     panel.id = 'debugLogPanel';
-    // v1071.1 — anchored to the BOTTOM, above the tab bar. Pinned to the top it
-    // covered the exact content being diagnosed (you couldn't swipe the rail
-    // with the log open). Clears the home indicator via safe-area.
-    panel.style.cssText = 'position:fixed;left:0;right:0;bottom:calc(84px + env(safe-area-inset-bottom,0px));top:auto;height:26vh;z-index:99999;background:rgba(0,0,0,0.92);color:#0f0;font:10px/1.4 monospace;display:flex;flex-direction:column;border-top:2px solid #0f0;';
+    panel.style.cssText = 'position:fixed;left:0;right:0;top:0;height:30vh;z-index:99999;background:rgba(0,0,0,0.92);color:#0f0;font:10px/1.4 monospace;display:flex;flex-direction:column;border-bottom:2px solid #0f0;';
     panel.innerHTML = `<div style="display:flex;justify-content:space-between;padding:4px 8px;background:#0a0a0a;color:#fff;flex-shrink:0;">
       <span>🐛 Video Debug Log</span>
       <span><button onclick="_dbgCollapse()" id="dbgCollapseBtn" style="background:none;border:1px solid #555;color:#fff;margin-right:6px;border-radius:3px;">Hide ▲</button><button onclick="_debugLines.length=0;document.getElementById('debugLogBody').textContent='';" style="background:none;border:1px solid #555;color:#fff;margin-right:6px;border-radius:3px;">Clear</button><button onclick="copyDebugLog()" style="background:none;border:1px solid #555;color:#fff;margin-right:6px;border-radius:3px;">Copy</button><button onclick="toggleDebugLog()" style="background:none;border:1px solid #555;color:#fff;border-radius:3px;">✕</button></span>
@@ -18245,8 +18236,8 @@ function _dbgCollapse() {
   if (!p || !body) return;
   const collapsed = body.style.display === 'none';
   body.style.display = collapsed ? '' : 'none';
-  p.style.height = collapsed ? '26vh' : 'auto';
-  if (b) b.textContent = collapsed ? 'Hide ▼' : 'Show ▲';   // v1071.1 — panel is at the bottom now
+  p.style.height = collapsed ? '30vh' : 'auto';
+  if (b) b.textContent = collapsed ? 'Hide ▲' : 'Show ▼';
 }
 function copyDebugLog() {
   const text = _debugLines.join('\n');
@@ -27676,6 +27667,59 @@ function _wireEntryDots(root) {
       if (sc._dotRaf) return;
       sc._dotRaf = requestAnimationFrame(() => { sc._dotRaf = null; update(); });
     }, { passive: true });
+
+    // v1071 — iOS accepts large flings but often snaps ordinary 20–45px swipes
+    // back to the same card. Keep the gesture native (no preventDefault), then
+    // settle one full card on touchend only when the gesture is clearly
+    // horizontal. Vertical page scrolling and taps remain untouched.
+    let swipeStart = null;
+    sc.addEventListener('touchstart', e => {
+      if (!e.touches || e.touches.length !== 1) { swipeStart = null; return; }
+      const st = step();
+      const cards = sc.querySelectorAll('.fcc-entry-card');
+      if (!st || cards.length < 2) { swipeStart = null; return; }
+      const t = e.touches[0];
+      swipeStart = {
+        x: t.clientX,
+        y: t.clientY,
+        index: Math.max(0, Math.min(cards.length - 1, Math.round(sc.scrollLeft / st)))
+      };
+    }, { passive: true });
+    sc.addEventListener('touchend', e => {
+      const start = swipeStart;
+      swipeStart = null;
+      if (!start || !e.changedTouches || !e.changedTouches.length) return;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - start.x;
+      const dy = t.clientY - start.y;
+      const ax = Math.abs(dx);
+      const ay = Math.abs(dy);
+      if (ax < 20 || ax <= ay * 1.1) return;
+
+      const cards = sc.querySelectorAll('.fcc-entry-card');
+      const st = step();
+      if (!st || cards.length < 2) return;
+      const target = Math.max(0, Math.min(cards.length - 1, start.index + (dx < 0 ? 1 : -1)));
+      if (target === start.index) { update(); return; }
+
+      // Temporarily release mandatory snap so WebKit cannot pull the rail back
+      // to the starting card while this explicit one-card settle is running.
+      const previousSnap = sc.style.scrollSnapType;
+      const previousBehavior = sc.style.scrollBehavior;
+      sc.style.scrollSnapType = 'none';
+      sc.style.scrollBehavior = 'auto';
+      sc.scrollLeft = sc.scrollLeft; // stop any remaining native momentum
+      requestAnimationFrame(() => {
+        sc.scrollTo({ left: target * st, behavior: 'smooth' });
+        setTimeout(() => {
+          sc.style.scrollSnapType = previousSnap;
+          sc.style.scrollBehavior = previousBehavior;
+          update();
+        }, 420);
+      });
+    }, { passive: true });
+    sc.addEventListener('touchcancel', () => { swipeStart = null; }, { passive: true });
+
     dots.addEventListener('click', e => {
       const d = e.target.closest('.fcc-dot');
       if (!d) return;
@@ -33568,65 +33612,5 @@ window.__fcBuildV1065={build:'v1065',basedOn:'v1064',flyerRenderer:'exact v1056 
 </script>
 
 
-<script id="fc-v1071-rail-probe">
-/* v1071 — ON-DEVICE rail diagnostics. The horizontal entry rail scrolls and
-   snaps correctly in a desktop engine with this exact stylesheet (verified by
-   measurement: overflow present, snap active, touch-action auto up the whole
-   chain, programmatic scrollLeft moves). On the phone it doesn't pan at all.
-   That combination means the remaining difference is only observable on the
-   device, so this probe reports the device's own truth into the debug log:
-
-     [rail] geom      — scrollWidth/clientWidth (is there anything to scroll?)
-     [rail] ta-chain  — computed touch-action of the rail and every ancestor,
-                        AS COMPUTED BY IOS, which is the value that matters
-     [rail] hit       — which element actually receives a touch inside the
-                        rail's box (an invisible layer above it would show here)
-     [rail] ts/tm     — touchstart/touchmove arriving at the rail, with
-                        defaultPrevented (a rogue preventDefault shows here)
-     [rail] settle    — scrollLeft after the gesture ends
-
-   Passive listeners only; zero behaviour change. Remove after diagnosis. */
-(function(){
-  // Resolve dlog at call time and never throw: if the main script died before
-  // defining it, fall back to console so the probe still reports something.
-  function plog(tag,msg,data){
-    try{ if(typeof dlog==='function') return dlog(tag,msg,data); }catch(e){}
-    try{ console.log('['+tag+']',msg,data||''); }catch(e){}
-  }
-  function probeOnce(){
-    var sc=document.querySelector('#feedContainer .fcc-entries-scroll');
-    if(!sc || sc.dataset.probed) return;
-    sc.dataset.probed='1';
-    try{
-      plog('rail','geom',{sw:sc.scrollWidth,cw:sc.clientWidth,cards:sc.children.length});
-      var chain=[],e=sc;
-      while(e && e.tagName!=='HTML'){
-        var cs=getComputedStyle(e);
-        chain.push((e.id?'#'+e.id:(''+(e.className||e.tagName)).split(' ')[0])+':'+cs.touchAction+
-                   (cs.pointerEvents==='none'?'/PE-NONE':''));
-        e=e.parentElement;
-      }
-      plog('rail','ta-chain',{chain:chain.join(' > ')});
-      var r=sc.getBoundingClientRect();
-      var hit=document.elementFromPoint(r.left+r.width/2, r.top+r.height/2);
-      var inside=hit && (sc===hit || sc.contains(hit));
-      plog('rail','hit',{el:hit?((hit.id?'#'+hit.id:'')+'.'+((''+hit.className).split(' ')[0]||hit.tagName)):'null', insideRail:!!inside});
-    }catch(err){ plog('rail','probe-error',{m:String(err).slice(0,80)}); }
-    sc.addEventListener('touchstart',function(ev){
-      plog('rail','ts',{x:Math.round(ev.touches[0].clientX),sl:Math.round(sc.scrollLeft),dp:ev.defaultPrevented});
-    },{passive:true});
-    var tmLogged=0;
-    sc.addEventListener('touchmove',function(ev){
-      if(tmLogged++%5) return;   // sample, don't flood
-      plog('rail','tm',{x:Math.round(ev.touches[0].clientX),sl:Math.round(sc.scrollLeft),dp:ev.defaultPrevented});
-    },{passive:true});
-    sc.addEventListener('touchend',function(){
-      setTimeout(function(){ plog('rail','settle',{sl:Math.round(sc.scrollLeft)}); },350);
-    },{passive:true});
-  }
-  // Rails are re-rendered; keep watching cheaply.
-  setInterval(probeOnce, 1200);
-})();
-</script>
 </body>
 </html>
