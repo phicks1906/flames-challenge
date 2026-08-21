@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1054 — Progressive Guidance & Level System</title>
+<title>FlamesChallenge v1055 — Guided Compete & Titles Clarity</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,7 +21,7 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1054 · progressive-guidance-level-system" />
+<meta name="fc-build" content="v1055 · guided-compete-titles-clarity" />
 <meta name="fc-whatsnew" content="Restores the last known working navigation architecture while the focused-screen redesign is rebuilt and fully regression-tested." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
@@ -7793,6 +7793,7 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
       <button class="ch-tab" data-cfilter="closed">🏁 Decided</button>
       <button class="ch-tab" data-cfilter="mine">👤 Mine</button>
     </div>
+    <div id="fcCompeteFilterGuideV1055" class="fc-compete-filter-guide-v1055" aria-live="polite">Open challenges accept entries. Pick one and submit before the deadline.</div>
     <div class="ch-grid" id="challengesGrid"></div>
   </div>
 </section>
@@ -23407,7 +23408,7 @@ const _CARD_ICON = {
   vote: '<svg class="chc-ico" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M4.2 1.4h7.6v5.1h-1.5V2.9H5.7v3.6H4.2V1.4Zm2.1 2.2h3.4v1.2H6.3V3.6Zm0 2h3.4v1.2H6.3V5.6ZM1.6 7.6h12.8v6.9H1.6V7.6Zm1.5 1.5v3.9h9.8V9.1H9.6a1.6 1.6 0 0 1-3.2 0H3.1Z"/></svg>',
 };
 
-function _cardMediaHTML(ch, status, entries, isChampionship) {
+function _cardMediaHTML(ch, status, entries, isChampionship, authoritativeCount = entries.length) {
   const withThumb = entries.map(e => ({ e, u: _cardThumbUrl(e) })).filter(x => x.u);
 
   // Championship — three finalists with names, not promo text over stock art.
@@ -23455,9 +23456,20 @@ function _cardMediaHTML(ch, status, entries, isChampionship) {
       </div>`).join('')}</div>`;
   }
 
-  // No entries — a placeholder that can never be mistaken for a submission.
-  // No image at all: there is no per-category art small enough to be worth a
-  // request here, and any photo risks reading as somebody's entry.
+  // Entries can exist before a usable thumbnail is available (video processing,
+  // audio/text submissions, or a preview fetch failure). Never contradict the
+  // count by claiming there are no entries.
+  const knownCount=Math.max(Number(authoritativeCount)||0,entries.length);
+  if(knownCount>0){
+    const ownPending=entries.some(e=>String(e.user_id||'')===String(state.profile?.id||'')&&['pending','flagged','escalated'].includes(String(e.moderation_status||'')));
+    const type=String(entries[0]?.media_type||ch?.media_type||'entry').toLowerCase();
+    const noun=type==='video'?'video':type==='audio'?'audio':type==='text'?'text':'entry';
+    const headline=ownPending?'Your entry is under review':`${knownCount} ${noun} entr${knownCount===1?'y':'ies'} submitted`;
+    const detail=ownPending?'Only visible to you until review finishes.':(type==='audio'||type==='text'?'Open the challenge to view the submission.':'Preview processing — open the challenge to view.');
+    return `<div class="chc-empty chc-preview-pending-v1055"><div class="chc-empty-ov"><div class="chc-preview-state-icon-v1055">${type==='audio'?'♪':type==='text'?'Aa':'↻'}</div><div class="chc-empty-msg">${headline}</div><div class="chc-preview-state-sub-v1055">${detail}</div></div></div>`;
+  }
+
+  // Truly empty challenge.
   return `<div class="chc-empty">
     <div class="chc-empty-ov">
       <div class="chc-plus">+</div>
@@ -23520,6 +23532,27 @@ function runChallengeCardAction(ch, mode) {
   if (mode === 'enter') { state.currentChallenge = ch; openSubmitEntry(); return; }
   openChallenge(ch);
 }
+function fcCardGuidanceV1055(ch,status,entryCount,isCreator){
+  const entered=fcCardHasEntered(ch),voted=fcCardHasVoted(ch);
+  if(status==='submitting'){
+    if(isCreator){
+      if(entryCount===0)return 'No entries yet. Share this challenge to bring in competitors.';
+      if(entryCount===1)return 'One entry is in. Another eligible competitor is needed for a scored result.';
+      return 'Entries are open. Promote the challenge or review the field before voting.';
+    }
+    if(entered)return 'Your entry is in. You can edit it until entries close.';
+    if(entryCount===0)return 'Be the first to enter before the deadline.';
+    if(entryCount===1)return 'Join the field and make this a valid two-competitor contest.';
+    return 'Review the prompt, then enter before the deadline.';
+  }
+  if(isVotingPhase(status)){
+    if(voted)return 'Your vote is recorded. You can change it until voting closes.';
+    return 'Choose one entry. You can change your vote until voting closes.';
+  }
+  if(status==='voided')return 'The challenge ended without enough eligible competitors for a result.';
+  if(status==='closed')return 'Voting is complete. Open the challenge to see the winner and final totals.';
+  return '';
+}
 function buildChallengeCardShell(ch) {
   const creator = ch.creator || { name: 'Unknown' };
   const entryCount = state.entryCounts[ch.id] || 0;
@@ -23536,7 +23569,7 @@ function buildChallengeCardShell(ch) {
 
   const cardEntries = _cardEntriesFor(ch);
   const voteTotal = _cardVotes(ch, cardEntries);
-  const mediaHtml = _cardMediaHTML(ch, status, cardEntries, isChampionship);
+  const mediaHtml = _cardMediaHTML(ch, status, cardEntries, isChampionship, entryCount);
 
   let pillCls = 'open', pillTxt = 'Open';
   if (isVotingPhase(status)) { pillCls = 'vote'; pillTxt = isChampionship ? 'Title vote' : 'Voting'; }
@@ -23556,6 +23589,7 @@ function buildChallengeCardShell(ch) {
   const showPill = status !== 'closed';
   const action = fcCardAction(ch, status);
   const ctaCls = action.ghost ? ' chc-ghost' : '';
+  const guidance=fcCardGuidanceV1055(ch,status,Number(entryCount)||0,isCreator);
 
   return `
     <div class="chc-top">
@@ -23569,6 +23603,7 @@ function buildChallengeCardShell(ch) {
     <div class="chc-title">${escapeHtml(display.title)}</div>
     ${display.prompt ? `<div class="chc-prompt">${escapeHtml(display.prompt)}</div>` : ''}
     ${mediaHtml}
+    ${guidance?`<div class="chc-guidance-v1055">${escapeHtml(guidance)}</div>`:''}
     <div class="chc-meta">
       ${showPill ? `<span class="chc-pill cc-${pillCls}"><span class="d"></span>${pillTxt}</span>` : ''}
       ${counts.join('')}
@@ -28662,12 +28697,19 @@ document.addEventListener('click', (e) => {
     el.classList.toggle('challenge-recommendation', !!move.challenge);
     el.style.display = move.challenge ? 'grid' : 'flex';
     if(move.challenge){
-      el.innerHTML=`<div class="ember-guidance-art">${emberFace(54,move.pose)}</div><div class="ember-guidance-main"><div class="ember-rec-kicker">${escapeHtml(move.reason)}</div><div class="ember-rec-type">${escapeHtml(move.category)} · ${escapeHtml(move.media)}</div><strong class="ember-rec-title">${escapeHtml(move.displayTitle || 'Untitled challenge')}</strong><div class="ember-rec-task-label">What to submit</div><p class="ember-rec-description">${escapeHtml(move.task)}</p><div class="ember-rec-relation">${escapeHtml(move.relation)}</div><div class="ember-rec-meta">${escapeHtml(move.meta)}</div></div><button type="button" class="ember-guidance-action" data-ember-guidance-action>${escapeHtml(move.action)} <span aria-hidden="true">→</span></button>`;
+      const action=String(move.action||'');
+      const isVoting=/vote|voting/i.test(action);
+      const isPromote=/promote/i.test(action);
+      const isEdit=/edit/i.test(action);
+      const cue=isVoting?'Voting is open':isPromote?'Your challenge needs attention':isEdit?'Your entry can still be changed':'Open for entries';
+      const body=isVoting?move.relation:(move.task||move.relation||'');
+      const secondary=isVoting?'':(move.relation||'');
+      el.innerHTML=`<div class="ember-guidance-art">${emberFace(54,move.pose)}</div><div class="ember-guidance-main"><div class="ember-rec-purpose-v1055">YOUR NEXT MOVE</div><div class="ember-rec-kicker">${escapeHtml(cue)}</div><div class="ember-rec-type">${escapeHtml(move.category)} · ${escapeHtml(move.media)}</div><strong class="ember-rec-title">${escapeHtml(move.displayTitle || 'Untitled challenge')}</strong><p class="ember-rec-description">${escapeHtml(body)}</p>${secondary?`<div class="ember-rec-relation">${escapeHtml(secondary)}</div>`:''}<div class="ember-rec-meta">${escapeHtml(move.meta)}</div></div><button type="button" class="ember-guidance-action" data-ember-guidance-action>${escapeHtml(move.action)} <span aria-hidden="true">→</span></button>`;
       const actionBtn=el.querySelector('[data-ember-guidance-action]');
       if(actionBtn) actionBtn.onclick=(event)=>{event.stopPropagation();move.run();};
       el.onclick=(event)=>{if(!event.target.closest('[data-ember-guidance-action]'))move.run();};
     }else{
-      el.innerHTML=`<div class="ember-guidance-art">${emberFace(46,move.pose)}</div><div class="ember-guidance-main"><strong>${escapeHtml(move.title)}</strong><p>${escapeHtml(move.text)}</p></div><button type="button" class="ember-guidance-action" data-ember-guidance-action>${escapeHtml(move.action)} <span aria-hidden="true">→</span></button>`;
+      el.innerHTML=`<div class="ember-guidance-art">${emberFace(46,move.pose)}</div><div class="ember-guidance-main"><div class="ember-rec-purpose-v1055">YOUR NEXT MOVE</div><strong>${escapeHtml(move.title)}</strong><p>${escapeHtml(move.text)}</p></div><button type="button" class="ember-guidance-action" data-ember-guidance-action>${escapeHtml(move.action)} <span aria-hidden="true">→</span></button>`;
       const actionBtn=el.querySelector('[data-ember-guidance-action]');
       if(actionBtn) actionBtn.onclick=(event)=>{event.stopPropagation();move.run();};
       el.onclick=(event)=>{if(!event.target.closest('[data-ember-guidance-action]'))move.run();};
@@ -33047,6 +33089,149 @@ body.theme-light .fc-score-metric-v1032,body.theme-light .fc-score-cutoff-v1032,
   const priorCtx=window.buildEmberContext;window.buildEmberContext=function(){const base=typeof priorCtx==='function'?priorCtx():{};const ls=state.profile?.id?getLadderStatus(state.profile.id):null;return {...base,levelSystem:{version:'v1054',visibleBadgeIsOpponentValue:true,regularLevels:REGULAR_LEVELS,hallOfFameLevels:HOF_LEVELS,current:ls?{name:ls.name,source:ls.source,points:ls.points,regularWins:ls.regularWins,championshipTitles:ls.champCount,next:ls.nextName}:null,founderIsSeparate:true}};};
   document.addEventListener('DOMContentLoaded',()=>{addTitlesHelp();decorateProfileLevel();setTimeout(renderBrief,160)},{once:true});if(document.readyState!=='loading'){addTitlesHelp();decorateProfileLevel();setTimeout(renderBrief,160)}
   window.__fcBuildV1054={build:'v1054',phase:'Production Hardening',focus:'progressive guidance + visible level system',newEdgeFunctions:0,edgeFunctionChanges:0,sqlChanges:0};
+})();
+</script>
+
+
+
+<style id="fc-v1055-guided-compete-titles-css">
+/* v1055 — Create already teaches through sequence. Bring that same clarity to Home, Compete, and Titles without turning them into wizards. */
+.ember-rec-purpose-v1055{font-size:9px;font-weight:950;letter-spacing:.14em;color:var(--ember);margin-bottom:4px}
+#emberHomeCard.challenge-recommendation .ember-rec-kicker{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted)}
+#emberHomeCard.challenge-recommendation .ember-rec-description{margin:6px 0 0!important;color:var(--text-dim)!important;line-height:1.42!important}
+#emberHomeCard.challenge-recommendation .ember-rec-relation{margin-top:5px!important;font-size:11px!important;color:var(--text-muted)!important}
+
+/* Home modules declare their roles. Keep the progress module compact and profile-owned. */
+#feedView .heat-check.fc-home-progress-v1055{padding:14px 15px!important;margin-top:14px!important}
+#feedView .heat-check.fc-home-progress-v1055 .heat-check-header{margin-bottom:9px!important}
+#feedView .heat-check.fc-home-progress-v1055 .heat-check-header h3{font-size:18px!important;line-height:1.1!important}
+#feedView .heat-check.fc-home-progress-v1055 .hc-view-stats{font-size:10px!important;white-space:nowrap!important}
+#feedView .heat-check.fc-home-progress-v1055 .hc-ladder,
+#feedView .heat-check.fc-home-progress-v1055 .hc-winrate,
+#feedView .heat-check.fc-home-progress-v1055 .hc-pending-line{display:none!important}
+#feedView .heat-check.fc-home-progress-v1055 .hc-status-line{margin:0!important;padding:9px 0 0!important;min-height:0!important;border-top:1px solid var(--border)!important;display:flex!important;align-items:center!important;gap:10px!important}
+#feedView .heat-check.fc-home-progress-v1055 .fc-home-progress-purpose-v1055{font-size:11px;line-height:1.4;color:var(--text-dim);margin:-2px 0 9px}
+#feedView .heat-check.fc-home-progress-v1055 .fc-edge-progress{white-space:normal!important}
+
+/* Compete: one active-state instruction, one factual cue on each card. */
+#emberCompeteCard{display:none!important}
+.fc-compete-filter-guide-v1055{margin:8px 2px 12px;padding:10px 12px;border-left:3px solid var(--ember);border-radius:0 11px 11px 0;background:rgba(255,106,44,.055);font-size:11.5px;line-height:1.42;color:var(--text-dim)}
+.chc-guidance-v1055{margin:10px 0 2px;padding:9px 10px;border-radius:11px;background:var(--surface-2);font-size:11px;line-height:1.42;color:var(--text-dim)}
+.chc-preview-pending-v1055 .chc-empty-ov{gap:5px!important}
+.chc-preview-state-icon-v1055{width:38px;height:38px;border:1px solid var(--border-bright);border-radius:50%;display:grid;place-items:center;color:var(--ember-bright);font-size:16px;font-weight:900}
+.chc-preview-state-sub-v1055{max-width:240px;text-align:center;font-size:10.5px;line-height:1.35;color:var(--text-muted)}
+
+/* Titles: standings first, two help routes, no competing Ember block. */
+#fcEmberTitlesAction{display:none!important}
+#leaderboardViewSection .section-head{margin-bottom:9px!important}
+#leaderboardViewSection .section-sub{max-width:560px!important;line-height:1.42!important}
+#leaderboardViewSection .fc-level-help-row-v1054{margin:8px 0 10px!important}
+#leaderboardViewSection .fc-level-help-row-v1054 button{min-height:34px!important;padding:7px 11px!important}
+#leaderboardViewSection .fc-score-ember-v1032{display:none!important}
+#leaderboardViewSection .fc-score-you-v1032.fc-titles-status-v1055{margin:10px 0 0!important;padding:10px 12px!important;border-radius:12px!important;display:flex!important;align-items:center!important;gap:10px!important;background:var(--surface-2)!important;border:1px solid var(--border)!important}
+#leaderboardViewSection .fc-score-you-v1032.fc-titles-status-v1055 .fc-score-you-copy-v1032{min-width:0;flex:1}
+#leaderboardViewSection .fc-score-you-v1032.fc-titles-status-v1055 .fc-score-you-label-v1032{font-size:8.5px!important}
+#leaderboardViewSection .fc-score-you-v1032.fc-titles-status-v1055 .fc-score-you-main-v1032{font-size:13px!important;margin-top:2px!important}
+#leaderboardViewSection .fc-score-you-v1032.fc-titles-status-v1055 .fc-score-you-sub-v1032{font-size:10px!important;line-height:1.35!important;margin-top:2px!important}
+#leaderboardViewSection .fc-score-you-v1032.fc-titles-status-v1055 .fc-score-you-actions-v1032{display:flex!important;gap:6px!important;flex:0 0 auto!important}
+#leaderboardViewSection .fc-score-you-v1032.fc-titles-status-v1055 .fc-score-you-actions-v1032 button{padding:7px 8px!important;font-size:9px!important;min-height:32px!important}
+#leaderboardViewSection .fc-score-you-v1032.fc-titles-status-v1055 .fc-score-you-actions-v1032 button:first-child{display:none!important}
+
+/* Complete light-mode token reset. v1034 intentionally forced a dark token set; v1054 changed only the backgrounds. */
+body.theme-light .fc-score-race-v1032,
+html[data-theme="light"] body .fc-score-race-v1032{
+  color-scheme:light!important;
+  --text:#171310!important;
+  --text-dim:#5e554d!important;
+  --text-muted:#83786f!important;
+  --border:#ded6cd!important;
+  --border-bright:#c9beb2!important;
+  --gold:#a66b00!important;
+  --ember:#e84d17!important;
+  color:#171310!important;
+}
+body.theme-light .fc-score-race-v1032 :is(.fc-score-title-v1032,.fc-score-name-v1032,.fc-score-rank-v1032,.fc-score-you-main-v1032,.fc-score-metric-v1032 b,.fc-score-cutoff-v1032 b,.fc-score-open-name-v1033),
+html[data-theme="light"] body .fc-score-race-v1032 :is(.fc-score-title-v1032,.fc-score-name-v1032,.fc-score-rank-v1032,.fc-score-you-main-v1032,.fc-score-metric-v1032 b,.fc-score-cutoff-v1032 b,.fc-score-open-name-v1033){color:#171310!important;text-shadow:none!important}
+body.theme-light .fc-score-race-v1032 :is(.fc-score-formula-v1032,.fc-score-status-v1032,.fc-score-columns-v1032,.fc-score-metric-v1032 span,.fc-score-cutoff-v1032 span,.fc-score-you-label-v1032,.fc-score-you-sub-v1032,.fc-score-open-sub-v1033),
+html[data-theme="light"] body .fc-score-race-v1032 :is(.fc-score-formula-v1032,.fc-score-status-v1032,.fc-score-columns-v1032,.fc-score-metric-v1032 span,.fc-score-cutoff-v1032 span,.fc-score-you-label-v1032,.fc-score-you-sub-v1032,.fc-score-open-sub-v1033){color:#6b6158!important;text-shadow:none!important}
+body.theme-light .fc-score-race-v1032 .fc-score-kicker-v1032,
+html[data-theme="light"] body .fc-score-race-v1032 .fc-score-kicker-v1032{color:#c34216!important}
+body.theme-light .fc-score-race-v1032 .fc-score-qual-v1032,
+html[data-theme="light"] body .fc-score-race-v1032 .fc-score-qual-v1032{color:#815400!important;background:#fff3cf!important;border-color:#e6c879!important}
+body.theme-light .fc-score-race-v1032 .fc-score-metric-v1032,
+html[data-theme="light"] body .fc-score-race-v1032 .fc-score-metric-v1032{box-shadow:none!important}
+
+@media(max-width:520px){
+  #leaderboardViewSection .fc-score-you-v1032.fc-titles-status-v1055{align-items:flex-start!important;flex-direction:column!important}
+  #leaderboardViewSection .fc-score-you-v1032.fc-titles-status-v1055 .fc-score-you-actions-v1032{width:100%!important}
+  #leaderboardViewSection .fc-score-you-v1032.fc-titles-status-v1055 .fc-score-you-actions-v1032 button{width:100%!important}
+}
+</style>
+<script id="fc-v1055-guided-compete-titles-js">
+(function(){
+  'use strict';
+  const guideCopy={
+    active:'Open challenges accept entries. Pick one and submit before the deadline.',
+    voting:'Voting is live. Choose one entry; you can change your vote until voting closes.',
+    closed:'Decided challenges show the winner, final vote totals, and any Championship Score awarded.',
+    mine:'Your challenges and entries. Promote, edit, vote, or review results from here.'
+  };
+  function updateCompeteGuide(){
+    const el=document.getElementById('fcCompeteFilterGuideV1055');if(!el)return;
+    const q=String(state?.cSearch||'').trim();
+    el.textContent=q?`Search results across every challenge phase for “${q}”.`:(guideCopy[state?.cFilter]||guideCopy.active);
+  }
+  function compactHomeProgressV1055(){
+    const card=document.querySelector('#feedView .heat-check');if(!card||!state?.profile)return;
+    card.classList.add('fc-home-progress-v1055');
+    const hello=document.getElementById('feedHello');if(hello)hello.textContent='Your progress';
+    const view=card.querySelector('.hc-view-stats');if(view){view.textContent='Open profile →';view.onclick=()=>window.openOwnCompetitiveProfile?.();}
+    let purpose=card.querySelector('.fc-home-progress-purpose-v1055');
+    if(!purpose){purpose=document.createElement('div');purpose.className='fc-home-progress-purpose-v1055';purpose.textContent='Your visible level, record, and Championship titles live on your profile.';card.querySelector('.heat-check-header')?.insertAdjacentElement('afterend',purpose);}
+    const sl=document.getElementById('hcStatusLine');
+    let ls=null;try{ls=getLadderStatus(state.profile.id);}catch(e){}
+    if(sl&&ls){
+      const icon=`${LADDER_BADGE_BASE}${ls.key}.png`;
+      const progress=ls.isMaxed?`${ls.metricCount} ${ls.metricLabel} · highest level`:`${ls.metricCount} ${ls.metricLabel} · ${Math.max(0,Number(ls.nextMin||0)-Number(ls.metricCount||0))} more to ${ls.nextName}`;
+      sl.innerHTML=`<img class="hc-sl-coin" src="${icon}" alt=""><div class="fc-edge-copy"><div class="fc-edge-label">Visible competitive level</div><div class="fc-edge-tier">${escapeHtml(ls.name)}</div><div class="fc-edge-progress">${escapeHtml(progress)}</div></div>${ls.isFounder?'<span class="fc-founder-recognition">Founder</span>':''}`;
+      sl.onclick=()=>window.openOwnCompetitiveProfile?.();
+    }
+  }
+  function configureTitlesV1055(){
+    const section=document.getElementById('leaderboardViewSection');if(!section)return;
+    const sub=section.querySelector('.section-sub');if(sub)sub.textContent='Win eligible challenges this month to qualify for your category Championship.';
+    const ember=document.getElementById('fcEmberTitlesAction');if(ember)ember.style.display='none';
+    const tabs=document.getElementById('lbCategoryTabs');
+    const row=document.getElementById('fcLevelHelpRowV1054');
+    if(row&&tabs){
+      if(row.dataset.v1055Configured!=='1'){
+        row.dataset.v1055Configured='1';
+        row.innerHTML='<button type="button">How this race works</button><button type="button">Competitive levels</button>';
+        row.children[0].onclick=()=>typeof toggleLbHow==='function'&&toggleLbHow();
+        row.children[1].onclick=()=>typeof openBadgeLegend==='function'&&openBadgeLegend();
+      }
+      if(tabs.nextElementSibling!==row)tabs.insertAdjacentElement('afterend',row);
+    }
+    const race=document.getElementById('fcScoreRaceV1033');
+    if(race){
+      const personal=race.querySelector('.fc-score-you-v1032');
+      const head=race.querySelector('.fc-score-head-v1032');
+      if(personal&&head){personal.classList.add('fc-titles-status-v1055');if(head.nextElementSibling!==personal)head.insertAdjacentElement('afterend',personal);}
+    }
+  }
+  function postRender(){updateCompeteGuide();compactHomeProgressV1055();configureTitlesV1055();}
+  const priorChallenges=window.renderChallenges;
+  if(typeof priorChallenges==='function')window.renderChallenges=function(){const r=priorChallenges.apply(this,arguments);requestAnimationFrame(updateCompeteGuide);return r;};
+  const priorFeed=window.renderFeed;
+  if(typeof priorFeed==='function')window.renderFeed=function(){const r=priorFeed.apply(this,arguments);requestAnimationFrame(compactHomeProgressV1055);return r;};
+  const priorHello=window.renderFeedHello;
+  if(typeof priorHello==='function')window.renderFeedHello=function(){const r=priorHello.apply(this,arguments);requestAnimationFrame(compactHomeProgressV1055);return r;};
+  const priorLeaderboard=window.renderLeaderboard;
+  if(typeof priorLeaderboard==='function')window.renderLeaderboard=function(){const r=priorLeaderboard.apply(this,arguments);requestAnimationFrame(()=>requestAnimationFrame(configureTitlesV1055));return r;};
+  document.getElementById('chTabs')?.addEventListener('click',()=>requestAnimationFrame(updateCompeteGuide));
+  const raceHost=document.getElementById('lbTabRankings');if(raceHost)new MutationObserver(()=>requestAnimationFrame(configureTitlesV1055)).observe(raceHost,{childList:true,subtree:true});
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(postRender,300),{once:true});else setTimeout(postRender,300);
+  window.__fcBuildV1055={build:'v1055',phase:'Production Hardening',focus:'guided Home modules + lifecycle-aware Compete cards + Titles comprehension and contrast',navigationChanged:false,createFlowChanged:false,scoringRulesChanged:false,levelThresholdsChanged:false,moderationChanged:false,newEdgeFunctions:0,edgeFunctionChanges:0,sqlChanges:0};
 })();
 </script>
 
