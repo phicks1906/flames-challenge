@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1065 — Flyer Revert & Winner Media Recovery</title>
+<title>FlamesChallenge v1066 — Reliable Updates & Viewer Snap Recovery</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1065 · flyer-revert-winner-media-recovery" />
-<meta name="fc-whatsnew" content="Restores the approved v1056 flyer card and returns winner media to a compact, non-stretched stage." />
+<meta name="fc-build" content="v1066 · reliable-updates-viewer-snap-recovery" />
+<meta name="fc-whatsnew" content="Makes manual update checks network-reliable, removes empty viewer height, and restores decisive horizontal snapping." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -7348,6 +7348,13 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
   background:rgba(79,195,247,.07);
 }
 .fc-admin-preview-v1049 strong{color:#78d7ff}
+
+/* v1066 — Feed viewer only: natural height for short entries and decisive iOS snapping. */
+#feedViewerModal{height:auto!important;min-height:0!important;max-height:90dvh!important;overflow:hidden!important}
+#feedViewerModal #fvScrollRegion{flex:0 1 auto!important;min-height:0!important;overflow-y:auto!important}
+#feedViewerModal #fvEntries{scroll-snap-type:x mandatory!important;scroll-padding-inline:0!important}
+#feedViewerModal #fvEntries>.fc-v1024-fv-slide{scroll-snap-align:start!important;scroll-snap-stop:always!important}
+
 </style>
 </head>
 <body>
@@ -9372,7 +9379,7 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
   <!-- v805 — min 62vh / max 90vh. A fixed 88vh left a big empty body on sparse
        challenges; no floor let it collapse into a tray. Between those it sizes
        to content. -->
-  <div id="feedViewerModal" style="background:var(--surface);border-radius:var(--radius) var(--radius) 0 0;width:100%;min-height:62vh;max-height:90vh;display:flex;flex-direction:column;position:relative;animation:slideUp 0.3s cubic-bezier(0.16,1,0.3,1);border-top:3px solid var(--ember);box-shadow:0 -8px 40px rgba(255,106,44,0.18);padding-bottom:0;">
+  <div id="feedViewerModal" style="background:var(--surface);border-radius:var(--radius) var(--radius) 0 0;width:100%;height:auto;max-height:90dvh;display:flex;flex-direction:column;position:relative;overflow:hidden;animation:slideUp 0.3s cubic-bezier(0.16,1,0.3,1);border-top:3px solid var(--ember);box-shadow:0 -8px 40px rgba(255,106,44,0.18);padding-bottom:0;">
     <!-- Drag handle -->
     <div style="display:flex;justify-content:center;padding:10px 0 4px;flex-shrink:0;">
       <div style="width:36px;height:4px;border-radius:2px;background:var(--border-bright);opacity:0.6;"></div>
@@ -9397,10 +9404,10 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
          entry. Same root cause this codebase already fixed once for feed cards
          (overflow:hidden traps scroll unless the scroll region is a distinct
          box) — action bar is now a true flex sibling, always visible. -->
-    <div id="fvScrollRegion" style="flex:1;min-height:0;overflow-y:auto;">
+    <div id="fvScrollRegion" style="flex:0 1 auto;min-height:0;overflow-y:auto;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;">
       <!-- Horizontal snap-scroll entries -->
       <div style="position:relative;">
-        <div id="fvEntries" style="display:flex;flex-direction:row;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scroll-snap-stop:always;-webkit-overflow-scrolling:touch;scrollbar-width:none;gap:0;"></div>
+        <div id="fvEntries" style="display:flex;flex-direction:row;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;overscroll-behavior-x:contain;touch-action:pan-x pan-y;-webkit-overflow-scrolling:touch;scrollbar-width:none;gap:0;"></div>
         <!-- Counter + dots -->
         <div id="fvCounter" style="text-align:center;font-size:13px;font-weight:700;color:var(--ember);padding:8px 0 12px;letter-spacing:0.04em;"></div>
         <div id="fvDots" style="display:none;"></div>
@@ -9838,6 +9845,30 @@ try {
   }
 } catch (e) {}
 
+// v1066 — finish a manual network update check after the fresh shell loads.
+// The initiating page stores its running version, clears SW/cache state, and
+// reloads index.html from the network. This page then reports the comparison.
+(function fcReportManualUpdateResultV1066(){
+  let request = null;
+  try {
+    request = JSON.parse(sessionStorage.getItem('fc_manual_update_check_v1066') || 'null');
+    if (request) sessionStorage.removeItem('fc_manual_update_check_v1066');
+  } catch (e) {}
+  if (!request) return;
+  const from = String(request.from || '').match(/v?\d+(?:\.\d+)*/i)?.[0]?.toLowerCase().replace(/^v/, '') || '';
+  const current = String(APP_VERSION).match(/v?\d+(?:\.\d+)*/i)?.[0]?.toLowerCase().replace(/^v/, '') || '';
+  const message = from && current && from !== current
+    ? `Updated to v${current}`
+    : `You’re current · v${current || from || 'latest'}`;
+  let tries = 0;
+  const report = () => {
+    if (typeof window.toast === 'function') window.toast(message);
+    else if (typeof toast === 'function') toast(message);
+    else if (tries++ < 40) setTimeout(report, 250);
+  };
+  setTimeout(report, 350);
+})();
+
 /* ---------- UPDATE CHECK (v1010) ----------
    The previous checker required the host to return HTTP 206 for a Range
    request. Many static hosts and CDN configurations correctly returned 200
@@ -9985,11 +10016,44 @@ async function checkForUpdate(force=false, options={}) {
 }
 window.fcCheckForUpdate = () => checkForUpdate(true,{manual:true});
 window.fcManualUpdateCheck = async function(){
-  try{ if(typeof toast==='function') toast('Checking for updates…'); }catch(e){}
-  const result=await checkForUpdate(true,{manual:true});
-  if(result.status==='current'){try{toast(`You’re current · ${_versionId(APP_VERSION)}`);}catch(e){}}
-  else if(result.status==='error'){try{toast('Could not check right now. Try again when connected.');}catch(e){}}
-  return result;
+  try { if (typeof toast === 'function') toast('Checking for updates…'); } catch (e) {}
+  try {
+    sessionStorage.setItem('fc_manual_update_check_v1066', JSON.stringify({ from: APP_VERSION, at: Date.now() }));
+  } catch (e) {}
+
+  let navigated = false;
+  const go = () => {
+    if (navigated) return;
+    navigated = true;
+    const target = new URL('/index.html', location.origin);
+    target.searchParams.set('_fc_manual_check', String(Date.now()));
+    try { window.location.replace(target.toString()); }
+    catch (e) { window.location.href = target.toString(); }
+  };
+
+  const fallback = setTimeout(go, 1200);
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await Promise.race([
+        navigator.serviceWorker.getRegistrations().catch(() => []),
+        new Promise(resolve => setTimeout(() => resolve([]), 500))
+      ]);
+      await Promise.allSettled((regs || []).map(reg => reg.unregister()));
+    }
+    if ('caches' in window) {
+      const keys = await Promise.race([
+        caches.keys().catch(() => []),
+        new Promise(resolve => setTimeout(() => resolve([]), 500))
+      ]);
+      await Promise.allSettled((keys || []).map(key => caches.delete(key)));
+    }
+  } catch (e) {
+    console.warn('manual update cleanup skipped', e);
+  } finally {
+    clearTimeout(fallback);
+    go();
+  }
+  return { status: 'reloading' };
 };
 function showUpdateBanner(build, news) {
   // Never display an update prompt for the version already running.
@@ -25153,6 +25217,43 @@ let _fvChallenge = null;
 let _fvVoteCounts = {}; // entryId → count
 let _fvEntries = [];    // entries loaded by openFeedViewer — used by standings
 
+// v1066 — iOS momentum can stop a mandatory snap scroller between slides.
+// Keep native swiping, then settle to the nearest full entry after momentum ends.
+function fcWireFeedViewerSnapV1066(list, total) {
+  if (!list) return;
+  if (list._fcSnapScrollV1066) list.removeEventListener('scroll', list._fcSnapScrollV1066);
+  if (list._fcSnapEndV1066) list.removeEventListener('scrollend', list._fcSnapEndV1066);
+  clearTimeout(list._fcSnapTimerV1066);
+  list._fcSnapScrollV1066 = null;
+  list._fcSnapEndV1066 = null;
+  if (total < 2) return;
+
+  let settling = false;
+  const settle = () => {
+    if (settling || !list.isConnected) return;
+    const width = list.clientWidth;
+    if (!width) return;
+    const index = Math.max(0, Math.min(total - 1, Math.round(list.scrollLeft / width)));
+    const target = index * width;
+    if (Math.abs(list.scrollLeft - target) < 2) return;
+    settling = true;
+    list.scrollTo({ left: target, behavior: 'smooth' });
+    setTimeout(() => { settling = false; }, 280);
+  };
+
+  if ('onscrollend' in list) {
+    list._fcSnapEndV1066 = settle;
+    list.addEventListener('scrollend', settle, { passive: true });
+  } else {
+    list._fcSnapScrollV1066 = () => {
+      if (settling) return;
+      clearTimeout(list._fcSnapTimerV1066);
+      list._fcSnapTimerV1066 = setTimeout(settle, 110);
+    };
+    list.addEventListener('scroll', list._fcSnapScrollV1066, { passive: true });
+  }
+}
+
 async function openFeedViewer(chId, startEntryId = null) {
   const ch = state.challenges.find(c => c.id === chId) || state.currentChallenge;
   if (!ch) return;
@@ -25289,6 +25390,7 @@ async function openFeedViewer(chId, startEntryId = null) {
         });
       }, { passive: true });
     }
+    fcWireFeedViewerSnapV1066(list, total);
 
     // Tap poster → promote the pre-buffered hidden video to the playback position.
     // replaceWith() moves the existing DOM element (never serializes to HTML, so the
@@ -25737,7 +25839,7 @@ function renderFvEntry(entry, ch, canVote, myVoteEntryId, status) {
     ? `${lbu.wins||0}W · ${lbu.losses||0}L${catWins > 0 ? ` · ${catWins} this month` : ''}`
     : '';
 
-  return `<div class="fc-v1024-fv-slide${iVoted ? ' selected' : ''}" data-fv-entry-id="${entry.id}" style="flex:0 0 100%;width:100%;scroll-snap-align:center;min-width:0;box-sizing:border-box;">
+  return `<div class="fc-v1024-fv-slide${iVoted ? ' selected' : ''}" data-fv-entry-id="${entry.id}" style="flex:0 0 100%;width:100%;scroll-snap-align:start;scroll-snap-stop:always;min-width:0;box-sizing:border-box;">
     ${mediaHtml}
     <div style="padding:12px 14px 16px;">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
