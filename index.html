@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1073 — Refined Next Move Card</title>
+<title>FlamesChallenge v1074 — Unified Home Action Cards</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1073 · refined-next-move-card" />
-<meta name="fc-whatsnew" content="Replaces the previous Ember artwork with the approved friendly flame character across compact, guidance, onboarding, profile, and assistant uses." />
+<meta name="fc-build" content="v1074 · unified-home-action-cards" />
+<meta name="fc-whatsnew" content="Brings Live Now rows into the same visual system as Your Next Move with larger media, clearer status wording, and consistent spacing." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -29156,19 +29156,28 @@ document.addEventListener('click', (e) => {
     const shelfTitle=document.getElementById('fcHomeLiveTitle');
     const uid=state.profile?.id;
     const allOwned=!!uid && rows.every(({ch})=>String(ch.creator_id||ch.creator?.id||ch.user_id)===String(uid));
-    if(shelfTitle) shelfTitle.textContent=allOwned?'Your other live challenges':'Enter or vote now';
+    if(shelfTitle) shelfTitle.textContent=allOwned?'Other live challenges':'Enter or vote now';
     shelf.style.display='block';
     list.innerHTML=rows.map(({ch,s,action})=>{
       const copy=fcSplitTitle(ch), count=fcEntryCount(ch);
       const end=s==='submitting'?ch.submission_deadline:ch.voting_end;
-      const phase=s==='submitting'?'Open':s==='sudden_death'?'Sudden death':'Voting';
-      const deadline=s==='submitting'?'Entries close':'Voting ends';
+      const timing=end?fcCountdown(end):'';
+      let statusCopy='';
+      if(s==='submitting'){
+        statusCopy=count===0
+          ? `No entries yet${timing?`. Closes in ${timing}.`:'.'}`
+          : `${count} entr${count===1?'y':'ies'}${timing?`. Closes in ${timing}.`:'.'}`;
+      }else if(s==='sudden_death'){
+        statusCopy=`Sudden death is live${count?`. ${count} entr${count===1?'y':'ies'}.`:'.'}${timing?` Ends in ${timing}.`:''}`;
+      }else{
+        statusCopy=`Voting is open${count?`. ${count} entr${count===1?'y':'ies'}.`:'.'}${timing?` Ends in ${timing}.`:''}`;
+      }
       return `<article class="fc-home-live-card" data-live-id="${escapeHtml(ch.id)}">
         <div class="fc-home-live-media">${fcMedia(ch)}</div>
         <div class="fc-home-live-copy">
           <div class="fc-home-live-type">${escapeHtml(ch.category||'Challenge')} · ${escapeHtml(fcMediaLabel(ch))}</div>
           <div class="fc-home-live-title">${escapeHtml(copy.title)}</div>
-          <div class="fc-home-live-meta">${phase} · ${count} entr${count===1?'y':'ies'}${end?` · ${deadline} in ${fcCountdown(end)}`:''}</div>
+          <div class="fc-home-live-meta">${escapeHtml(statusCopy)}</div>
           <div class="fc-home-live-action">${escapeHtml(action.label)} →</div>
         </div>
       </article>`;
@@ -33699,5 +33708,47 @@ window.__fcBuildV1065={build:'v1065',basedOn:'v1064',flyerRenderer:'exact v1056 
 
 
 <script id="fc-v1073-build-marker">window.__fcBuildV1073={build:'v1073',focus:'Home Your Next Move hierarchy and Ember scale',scope:'Home top card only',navigationChanged:false,scoringChanged:false,backendChanged:false};</script>
+<style id="fc-v1074-live-now-unification-css">
+/* v1074 — Live Now rows use the same anatomy as Your Next Move. */
+#feedView #fcHomeLive .fc-home-live-card{
+  grid-template-columns:92px minmax(0,1fr)!important;
+  gap:13px!important;
+  align-items:center!important;
+  padding:11px!important;
+  border-radius:15px!important;
+}
+#feedView #fcHomeLive .fc-home-live-media{
+  width:92px!important;
+  height:92px!important;
+  border-radius:16px!important;
+}
+#feedView #fcHomeLive .fc-home-live-copy{
+  min-width:0!important;
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:flex-start!important;
+  justify-content:center!important;
+}
+#feedView #fcHomeLive .fc-home-live-title{
+  font-size:17px!important;
+  line-height:1.16!important;
+  margin:4px 0 3px!important;
+}
+#feedView #fcHomeLive .fc-home-live-meta{
+  font-size:12px!important;
+  line-height:1.38!important;
+  margin:0!important;
+}
+#feedView #fcHomeLive .fc-home-live-action{
+  margin-top:7px!important;
+  font-size:12px!important;
+}
+@media(max-width:520px){
+  #feedView #fcHomeLive .fc-home-live-card{grid-template-columns:88px minmax(0,1fr)!important}
+  #feedView #fcHomeLive .fc-home-live-media{width:88px!important;height:88px!important}
+}
+</style>
+<script id="fc-v1074-build-marker">window.__fcBuildV1074={build:'v1074',focus:'Live Now rows unified with Your Next Move',scope:'Home Live Now only',navigationChanged:false,scoringChanged:false,backendChanged:false};</script>
+
 </body>
 </html>
