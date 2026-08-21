@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1058 — Compact Feed Challenge & Winner Cards</title>
+<title>FlamesChallenge v1059 — Focused Compete Clarity</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,7 +21,7 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1058 · compact-feed-challenge-winner-cards" />
+<meta name="fc-build" content="v1059 · focused-compete-clarity" />
 <meta name="fc-whatsnew" content="Rebuilds only Home feed challenge and winner cards with compact hierarchy, fixed media stages, truthful counts, and cleaner actions." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
@@ -7780,9 +7780,8 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
     <div class="ch-header">
       <div>
         <h2 class="section-title">Compete</h2>
-        <p class="section-sub">Enter challenges. Vote on the work. Advance toward a title.</p>
+        <p class="section-sub">Compete, vote, and see who wins.</p>
       </div>
-      <button type="button" class="btn btn-ghost btn-sm ux-polls-link" onclick="switchView('polls')">Polls</button>
     </div>
     <section class="ember-guidance-card compact" id="emberCompeteCard" style="display:none"></section>
     <div class="ch-search-wrap">
@@ -7792,12 +7791,12 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
     </div>
     <div id="chSearchCount" class="ch-search-count" style="display:none"></div>
     <div class="ch-tabs" id="chTabs">
-      <button class="ch-tab active" data-cfilter="active">🔥 Open</button>
-      <button class="ch-tab" data-cfilter="voting">🗳️ Voting</button>
-      <button class="ch-tab" data-cfilter="closed">🏁 Decided</button>
-      <button class="ch-tab" data-cfilter="mine">👤 Mine</button>
+      <button class="ch-tab active" data-cfilter="active">Open</button>
+      <button class="ch-tab" data-cfilter="voting">Vote</button>
+      <button class="ch-tab" data-cfilter="closed">Results</button>
+      <button class="ch-tab" data-cfilter="mine">Mine</button>
     </div>
-    <div id="fcCompeteFilterGuideV1055" class="fc-compete-filter-guide-v1055" aria-live="polite">Open challenges accept entries. Pick one and submit before the deadline.</div>
+    <div id="fcCompeteFilterGuideV1055" class="fc-compete-filter-guide-v1055" aria-live="polite">Submit an entry before the deadline.</div>
     <div class="ch-grid" id="challengesGrid"></div>
   </div>
 </section>
@@ -20356,7 +20355,7 @@ function renderChallenges() {
   // Wire card clicks → open challenge detail
   grid.querySelectorAll('.feed-challenge-card[data-chid]').forEach(card => {
     card.addEventListener('click', e => {
-      if (e.target.closest('[data-chc-act],[data-chc-menu]')) return;
+      if (e.target.closest('[data-chc-act],[data-chc-menu],[data-fc-compete-score-v1059]')) return;
       const ch = list.find(c => c.id === card.dataset.chid);
       if (ch) openChallenge(ch);
     });
@@ -23557,6 +23556,36 @@ function fcCardGuidanceV1055(ch,status,entryCount,isCreator){
   if(status==='closed')return 'Voting is complete. Open the challenge to see the winner and final totals.';
   return '';
 }
+function fcCompeteStatusLineV1059(ch,status,entryCount,voteTotal){
+  const parts=[];
+  if(status==='submitting')parts.push('Open');
+  else if(status==='sd_submitting')parts.push('Sudden-death entries');
+  else if(isVotingPhase(status))parts.push(ch.is_championship?'Title vote':'Voting');
+  else if(status==='voided')parts.push('No contest');
+  else parts.push('Final');
+  if(status!=='closed'&&status!=='voided')parts.push(`${entryCount} ${entryCount===1?'entry':'entries'}`);
+  if(voteTotal>0)parts.push(`${_compactCount(voteTotal)} ${voteTotal===1?'vote':'votes'}`);
+  let end='';
+  if(status==='submitting'&&ch.submission_deadline)end=`${formatCountdown(ch.submission_deadline)} left`;
+  else if(status==='sd_submitting'&&ch.sd_submit_end)end=`${formatCountdown(ch.sd_submit_end)} left`;
+  else if(isVotingPhase(status)&&ch.voting_end)end=`${formatCountdown(ch.voting_end)} left`;
+  else if((status==='closed'||status==='voided')&&ch.voting_end)end=`Ended ${timeAgo(ch.voting_end)}`;
+  if(end)parts.push(end);
+  return parts;
+}
+function fcCompeteScoreContextV1059(ch,status,entryCount){
+  if(ch.is_championship)return 'Championship round · Awards a title, not monthly Championship Score.';
+  if(ch.is_public===false)return 'Private challenge · Does not affect public Championship Score.';
+  const row=(state?.boostByChallenge||{})[ch.id];
+  if(row)return `Awarded ${Number(row.total_boost||0)} Championship Score.`;
+  if(status==='voided')return 'No contest · No Championship Score awarded.';
+  if(status==='closed')return 'Final result · Open the challenge for the Score breakdown.';
+  if(status==='sd_submitting')return 'Championship Score is set after the sudden-death vote closes.';
+  if(isVotingPhase(status))return 'Championship Score is calculated when voting closes.';
+  if(entryCount===0)return 'Needs two eligible competitors to earn Championship Score.';
+  if(entryCount===1)return 'Needs one more eligible competitor to earn Championship Score.';
+  return 'Eligible for Championship Score. Final value is set after voting.';
+}
 function buildChallengeCardShell(ch, surface = 'compete') {
   const creator = ch.creator || { name: 'Unknown' };
   const entryCount = state.entryCounts[ch.id] || 0;
@@ -23575,27 +23604,9 @@ function buildChallengeCardShell(ch, surface = 'compete') {
   const voteTotal = _cardVotes(ch, cardEntries);
   const mediaHtml = _cardMediaHTML(ch, status, cardEntries, isChampionship, entryCount);
 
-  let pillCls = 'open', pillTxt = 'Open';
-  if (isVotingPhase(status)) { pillCls = 'vote'; pillTxt = isChampionship ? 'Title vote' : 'Voting'; }
-  else if (status === 'closed') { pillCls = 'win'; pillTxt = 'Winner'; }
-  else if (status === 'voided') { pillCls = 'win'; pillTxt = 'No contest'; }
-
-  const counts = [];
-  if (isCreator) counts.push('<span class="chc-owner">Your challenge</span>');
-  if (isChampionship) {
-    if (entryCount) counts.push(`<span>${entryCount} finalist${entryCount === 1 ? '' : 's'}</span>`);
-  } else if (status !== 'closed' && entryCount) {
-    counts.push(`<span>${_CARD_ICON.user}${entryCount} ${entryWord}</span>`);
-  }
-  if (voteTotal > 0) counts.push(`<span>${_CARD_ICON.vote}${_compactCount(voteTotal)} votes</span>`);
-
-  const deadline = _cardDeadlineText(ch, status);
-  const showPill = status !== 'closed';
   const action = fcCardAction(ch, status);
   const ctaCls = action.ghost ? ' chc-ghost' : '';
-  const guidance=surface==='compete'?fcCardGuidanceV1055(ch,status,Number(entryCount)||0,isCreator):'';
-
-  return `
+  const commonTop = `
     <div class="chc-top">
       <div class="chc-av">${av}</div>
       <div class="chc-who">
@@ -23606,8 +23617,34 @@ function buildChallengeCardShell(ch, surface = 'compete') {
     </div>
     <div class="chc-title">${escapeHtml(display.title)}</div>
     ${display.prompt ? `<div class="chc-prompt">${escapeHtml(display.prompt)}</div>` : ''}
-    ${mediaHtml}
-    ${guidance?`<div class="chc-guidance-v1055">${escapeHtml(guidance)}</div>`:''}
+    ${mediaHtml}`;
+
+  if(surface==='compete'){
+    const statusParts=fcCompeteStatusLineV1059(ch,status,Number(entryCount)||0,voteTotal);
+    const scoreContext=fcCompeteScoreContextV1059(ch,status,Number(entryCount)||0);
+    return `${commonTop}
+      <div class="fc-compete-card-foot-v1059">
+        <div class="fc-compete-card-status-v1059">${statusParts.map(x=>`<span>${escapeHtml(x)}</span>`).join('<i aria-hidden="true">·</i>')}</div>
+        <button type="button" class="fc-compete-card-score-v1059" data-fc-compete-score-v1059="${ch.id}">${escapeHtml(scoreContext)} <span aria-hidden="true">ⓘ</span></button>
+        <button class="chc-cta fc-compete-card-action-v1059${ctaCls}" data-chc-act="${ch.id}" data-chc-mode="${action.mode}">${action.label}</button>
+      </div>`;
+  }
+
+  let pillCls = 'open', pillTxt = 'Open';
+  if (isVotingPhase(status)) { pillCls = 'vote'; pillTxt = isChampionship ? 'Title vote' : 'Voting'; }
+  else if (status === 'closed') { pillCls = 'win'; pillTxt = 'Winner'; }
+  else if (status === 'voided') { pillCls = 'win'; pillTxt = 'No contest'; }
+  const counts = [];
+  if (isCreator) counts.push('<span class="chc-owner">Your challenge</span>');
+  if (isChampionship) {
+    if (entryCount) counts.push(`<span>${entryCount} finalist${entryCount === 1 ? '' : 's'}</span>`);
+  } else if (status !== 'closed' && entryCount) {
+    counts.push(`<span>${_CARD_ICON.user}${entryCount} ${entryWord}</span>`);
+  }
+  if (voteTotal > 0) counts.push(`<span>${_CARD_ICON.vote}${_compactCount(voteTotal)} ${voteTotal===1?'vote':'votes'}</span>`);
+  const deadline = _cardDeadlineText(ch, status);
+  const showPill = status !== 'closed';
+  return `${commonTop}
     <div class="chc-meta">
       ${showPill ? `<span class="chc-pill cc-${pillCls}"><span class="d"></span>${pillTxt}</span>` : ''}
       ${counts.join('')}
@@ -33229,10 +33266,10 @@ html[data-theme="light"] body .fc-score-race-v1032 .fc-score-metric-v1032{box-sh
 (function(){
   'use strict';
   const guideCopy={
-    active:'Open challenges accept entries. Pick one and submit before the deadline.',
-    voting:'Voting is live. Choose one entry; you can change your vote until voting closes.',
-    closed:'Decided challenges show the winner, final vote totals, and any Championship Score awarded.',
-    mine:'Your challenges and entries. Promote, edit, vote, or review results from here.'
+    active:'Submit an entry before the deadline.',
+    voting:'Choose one entry before voting closes. You can change your vote until then.',
+    closed:'See the winners, final vote totals, and Championship Score awarded.',
+    mine:'Manage your challenges, entries, and votes.'
   };
   function updateCompeteGuide(){
     const el=document.getElementById('fcCompeteFilterGuideV1055');if(!el)return;
@@ -33406,5 +33443,41 @@ html[data-theme="light"] body .fc-score-race-v1032 .fc-score-metric-v1032{box-sh
 window.__fcBuildV1058={build:'v1058',phase:'Production Hardening',focus:'compact Home feed challenge and winner cards',basedOn:'v1057',homeTopChanged:false,feedChallengeRebuilt:true,winnerCardRebuilt:true,flyerChanged:false,emberChanged:false,navigationChanged:false,competeChanged:false,titlesChanged:false,createFlowChanged:false,scoringRulesChanged:false,levelThresholdsChanged:false,moderationChanged:false,newEdgeFunctions:0,edgeFunctionChanges:0,sqlChanges:0};
 </script>
 
+
+<style id="fc-v1059-focused-compete-css">
+/* v1059 — Compete only. One purpose, one status line, one Score line, one action. */
+#challengesViewSection .ch-header{align-items:flex-start!important;margin-bottom:14px!important}
+#challengesViewSection .ch-header>div{max-width:100%!important}
+#challengesViewSection .section-sub{max-width:480px!important;margin-top:5px!important}
+#challengesViewSection .ux-polls-link{display:none!important}
+#challengesViewSection .ch-tabs{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:4px!important;overflow:visible!important;padding:5px!important;border-radius:18px!important}
+#challengesViewSection .ch-tab{min-width:0!important;width:100%!important;padding:11px 5px!important;font-size:12px!important;line-height:1!important;white-space:nowrap!important;text-align:center!important}
+#challengesViewSection .fc-compete-filter-guide-v1055{margin:7px 4px 14px!important;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;font-size:11.5px!important;line-height:1.42!important;color:var(--text-dim)!important}
+#challengesGrid > [data-cid] > .fc-score-eligibility-v1032{display:none!important}
+#challengesGrid .chc-guidance-v1055,#challengesGrid .chc-meta{display:none!important}
+#challengesGrid .fc-compete-card-foot-v1059{padding:12px 14px 14px!important;border-top:1px solid var(--border)!important;background:var(--surface)!important}
+#challengesGrid .fc-compete-card-status-v1059{display:flex!important;align-items:center!important;flex-wrap:wrap!important;gap:4px 7px!important;font-size:11.5px!important;font-weight:800!important;line-height:1.35!important;color:var(--text-dim)!important}
+#challengesGrid .fc-compete-card-status-v1059 i{font-style:normal!important;color:var(--text-muted)!important}
+#challengesGrid .fc-compete-card-score-v1059{display:block!important;width:100%!important;margin:7px 0 0!important;padding:0!important;border:0!important;background:none!important;text-align:left!important;color:var(--text-muted)!important;font:650 10.5px/1.4 var(--font-body)!important;cursor:pointer!important}
+#challengesGrid .fc-compete-card-score-v1059 span{color:var(--ember)!important;font-size:9px!important;margin-left:3px!important}
+#challengesGrid .fc-compete-card-action-v1059{width:100%!important;min-height:46px!important;margin:12px 0 0!important;border-radius:13px!important;font-size:13.5px!important}
+@media(max-width:390px){#challengesViewSection .ch-tab{font-size:11px!important;padding-left:3px!important;padding-right:3px!important}#challengesGrid .fc-compete-card-foot-v1059{padding-left:12px!important;padding-right:12px!important}}
+</style>
+<script id="fc-v1059-focused-compete-js">
+(function(){
+  'use strict';
+  document.addEventListener('click',function(e){
+    const btn=e.target.closest('[data-fc-compete-score-v1059]');
+    if(!btn)return;
+    e.preventDefault();e.stopPropagation();
+    const wrap=btn.closest('[data-cid]');
+    const badge=wrap?.querySelector(':scope > .fc-score-eligibility-v1032');
+    if(badge){badge.click();return;}
+    const ch=(state.challenges||[]).find(x=>String(x.id)===String(btn.dataset.fcCompeteScoreV1059));
+    if(ch)openChallenge(ch);
+  });
+  window.__fcBuildV1059={build:'v1059',phase:'Production Hardening',focus:'focused Compete header, filters, and card-foot clarity',basedOn:'v1058',competeChanged:true,homeChanged:false,feedChanged:false,titlesChanged:false,createFlowChanged:false,navigationChanged:false,scoringRulesChanged:false,levelThresholdsChanged:false,moderationChanged:false,newEdgeFunctions:0,edgeFunctionChanges:0,sqlChanges:0};
+})();
+</script>
 </body>
 </html>
