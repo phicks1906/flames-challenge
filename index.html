@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1066 — Reliable Updates & Viewer Snap Recovery</title>
+<title>FlamesChallenge v1067 — Horizontal Viewer Recovery</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1066 · reliable-updates-viewer-snap-recovery" />
-<meta name="fc-whatsnew" content="Makes manual update checks network-reliable, removes empty viewer height, and restores decisive horizontal snapping." />
+<meta name="fc-build" content="v1067 · horizontal-viewer-recovery" />
+<meta name="fc-whatsnew" content="Restores native horizontal entry swiping while preserving the reliable update check and compact viewer height." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -7349,11 +7349,13 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
 }
 .fc-admin-preview-v1049 strong{color:#78d7ff}
 
-/* v1066 — Feed viewer only: natural height for short entries and decisive iOS snapping. */
+/* v1067 — Feed viewer only: compact height + native horizontal swiping.
+   The v1066 gesture override and JavaScript settle routine interfered with
+   iOS gesture ownership inside the vertically scrollable sheet. */
 #feedViewerModal{height:auto!important;min-height:0!important;max-height:90dvh!important;overflow:hidden!important}
 #feedViewerModal #fvScrollRegion{flex:0 1 auto!important;min-height:0!important;overflow-y:auto!important}
-#feedViewerModal #fvEntries{scroll-snap-type:x mandatory!important;scroll-padding-inline:0!important}
-#feedViewerModal #fvEntries>.fc-v1024-fv-slide{scroll-snap-align:start!important;scroll-snap-stop:always!important}
+#feedViewerModal #fvEntries{scroll-snap-type:x mandatory!important;scroll-padding-inline:0!important;touch-action:auto!important;overscroll-behavior-x:auto!important}
+#feedViewerModal #fvEntries>.fc-v1024-fv-slide{flex:0 0 100%!important;width:100%!important;min-width:100%!important;scroll-snap-align:start!important;scroll-snap-stop:always!important}
 
 </style>
 </head>
@@ -9407,7 +9409,7 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
     <div id="fvScrollRegion" style="flex:0 1 auto;min-height:0;overflow-y:auto;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;">
       <!-- Horizontal snap-scroll entries -->
       <div style="position:relative;">
-        <div id="fvEntries" style="display:flex;flex-direction:row;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;overscroll-behavior-x:contain;touch-action:pan-x pan-y;-webkit-overflow-scrolling:touch;scrollbar-width:none;gap:0;"></div>
+        <div id="fvEntries" style="display:flex;flex-direction:row;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;gap:0;touch-action:auto;"></div>
         <!-- Counter + dots -->
         <div id="fvCounter" style="text-align:center;font-size:13px;font-weight:700;color:var(--ember);padding:8px 0 12px;letter-spacing:0.04em;"></div>
         <div id="fvDots" style="display:none;"></div>
@@ -9851,8 +9853,8 @@ try {
 (function fcReportManualUpdateResultV1066(){
   let request = null;
   try {
-    request = JSON.parse(sessionStorage.getItem('fc_manual_update_check_v1066') || 'null');
-    if (request) sessionStorage.removeItem('fc_manual_update_check_v1066');
+    request = JSON.parse(sessionStorage.getItem('fc_manual_update_check_v1067') || sessionStorage.getItem('fc_manual_update_check_v1066') || 'null');
+    if (request) { sessionStorage.removeItem('fc_manual_update_check_v1067'); sessionStorage.removeItem('fc_manual_update_check_v1066'); }
   } catch (e) {}
   if (!request) return;
   const from = String(request.from || '').match(/v?\d+(?:\.\d+)*/i)?.[0]?.toLowerCase().replace(/^v/, '') || '';
@@ -10018,7 +10020,7 @@ window.fcCheckForUpdate = () => checkForUpdate(true,{manual:true});
 window.fcManualUpdateCheck = async function(){
   try { if (typeof toast === 'function') toast('Checking for updates…'); } catch (e) {}
   try {
-    sessionStorage.setItem('fc_manual_update_check_v1066', JSON.stringify({ from: APP_VERSION, at: Date.now() }));
+    sessionStorage.setItem('fc_manual_update_check_v1067', JSON.stringify({ from: APP_VERSION, at: Date.now() }));
   } catch (e) {}
 
   let navigated = false;
@@ -25217,43 +25219,7 @@ let _fvChallenge = null;
 let _fvVoteCounts = {}; // entryId → count
 let _fvEntries = [];    // entries loaded by openFeedViewer — used by standings
 
-// v1066 — iOS momentum can stop a mandatory snap scroller between slides.
-// Keep native swiping, then settle to the nearest full entry after momentum ends.
-function fcWireFeedViewerSnapV1066(list, total) {
-  if (!list) return;
-  if (list._fcSnapScrollV1066) list.removeEventListener('scroll', list._fcSnapScrollV1066);
-  if (list._fcSnapEndV1066) list.removeEventListener('scrollend', list._fcSnapEndV1066);
-  clearTimeout(list._fcSnapTimerV1066);
-  list._fcSnapScrollV1066 = null;
-  list._fcSnapEndV1066 = null;
-  if (total < 2) return;
-
-  let settling = false;
-  const settle = () => {
-    if (settling || !list.isConnected) return;
-    const width = list.clientWidth;
-    if (!width) return;
-    const index = Math.max(0, Math.min(total - 1, Math.round(list.scrollLeft / width)));
-    const target = index * width;
-    if (Math.abs(list.scrollLeft - target) < 2) return;
-    settling = true;
-    list.scrollTo({ left: target, behavior: 'smooth' });
-    setTimeout(() => { settling = false; }, 280);
-  };
-
-  if ('onscrollend' in list) {
-    list._fcSnapEndV1066 = settle;
-    list.addEventListener('scrollend', settle, { passive: true });
-  } else {
-    list._fcSnapScrollV1066 = () => {
-      if (settling) return;
-      clearTimeout(list._fcSnapTimerV1066);
-      list._fcSnapTimerV1066 = setTimeout(settle, 110);
-    };
-    list.addEventListener('scroll', list._fcSnapScrollV1066, { passive: true });
-  }
-}
-
+// v1067 — native horizontal swiping; CSS snap handles alignment without JS gesture interception.
 async function openFeedViewer(chId, startEntryId = null) {
   const ch = state.challenges.find(c => c.id === chId) || state.currentChallenge;
   if (!ch) return;
@@ -25390,7 +25356,6 @@ async function openFeedViewer(chId, startEntryId = null) {
         });
       }, { passive: true });
     }
-    fcWireFeedViewerSnapV1066(list, total);
 
     // Tap poster → promote the pre-buffered hidden video to the playback position.
     // replaceWith() moves the existing DOM element (never serializes to HTML, so the
