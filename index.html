@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1048 — Creator Analytics & Promotion Insights</title>
+<title>FlamesChallenge v1049 — Production Hardening I</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,7 +21,7 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1048 · creator-analytics-promotion-insights" />
+<meta name="fc-build" content="v1049 · production-hardening-1" />
 <meta name="fc-whatsnew" content="Ember now answers competition rules and recorded Championship facts locally from the approved current system before using AI for open-ended help." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
@@ -7312,6 +7312,43 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
 @media(max-width:360px){.fc-insights-grid-v1048{grid-template-columns:1fr}.fc-insights-wide-v1048{grid-column:auto}}
 </style>
 
+
+<style id="fc-v1049-hardening-css">
+/* v1049 — Production Hardening I: moderation-preview clarity and stable entry gestures. */
+.fc-review-badge-v1049{
+  background:rgba(255,200,87,.14)!important;
+  color:#ffd36d!important;
+  border:1px solid rgba(255,200,87,.36)!important;
+  max-width:calc(100% - 24px);
+  white-space:normal;
+  line-height:1.25;
+}
+.fc-private-preview-v1049{
+  margin:10px 12px 0;
+  padding:10px 11px;
+  border:1px solid rgba(255,200,87,.28);
+  border-radius:11px;
+  background:rgba(255,200,87,.075);
+  color:var(--text-dim);
+  font-size:11px;
+  line-height:1.42;
+}
+.fc-private-preview-v1049 strong{
+  display:block;
+  margin-bottom:2px;
+  color:#ffd36d;
+  font-size:9px;
+  font-weight:900;
+  letter-spacing:.11em;
+  text-transform:uppercase;
+}
+.fc-private-preview-v1049 span{display:block}
+.fc-admin-preview-v1049{
+  border-color:rgba(79,195,247,.28);
+  background:rgba(79,195,247,.07);
+}
+.fc-admin-preview-v1049 strong{color:#78d7ff}
+</style>
 </head>
 <body>
 <!-- v690 — View-as-member banner. Deliberately loud and impossible to miss: the
@@ -17186,11 +17223,11 @@ function renderHallOfFame() {
   });
   if (!legendsHtml) {
     legendsHtml = `<div style="text-align:center;padding:20px 0 28px;color:var(--text-muted);font-size:13px">
-      No legends yet.<br>Win 5 championships to earn your place.
+      No earned Hall of Fame honors yet.<br>Win 5 championships to earn your first honor.
     </div>`;
   }
   const legendsSection = `<div style="margin-bottom:24px">
-    <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--gold);margin-bottom:10px">🏛️ HALL OF LEGENDS</div>
+    <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--gold);margin-bottom:10px">🏛️ HALL OF FAME HONORS</div>
     ${legendsHtml}
   </div>`;
 
@@ -20942,8 +20979,7 @@ function renderChallengeDetail() {
   const isClosed = status === 'closed';
   const iHaveVoted = !!state.myCurrentVote;
   const canVote = isVotingPhase(status);
-  // v1024 — individual tallies and leaders remain hidden while voting is open.
-  // A voter sees their own selection plus total participation, never the live race.
+  // Live totals and leaders remain visible during voting and after close.
   const _sealed = ballotsSealed(ch, status);
   const revealStandings = isClosed || canVote;
   renderChallengeVotingNoticeV1024(ch, status);
@@ -21009,13 +21045,18 @@ function renderChallengeDetail() {
     // Moderation status badge — only ever shown to the entry's own submitter
     // (or admin), since anyone else with visibility already had it pass review.
     let modBadge = '';
-    if (isMyEntry && entry.moderation_status) {
-      if (entry.moderation_status === 'pending') {
-        modBadge = '<div class="cd-medal" style="background:rgba(79,195,247,0.15);color:#4fc3f7;border:1px solid rgba(79,195,247,0.3)">🔍 Under review</div>';
-      } else if (entry.moderation_status === 'rejected') {
+    let moderationPreviewNotice = '';
+    const isPendingReview = entry.moderation_status === 'pending' || entry.moderation_status === 'escalated' || entry.moderation_status === 'flagged';
+    const isAdminPreview = !isMyEntry && isPendingReview && typeof isAdmin === 'function' && isAdmin();
+    if (entry.moderation_status) {
+      if (isMyEntry && isPendingReview) {
+        modBadge = '<div class="cd-medal fc-review-badge-v1049">Under review · Only visible to you</div>';
+        moderationPreviewNotice = '<div class="fc-private-preview-v1049"><strong>Private preview</strong><span>This entry is visible only to you and moderators until it is approved.</span></div>';
+      } else if (isAdminPreview) {
+        modBadge = '<div class="cd-medal fc-review-badge-v1049">Under review · Admin preview</div>';
+        moderationPreviewNotice = '<div class="fc-private-preview-v1049 fc-admin-preview-v1049"><strong>Moderation preview</strong><span>This entry is not visible to other members.</span></div>';
+      } else if (isMyEntry && entry.moderation_status === 'rejected') {
         modBadge = '<div class="cd-medal" style="background:rgba(255,45,31,0.15);color:#ff2d1f;border:1px solid rgba(255,45,31,0.3)">🚫 Not approved</div>';
-      } else if (entry.moderation_status === 'escalated' || entry.moderation_status === 'flagged') {
-        modBadge = '<div class="cd-medal" style="background:rgba(255,200,87,0.15);color:#ffc857;border:1px solid rgba(255,200,87,0.3)">🔍 Under review</div>';
       }
     }
 
@@ -21102,6 +21143,7 @@ function renderChallengeDetail() {
       <div class="cd-entry${iVoted ? ' voted' : ''}${winnerClass}${state.currentChallenge?.is_championship ? ' champ-entry-trim' : ''}" data-entry-id="${entry.id}">
         ${medalBadge}${modBadge}
         <div class="cd-entry-media">${mediaHtml}</div>
+        ${moderationPreviewNotice}
         <div class="cd-entry-body">
           <div class="cd-entry-submitter ${entry.user_id && entry.user_id !== state.profile?.id ? 'user-clickable' : ''}" ${entry.user_id && entry.user_id !== state.profile?.id ? `data-user-id="${entry.user_id}"` : ''}>
             <div class="avatar">${honoredAvatarHTML(entry.user_id, avatarInner(entry.submitter?.avatar), 44)}</div>
@@ -21176,14 +21218,9 @@ function renderChallengeDetail() {
     if (e.key === 'ArrowLeft') { e.preventDefault(); goToEntry(activeEntryIndex - 1); }
     if (e.key === 'ArrowRight') { e.preventDefault(); goToEntry(activeEntryIndex + 1); }
   });
-  // Native horizontal overflow handles swiping; arrows and dots remain explicit controls.
-  grid.addEventListener('pointerup', e => {
-    if (!gestureStart) return;
-    const dx = e.clientX - gestureStart.x;
-    const dy = e.clientY - gestureStart.y;
-    gestureStart = null;
-    if (Math.abs(dx) > 54 && Math.abs(dx) > Math.abs(dy) * 1.35) goToEntry(activeEntryIndex + (dx < 0 ? 1 : -1));
-  }, { passive:true });
+  // Native horizontal overflow handles swiping. Arrows and dots remain explicit controls.
+  // v1049 removes the obsolete pointerup shim, which referenced an undefined
+  // gestureStart and could throw after a swipe on the entry viewer.
   syncEntryControls(0);
 
   // Attach vote handlers
@@ -21889,7 +21926,7 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
       // Re-trigger moderation for the swapped-in video
       if (editSwappedVideo && seState.editingEntry.id) {
         triggerVideoModeration(seState.editingEntry.id, mediaUrl);
-        toast('✅ Entry updated — new video under review');
+        toast('✅ Entry updated — awaiting review. Only you and moderators can see the preview until approved.');
       } else {
         toast('✅ Entry updated!');
       }
@@ -21931,7 +21968,7 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
       // Kick off async video moderation — non-blocking, entry already saved.
       if (entryData && ch.media_type === 'video' && mediaUrl) {
         triggerVideoModeration(entryData.id, mediaUrl);
-        toast('🔥 Entry submitted — under review, live shortly!');
+        toast('Entry submitted — awaiting review. Only you and moderators can see it until approved.');
       } else {
         toast('🔥 Entry submitted!');
       }
@@ -32798,11 +32835,13 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
   }
   function clarityData(ch,status){
     const entries=countEligibleEntries(ch),my=state.profile?.id;
-    const entered=!!my&&(state.currentEntries||[]).some(e=>String(e.user_id)===String(my)&&e.moderation_status!=='rejected'&&(status!=='sd_submitting'||(e.sd_round||0)===(ch.sd_round||0)));
+    const myEntry=!!my?(state.currentEntries||[]).find(e=>String(e.user_id)===String(my)&&e.moderation_status!=='rejected'&&(status!=='sd_submitting'||(e.sd_round||0)===(ch.sd_round||0))):null;
+    const entered=!!myEntry;
+    const awaitingReview=!!myEntry&&['pending','flagged','escalated'].includes(myEntry.moderation_status);
     const add=byId('cdAddEntryBtn'),canEnter=!!add&&add.style.display!=='none';
     if(status==='submitting'){
-      const doNow=entered?'Your entry is in. You can edit or withdraw it until entries close.':canEnter?'Submit one entry before entries close.':entries.length>=MAX_ENTRIES_PER_CHALLENGE?'This challenge is full. Watch until voting opens.':'Watch the field or promote the challenge.';
-      return {head:'Entries open',time:deadline(ch,status),doNow,next:`Voting opens after entries close. Fewer than ${R.entry.minimumCompetitors} eligible competitors means no contest.`,section:'entering',rule:ch.is_championship?'Championship round · no regular monthly Score':ch.is_public===false?'Private challenge · no Championship Score':'Public challenge · Score requires a decisive eligible win'};
+      const doNow=awaitingReview?'Entry submitted · Awaiting review. This preview is visible only to you and moderators. You can edit or withdraw it until entries close.':entered?'Your entry is approved and live. You can edit or withdraw it until entries close.':canEnter?'Submit one entry before entries close.':entries.length>=MAX_ENTRIES_PER_CHALLENGE?'This challenge is full. Watch until voting opens.':'Watch the field or promote the challenge.';
+      return {head:awaitingReview?'Entry awaiting review':'Entries open',time:deadline(ch,status),doNow,next:awaitingReview?'Once approved, your entry becomes visible to other members. Voting opens after entries close.':`Voting opens after entries close. Fewer than ${R.entry.minimumCompetitors} eligible competitors means no contest.`,section:'entering',rule:awaitingReview?'Private preview · not public yet':ch.is_championship?'Championship round · no regular monthly Score':ch.is_public===false?'Private challenge · no Championship Score':'Public challenge · Score requires a decisive eligible win'};
     }
     if(status==='voting')return {head:'Voting now',time:deadline(ch,status),doNow:state.myCurrentVote?'Your vote is recorded. Choose another entry to change it.':'Choose one entry. You have one ballot and can change it until voting closes.',next:ch.allow_sudden_death?'The highest final total wins. A tie moves the tied finalists to sudden death.':'The highest final total wins. A tied final has no decisive winner unless sudden death was enabled.',section:'voting',rule:'Live totals are visible · final recorded ballot counts'};
     if(status==='sd_submitting'){
@@ -32987,5 +33026,19 @@ window.__fcBuildV1047={build:'v1047',phase:'Competition Clarity, Rules & Trust',
 })();
 </script>
 
+
+<script id="fc-v1049-production-hardening-marker">
+window.__fcBuildV1049={
+  build:'v1049',
+  phase:'Production Hardening & Release Readiness — Pass 1',
+  hallOfFameNamingCanonical:true,
+  pendingEntryPrivatePreview:true,
+  nativeEntrySwipeOnly:true,
+  undefinedGestureHandlerRemoved:true,
+  backendChanges:false,
+  newEdgeFunctions:0,
+  edgeFunctionChanges:0
+};
+</script>
 </body>
 </html>
