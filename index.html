@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1051 — Focused Navigation & Contextual Guidance</title>
+<title>FlamesChallenge v1052 — Navigation Freeze Hotfix</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1051 · focused-navigation-contextual-guidance" />
-<meta name="fc-whatsnew" content="Ember now answers competition rules and recorded Championship facts locally from the approved current system before using AI for open-ended help." />
+<meta name="fc-build" content="v1052 · navigation-freeze-hotfix" />
+<meta name="fc-whatsnew" content="Restores responsive navigation and feed loading while preserving the focused screen architecture." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -11994,7 +11994,8 @@ function initFeedExpandBtn() {
 
 function renderFeedHello() {
   if (!state.profile) return;
-  document.getElementById('feedHello').textContent = `Welcome back, ${state.profile.name}`;
+  const feedHello = document.getElementById('feedHello');
+  if (feedHello) feedHello.textContent = `Welcome back, ${state.profile.name}`;
   updateWelcomeBanner();
 }
 
@@ -33221,9 +33222,16 @@ body.fc-you-page-v1051 #profileSheet.fc-own-profile-page-v1051{display:block!imp
   }
 
   function removeDestinationDuplicates(){
+    // v1052 hotfix: do not remove the legacy heat-check shell. renderFeedHello()
+    // still updates #feedHello during app hydration, and deleting that node caused
+    // a fatal null-reference that stopped the authenticated app after Home painted.
+    // The shell remains hidden by the v1051 CSS so it does not return visually.
     ['fcPurposeCard','emberHomeCard','fcHomeLive','emberCompeteCard','fcEmberTitlesAction'].forEach(id=>byId(id)?.remove());
-    document.querySelector('#feedView .heat-check')?.remove();
-    document.querySelectorAll('#leaderboardViewSection .fc-score-ember-v1032,#leaderboardViewSection .fc-score-you-v1032,#lbTabHallOfFame .hof-stand').forEach(el=>el.remove());
+    const heat=document.querySelector('#feedView .heat-check');
+    if(heat){heat.setAttribute('aria-hidden','true');heat.hidden=true;}
+    // Keep legacy leaderboard containers mounted because older renderers may still
+    // address them. CSS owns their visual suppression.
+    document.querySelectorAll('#leaderboardViewSection .fc-score-ember-v1032,#leaderboardViewSection .fc-score-you-v1032,#lbTabHallOfFame .hof-stand').forEach(el=>el.setAttribute('aria-hidden','true'));
   }
 
   function installHomeHeader(){
@@ -33362,16 +33370,14 @@ body.fc-you-page-v1051 #profileSheet.fc-own-profile-page-v1051{display:block!imp
 })();
 </script>
 
-<script id="fc-v1051-build-marker">
-window.__fcBuildV1051={
-  build:'v1051',
-  phase:'Production Hardening & Release Readiness — Information Architecture',
-  focus:'focused navigation with contextual guidance',
-  productionReviewed:'v1049 deployed site reviewed before build',
-  home:'activity plus one next action',
-  compete:'challenge discovery plus compact Score eligibility',
-  titles:'standings, qualification and public title history',
-  profile:'true primary destination with persistent bottom navigation',
+<script id="fc-v1052-build-marker">
+window.__fcBuildV1052={
+  build:'v1052',
+  phase:'Production Hardening & Release Readiness — Navigation Recovery',
+  focus:'restore app responsiveness without reverting focused screen architecture',
+  basedOn:'v1051',
+  rootCause:'v1051 removed the legacy heat-check DOM node that still contained #feedHello; renderFeedHello then threw during authenticated hydration',
+  fix:['keep legacy shell mounted but hidden','null-guard renderFeedHello','keep legacy leaderboard containers mounted'],
   tierAndHallOfFameMechanicsChanged:false,
   moderationWorkflowChanged:false,
   backendChanges:false,
