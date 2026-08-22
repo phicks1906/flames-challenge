@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1081 — Challenge Detail Card Polish</title>
+<title>FlamesChallenge v1082 — Uniform Entry Previews</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1081 · challenge-detail-card-polish" />
-<meta name="fc-whatsnew" content="Caps portrait entry cards, keeps challenge content below the header, removes duplicate pagination dots, and hides Creator Insights until analytics is configured." />
+<meta name="fc-build" content="v1082 · uniform-entry-previews" />
+<meta name="fc-whatsnew" content="Makes every entry preview the same square size and removes adaptive carousel-height changes for steadier swiping." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -23622,13 +23622,13 @@ function fcEntryPreviewUrlV1060(e) {
   return e.media_url;
 }
 function fcFitEntryCardMediaV1079(img) {
+  // v1082 — preview cards are deliberately uniform. Natural dimensions are
+  // preserved in the full-screen viewer, while every voting preview gets the
+  // same square judging surface so the rail never changes height mid-swipe.
   const card = img?.closest?.('.fcc-entry-card');
-  if (!card || !img.naturalWidth || !img.naturalHeight) return;
-  const ratio = img.naturalWidth / img.naturalHeight;
+  if (!card) return;
   card.classList.remove('fc-entry-landscape-v1079', 'fc-entry-square-v1079', 'fc-entry-portrait-v1079');
-  if (ratio >= 1.2) card.classList.add('fc-entry-landscape-v1079');
-  else if (ratio >= 0.86) card.classList.add('fc-entry-square-v1079');
-  else card.classList.add('fc-entry-portrait-v1079');
+  card.classList.add('fc-entry-square-v1082');
 }
 function fcEntryCardMediaV1060(e, ch) {
   const label = e.submitter?.name || 'Competitor';
@@ -23656,7 +23656,7 @@ function fcEntryRailV1060(ch, entries) {
   return `<div class="fcc-entries-wrap fc-entry-rail-v1060 fc-entry-rail-v1079"><div class="fcc-entries-scroll">${entries.map((e,i) => {
     const sub = e.submitter || {};
     const av = sub.avatar && /^https?:/.test(sub.avatar) ? `<img src="${escapeHtml(sub.avatar)}" alt="">` : escapeHtml((sub.name || '?').charAt(0).toUpperCase());
-    return `<article class="fcc-entry-card fc-entry-portrait-v1079" data-entry-open="${ch.id}" data-entry-id="${e.id}" aria-label="Entry ${i+1} of ${entries.length}"><header class="fcc-entry-head-v1079"><span class="fcc-entry-avatar">${av}</span><span class="fcc-entry-name-v1079">${escapeHtml(sub.name || `Entry ${i+1}`)}</span><span class="fcc-entry-position-v1079">${i+1} of ${entries.length}</span></header>${fcEntryCardMediaV1060(e,ch)}</article>`;
+    return `<article class="fcc-entry-card fc-entry-square-v1082" data-entry-open="${ch.id}" data-entry-id="${e.id}" aria-label="Entry ${i+1} of ${entries.length}"><header class="fcc-entry-head-v1079"><span class="fcc-entry-avatar">${av}</span><span class="fcc-entry-name-v1079">${escapeHtml(sub.name || `Entry ${i+1}`)}</span><span class="fcc-entry-position-v1079">${i+1} of ${entries.length}</span></header>${fcEntryCardMediaV1060(e,ch)}</article>`;
   }).join('')}</div>${_entryDotsHtml(entries.length)}</div>`;
 }
 
@@ -34099,125 +34099,6 @@ window.__fcBuildV1079={build:'v1079',basedOn:'v1078',focus:'media-aware entry ca
 </script>
 
 
-<style id="fc-v1080-adaptive-entry-card-height-css">
-/* v1080 — A horizontal flex row takes the height of its tallest card. With a
-   landscape entry beside a portrait entry, that kept the whole rail portrait-
-   tall and stretched the active landscape card into a large empty box. Cards
-   now keep their own natural height, while JS makes the rail follow the active
-   snapped card. The numeric position already communicates that more entries
-   exist, so the broken-looking next-card strip is removed. */
-.fc-entry-rail-v1079 .fcc-entries-scroll{
-  align-items:flex-start!important;
-  transition:height .18s ease!important;
-  gap:8px!important;
-}
-.fc-entry-rail-v1079 .fcc-entry-card{
-  align-self:flex-start!important;
-  flex:0 0 100%!important;
-  min-width:100%!important;
-  width:100%!important;
-}
-</style>
-<script id="fc-v1080-adaptive-entry-card-height-js">
-(function(){
-  'use strict';
-
-  function activeCard(sc){
-    const cards=Array.from(sc?.querySelectorAll?.('.fcc-entry-card')||[]);
-    if(!cards.length) return null;
-    if(cards.length===1) return cards[0];
-    let nearest=cards[0];
-    let distance=Math.abs(sc.scrollLeft-cards[0].offsetLeft);
-    for(let i=1;i<cards.length;i++){
-      const next=Math.abs(sc.scrollLeft-cards[i].offsetLeft);
-      if(next<distance){distance=next;nearest=cards[i];}
-    }
-    return nearest;
-  }
-
-  function sync(sc){
-    if(!sc?.isConnected) return;
-    const card=activeCard(sc);
-    if(!card) return;
-    const cardHeight=card.getBoundingClientRect().height||card.offsetHeight||0;
-    const css=getComputedStyle(sc);
-    const railPadding=(parseFloat(css.paddingTop)||0)+(parseFloat(css.paddingBottom)||0);
-    const height=Math.ceil(cardHeight+railPadding);
-    if(height>0 && Math.abs((parseFloat(sc.style.height)||0)-height)>1){
-      sc.style.height=height+'px';
-    }
-  }
-
-  function wire(sc){
-    if(!sc || sc.dataset.fcAdaptiveHeightV1080==='1') return;
-    sc.dataset.fcAdaptiveHeightV1080='1';
-    let raf=0;
-    const queue=()=>{
-      if(raf) return;
-      raf=requestAnimationFrame(()=>{raf=0;sync(sc);});
-    };
-    sc.addEventListener('scroll',queue,{passive:true});
-    sc.addEventListener('touchend',queue,{passive:true});
-    sc.addEventListener('pointerup',queue,{passive:true});
-    if('ResizeObserver' in window){
-      const ro=new ResizeObserver(queue);
-      sc.querySelectorAll('.fcc-entry-card').forEach(card=>ro.observe(card));
-      sc._fcAdaptiveHeightObserverV1080=ro;
-    }
-    requestAnimationFrame(()=>requestAnimationFrame(queue));
-  }
-
-  function scan(root){
-    const scope=root?.querySelectorAll?root:document;
-    scope.querySelectorAll('.fc-entry-rail-v1079 .fcc-entries-scroll').forEach(wire);
-  }
-
-  const baseFit=window.fcFitEntryCardMediaV1079;
-  if(typeof baseFit==='function'){
-    window.fcFitEntryCardMediaV1079=function(img){
-      const result=baseFit.apply(this,arguments);
-      const sc=img?.closest?.('.fcc-entries-scroll');
-      if(sc){wire(sc);requestAnimationFrame(()=>sync(sc));}
-      return result;
-    };
-  }
-
-  const observer=new MutationObserver(records=>{
-    for(const record of records){
-      for(const node of record.addedNodes){
-        if(node.nodeType!==1) continue;
-        if(node.matches?.('.fc-entry-rail-v1079 .fcc-entries-scroll')) wire(node);
-        scan(node);
-      }
-    }
-  });
-
-  function start(){
-    scan(document);
-    observer.observe(document.body,{childList:true,subtree:true});
-  }
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',start,{once:true});
-  else start();
-
-  window.__fcBuildV1080={
-    build:'v1080',
-    basedOn:'v1079',
-    focus:'active entry card controls carousel height',
-    rootCause:'flex row inherited tallest entry height',
-    adaptiveRailHeight:true,
-    landscapeBlankSpaceRemoved:true,
-    nextCardPeekPx:0,
-    viewerChanged:false,
-    navigationChanged:false,
-    onboardingChanged:false,
-    scoringChanged:false,
-    moderationChanged:false,
-    backendChanged:false,
-    sqlChanges:0,
-    edgeFunctionChanges:0
-  };
-})();
-</script>
 
 
 <style id="fc-v1081-challenge-detail-card-polish-css">
@@ -34426,6 +34307,105 @@ body.fc-insights-unavailable-v1081 .pm-tile[onclick*="openCreatorInsightsV1048"]
     challengeHeaderLayerCorrected:true,
     duplicateDetailDotsRemoved:true,
     insightsHiddenUntilConfigured:true,
+    viewerChanged:false,
+    navigationChanged:false,
+    onboardingChanged:false,
+    scoringChanged:false,
+    moderationChanged:false,
+    backendChanged:false,
+    sqlChanges:0,
+    edgeFunctionChanges:0
+  };
+})();
+</script>
+
+
+<style id="fc-v1082-uniform-entry-preview-css">
+/* v1082 — Every competition preview uses one stable square judging surface.
+   The original proportions remain intact through object-fit:contain and the
+   full-screen viewer. A constant card height prevents the page and rail from
+   resizing while the user swipes between portrait and landscape entries. */
+.fc-entry-rail-v1079 .fcc-entries-scroll{
+  align-items:stretch!important;
+  height:auto!important;
+  min-height:0!important;
+  transition:none!important;
+  gap:8px!important;
+  scroll-behavior:auto!important;
+  scroll-snap-type:x mandatory!important;
+  -webkit-overflow-scrolling:touch!important;
+  overscroll-behavior-x:contain!important;
+  will-change:auto!important;
+}
+.fc-entry-rail-v1079 .fcc-entry-card{
+  align-self:stretch!important;
+  flex:0 0 100%!important;
+  min-width:100%!important;
+  width:100%!important;
+  height:auto!important;
+  scroll-snap-align:start!important;
+  scroll-snap-stop:always!important;
+  will-change:auto!important;
+}
+.fc-entry-rail-v1079 .fcc-entry-media,
+.fc-entry-rail-v1079 .fc-entry-portrait-v1079 .fcc-entry-media,
+.fc-entry-rail-v1079 .fc-entry-square-v1079 .fcc-entry-media,
+.fc-entry-rail-v1079 .fc-entry-landscape-v1079 .fcc-entry-media,
+.fc-entry-rail-v1079 .fc-entry-square-v1082 .fcc-entry-media,
+.fc-entry-rail-v1079 .fc-entry-video-v1079,
+.fc-entry-rail-v1079 .fc-entry-text-v1079,
+.fc-entry-rail-v1079 .fc-entry-audio-v1079{
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  aspect-ratio:1/1!important;
+  transition:none!important;
+}
+.fc-entry-rail-v1079 .fc-entry-stage-v1060{
+  display:grid!important;
+  place-items:center!important;
+  overflow:hidden!important;
+  background:#090807!important;
+}
+.fc-entry-rail-v1079 .fc-entry-blur-v1060{
+  position:absolute!important;
+  inset:-10%!important;
+  width:120%!important;
+  height:120%!important;
+  object-fit:cover!important;
+}
+.fc-entry-rail-v1079 .fc-entry-contain-v1060{
+  position:relative!important;
+  z-index:1!important;
+  width:100%!important;
+  height:100%!important;
+  object-fit:contain!important;
+}
+</style>
+<script id="fc-v1082-uniform-entry-preview-marker-js">
+(function(){
+  'use strict';
+  // Clear a stale inline height if an already-open screen survives an in-app
+  // update. No scroll or resize listeners are used; CSS owns rail sizing.
+  document.querySelectorAll?.('.fc-entry-rail-v1079 .fcc-entries-scroll').forEach(sc=>{
+    sc.style.removeProperty('height');
+    sc.removeAttribute('data-fc-adaptive-height-v1080');
+    if(sc._fcAdaptiveHeightObserverV1080){
+      try{sc._fcAdaptiveHeightObserverV1080.disconnect();}catch(_e){}
+      delete sc._fcAdaptiveHeightObserverV1080;
+    }
+  });
+  window.__fcBuildV1082={
+    build:'v1082',
+    basedOn:'v1081',
+    focus:'uniform square entry previews and stable native carousel height',
+    previewAspect:'1:1',
+    equalPreviewDimensions:true,
+    adaptiveRailHeightRemoved:true,
+    nativeScrollSnapPreserved:true,
+    fullImageContained:true,
+    blurredFillPreserved:true,
     viewerChanged:false,
     navigationChanged:false,
     onboardingChanged:false,
