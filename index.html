@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1097 — Entry Moderation & Withdrawal Integrity</title>
+<title>FlamesChallenge v1098 — Gate 2C Score & Qualification Integrity</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1097 · entry-moderation-withdrawal-integrity" />
-<meta name="fc-whatsnew" content="Keeps resubmitted entries from remaining rejected and limits self-service entry deletion to the open entry window." />
+<meta name="fc-build" content="v1098 · gate-2c-score-qualification-integrity" />
+<!-- v1098: confirmed Score persistence, serialized leaderboard settlement, Score-based cutoff-tie qualification. Server-atomic result settlement remains a separate backend gate. -->
+<meta name="fc-whatsnew" content="Confirms Score before display and qualifies every competitor tied within the top three Score levels." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -11873,7 +11874,7 @@ async function loadFeedActivity(opts = {}) {
   }
 }
 
-async function loadLeaderboard() {
+async function loadLeaderboardCoreV1098() {
   const now = new Date();
   const MONTH_START = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
   // v749 — also bound the PREVIOUS calendar month, so a championship launched
@@ -11971,8 +11972,9 @@ async function loadLeaderboard() {
   // -- Boost ledger (v627): load existing rows so we only settle challenges that
   // haven't been boosted yet, and stash them for standings/display reads.
   const boostByChallenge = {};
-  const boostToWrite = [];
-  const upsetsToBroadcast = [];
+  const scoreCreatesV1098 = [];
+  const scoreUpgradesV1098 = [];
+  const upsetCandidatesV1098 = new Map();
   try {
     const { data: bl } = await db.from('boost_ledger').select('*').in('challenge_id', chIds);
     (bl || []).forEach(r => { boostByChallenge[r.challenge_id] = r; });
@@ -12051,8 +12053,8 @@ async function loadLeaderboard() {
       if (thisMonthChIds.has(chId)) {
         winsByUser[uid].monthly++;
         winsByUser[uid].monthlyByCategory[cat] = (winsByUser[uid].monthlyByCategory[cat] || 0) + 1;
-        if (prevMonthChIds.has(chId)) winsByUser[uid].prevMonthByCategory[cat] = (winsByUser[uid].prevMonthByCategory[cat] || 0) + 1; // v749
       }
+      if (prevMonthChIds.has(chId)) winsByUser[uid].prevMonthByCategory[cat] = (winsByUser[uid].prevMonthByCategory[cat] || 0) + 1;
       return;
     }
 
@@ -12122,9 +12124,9 @@ async function loadLeaderboard() {
           opponent_pts: snap.opponentPts, vote_pts: snap.votePts,
           total_boost: snap.totalBoost, detail: snap.detail,
         };
-        boostToWrite.push(_row);
-        boostByChallenge[chId] = _row;
-        if (_upset) upsetsToBroadcast.push({ chId, winnerId: uid, winnerName: (allProfiles.find(p => p.id === uid)?.name) || 'Someone', victimId: _upset.opponentId, victimTier: _upset.tier, category: cat });
+        if (isNewScoreRow) scoreCreatesV1098.push(_row);
+        else scoreUpgradesV1098.push(_row);
+        if (_upset) upsetCandidatesV1098.set(chId, { chId, winnerId: uid, winnerName: (allProfiles.find(p => p.id === uid)?.name) || 'Someone', victimId: _upset.opponentId, victimTier: _upset.tier, category: cat });
       }
 
       // ── Weighted score: log2(entrants) × log2(voters)² × √(MOV) ──────────
@@ -12140,11 +12142,11 @@ async function loadLeaderboard() {
       if (thisMonthChIds.has(chId)) {
         winsByUser[uid].monthly++;
         winsByUser[uid].monthlyByCategory[cat] = (winsByUser[uid].monthlyByCategory[cat] || 0) + 1;
-        if (prevMonthChIds.has(chId)) winsByUser[uid].prevMonthByCategory[cat] = (winsByUser[uid].prevMonthByCategory[cat] || 0) + 1; // v749
         entries.filter(e => e.user_id !== uid).forEach(e => {
           ensureUser(e.user_id); lossesByUser[e.user_id].monthly++;
         });
       }
+      if (prevMonthChIds.has(chId)) winsByUser[uid].prevMonthByCategory[cat] = (winsByUser[uid].prevMonthByCategory[cat] || 0) + 1;
     } else if (max > 0 && topEntries.length > 1 && wentThroughSD) {
       // ── Re-tie after Sudden Death → SPLIT the win (both/all credited) ─────
       // No infinite loop: a challenge already through SD doesn't re-trigger it,
@@ -12177,36 +12179,68 @@ async function loadLeaderboard() {
     }
   });
 
-  // -- Persist new Championship Score snapshots and formula-v3 level upgrades.
-  // challenge_id remains the unique ledger key. No schema migration is needed;
-  // formula version and total ballots live inside the existing detail JSON.
-  if (boostToWrite.length) {
-    db.from('boost_ledger').upsert(boostToWrite, { onConflict: 'challenge_id' })
-      .then(({ error }) => { if (error) console.warn('score ledger write', error); })
-      .catch(e => console.warn('score ledger write', e));
+  // v1098 — Persist Score before exposing it. New rows use the unique
+  // challenge_id key with DO NOTHING semantics, so only the caller that actually
+  // creates the ledger row may emit first-settlement side effects. Formula upgrades
+  // update existing rows but never rebroadcast an old result.
+  const confirmedNewScoreIdsV1098 = new Set();
+  const scoreCandidateIdsV1098 = [...new Set([
+    ...scoreCreatesV1098.map(r => r.challenge_id),
+    ...scoreUpgradesV1098.map(r => r.challenge_id),
+  ])];
+
+  if (scoreCreatesV1098.length) {
+    try {
+      const { data: createdRows, error } = await db.from('boost_ledger')
+        .upsert(scoreCreatesV1098, { onConflict: 'challenge_id', ignoreDuplicates: true })
+        .select('*');
+      if (error) throw error;
+      (createdRows || []).forEach(r => { if (r?.challenge_id) confirmedNewScoreIdsV1098.add(r.challenge_id); });
+    } catch (e) { console.warn('score ledger create', e); }
   }
 
-  // Upset broadcasts (v631): when a boost row is newly written and it was an
-  // upset, notify the beaten player's followers — spectacle, no ping to the
-  // loser. Fire-and-forget; the boost_ledger UNIQUE guard already ensures each
-  // challenge settles once, so this only runs on first settle (no dupes).
-  if (upsetsToBroadcast.length) {
-    (async () => {
-      for (const u of upsetsToBroadcast) {
-        try {
-          const { data: fr } = await db.from('follows').select('follower_id').eq('followee_id', u.victimId);
-          const tierLabel = ({ legend:'Legend', icon:'Icon', immortal:'Immortal', goat:'G.O.A.T.', inferno:'Inferno', blaze:'Blaze' })[u.victimTier] || u.victimTier;
-          const rows = (fr || [])
-            .filter(r => r.follower_id !== u.winnerId)
-            .map(r => ({
-              user_id: r.follower_id, type: 'upset', challenge_id: u.chId,
-              message: `🔥 UPSET! ${u.winnerName} just took down a ${tierLabel} in ${u.category}.`,
-              created_at: new Date().toISOString(),
-            }));
-          if (rows.length) await db.from('notifications').insert(rows);
-        } catch (e) { console.warn('upset broadcast', e); }
+  if (scoreUpgradesV1098.length) {
+    try {
+      const { error } = await db.from('boost_ledger')
+        .upsert(scoreUpgradesV1098, { onConflict: 'challenge_id' });
+      if (error) throw error;
+    } catch (e) { console.warn('score ledger upgrade', e); }
+  }
+
+  // Reload the exact rows from Supabase. A failed or losing concurrent write is
+  // therefore never represented as visible local Score.
+  if (scoreCandidateIdsV1098.length) {
+    try {
+      const { data: confirmedRows, error } = await db.from('boost_ledger')
+        .select('*').in('challenge_id', scoreCandidateIdsV1098);
+      if (error) throw error;
+      (confirmedRows || []).forEach(r => { if (r?.challenge_id) boostByChallenge[r.challenge_id] = r; });
+    } catch (e) { console.warn('score ledger confirm', e); }
+  }
+  state.boostByChallenge = boostByChallenge;
+
+  // v1098 — only the transaction that created the unique Score row can send the
+  // upset broadcast. Await the insert so repeated foreground refreshes cannot race
+  // each other inside this client. The database's unique Score key handles other clients.
+  for (const chId of confirmedNewScoreIdsV1098) {
+    const u = upsetCandidatesV1098.get(chId);
+    if (!u) continue;
+    try {
+      const { data: fr, error: followErr } = await db.from('follows').select('follower_id').eq('followee_id', u.victimId);
+      if (followErr) throw followErr;
+      const tierLabel = ({ legend:'Legend', icon:'Icon', immortal:'Immortal', goat:'G.O.A.T.', inferno:'Inferno', blaze:'Blaze' })[u.victimTier] || u.victimTier;
+      const rows = (fr || [])
+        .filter(r => r.follower_id !== u.winnerId)
+        .map(r => ({
+          user_id: r.follower_id, type: 'upset', challenge_id: u.chId,
+          message: `🔥 UPSET! ${u.winnerName} just took down a ${tierLabel} in ${u.category}.`,
+          created_at: new Date().toISOString(),
+        }));
+      if (rows.length) {
+        const { error: notificationErr } = await db.from('notifications').insert(rows);
+        if (notificationErr) throw notificationErr;
       }
-    })();
+    } catch (e) { console.warn('upset broadcast', e); }
   }
 
   // ── Compute streak per user (consecutive wins newest→oldest) ────────────────
@@ -12240,22 +12274,31 @@ async function loadLeaderboard() {
   const _ensureBoost = id => {
     if (!boostByUser[id]) boostByUser[id] = {
       allTime: 0, month: 0, monthByCat: {}, opponentMonthByCat: {},
-      turnoutMonthByCat: {}, scoringWinsMonthByCat: {}, ballotsMonthByCat: {}
+      turnoutMonthByCat: {}, scoringWinsMonthByCat: {}, ballotsMonthByCat: {},
+      prevMonthByCat: {}, opponentPrevMonthByCat: {}, turnoutPrevMonthByCat: {},
+      scoringWinsPrevMonthByCat: {}, ballotsPrevMonthByCat: {}
     };
   };
   Object.values(boostByChallenge).forEach(r => {
     if (!r || !r.winner_id) return;
     _ensureBoost(r.winner_id);
     boostByUser[r.winner_id].allTime += Number(r.total_boost || 0);
+    const c = r.category || 'Other';
+    const d = (r.detail && typeof r.detail === 'object') ? r.detail : {};
     if (thisMonthChIds.has(r.challenge_id)) {
-      const c = r.category || 'Other';
-      const d = (r.detail && typeof r.detail === 'object') ? r.detail : {};
       boostByUser[r.winner_id].month += Number(r.total_boost || 0);
       boostByUser[r.winner_id].monthByCat[c] = (boostByUser[r.winner_id].monthByCat[c] || 0) + Number(r.total_boost || 0);
       boostByUser[r.winner_id].opponentMonthByCat[c] = (boostByUser[r.winner_id].opponentMonthByCat[c] || 0) + Number(r.opponent_pts || 0);
       boostByUser[r.winner_id].turnoutMonthByCat[c] = (boostByUser[r.winner_id].turnoutMonthByCat[c] || 0) + Number(r.vote_pts || 0);
       boostByUser[r.winner_id].scoringWinsMonthByCat[c] = (boostByUser[r.winner_id].scoringWinsMonthByCat[c] || 0) + 1;
       boostByUser[r.winner_id].ballotsMonthByCat[c] = (boostByUser[r.winner_id].ballotsMonthByCat[c] || 0) + Number(d.totalBallots || 0);
+    }
+    if (prevMonthChIds.has(r.challenge_id)) {
+      boostByUser[r.winner_id].prevMonthByCat[c] = (boostByUser[r.winner_id].prevMonthByCat[c] || 0) + Number(r.total_boost || 0);
+      boostByUser[r.winner_id].opponentPrevMonthByCat[c] = (boostByUser[r.winner_id].opponentPrevMonthByCat[c] || 0) + Number(r.opponent_pts || 0);
+      boostByUser[r.winner_id].turnoutPrevMonthByCat[c] = (boostByUser[r.winner_id].turnoutPrevMonthByCat[c] || 0) + Number(r.vote_pts || 0);
+      boostByUser[r.winner_id].scoringWinsPrevMonthByCat[c] = (boostByUser[r.winner_id].scoringWinsPrevMonthByCat[c] || 0) + 1;
+      boostByUser[r.winner_id].ballotsPrevMonthByCat[c] = (boostByUser[r.winner_id].ballotsPrevMonthByCat[c] || 0) + Number(d.totalBallots || 0);
     }
   });
 
@@ -12278,6 +12321,11 @@ async function loadLeaderboard() {
     turnoutPtsMonthByCat: boostByUser[p.id]?.turnoutMonthByCat || {},
     scoreWinsMonthByCat: boostByUser[p.id]?.scoringWinsMonthByCat || {},
     ballotsMonthByCat: boostByUser[p.id]?.ballotsMonthByCat || {},
+    boostPrevMonthByCat: boostByUser[p.id]?.prevMonthByCat || {},
+    opponentPtsPrevMonthByCat: boostByUser[p.id]?.opponentPrevMonthByCat || {},
+    turnoutPtsPrevMonthByCat: boostByUser[p.id]?.turnoutPrevMonthByCat || {},
+    scoreWinsPrevMonthByCat: boostByUser[p.id]?.scoringWinsPrevMonthByCat || {},
+    ballotsPrevMonthByCat: boostByUser[p.id]?.ballotsPrevMonthByCat || {},
     streak: streakByUser[p.id] || 0,
   }));
 
@@ -12295,6 +12343,19 @@ async function loadLeaderboard() {
   state.lbCategory = state.lbCategory || 'All';
   state.leaders = [...users].sort((a, b) => b.monthly - a.monthly).slice(0, 10);
 }
+
+let _fcLeaderboardLoadPromiseV1098 = null;
+async function loadLeaderboard() {
+  if (_fcLeaderboardLoadPromiseV1098) return _fcLeaderboardLoadPromiseV1098;
+  const run = loadLeaderboardCoreV1098();
+  _fcLeaderboardLoadPromiseV1098 = run;
+  try {
+    return await run;
+  } finally {
+    if (_fcLeaderboardLoadPromiseV1098 === run) _fcLeaderboardLoadPromiseV1098 = null;
+  }
+}
+
 
 /* ---------- RENDER: chip, feed, heat check ---------- */
 function renderProfileChip() {
@@ -17763,6 +17824,40 @@ async function promoteNextReserve(challengeId) {
    Handled server-side by the process-championship-noshows Edge Function on an
    hourly pg_cron schedule. No client-side check needed. */
 
+function computeChampionshipQualifiersV1098(users, category, usedMonth) {
+  const scoreKey = usedMonth === 'prev'
+    ? (u => Number(u.boostPrevMonthByCat?.[category] || 0))
+    : (u => Number(u.boostMonthByCat?.[category] || 0));
+  const winsKey = usedMonth === 'prev'
+    ? (u => Number(u.scoreWinsPrevMonthByCat?.[category] || 0))
+    : (u => Number(u.scoreWinsMonthByCat?.[category] || 0));
+  const opponentKey = usedMonth === 'prev'
+    ? (u => Number(u.opponentPtsPrevMonthByCat?.[category] || 0))
+    : (u => Number(u.opponentPtsMonthByCat?.[category] || 0));
+  const turnoutKey = usedMonth === 'prev'
+    ? (u => Number(u.turnoutPtsPrevMonthByCat?.[category] || 0))
+    : (u => Number(u.turnoutPtsMonthByCat?.[category] || 0));
+  const ballotsKey = usedMonth === 'prev'
+    ? (u => Number(u.ballotsPrevMonthByCat?.[category] || 0))
+    : (u => Number(u.ballotsMonthByCat?.[category] || 0));
+
+  const ranked = [...(users || [])]
+    .filter(u => scoreKey(u) > 0)
+    .sort((a, b) =>
+      scoreKey(b) - scoreKey(a) ||
+      winsKey(b) - winsKey(a) ||
+      opponentKey(b) - opponentKey(a) ||
+      turnoutKey(b) - turnoutKey(a) ||
+      String(a.name || '').localeCompare(String(b.name || ''))
+    );
+  const levels = [...new Set(ranked.map(scoreKey))].sort((a, b) => b - a);
+  const cutoffScore = levels.length ? levels[Math.min(2, levels.length - 1)] : 0;
+  const rankByScore = new Map(levels.map((score, i) => [score, i + 1]));
+  const contenders = ranked.filter(u => rankByScore.get(scoreKey(u)) <= 3);
+  const reserves = ranked.filter(u => rankByScore.get(scoreKey(u)) > 3).slice(0, 5);
+  return { ranked, contenders, reserves, levels, cutoffScore, rankByScore, scoreKey, winsKey, opponentKey, turnoutKey, ballotsKey };
+}
+
 async function launchChampionshipChallenge(category) {
   if (!isAdmin() || !state.profile) return;
   if (_championshipLaunching) { toast('Launch already in progress…'); return; }
@@ -17780,42 +17875,36 @@ async function launchChampionshipChallenge(category) {
   });
   if (alreadyLaunched) { toast(`${category} Championship already launched this month`); return; }
 
-  // v749 — qualify off the CORRECT month. If the current calendar month barely
-  // has data yet (board just reset on the 1st), crown the month that just
-  // ended instead, using prevMonthByCategory. This is the fix for a top-3
-  // finisher getting no invite because the launch read the reset month.
-  const curKey = (u) => (u.monthlyByCategory[category] || 0);
-  const prevKey = (u) => (u.prevMonthByCategory[category] || 0);
-  const curField = (data.users || []).reduce((s, u) => s + curKey(u), 0);
-  const prevField = (data.users || []).reduce((s, u) => s + prevKey(u), 0);
-  // Use previous month when the current month has clearly less to go on
-  // (typical right after a reset). Ties/ample current data -> current month.
-  const usedMonth = (curField === 0 || (prevField > curField)) ? 'prev' : 'cur';
-  const keyFn = usedMonth === 'prev' ? prevKey : curKey;
+  // v1098 — qualification is based on Championship Score, not raw win count.
+  // The top three distinct Score levels qualify and everyone tied at the cutoff advances.
+  const curScore = (u) => Number(u.boostMonthByCat?.[category] || 0);
+  const prevScore = (u) => Number(u.boostPrevMonthByCat?.[category] || 0);
+  const curField = (data.users || []).reduce((sum, u) => sum + curScore(u), 0);
+  const prevField = (data.users || []).reduce((sum, u) => sum + prevScore(u), 0);
+  const usedMonth = (curField === 0 || prevField > curField) ? 'prev' : 'cur';
+  const qualifierData = computeChampionshipQualifiersV1098(data.users || [], category, usedMonth);
+  const { ranked, contenders, reserves, rankByScore, scoreKey, winsKey, opponentKey, turnoutKey, ballotsKey } = qualifierData;
 
-  const ranked = [...(data.users || [])]
-    .filter(u => keyFn(u) > 0)
-    .sort((a, b) => keyFn(b) - keyFn(a));
+  if (contenders.length < 2) { toast('Need at least 2 Score qualifiers'); return; }
 
-  const contenders = ranked.slice(0, 3);
-  const reserves = ranked.slice(3, 8); // players 4–8 wait in the wings
-
-  if (contenders.length < 2) { toast('Need at least 2 qualifiers'); return; }
-
-  // v749 — SNAPSHOT: freeze exactly who qualified, their win counts, and which
-  // month was used, so "why wasn't I invited?" is answerable forever. Written
-  // onto the championship_launches row below.
+  // v1098 — freeze the actual Score calculation and shared rank used at launch.
   const qualSnapshot = {
     month_used: usedMonth,
+    metric: 'championship_score',
+    qualification_rule: 'top_3_distinct_score_levels_with_cutoff_ties',
+    cutoff_score: qualifierData.cutoffScore,
     computed_at: new Date().toISOString(),
     category,
-    ranked: ranked.slice(0, 8).map((u, i) => ({
-      rank: i + 1, id: u.id, name: u.name, wins: keyFn(u),
-      role: i < 3 ? 'contender' : 'reserve',
+    ranked: [...contenders, ...reserves].map(u => ({
+      rank: rankByScore.get(scoreKey(u)), id: u.id, name: u.name,
+      championship_score: scoreKey(u), wins: winsKey(u),
+      opponent_points: opponentKey(u), turnout_points: turnoutKey(u),
+      valid_ballots: ballotsKey(u),
+      role: rankByScore.get(scoreKey(u)) <= 3 ? 'contender' : 'reserve',
     })),
   };
 
-  if (!confirm(`Launch ${category} Championship Challenge and invite top ${contenders.length}? (${reserves.length} reserves on standby)`)) return;
+  if (!confirm(`Launch ${category} Championship and invite ${contenders.length} qualifier${contenders.length === 1 ? '' : 's'} across the top ${Math.min(3, qualifierData.levels.length)} Score level${Math.min(3, qualifierData.levels.length) === 1 ? '' : 's'}? (${reserves.length} reserves on standby)`)) return;
 
   const monthLabel = now.toLocaleString('default', { month: 'long', year: 'numeric' });
   const subDeadline = new Date(now.getTime() + 7 * 86400000).toISOString();
@@ -17843,7 +17932,7 @@ async function launchChampionshipChallenge(category) {
 
     if (chErr) throw chErr;
 
-    // Invite top 3 contenders (status pending until they accept/decline)
+    // Invite every qualifier in the top three distinct Score levels (including cutoff ties)
     const inviteRows = contenders.map(u => ({ challenge_id: ch.id, invited_user_id: u.id, invite_status: 'pending' }));
     const { error: invErr } = await db.from('challenge_invites').insert(inviteRows);
     if (invErr) throw invErr;
@@ -17875,7 +17964,7 @@ async function launchChampionshipChallenge(category) {
     // Update in-memory state — replace any stale record for this category+month
     state.champLaunches = (state.champLaunches || []).filter(l => !(l.category === category && l.month === month));
     state.champLaunches.unshift({ category, month, challenge_id: ch.id, launched_by: state.profile.id, launched_at: new Date().toISOString(), is_sponsored: false });
-    toast(`⚡ ${category} Championship launched — ${contenders.length} invited`);
+    toast(`⚡ ${category} Championship launched — ${contenders.length} Score qualifiers invited`);
     // Send qualifier emails (fire and forget — don't block launch on email failure)
     const deadlineLabel = new Date(subDeadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
     db.functions.invoke('send-championship-email', {
