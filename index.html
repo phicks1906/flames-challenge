@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1101 — Authoritative Results & Database Recovery</title>
+<title>FlamesChallenge v1102 — Authoritative Competitive Profiles</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1101 · authoritative-results-database-recovery" />
-<!-- v1101: makes settled results server-authoritative, adds bounded mutation recovery, atomic challenge workflows, and uploaded-media cleanup. -->
+<meta name="fc-build" content="v1102 · authoritative-competitive-profiles" />
+<!-- v1102: adds approved competitive co-winner scoring and profile-specific authoritative competitive identity. -->
 <meta name="fc-whatsnew" content="Safer iPhone spacing, accessible sheets and controls, clearer contrast, and Reduced Motion support." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
@@ -12131,13 +12131,19 @@ async function loadLeaderboardCoreV1101() {
       (winnersByChallenge[w.challenge_id] ||= []).push(w);
     });
 
+    // v1102: participation is challenge-wide, not final-round-only. A member
+    // eliminated in an earlier sudden-death round still has one decided result
+    // for that challenge. Rejected entries never create participation.
     const entriesByChallenge = {};
+    const finalEntriesByChallenge = {};
     (entryRows || []).forEach(e => {
       const result = resultByChallenge[e.challenge_id];
       if (!result) return;
       if (String(e.moderation_status || '').toLowerCase() === 'rejected') return;
-      if (Number(e.sd_round || 0) !== Number(result.final_round || 0)) return;
       (entriesByChallenge[e.challenge_id] ||= []).push(e);
+      if (Number(e.sd_round || 0) === Number(result.final_round || 0)) {
+        (finalEntriesByChallenge[e.challenge_id] ||= []).push(e);
+      }
     });
 
     const participantIds = new Set();
@@ -12211,19 +12217,20 @@ async function loadLeaderboardCoreV1101() {
     });
 
     const boostByChallenge = {};
+    const scoreRowsV1102 = [];
     const levelSnapshotByChallenge = {};
     (winnerRows || []).forEach(w => {
       (levelSnapshotByChallenge[w.challenge_id] ||= {})[w.user_id] = w.visible_level || 'spark';
       const score = Number(w.championship_score || 0);
-      if (score <= 0) return;
       const result = resultByChallenge[w.challenge_id];
-      if (!result) return;
+      if (!result || (!result.score_awarded && score <= 0)) return;
       const detailRoot = (w.detail && typeof w.detail === 'object') ? w.detail : {};
       const scoreDetail = (detailRoot.score && typeof detailRoot.score === 'object')
         ? detailRoot.score : detailRoot;
-      boostByChallenge[w.challenge_id] = {
+      const row = {
         challenge_id: w.challenge_id,
         winner_id: w.user_id,
+        is_co_winner: !!w.is_co_winner,
         category: result.category || 'Other',
         month: result.month,
         opponent_pts: Number(w.opponent_pts || 0),
@@ -12231,6 +12238,13 @@ async function loadLeaderboardCoreV1101() {
         total_boost: score,
         detail: scoreDetail
       };
+      scoreRowsV1102.push(row);
+      // Preserve the legacy direct challenge lookup for the first winner while
+      // retaining every additional co-winner under a composite key.
+      const key = boostByChallenge[w.challenge_id]
+        ? `${w.challenge_id}:${w.user_id}`
+        : w.challenge_id;
+      boostByChallenge[key] = row;
     });
 
     const streakByUser = {};
@@ -12257,7 +12271,7 @@ async function loadLeaderboardCoreV1101() {
         scoringWinsPrevMonthByCat: {}, ballotsPrevMonthByCat: {}
       };
     };
-    Object.values(boostByChallenge).forEach(row => {
+    scoreRowsV1102.forEach(row => {
       ensureBoost(row.winner_id);
       const b = boostByUser[row.winner_id];
       const cat = row.category || 'Other';
@@ -12325,6 +12339,7 @@ async function loadLeaderboardCoreV1101() {
     state.challengeResultsV1101 = resultByChallenge;
     state.challengeResultWinnersV1101 = winnersByChallenge;
     state.boostByChallenge = boostByChallenge;
+    state.scoreRowsV1102 = scoreRowsV1102;
     state._fcLevelSnapshotByChallengeV1054 = levelSnapshotByChallenge;
     state._fcRegularWinsAllTimeV1054 = regularWinsForLevels;
     state.leaderboardData = { users, leaders, champions: {} };
@@ -13131,7 +13146,7 @@ async function loadMyRecord() {
     let result = 'pending';
 
     if (resultRow) {
-      if (myWinnerRow) result = myWinnerRow.is_co_winner ? 'tied' : 'won';
+      if (myWinnerRow) result = 'won'; // v1102: a recorded co-winner is a winner
       else if (winnerRows.length) result = 'lost';
       else if (resultRow.resolution === 'unresolved_tie') result = 'tied';
       else result = 'voided';
@@ -27212,7 +27227,8 @@ async function loadFollows(opts = {}) {
 }
 
 let upmCurrentUserId = null;
-let psState = { userId: null, tab: 'challenges', profile: null, posts: [], challenges: [], entries: [], postLikeCounts: {} };
+let psState = { userId: null, tab: 'challenges', profile: null, posts: [], challenges: [], entries: [], postLikeCounts: {}, competitive: null, loadError: null };
+let psRequestSeqV1102 = 0;
 
 /* ===================== DIRECT MESSAGES (v488) ===================== */
 let dmState = { threadId: null, otherId: null, otherName: '', otherAvatar: '🔥', messages: [] };
@@ -27487,11 +27503,28 @@ function closeDmSettings(){
 
 async function openUserProfile(userId) {
   if (!userId) { console.warn('[openUserProfile] no userId'); return; }
-  console.log('[openUserProfile] opening', userId);
-  psState = { userId, tab: 'challenges', profile: null, posts: [], challenges: [], entries: [], postLikeCounts: {} };
+  const requestId = ++psRequestSeqV1102;
+  console.log('[openUserProfile] opening', userId, 'request', requestId);
+  psState = {
+    userId,
+    requestId,
+    tab: 'challenges',
+    profile: null,
+    posts: [],
+    challenges: [],
+    entries: [],
+    postLikeCounts: {},
+    competitive: null,
+    loadError: null
+  };
 
-  // Open sheet with loading state immediately
-  document.getElementById('psHeaderName').textContent = 'Profile';
+  const isCurrentRequest = () =>
+    psState &&
+    psState.requestId === requestId &&
+    String(psState.userId) === String(userId);
+
+  // Open sheet with loading state immediately.
+  document.getElementById('psHeaderName').textContent = 'Competitive profile';
   document.getElementById('psAvatar').textContent = '⏳';
   document.getElementById('psName').textContent = 'Loading...';
   document.getElementById('psStats').innerHTML = '';
@@ -27499,46 +27532,119 @@ async function openUserProfile(userId) {
   { const _em = document.getElementById('psEmber'); if (_em) _em.style.display = 'none'; }
   document.getElementById('psFollowBtn').style.display = 'none';
   { const _mb = document.getElementById('psMessageBtn'); if (_mb) _mb.style.display = 'none'; }
-  document.getElementById('psContent').innerHTML = '<div class="ps-empty">Loading…</div>';
+  document.getElementById('psContent').innerHTML = '<div class="ps-empty">Loading competitive record…</div>';
   document.querySelectorAll('.ps-tab').forEach(t => t.classList.toggle('active', t.dataset.pstab === 'challenges'));
   document.getElementById('profileSheet').classList.add('open');
   document.body.style.overflow = 'hidden';
 
   try {
-    const [profRes, chRes, enRes, postRes] = await Promise.all([
-      db.from('profiles').select('id, name, avatar, points, streak').eq('id', userId).maybeSingle(),
-      db.from('challenges').select('*, creator:profiles!challenges_creator_id_fkey(id, name, avatar)').eq('creator_id', userId).order('created_at', { ascending: false }),
-      db.from('entries').select('*, challenge:challenges(id, title, media_type, submission_deadline, voting_end, is_public, is_championship, creator_id, category, rules, created_at)').eq('user_id', userId).order('created_at', { ascending: false }),
-      db.from('posts').select('*, author:profiles!posts_user_id_fkey(id, name, avatar)').eq('user_id', userId).order('created_at', { ascending: false }),
+    const [profile, challenges, entries, posts, competitive] = await Promise.all([
+      fcDbReadV1101(
+        db.from('profiles')
+          .select('id, name, avatar, points, streak')
+          .eq('id', userId)
+          .maybeSingle(),
+        'Profile identity',
+        15000
+      ),
+      fcDbReadV1101(
+        db.from('challenges')
+          .select('*, creator:profiles!challenges_creator_id_fkey(id, name, avatar)')
+          .eq('creator_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(150),
+        'Hosted challenges',
+        18000
+      ),
+      fcDbReadV1101(
+        db.from('entries')
+          .select('*, challenge:challenges(id, title, media_type, submission_deadline, voting_end, is_public, is_championship, creator_id, category, rules, created_at)')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(300),
+        'Profile entries',
+        18000
+      ),
+      fcDbReadV1101(
+        db.from('posts')
+          .select('*, author:profiles!posts_user_id_fkey(id, name, avatar)')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(150),
+        'Profile posts',
+        18000
+      ),
+      fcDbReadV1101(
+        db.rpc('fc_profile_competitive_v1102', { p_user_id: userId }),
+        'Authoritative competitive profile',
+        18000
+      )
     ]);
 
-    if (profRes.error) throw profRes.error;
-    if (!profRes.data) {
+    if (!isCurrentRequest()) return;
+    if (!profile) {
       document.getElementById('psName').textContent = 'User not found';
       document.getElementById('psAvatar').textContent = '❓';
       document.getElementById('psContent').innerHTML = '<div class="ps-empty">This profile could not be loaded.</div>';
       return;
     }
 
-    psState.profile = profRes.data;
-    psState.challenges = chRes.data || [];
-    psState.entries = enRes.data || [];
-    psState.posts = postRes.data || [];
+    psState.profile = profile;
+    psState.challenges = challenges || [];
+    psState.entries = entries || [];
+    psState.posts = posts || [];
+    psState.competitive = competitive || {};
 
-    // Like counts for their posts
+    // Merge this person's complete authoritative Score history into the local
+    // public ledger without replacing another co-winner from the same result.
+    state.boostByChallenge = state.boostByChallenge || {};
+    (psState.competitive.score_rows || []).forEach(row => {
+      const normalized = {
+        ...row,
+        detail: row.detail || {},
+        winner_id: row.winner_id || userId,
+        opponent_pts: Number(row.opponent_pts || 0),
+        vote_pts: Number(row.vote_pts || 0),
+        total_boost: Number(row.total_boost || 0)
+      };
+      const direct = state.boostByChallenge[normalized.challenge_id];
+      const key = !direct || String(direct.winner_id) === String(normalized.winner_id)
+        ? normalized.challenge_id
+        : `${normalized.challenge_id}:${normalized.winner_id}`;
+      state.boostByChallenge[key] = normalized;
+    });
+
+    // Like counts remain subordinate to the competitive identity and are also
+    // bounded. A failure is visible rather than silently becoming factual zero.
     const postIds = psState.posts.map(p => p.id);
     if (postIds.length > 0) {
-      const { data: likes } = await db.from('post_likes').select('post_id').in('post_id', postIds);
+      const likes = await fcDbReadV1101(
+        db.from('post_likes').select('post_id').in('post_id', postIds),
+        'Profile post reactions',
+        12000
+      );
+      if (!isCurrentRequest()) return;
       const counts = {};
       (likes || []).forEach(l => { counts[l.post_id] = (counts[l.post_id] || 0) + 1; });
       psState.postLikeCounts = counts;
     }
 
+    if (!isCurrentRequest()) return;
     renderProfileSheet();
   } catch (err) {
+    if (!isCurrentRequest()) return;
     console.error('[openUserProfile] error', err);
-    document.getElementById('psName').textContent = 'Error';
-    document.getElementById('psContent').innerHTML = `<div class="ps-empty" style="color:#ff6b7a">${escapeHtml(err.message || String(err))}</div>`;
+    psState.loadError = err;
+    document.getElementById('psName').textContent = 'Profile unavailable';
+    document.getElementById('psAvatar').textContent = '⚠️';
+    document.getElementById('psContent').innerHTML = `
+      <div class="ps-empty" style="color:var(--text-dim)">
+        <strong style="display:block;color:var(--text);margin-bottom:8px">Competitive profile could not be loaded.</strong>
+        ${escapeHtml(err.message || String(err))}
+        <div style="height:14px"></div>
+        <button type="button" class="btn btn-primary" id="psRetryV1102">Retry</button>
+      </div>`;
+    document.getElementById('psRetryV1102')?.addEventListener('click', () => openUserProfile(userId));
   }
 }
 
@@ -27556,13 +27662,14 @@ function renderProfileSheet() {
   psAvEl.innerHTML = psMetal
     ? honoredAvatarHTML(prof.id, avatarInner(prof.avatar || '🔥'), 200)
     : avatarInner(prof.avatar || '🔥');
-  // Current champion badge — only from Championship Challenge wins
-  const champTitlesPS = getChampTitles();
-  const nowPS = new Date();
-  const curMonthPS = `${nowPS.getFullYear()}-${String(nowPS.getMonth()+1).padStart(2,'0')}`;
-  const champCategories = Object.values(champTitlesPS)
-    .filter(t => t.userId === prof.id && t.month === curMonthPS && t.processed)
-    .map(t => t.category);
+  // v1102: the reigning title survives a calendar rollover until the next
+  // Championship is decided, subject to the existing two-month stale guard.
+  const authoritativeReigningV1102 = psState.competitive?.championship?.reigning;
+  const champCategories = Array.isArray(authoritativeReigningV1102)
+    ? authoritativeReigningV1102.map(t => t.category).filter(Boolean)
+    : Object.entries(reigningChampsByCat())
+        .filter(([, row]) => String(row.userId) === String(prof.id))
+        .map(([category]) => category);
   // Also check if leader (not champion) in any category
   const leaderCategories = Object.entries(state.leaderboardData?.leaders || {})
     .filter(([cat, uid]) => uid === prof.id && cat !== 'All')
@@ -27600,21 +27707,30 @@ function renderProfileSheet() {
   const oldStats = document.getElementById('psStats');
   if (oldStats) oldStats.style.display = 'none';
 
-  // Get stats: self from myWLT, others from leaderboardData
+  // v1102: signed-in and public viewers read the same profile-specific
+  // authoritative record. Co-winners are wins; participation is one result per
+  // challenge across every sudden-death round.
   let hcWins, hcLosses, hcTies, hcStreak, hcEntries;
-  if (isMe && state.myWLT) {
-    hcWins    = state.myWLT.wins;
-    hcLosses  = state.myWLT.losses;
-    hcTies    = state.myWLT.ties;
-    hcStreak  = state.myWLT.streak;
-    hcEntries = state.myRecord?.length || psState.entries.length;
+  const competitiveRecordV1102 = psState.competitive?.record;
+  if (competitiveRecordV1102) {
+    hcWins = Number(competitiveRecordV1102.wins || 0);
+    hcLosses = Number(competitiveRecordV1102.losses || 0);
+    hcTies = Number(competitiveRecordV1102.ties || 0);
+    hcStreak = Number(competitiveRecordV1102.streak || 0);
+    hcEntries = Number(competitiveRecordV1102.entries || 0);
+  } else if (isMe && state.myWLT) {
+    hcWins = Number(state.myWLT.wins || 0);
+    hcLosses = Number(state.myWLT.losses || 0);
+    hcTies = Number(state.myWLT.ties || 0);
+    hcStreak = Number(state.myWLT.streak || 0);
+    hcEntries = Number(state.myRecord?.length || psState.entries.length || 0);
   } else {
     const lu = (state.leaderboardData?.users || []).find(u => u.id === prof.id);
-    hcWins    = lu?.wins    || 0;
-    hcLosses  = lu?.losses  || 0;
-    hcTies    = 0; // not tracked in leaderboard
-    hcStreak  = lu?.streak  || 0;
-    hcEntries = psState.entries.length;
+    hcWins = Number(lu?.wins || 0);
+    hcLosses = Number(lu?.losses || 0);
+    hcTies = 0;
+    hcStreak = Number(lu?.streak || 0);
+    hcEntries = Number(psState.entries.length || 0);
   }
 
   const hcDecided = hcWins + hcLosses;
@@ -31635,7 +31751,14 @@ window.fcPublicFeedDiagnostics = function(){
   }
   function ledgerRows(userId,cat){
     const mk=monthKey();
-    return Object.values(state?.boostByChallenge||{}).filter(r=>r&&r.winner_id===userId&&r.month===mk&&(!cat||r.category===cat));
+    const globalRows=Object.values(state?.boostByChallenge||{});
+    const profileRows=(String(psState?.profile?.id||'')===String(userId)&&Array.isArray(psState?.competitive?.score_rows))?psState.competitive.score_rows:[];
+    const seen=new Set(),rows=[];
+    [...globalRows,...profileRows].forEach(r=>{
+      if(!r||String(r.winner_id)!==String(userId)||r.month!==mk||(cat&&r.category!==cat))return;
+      const key=`${r.challenge_id}:${r.winner_id}`;if(seen.has(key))return;seen.add(key);rows.push(r);
+    });
+    return rows;
   }
   function components(user,cat){
     const rows=ledgerRows(user.id,cat);
@@ -31713,7 +31836,7 @@ window.fcPublicFeedDiagnostics = function(){
   window.openChampionshipScoreSheet=async function(userId,cat,focus='total'){
     const body=document.getElementById('boostSheetBody'),sheet=document.getElementById('boostSheet');
     if(!body||!sheet)return;
-    const u=(state?.leaderboardData?.users||[]).find(x=>x.id===userId)||{};
+    const u=(state?.leaderboardData?.users||[]).find(x=>String(x.id)===String(userId))||(String(psState?.profile?.id||'')===String(userId)?psState.profile:{})||{};
     const rows=ledgerRows(userId,cat).sort((a,b)=>Number(b.total_boost||0)-Number(a.total_boost||0));
     const score=rows.reduce((s,r)=>s+Number(r.total_boost||0),0),opponent=rows.reduce((s,r)=>s+Number(r.opponent_pts||0),0),turnout=rows.reduce((s,r)=>s+Number(r.vote_pts||0),0);
     sheet.classList.add('open');body.innerHTML='<div style="padding:30px;text-align:center;color:var(--text-muted)">Loading score history…</div>';
@@ -32293,28 +32416,47 @@ html[data-theme="light"] .fc-v1036-archive{
   const recentSort=rows=>[...(rows||[])].sort((a,b)=>new Date(b?.created_at||b?.challenge?.created_at||0)-new Date(a?.created_at||a?.challenge?.created_at||0));
 
   function recordFor(prof,isMe){
+    const authoritative=psState?.competitive?.record;
+    if(authoritative){
+      const wins=Number(authoritative.wins||0),losses=Number(authoritative.losses||0),ties=Number(authoritative.ties||0);
+      return {wins,losses,ties,streak:Number(authoritative.streak||0),entries:Number(authoritative.entries||0),pct:(wins+losses)?Math.round(wins/(wins+losses)*100):0};
+    }
     if(isMe&&state?.myWLT){
       const wins=Number(state.myWLT.wins||0),losses=Number(state.myWLT.losses||0),ties=Number(state.myWLT.ties||0);
-      return {wins,losses,ties,entries:Number(state.myRecord?.length||psState?.entries?.length||0),pct:(wins+losses)?Math.round(wins/(wins+losses)*100):0};
+      return {wins,losses,ties,streak:Number(state.myWLT.streak||0),entries:Number(state.myRecord?.length||psState?.entries?.length||0),pct:(wins+losses)?Math.round(wins/(wins+losses)*100):0};
     }
     const u=userRow(prof.id),wins=Number(u?.wins||0),losses=Number(u?.losses||0);
-    return {wins,losses,ties:0,entries:Number(psState?.entries?.length||0),pct:(wins+losses)?Math.round(wins/(wins+losses)*100):0};
+    return {wins,losses,ties:0,streak:Number(u?.streak||0),entries:Number(psState?.entries?.length||0),pct:(wins+losses)?Math.round(wins/(wins+losses)*100):0};
   }
   function scoreRows(prof){
+    const authoritative=Array.isArray(psState?.competitive?.score_by_category)?psState.competitive.score_by_category:[];
+    const byCat=Object.fromEntries(authoritative.map(r=>[r.category,r]));
     const u=userRow(prof.id)||{};
     const map=u.boostMonthByCat||{},opp=u.opponentPtsMonthByCat||{},turn=u.turnoutPtsMonthByCat||{},wins=u.scoreWinsMonthByCat||{};
     const base=Array.isArray(CATEGORIES)?CATEGORIES:[];
-    const cats=[...new Set([...base,...Object.keys(map)])];
-    return cats.map(cat=>({cat,score:Number(map[cat]||0),opponent:Number(opp[cat]||0),turnout:Number(turn[cat]||0),wins:Number(wins[cat]||0)}))
-      .sort((a,b)=>b.score-a.score||base.indexOf(a.cat)-base.indexOf(b.cat));
+    const cats=[...new Set([...base,...Object.keys(map),...Object.keys(byCat)])];
+    return cats.map(cat=>{
+      const a=byCat[cat];
+      return {cat,score:Number(a?.score??map[cat]??0),opponent:Number(a?.opponent_points??opp[cat]??0),turnout:Number(a?.turnout_points??turn[cat]??0),wins:Number(a?.scoring_wins??wins[cat]??0)};
+    }).sort((a,b)=>b.score-a.score||base.indexOf(a.cat)-base.indexOf(b.cat));
   }
   function championshipsFor(prof){
+    const authoritative=psState?.competitive?.championship;
+    if(authoritative){
+      const wins=(authoritative.titles||[]).map(r=>({userId:prof.id,challengeId:r.challenge_id,category:r.category,month:r.month,wins:r.vote_count}));
+      const regularWins=Number(psState?.competitive?.regular_wins||0);
+      const titleCount=Number(authoritative.title_count||wins.length||0);
+      const ls=typeof levelStatusForCounts==='function'?levelStatusForCounts(regularWins,titleCount,typeof FOUNDERS!=='undefined'&&Array.isArray(FOUNDERS)&&FOUNDERS.includes(prof.id)):null;
+      return {wins,appearances:Number(authoritative.appearances||0),reigning:authoritative.reigning||[],ls};
+    }
     const wins=(state?.hofData||[]).filter(r=>String(r.userId)===String(prof.id));
     const appearances=new Set((psState?.entries||[]).filter(e=>e?.challenge?.is_championship).map(e=>e.challenge.id)).size;
     const ls=typeof getLadderStatus==='function'?getLadderStatus(prof.id):null;
-    return {wins,appearances,ls};
+    return {wins,appearances,reigning:[],ls};
   }
   function strongestFor(prof){
+    const authoritative=psState?.competitive?.strongest_score;
+    if(authoritative&&Number(authoritative.total_boost||0)>0)return authoritative;
     let best=null;
     Object.values(state?.boostByChallenge||{}).forEach(r=>{
       if(String(r?.winner_id)!==String(prof.id)||!Number(r?.total_boost||0))return;
@@ -32335,9 +32477,13 @@ html[data-theme="light"] .fc-v1036-archive{
     return rows.sort((a,b)=>new Date(b.ch.created_at||0)-new Date(a.ch.created_at||0)).slice(0,3);
   }
   function titleChips(prof,champ,scoreRowsData){
-    const chips=[],m=new Date().toLocaleDateString(undefined,{month:'short'});
-    const current=(state?.hofData||[]).filter(r=>String(r.userId)===String(prof.id)&&r.month===monthKey());
-    current.forEach(r=>chips.push(`<span class="fc-v1036-title-chip">${esc(r.category)} Champion · ${esc(m)}</span>`));
+    const chips=[];
+    const reigning=Array.isArray(champ.reigning)&&champ.reigning.length
+      ? champ.reigning
+      : Object.entries(typeof reigningChampsByCat==='function'?reigningChampsByCat():{})
+          .filter(([,r])=>String(r.userId)===String(prof.id))
+          .map(([category,r])=>({category,month:r.month}));
+    reigning.forEach(r=>chips.push(`<span class="fc-v1036-title-chip">${esc(r.category)} Champion · Reigning</span>`));
     const leaders=(scoreRowsData||[]).filter(r=>r.score>0).filter(r=>{
       const all=(state?.leaderboardData?.users||[]).map(u=>Number(u?.boostMonthByCat?.[r.cat]||0));
       const max=all.length?Math.max(...all):0;
@@ -35891,7 +36037,8 @@ body.fc-dialog-open-v1100{overflow:hidden!important}
     '#tourOverlay',
     '#celebrationOverlay',
     '.fc-public-browser',
-    '#emberGuidanceModal'
+    '#emberGuidanceModal',
+    '.fc-v1036-archive'
   ].join(',');
 
   const labels = {
@@ -35904,7 +36051,8 @@ body.fc-dialog-open-v1100{overflow:hidden!important}
     followingSheet:'Following and followers',
     feedViewerSheet:'Challenge entry viewer',
     celebrationOverlay:'Achievement',
-    getAppPrompt:'Get the FlamesChallenge app'
+    getAppPrompt:'Get the FlamesChallenge app',
+    fcProfileArchiveV1036:'Profile activity archive'
   };
 
   const closeFns = {
@@ -36212,6 +36360,11 @@ body.fc-dialog-open-v1100{overflow:hidden!important}
   prepareControls(document);
   sync();
 })();
+</script>
+<script id="fc-v1102-profile-integrity-note-js">
+/* v1102 source marker: competitive profiles use fc_profile_competitive_v1102;
+   competitive co-winners remain winners and can earn formula-v4 Score. */
+window.FC_PROFILE_VERSION = 'v1102';
 </script>
 </body>
 </html>
