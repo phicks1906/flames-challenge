@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1080 — Adaptive Entry Card Height</title>
+<title>FlamesChallenge v1081 — Challenge Detail Card Polish</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1080 · adaptive-entry-card-height" />
-<meta name="fc-whatsnew" content="Makes each entry card and carousel row match the active submission’s actual shape, removing the tall empty space beneath landscape photos." />
+<meta name="fc-build" content="v1081 · challenge-detail-card-polish" />
+<meta name="fc-whatsnew" content="Caps portrait entry cards, keeps challenge content below the header, removes duplicate pagination dots, and hides Creator Insights until analytics is configured." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -34207,6 +34207,225 @@ window.__fcBuildV1079={build:'v1079',basedOn:'v1078',focus:'media-aware entry ca
     adaptiveRailHeight:true,
     landscapeBlankSpaceRemoved:true,
     nextCardPeekPx:0,
+    viewerChanged:false,
+    navigationChanged:false,
+    onboardingChanged:false,
+    scoringChanged:false,
+    moderationChanged:false,
+    backendChanged:false,
+    sqlChanges:0,
+    edgeFunctionChanges:0
+  };
+})();
+</script>
+
+
+<style id="fc-v1081-challenge-detail-card-polish-css">
+/* v1081 — Challenge Detail visual corrections from signed-in iPhone testing. */
+#challengeDetailSheet > .cd-sheet-header{
+  z-index:300!important;
+}
+#challengeDetailSheet .cd-sheet-inner{
+  position:relative;
+  z-index:1;
+}
+
+/* The arrow counter already states position. A second dot pager duplicates it
+   and can end up stranded far below short landscape entries. */
+#challengeDetailSheet #cdEntriesDots{
+  display:none!important;
+  min-height:0!important;
+  margin:0!important;
+  padding:0!important;
+}
+
+/* Challenge Detail photos use a bounded card stage. The full original remains
+   available in the full-screen viewer. Portrait photos no longer create a
+   screen-length card; contained media sits over a quiet blurred fill. */
+#challengeDetailSheet .cd-entry-media.fc-cd-photo-stage-v1081{
+  position:relative!important;
+  display:grid!important;
+  place-items:center!important;
+  width:100%!important;
+  height:auto!important;
+  max-height:none!important;
+  overflow:hidden!important;
+  isolation:isolate;
+  background:#090807!important;
+}
+#challengeDetailSheet .cd-entry-media.fc-cd-photo-portrait-v1081{aspect-ratio:4/5!important}
+#challengeDetailSheet .cd-entry-media.fc-cd-photo-square-v1081{aspect-ratio:1/1!important}
+#challengeDetailSheet .cd-entry-media.fc-cd-photo-landscape-v1081{aspect-ratio:16/9!important}
+#challengeDetailSheet .cd-entry-media.fc-cd-photo-stage-v1081 > .fc-cd-entry-backdrop-v1081{
+  position:absolute!important;
+  inset:-8%!important;
+  z-index:0!important;
+  width:116%!important;
+  height:116%!important;
+  max-height:none!important;
+  object-fit:cover!important;
+  filter:blur(28px) brightness(.43) saturate(1.08)!important;
+  transform:scale(1.08)!important;
+  opacity:.9!important;
+  pointer-events:none!important;
+}
+#challengeDetailSheet .cd-entry-media.fc-cd-photo-stage-v1081 > img:not(.fc-cd-entry-backdrop-v1081){
+  position:relative!important;
+  z-index:1!important;
+  width:100%!important;
+  height:100%!important;
+  max-height:none!important;
+  object-fit:contain!important;
+  background:transparent!important;
+}
+
+/* Creator Insights is not a usable member feature until its analytics table
+   and RPC are installed. Keep every entry point out of the interface until a
+   runtime probe confirms both dependencies. */
+body.fc-insights-unavailable-v1081 .cd-share-btn[onclick*="openCreatorInsightsV1048"],
+body.fc-insights-unavailable-v1081 [data-v1054-action="insights"],
+body.fc-insights-unavailable-v1081 .pm-tile[onclick*="openCreatorInsightsV1048"]{
+  display:none!important;
+}
+</style>
+
+<script id="fc-v1081-challenge-detail-card-polish-js">
+(function(){
+  'use strict';
+
+  const PHOTO_CLASSES=[
+    'fc-cd-photo-portrait-v1081',
+    'fc-cd-photo-square-v1081',
+    'fc-cd-photo-landscape-v1081'
+  ];
+
+  function fitPhoto(img){
+    if(!img || !img.isConnected || img.classList.contains('fc-cd-entry-backdrop-v1081')) return;
+    const media=img.parentElement;
+    if(!media?.classList.contains('cd-entry-media')) return;
+
+    media.classList.add('fc-cd-photo-stage-v1081');
+    media.classList.remove(...PHOTO_CLASSES);
+    const ratio=(Number(img.naturalWidth)||0)/(Number(img.naturalHeight)||1);
+    const shape=ratio>=1.15
+      ? 'fc-cd-photo-landscape-v1081'
+      : ratio<=0.88
+        ? 'fc-cd-photo-portrait-v1081'
+        : 'fc-cd-photo-square-v1081';
+    media.classList.add(shape);
+
+    let backdrop=media.querySelector(':scope > .fc-cd-entry-backdrop-v1081');
+    if(!backdrop){
+      backdrop=img.cloneNode(false);
+      backdrop.className='fc-cd-entry-backdrop-v1081';
+      backdrop.alt='';
+      backdrop.setAttribute('aria-hidden','true');
+      backdrop.removeAttribute('loading');
+      media.insertBefore(backdrop,img);
+    }else if(backdrop.src!==img.currentSrc && backdrop.src!==img.src){
+      backdrop.src=img.currentSrc||img.src;
+    }
+  }
+
+  function wirePhoto(img){
+    if(!img || img.dataset.fcCdPhotoV1081==='1' || img.classList.contains('fc-cd-entry-backdrop-v1081')) return;
+    img.dataset.fcCdPhotoV1081='1';
+    const media=img.parentElement;
+    if(media?.classList.contains('cd-entry-media')){
+      media.classList.add('fc-cd-photo-stage-v1081','fc-cd-photo-portrait-v1081');
+    }
+    if(img.complete && img.naturalWidth) fitPhoto(img);
+    else img.addEventListener('load',()=>fitPhoto(img),{once:true});
+  }
+
+  function polishChallengeEntries(){
+    document.querySelectorAll('#challengeDetailSheet #cdEntriesGrid .cd-entry-media > img:not(.fc-cd-entry-backdrop-v1081)').forEach(wirePhoto);
+    const dots=document.getElementById('cdEntriesDots');
+    if(dots){
+      dots.innerHTML='';
+      dots.style.display='none';
+      dots.setAttribute('aria-hidden','true');
+    }
+  }
+
+  window.fcRegisterChallengeDetailEnhancerV1078?.('entry-card-polish-v1081',50,polishChallengeEntries);
+
+  let insightsState='unknown';
+  let insightsProbe=null;
+  const setupError=e=>/analytics_events|get_creator_analytics_v1048|schema cache|does not exist|42P01|PGRST202|PGRST205/i.test(String(e?.message||e||''));
+
+  function paintInsightsAvailability(available){
+    insightsState=available?'available':'unavailable';
+    document.body?.classList.toggle('fc-insights-unavailable-v1081',!available);
+  }
+
+  async function probeInsights(){
+    if(insightsState==='available') return true;
+    if(insightsState==='unavailable') return false;
+    if(insightsProbe) return insightsProbe;
+    if(typeof db==='undefined' || typeof state==='undefined' || !state?.profile?.id) return false;
+
+    insightsProbe=(async()=>{
+      try{
+        const table=await db.from('analytics_events').select('id').limit(1);
+        if(table.error) throw table.error;
+        const rpc=await db.rpc('get_creator_analytics_v1048',{p_challenge_ids:[]});
+        if(rpc.error) throw rpc.error;
+        paintInsightsAvailability(true);
+        return true;
+      }catch(err){
+        if(!setupError(err)) console.warn('Creator Insights availability check failed',err);
+        paintInsightsAvailability(false);
+        return false;
+      }finally{
+        insightsProbe=null;
+      }
+    })();
+    return insightsProbe;
+  }
+
+  const baseOpenInsights=window.openCreatorInsightsV1048;
+  if(typeof baseOpenInsights==='function'){
+    window.openCreatorInsightsV1048=async function(){
+      const available=await probeInsights();
+      if(!available){
+        document.getElementById('creatorInsightsSheetV1048')?.classList.remove('open');
+        document.body.style.overflow='';
+        if(typeof toast==='function') toast('Creator Insights isn’t available yet.');
+        return;
+      }
+      return baseOpenInsights.apply(this,arguments);
+    };
+  }
+
+  function start(){
+    document.body.classList.add('fc-insights-unavailable-v1081');
+    polishChallengeEntries();
+    const observer=new MutationObserver(records=>{
+      let shouldPolish=false;
+      for(const record of records){
+        if(record.addedNodes.length){shouldPolish=true;break;}
+      }
+      if(shouldPolish) polishChallengeEntries();
+      if(insightsState==='unknown' && state?.profile?.id) probeInsights();
+    });
+    observer.observe(document.body,{childList:true,subtree:true});
+    if(state?.profile?.id) probeInsights();
+  }
+
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',start,{once:true});
+  else start();
+
+  window.__fcBuildV1081={
+    build:'v1081',
+    basedOn:'v1080',
+    focus:'Challenge Detail card polish and unavailable Insights gating',
+    portraitCardAspect:'4:5',
+    squareCardAspect:'1:1',
+    landscapeCardAspect:'16:9',
+    challengeHeaderLayerCorrected:true,
+    duplicateDetailDotsRemoved:true,
+    insightsHiddenUntilConfigured:true,
     viewerChanged:false,
     navigationChanged:false,
     onboardingChanged:false,
