@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1077 — Challenge Detail Action Cleanup</title>
+<title>FlamesChallenge v1078 — Challenge Detail Rendering Pipeline</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1077 · challenge-detail-action-cleanup" />
-<meta name="fc-whatsnew" content="Removes duplicate Challenge Detail actions so Promote and Rules each have one authoritative control." />
+<meta name="fc-build" content="v1078 · challenge-detail-rendering-pipeline" />
+<meta name="fc-whatsnew" content="Consolidates Challenge Detail into one ordered rendering pipeline with shared phase, moderation, entry, action, and empty-state logic." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -20914,10 +20914,10 @@ function renderChampionshipHero(ch, status, countdownTarget) {
 }
 
 function challengePromotionBlocked() {
+  const shared = window.fcGetChallengeDetailStateV1078?.(state.currentChallenge);
+  if (shared) return shared.promotionBlocked;
   return (state.currentEntries || []).some(e =>
-    e.moderation_status === 'pending' ||
-    e.moderation_status === 'flagged' ||
-    e.moderation_status === 'escalated');
+    ['pending','flagged','escalated'].includes(String(e.moderation_status || '').toLowerCase()));
 }
 
 function renderChallengeDetail() {
@@ -20926,7 +20926,10 @@ function renderChallengeDetail() {
   const ch = state.currentChallenge;
   if (!ch) return;
 
-  const status = computeChallengeStatus(ch);
+  const detailState = window.fcGetChallengeDetailStateV1078
+    ? window.fcGetChallengeDetailStateV1078(ch)
+    : null;
+  const status = detailState?.status || computeChallengeStatus(ch);
   const statusLabel = challengePhase(status).label;
   const countdownTarget = status === 'submitting' ? ch.submission_deadline : status === 'sd_submitting' ? ch.sd_submit_end : (status === 'voting' || status === 'sudden_death') ? ch.voting_end : null;
 
@@ -21037,19 +21040,20 @@ function renderChallengeDetail() {
   // fresh (this-round) entry. The normal "already entered" check looks at the
   // current round's entries, not the original ones.
   const myId = state.profile?.id;
-  const isSdSub = status === 'sd_submitting';
-  const sdRound = ch.sd_round || 0;
-  // v715 — was .some(e => e.user_id === myId && ...) with no moderation check, so
-  // a rejected entry counted as entered and hid the submit button forever.
-  const enteredThisRound = state.profile && state.currentEntries.some(e =>
-    e.user_id === myId && e.moderation_status !== 'rejected' && (isSdSub ? (e.sd_round || 0) === sdRound : true));
-  const userHasEntered = enteredThisRound; // v715 — enteredThisRound now excludes rejected; see below
-  const challengeFull = state.currentEntries.length >= MAX_ENTRIES_PER_CHALLENGE;
-  const amTiedPlayer = isSdSub && Array.isArray(ch.sd_user_ids) && ch.sd_user_ids.includes(myId);
-  const canEnter = state.profile && !userHasEntered && (
+  const isSdSub = detailState?.isSdSubmitting ?? (status === 'sd_submitting');
+  const sdRound = detailState?.sdRound ?? (ch.sd_round || 0);
+  // v1078 — entry availability, moderation, and phase state now come from the
+  // shared Challenge Detail state object used by the brief, rules, counts, and
+  // post-render pipeline. This prevents one layer from disagreeing with another.
+  const enteredThisRound = detailState?.enteredThisRound ?? (state.profile && state.currentEntries.some(e =>
+    e.user_id === myId && e.moderation_status !== 'rejected' && (isSdSub ? (e.sd_round || 0) === sdRound : true)));
+  const userHasEntered = detailState?.userHasEntered ?? enteredThisRound;
+  const challengeFull = detailState?.challengeFull ?? (state.currentEntries.length >= MAX_ENTRIES_PER_CHALLENGE);
+  const amTiedPlayer = detailState?.amTiedPlayer ?? (isSdSub && Array.isArray(ch.sd_user_ids) && ch.sd_user_ids.includes(myId));
+  const canEnter = detailState?.canEnter ?? (state.profile && !userHasEntered && (
     (status === 'submitting' && !challengeFull) ||
     (isSdSub && amTiedPlayer)
-  ) && canEnterChampionship(ch); // v702 — see canEnterChampionship
+  ) && canEnterChampionship(ch)); // v702 — see canEnterChampionship
   document.getElementById('cdAddEntryBtn').style.display = canEnter ? 'block' : 'none';
   const cdWrap = document.getElementById('cdSubmitBtnWrap');
   if (cdWrap) cdWrap.style.display = canEnter ? 'block' : 'none';
@@ -21063,19 +21067,14 @@ function renderChallengeDetail() {
 
   // ── Sudden Death entry visibility ────────────────────────────────────────────
   //  submitting → hide ALL entries (blind round); voting → only this round's entries
-  let sdVisibleEntries;
-  if (ch.sd_phase === 'submitting') {
-    sdVisibleEntries = [];
-  } else if (ch.sd_phase === 'voting') {
-    const _r = ch.sd_round || 0;
-    // v715 — the LIST may include your own rejected entry (so you can see what
-    // happened), but the COUNT must not: a rejected entry isn't competing, and
-    // "3 entries" has to mean the same number to everyone. v703's point stands —
-    // it just shouldn't have been enforced by deleting the row from the list.
-    sdVisibleEntries = state.currentEntries.filter(e => (e.sd_round || 0) === _r && fcEntryCompetesV1060(e));
-  } else {
-    sdVisibleEntries = state.currentEntries.filter(fcEntryCompetesV1060);
-  }
+  const sdVisibleEntries = detailState?.visibleEntries || (() => {
+    if (ch.sd_phase === 'submitting') return [];
+    if (ch.sd_phase === 'voting') {
+      const _r = ch.sd_round || 0;
+      return state.currentEntries.filter(e => (e.sd_round || 0) === _r && fcEntryCompetesV1060(e));
+    }
+    return state.currentEntries.filter(fcEntryCompetesV1060);
+  })();
 
   // Entry count + grid
   // v715 — LIST vs COUNT are different questions, and conflating them is what
@@ -21123,7 +21122,7 @@ function renderChallengeDetail() {
   const prevBtn = document.getElementById('cdEntryPrev');
   const nextBtn = document.getElementById('cdEntryNext');
   if (sortedEntries.length === 0) {
-    const _hasPrivatePendingEntry = (state.currentEntries || []).some(e =>
+    const _hasPrivatePendingEntry = detailState?.hasPrivatePendingEntry ?? (state.currentEntries || []).some(e =>
       e.user_id === state.profile?.id &&
       ['pending', 'flagged', 'escalated'].includes(String(e.moderation_status || '').toLowerCase())
     );
@@ -30301,6 +30300,59 @@ window.__fcVotingExperienceIntegrity={build:'v1024',liveTallies:'superseded by v
 .fc-v1025-live-race .copy{min-width:0}.fc-v1025-live-race .kicker{font-size:9px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:#ff9860}.fc-v1025-live-race strong{display:block;margin-top:3px;font-size:14px;color:#fff}.fc-v1025-live-race small{display:block;margin-top:3px;font-size:11px;color:#9e9188;line-height:1.35}.fc-v1025-live-race .total{flex:0 0 auto;text-align:center;min-width:54px;padding:8px 10px;border-radius:12px;background:rgba(0,0,0,.24);font-weight:850;color:#fff}.fc-v1025-live-race .total span{display:block;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:#8d817a;margin-top:2px}
 .fc-v1025-sd-rule{margin-top:8px;color:#9f9188;font-size:11px;line-height:1.4}
 </style>
+<script id="fc-v1078-challenge-detail-pipeline-bootstrap-js">
+(function(){
+  'use strict';
+  const MOD_PENDING = new Set(['pending','flagged','escalated']);
+  const registry = window.__fcChallengeDetailEnhancersV1078 || [];
+  window.__fcChallengeDetailEnhancersV1078 = registry;
+
+  window.fcRegisterChallengeDetailEnhancerV1078 = function(name, order, fn){
+    if(typeof fn !== 'function') return;
+    const existing = registry.find(x => x.name === name);
+    if(existing){ existing.order = order; existing.fn = fn; return; }
+    registry.push({name, order:Number(order)||100, fn});
+  };
+
+  window.fcGetChallengeDetailStateV1078 = function(ch = state.currentChallenge){
+    if(!ch) return null;
+    const status = computeChallengeStatus(ch);
+    const allEntries = Array.isArray(state.currentEntries) ? state.currentEntries : [];
+    const myId = state.profile?.id || null;
+    const isSdSubmitting = status === 'sd_submitting';
+    const sdRound = Number(ch.sd_round || 0);
+    const inCurrentRound = e => !isSdSubmitting || Number(e.sd_round || 0) === sdRound;
+    const approvedEntries = allEntries.filter(e => fcEntryCompetesV1060(e));
+    const visibleEntries = ch.sd_phase === 'submitting'
+      ? []
+      : ch.sd_phase === 'voting'
+        ? approvedEntries.filter(e => Number(e.sd_round || 0) === sdRound)
+        : approvedEntries;
+    const myEntry = myId ? allEntries.find(e =>
+      String(e.user_id) === String(myId) &&
+      String(e.moderation_status || '').toLowerCase() !== 'rejected' &&
+      inCurrentRound(e)) : null;
+    const myModeration = String(myEntry?.moderation_status || '').toLowerCase();
+    const hasPrivatePendingEntry = !!myEntry && MOD_PENDING.has(myModeration);
+    const enteredThisRound = !!myEntry;
+    const challengeFull = allEntries.length >= MAX_ENTRIES_PER_CHALLENGE;
+    const amTiedPlayer = isSdSubmitting && Array.isArray(ch.sd_user_ids) && ch.sd_user_ids.includes(myId);
+    const canEnter = !!state.profile && !enteredThisRound && (
+      (status === 'submitting' && !challengeFull) ||
+      (isSdSubmitting && amTiedPlayer)
+    ) && canEnterChampionship(ch);
+    const promotionBlocked = allEntries.some(e => MOD_PENDING.has(String(e.moderation_status || '').toLowerCase()));
+    return {
+      ch, status, allEntries, approvedEntries, visibleEntries, myId, myEntry,
+      myModeration, hasPrivatePendingEntry, enteredThisRound,
+      userHasEntered:enteredThisRound, challengeFull, amTiedPlayer, canEnter,
+      isSdSubmitting, sdRound, promotionBlocked,
+      publicEntryCount:visibleEntries.length
+    };
+  };
+})();
+</script>
+
 <script id="fc-v1025-sudden-death-parity-js">
 (function(){
   'use strict';
@@ -30340,11 +30392,7 @@ window.__fcVotingExperienceIntegrity={build:'v1024',liveTallies:'superseded by v
     leaderMemory.set(ch.id,leaderKey);
   }
 
-  const priorDetail=window.renderChallengeDetail;
-  window.renderChallengeDetail=function(){const r=priorDetail?.apply(this,arguments);requestAnimationFrame(renderLiveRace);return r};
-
-  const priorNotice=window.renderChallengeVotingNoticeV1024;
-  window.renderChallengeVotingNoticeV1024=function(){const r=priorNotice?.apply(this,arguments);requestAnimationFrame(renderLiveRace);return r};
+  window.fcRegisterChallengeDetailEnhancerV1078?.('live-race',10,renderLiveRace);
 
   // Server function is the source of truth. The client call is an idempotent
   // foreground fallback so a transition is not delayed if cron is temporarily late.
@@ -30379,7 +30427,7 @@ window.__fcVotingExperienceIntegrity={build:'v1024',liveTallies:'superseded by v
       const el=byId('cdVotingNotice');const row=el?.querySelector('.row>div:last-child');
       if(row&&!row.querySelector('.fc-v1025-sd-rule'))row.insertAdjacentHTML('beforeend','<div class="fc-v1025-sd-rule">One finalist submitting wins by default. If nobody submits—or the runoff ties again—the tied finalists are co-winners. No manual decision and no extension.</div>');
     }
-    requestAnimationFrame(renderLiveRace);return r;
+    return r;
   };
 })();
 </script>
@@ -30986,15 +31034,9 @@ window.__fcSuddenDeathParity={build:'v1025',regularAndChampionships:'same new-en
       const e=eligibility(ch),badge=document.createElement('div');badge.className='fc-score-eligibility-v1032'+(e.neutral?' neutral':'');badge.textContent=e.text;card.insertAdjacentElement('afterbegin',badge);
     });
   }
-  function decorateChallengeDetail(){
-    const ch=state.currentChallenge,hero=document.getElementById('cdHero');if(!ch||!hero)return;
-    document.getElementById('fcScoreEligibilityDetailV1032')?.remove();
-    const e=eligibility(ch),wrap=document.createElement('div');wrap.id='fcScoreEligibilityDetailV1032';wrap.innerHTML=`<div class="fc-score-eligibility-v1032${e.neutral?' neutral':''}">${esc(e.text)}</div>`;hero.insertAdjacentElement('afterend',wrap);
-  }
 
   const priorLb=window.renderLeaderboard;if(typeof priorLb==='function')window.renderLeaderboard=function(){const r=priorLb.apply(this,arguments);requestAnimationFrame(renderScoreRace);return r};
   const priorCh=window.renderChallenges;if(typeof priorCh==='function')window.renderChallenges=function(){const r=priorCh.apply(this,arguments);requestAnimationFrame(decorateChallengeCards);return r};
-  const priorDetail=window.renderChallengeDetail;if(typeof priorDetail==='function')window.renderChallengeDetail=function(){const r=priorDetail.apply(this,arguments);requestAnimationFrame(decorateChallengeDetail);return r};
   document.addEventListener('click',e=>{if(e.target.closest('#lbCategoryTabs [data-lb-cat]'))setTimeout(renderScoreRace,0)});
   const tabs=document.getElementById('lbCategoryTabs');if(tabs)new MutationObserver(()=>requestAnimationFrame(renderScoreRace)).observe(tabs,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{requestAnimationFrame(renderScoreRace);requestAnimationFrame(decorateChallengeCards)});else{requestAnimationFrame(renderScoreRace);requestAnimationFrame(decorateChallengeCards)}
@@ -31150,7 +31192,10 @@ window.__fcSuddenDeathParity={build:'v1025',regularAndChampionships:'same new-en
 
   function challengeEntryCount(ch,detail=false){
     if(!ch)return 0;
-    if(detail&&state?.currentChallenge?.id===ch.id)return (state.currentEntries||[]).filter(e=>e.moderation_status!=='rejected').length;
+    if(detail&&state?.currentChallenge?.id===ch.id){
+      const shared=window.fcGetChallengeDetailStateV1078?.(ch);
+      return shared ? shared.approvedEntries.length : (state.currentEntries||[]).filter(fcEntryCompetesV1060).length;
+    }
     return Number(state?.entryCounts?.[ch.id]||0);
   }
   function eligibility(ch,detail=false){
@@ -31204,14 +31249,14 @@ window.__fcSuddenDeathParity={build:'v1025',regularAndChampionships:'same new-en
   function afterRace(smooth=false){requestAnimationFrame(()=>requestAnimationFrame(()=>{renderScoreRaceV1033();centerSelectedCategory(smooth)}))}
   const priorLb=window.renderLeaderboard;if(typeof priorLb==='function')window.renderLeaderboard=function(){const r=priorLb.apply(this,arguments);afterRace(false);return r};
   const priorCh=window.renderChallenges;if(typeof priorCh==='function')window.renderChallenges=function(){const r=priorCh.apply(this,arguments);afterCards();return r};
-  const priorDetail=window.renderChallengeDetail;if(typeof priorDetail==='function')window.renderChallengeDetail=function(){const r=priorDetail.apply(this,arguments);requestAnimationFrame(()=>requestAnimationFrame(decorateChallengeDetailV1033));return r};
+  window.fcRegisterChallengeDetailEnhancerV1078?.('score-eligibility',20,decorateChallengeDetailV1033);
   document.addEventListener('click',e=>{if(e.target.closest('#lbCategoryTabs [data-lb-cat]'))setTimeout(()=>afterRace(true),0)});
   const tabs=document.getElementById('lbCategoryTabs');
   if(tabs)new MutationObserver(()=>afterRace(false)).observe(tabs,{childList:true,subtree:true,attributes:true,attributeFilter:['class']});
   const grid=document.getElementById('challengesGrid');
   if(grid)new MutationObserver(()=>afterCards()).observe(grid,{childList:true,subtree:true});
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{afterRace(false);afterCards();requestAnimationFrame(()=>requestAnimationFrame(decorateChallengeDetailV1033))});
-  else{afterRace(false);afterCards();requestAnimationFrame(()=>requestAnimationFrame(decorateChallengeDetailV1033))}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{afterRace(false);afterCards();});
+  else{afterRace(false);afterCards();}
 })();
 </script>
 
@@ -32679,12 +32724,7 @@ html[data-theme="light"] body #challengesGrid > .fcc-challenge-wrap:not(.champ-g
     hero.insertAdjacentElement('afterend',details);
     sheet.onscroll=()=>sheet.classList.toggle('fc-cd-scrolled-v1043',sheet.scrollTop>72);
   }
-  const priorChallengeDetailV1043=window.renderChallengeDetail;
-  if(typeof priorChallengeDetailV1043==='function')window.renderChallengeDetail=function(){
-    const result=priorChallengeDetailV1043.apply(this,arguments);
-    requestAnimationFrame(()=>requestAnimationFrame(()=>requestAnimationFrame(decorateChallengeDetailV1043)));
-    return result;
-  };
+  window.fcRegisterChallengeDetailEnhancerV1078?.('rules-and-score-panel',30,decorateChallengeDetailV1043);
   window.__fcOnboardingV1044 = {
     authAlwaysDark:true,
     requiredTheme:true,
@@ -32918,10 +32958,8 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
     b.onclick=()=>fcOpenEmberWithQuestion(question||'What matters on this screen?'); return b;
   }
   function decorateContextualAccess(){
-    const details=document.getElementById('fcChallengeInfoV1043');
-    if(details&&!document.getElementById('fcEmberChallengeAction')){
-      const b=askButton('fcEmberChallengeAction','Ask Ember about this challenge','What matters next in this challenge?'); details.insertAdjacentElement('afterend',b);
-    }
+    // v1078 — Challenge Detail has one Ask Ember control in its compact
+    // status card. Do not recreate the superseded hidden contextual button.
     const titles=document.querySelector('#leaderboardViewSection .section-sub');
     if(titles&&!document.getElementById('fcEmberTitlesAction')) titles.insertAdjacentElement('afterend',askButton('fcEmberTitlesAction','Ask Ember about this race','How do I qualify from my current position?'));
     const p=document.querySelector('#profileSheet .fc-v1036-ember');
@@ -32942,7 +32980,7 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
   window.addEventListener('pageshow',()=>{installSettingsRow();enforceMode();});
 
   // Re-run contextual access after screen renderers most likely to replace nodes.
-  ['renderChallengeDetail','renderLeaderboard','renderProfileTab','renderFeed','renderChallenges'].forEach(name=>{
+  ['renderLeaderboard','renderProfileTab','renderFeed','renderChallenges'].forEach(name=>{
     const fn=window[name]; if(typeof fn!=='function')return;
     window[name]=function(){const r=fn.apply(this,arguments);requestAnimationFrame(()=>requestAnimationFrame(decorateContextualAccess));return r;};
   });
@@ -33061,58 +33099,6 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
     const prev=sheet.dataset.prevOverflow||''; sheet.classList.remove('open'); document.body.style.overflow=prev;
   };
 
-  function countEligibleEntries(ch){
-    const round=ch?.sd_phase==='voting'||ch?.sd_phase==='submitting'?(ch.sd_round||0):null;
-    return (state.currentEntries||[]).filter(e=>e.moderation_status!=='rejected' && (round==null || !ch.sd_phase || (e.sd_round||0)===round));
-  }
-  function validVotesFor(entries){const ids=new Set(entries.map(e=>e.id));return (state.currentVotes||[]).filter(v=>ids.has(v.entry_id));}
-  function finalOutcome(ch){
-    const entries=countEligibleEntries(ch),votes=validVotesFor(entries); if(entries.length<2 && !(ch?.sd_round>0&&entries.length===1))return {kind:'no-contest'};
-    if(ch?.sd_round>0&&entries.length===1&&votes.length===0)return {kind:'winner',walkover:true};
-    const tally={};votes.forEach(v=>tally[v.entry_id]=(tally[v.entry_id]||0)+1); let max=0;entries.forEach(e=>max=Math.max(max,tally[e.id]||0));
-    if(max===0&&ch?.sd_round>0&&entries.length>1)return {kind:'co-winners'};
-    const leaders=entries.filter(e=>(tally[e.id]||0)===max&&max>0); if(leaders.length>1)return {kind:ch?.sd_round>0?'co-winners':'tie'};
-    return {kind:leaders.length===1?'winner':'no-result'};
-  }
-  function deadline(ch,status){
-    const raw=status==='submitting'?ch.submission_deadline:status==='sd_submitting'?ch.sd_submit_end:(status==='voting'||status==='sudden_death')?ch.voting_end:null;
-    return raw&&typeof formatCountdown==='function'?formatCountdown(raw)+' left':'';
-  }
-  function clarityData(ch,status){
-    const entries=countEligibleEntries(ch),my=state.profile?.id;
-    const myEntry=!!my?(state.currentEntries||[]).find(e=>String(e.user_id)===String(my)&&e.moderation_status!=='rejected'&&(status!=='sd_submitting'||(e.sd_round||0)===(ch.sd_round||0))):null;
-    const entered=!!myEntry;
-    const awaitingReview=!!myEntry&&['pending','flagged','escalated'].includes(myEntry.moderation_status);
-    const add=byId('cdAddEntryBtn'),canEnter=!!add&&add.style.display!=='none';
-    if(status==='submitting'){
-      const doNow=awaitingReview?'Entry submitted · Awaiting review. This preview is visible only to you and moderators. You can edit or withdraw it until entries close.':entered?'Your entry is approved and live. You can edit or withdraw it until entries close.':canEnter?'Submit one entry before entries close.':entries.length>=MAX_ENTRIES_PER_CHALLENGE?'This challenge is full. Watch until voting opens.':'Watch the field or promote the challenge.';
-      return {head:awaitingReview?'Entry awaiting review':'Entries open',time:deadline(ch,status),doNow,next:awaitingReview?'Once approved, your entry becomes visible to other members. Voting opens after entries close.':`Voting opens after entries close. Fewer than ${R.entry.minimumCompetitors} eligible competitors means no contest.`,section:'entering',rule:awaitingReview?'Private preview · not public yet':ch.is_championship?'Championship round · no regular monthly Score':ch.is_public===false?'Private challenge · no Championship Score':'Public challenge · Score requires a decisive eligible win'};
-    }
-    if(status==='voting')return {head:'Voting now',time:deadline(ch,status),doNow:state.myCurrentVote?'Your vote is recorded. Choose another entry to change it.':'Choose one entry. You have one ballot and can change it until voting closes.',next:ch.allow_sudden_death?'The highest final total wins. A tie moves the tied finalists to sudden death.':'The highest final total wins. A tied final has no decisive winner unless sudden death was enabled.',section:'voting',rule:'Live totals are visible · final recorded ballot counts'};
-    if(status==='sd_submitting'){
-      const tied=Array.isArray(ch.sd_user_ids)&&ch.sd_user_ids.includes(my);
-      return {head:'Sudden-death entries',time:deadline(ch,status),doNow:tied?(entered?'Your new entry is submitted and stays hidden until reveal.':'Submit your new hidden entry before this window closes.'):'The tied finalists are submitting new hidden entries. There is nothing to vote on yet.',next:'The new entries reveal together, then a fresh runoff vote opens.',section:'results',rule:'One submission wins by default · no submissions means co-winners'};
-    }
-    if(status==='sudden_death')return {head:'Sudden-death voting',time:deadline(ch,status),doNow:state.myCurrentVote?'Your runoff vote is recorded. You may change it before the runoff closes.':'Vote on the newly revealed finalist entries.',next:'A second tie produces co-winners. There is no manual decision or discretionary extension.',section:'results',rule:'Fresh round · live totals · final-round ballots only'};
-    if(status==='voided')return {head:'No contest',time:'Final',doNow:'No action is required.',next:'Fewer than two eligible competitors remained, so there is no winner and no Championship Score.',section:'entering',rule:'No contest · no Score'};
-    if(status==='closed'){
-      const out=finalOutcome(ch); let next='The result is final.';
-      if(out.kind==='co-winners')next='The final sudden-death round ended tied, so the tied finalists are co-winners.';
-      else if(out.kind==='tie')next='The final vote is tied with no decisive winner. This result does not add Championship Score.';
-      else if(out.kind==='no-contest')next='This ended as a no-contest and does not add Championship Score.';
-      else if(ch.is_championship)next='The Championship result decides the title; the Championship round itself does not add regular monthly Score.';
-      else if(ch.is_public===false)next='Private challenge results do not add Championship Score.';
-      else if(out.kind==='winner')next='A decisive eligible public win is settled into the monthly category Score from Opponent Points + Turnout Points.';
-      return {head:out.kind==='tie'?'Final tie':out.kind==='co-winners'?'Co-winners':out.kind==='no-contest'?'No contest':'Final result',time:'Final',doNow:'Review the final standings and result details.',next,section:out.kind==='winner'?'score':'results',rule:ch.is_championship?'Championship title result':ch.is_public===false?'Private result · no Score':'Final-round result'};
-    }
-    return null;
-  }
-  function renderChallengeClarity(){
-    const el=byId('fcCompetitionClarityV1047'),ch=state.currentChallenge;if(!el||!ch)return;
-    const status=computeChallengeStatus(ch),d=clarityData(ch,status);if(!d){el.innerHTML='';return}
-    el.innerHTML=`<section class="fc-clarity-v1047"><div class="fc-clarity-v1047-head"><div><div class="fc-clarity-v1047-kicker">What is happening</div><strong>${esc(d.head)}</strong></div><div class="fc-clarity-v1047-time">${esc(d.time||'')}</div></div><div class="fc-clarity-v1047-grid"><div class="fc-clarity-v1047-item"><small>Do now</small><span>${esc(d.doNow)}</span></div><div class="fc-clarity-v1047-item"><small>What happens next</small><span>${esc(d.next)}</span></div></div><div class="fc-clarity-v1047-foot"><span>${esc(d.rule)}</span><button type="button" class="fc-rule-link-v1047" data-fc-current-rule="${esc(d.section)}">Rules that matter now</button></div></section>`;
-    el.querySelector('[data-fc-current-rule]')?.addEventListener('click',e=>openCompetitionRules(e.currentTarget.dataset.fcCurrentRule));
-  }
   function renderEntryRules(){
     const el=byId('fcEntryRulesV1047');if(!el)return;const ch=state.currentChallenge;if(!ch){el.innerHTML='';return}
     const status=computeChallengeStatus(ch);let title='Before you enter',copy=R.entry.withdrawal,section='entering';
@@ -33122,8 +33108,6 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
   }
   function addVoteRuleLink(id){const el=byId(id);if(!el||el.style.display==='none'||!el.innerHTML||el.querySelector('.fc-v1047-vote-rule-row'))return;el.insertAdjacentHTML('beforeend','<div class="fc-v1047-vote-rule-row"><button type="button" class="fc-rule-link-v1047">Voting rules</button></div>');el.querySelector('.fc-v1047-vote-rule-row button').onclick=()=>openCompetitionRules('voting')}
 
-  const priorDetail=window.renderChallengeDetail;
-  window.renderChallengeDetail=function(){const r=priorDetail?.apply(this,arguments);requestAnimationFrame(renderChallengeClarity);return r};
   const priorSubmit=window.openSubmitEntry;
   window.openSubmitEntry=function(){const r=priorSubmit?.apply(this,arguments);requestAnimationFrame(renderEntryRules);return r};
   const priorNotice=window.renderChallengeVotingNoticeV1024;
@@ -33171,8 +33155,8 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
     }};
   };
 
-  document.addEventListener('DOMContentLoaded',()=>{renderRules('overview');renderChallengeClarity();renderEntryRules();},{once:true});
-  if(document.readyState!=='loading'){renderRules('overview');renderChallengeClarity();renderEntryRules();}
+  document.addEventListener('DOMContentLoaded',()=>{renderRules('overview');renderEntryRules();},{once:true});
+  if(document.readyState!=='loading'){renderRules('overview');renderEntryRules();}
   window.__fcCompetitionClarityV1047={version:'v1047',rulesCenter:true,canonicalRulesSource:true,contextualStateActionNext:true,entryRules:true,votingRules:true,rejectedEntriesExcludedFromSettlement:true,newEdgeFunctions:0,edgeFunctionChanges:0};
 })();
 </script>
@@ -33334,7 +33318,7 @@ body.theme-light .fc-score-metric-v1032,body.theme-light .fc-score-cutoff-v1032,
   const esc=v=>typeof escapeHtml==='function'?escapeHtml(String(v??'')):String(v??'');
   function left(d){if(!d)return '';const ms=new Date(d)-Date.now();if(ms<=0)return 'Ending now';const m=Math.ceil(ms/60000);if(m<60)return `${m}m left`;const h=Math.floor(m/60),mm=m%60;if(h<48)return `${h}h${mm?` ${mm}m`:''} left`;const days=Math.ceil(h/24);return `${days}d left`;}
   function statusCopy(ch,status){
-    const entries=(state.currentEntries||[]).filter(e=>e.moderation_status!=='rejected');const me=state.profile?.id;const mine=entries.find(e=>e.user_id===me);const mod=mine?.moderation_status||'';const pending=['pending','flagged','escalated'].includes(mod);
+    const shared=window.fcGetChallengeDetailStateV1078?.(ch);const entries=shared?.approvedEntries||(state.currentEntries||[]).filter(e=>fcEntryCompetesV1060(e));const me=state.profile?.id;const mine=shared?.myEntry||null;const mod=shared?.myModeration||String(mine?.moderation_status||'').toLowerCase();const pending=shared?.hasPrivatePendingEntry??['pending','flagged','escalated'].includes(mod);
     if(status==='submitting'){
       if(pending)return {k:'Entry under review',t:left(ch.submission_deadline),h:'Only visible to you',p:'Review normally finishes quickly. You can still edit or withdraw before entries close.',primary:'edit',mine};
       if(mine)return {k:'Entries open',t:left(ch.submission_deadline),h:'Your entry is live',p:'You can edit or withdraw it until entries close.',primary:'edit',mine};
@@ -33362,22 +33346,49 @@ body.theme-light .fc-score-metric-v1032,body.theme-light .fc-score-cutoff-v1032,
     box.querySelector('[data-v1054-action="insights"]')?.addEventListener('click',()=>openCreatorInsightsV1048(ch.id));
     box.querySelector('[data-v1054-action="ember"]')?.addEventListener('click',()=>fcOpenEmberWithQuestion?.('What matters next in this challenge?'));
     const info=document.getElementById('fcChallengeInfoV1043');if(info){info.classList.add('fc-v1054-rule-panel');info.open=false;}
-    const all=(state.currentEntries||[]).filter(e=>e.moderation_status!=='rejected');const count=all.filter(e=>!e.moderation_status||e.moderation_status==='clear'||e.moderation_status==='approved').length;const privatePreview=all.some(e=>e.user_id===state.profile?.id&&['pending','flagged','escalated'].includes(e.moderation_status));
+    const shared=window.fcGetChallengeDetailStateV1078?.(ch);const count=shared?.publicEntryCount??(state.currentEntries||[]).filter(fcEntryCompetesV1060).length;const privatePreview=shared?.hasPrivatePendingEntry??false;
     const counter=document.getElementById('cdEntriesCounter');if(counter){const m=(counter.textContent.match(/(\d+)\s+of\s+(\d+)/i)||[]);counter.textContent=m[1]?(privatePreview?`${count} live · preview ${m[1]} of ${m[2]}`:`${count} entr${count===1?'y':'ies'} · ${m[1]} of ${m[2]}`):`${count} entr${count===1?'y':'ies'}`;}
   }
   function addTitlesHelp(){const sub=document.querySelector('#leaderboardViewSection .section-sub');if(!sub)return;let row=document.getElementById('fcLevelHelpRowV1054');if(!row){row=document.createElement('div');row.id='fcLevelHelpRowV1054';row.className='fc-level-help-row-v1054';row.innerHTML='<button type="button">Levels & Hall of Fame</button><button type="button">How monthly qualification works</button>';sub.insertAdjacentElement('afterend',row);row.children[0].onclick=openBadgeLegend;row.children[1].onclick=()=>{if(typeof toggleLbHow==='function')toggleLbHow();};}}
   function decorateProfileLevel(){const card=document.querySelector('#profileSheet .fc-v1036-tier-card');if(!card||card.dataset.v1054LevelHelp)return;card.dataset.v1054LevelHelp='1';card.setAttribute('role','button');card.tabIndex=0;card.title='See all levels and Hall of Fame rules';card.addEventListener('click',openBadgeLegend);card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openBadgeLegend();}});}
-  const priorDetail=window.renderChallengeDetail;if(typeof priorDetail==='function')window.renderChallengeDetail=function(){const r=priorDetail.apply(this,arguments);setTimeout(renderBrief,90);return r;};
+  window.fcRegisterChallengeDetailEnhancerV1078?.('compact-status-brief',40,renderBrief);
   const priorLeaderboard=window.renderLeaderboard;if(typeof priorLeaderboard==='function')window.renderLeaderboard=function(){const r=priorLeaderboard.apply(this,arguments);requestAnimationFrame(addTitlesHelp);return r;};
   const priorProfile=window.renderProfileTab;if(typeof priorProfile==='function')window.renderProfileTab=function(){const r=priorProfile.apply(this,arguments);requestAnimationFrame(decorateProfileLevel);return r;};
   const priorLocal=window.fcEmberLocalAnswerV1046;window.fcEmberLocalAnswerV1046=function(q){const x=String(q||'').toLowerCase();if(/tier|level|spark|flame|blaze|inferno|legend|icon|immortal|g\.?o\.?a\.?t|hall of fame/.test(x)){const uid=state.profile?.id,ls=uid?getLadderStatus(uid):null;let own='';if(ls)own=` Your visible level is ${ls.name}, worth ${ls.points} Opponent Point${ls.points===1?'':'s'}.`;return `FlamesChallenge has one visible level. Eligible public challenge wins move competitors through Spark, Flame, Blaze, and Inferno. Five Championship titles permanently move a competitor into the Hall of Fame as a Legend; 10 titles earns Icon, 15 earns Immortal, and 20 earns G.O.A.T. Once inducted, the badge never returns to the regular ladder. The visible badge determines Opponent Points: Spark 1, Flame 2, Blaze 4, Inferno 6, Legend 10, Icon 14, Immortal 18, G.O.A.T. 24.${own}`;}return typeof priorLocal==='function'?priorLocal(q):null;};
   const priorCtx=window.buildEmberContext;window.buildEmberContext=function(){const base=typeof priorCtx==='function'?priorCtx():{};const ls=state.profile?.id?getLadderStatus(state.profile.id):null;return {...base,levelSystem:{version:'v1054',visibleBadgeIsOpponentValue:true,regularLevels:REGULAR_LEVELS,hallOfFameLevels:HOF_LEVELS,current:ls?{name:ls.name,source:ls.source,points:ls.points,regularWins:ls.regularWins,championshipTitles:ls.champCount,next:ls.nextName}:null,founderIsSeparate:true}};};
-  document.addEventListener('DOMContentLoaded',()=>{addTitlesHelp();decorateProfileLevel();setTimeout(renderBrief,160)},{once:true});if(document.readyState!=='loading'){addTitlesHelp();decorateProfileLevel();setTimeout(renderBrief,160)}
+  document.addEventListener('DOMContentLoaded',()=>{addTitlesHelp();decorateProfileLevel();},{once:true});if(document.readyState!=='loading'){addTitlesHelp();decorateProfileLevel();}
   window.__fcBuildV1054={build:'v1054',phase:'Production Hardening',focus:'progressive guidance + visible level system',newEdgeFunctions:0,edgeFunctionChanges:0,sqlChanges:0};
 })();
 </script>
 
-
+<script id="fc-v1078-challenge-detail-pipeline-install-js">
+(function(){
+  'use strict';
+  if(window.__fcChallengeDetailPipelineInstalledV1078) return;
+  const base = window.renderChallengeDetail;
+  if(typeof base !== 'function') return;
+  let generation = 0;
+  function runPipeline(expectedGeneration, challengeId){
+    if(expectedGeneration !== generation) return;
+    if(challengeId && String(state.currentChallenge?.id || '') !== challengeId) return;
+    const enhancers = [...(window.__fcChallengeDetailEnhancersV1078 || [])]
+      .sort((a,b) => a.order - b.order || a.name.localeCompare(b.name));
+    enhancers.forEach(step => {
+      try { step.fn(); }
+      catch (error) { console.warn(`[v1078] Challenge Detail enhancer failed: ${step.name}`, error); }
+    });
+  }
+  window.__fcBaseRenderChallengeDetailV1078 = base;
+  window.renderChallengeDetail = function(){
+    const result = base.apply(this, arguments);
+    const currentGeneration = ++generation;
+    const challengeId = String(state.currentChallenge?.id || '');
+    requestAnimationFrame(() => runPipeline(currentGeneration, challengeId));
+    return result;
+  };
+  window.__fcChallengeDetailPipelineInstalledV1078 = true;
+})();
+</script>
 
 <style id="fc-v1055-guided-compete-titles-css">
 /* v1055 — Create already teaches through sequence. Bring that same clarity to Home, Compete, and Titles without turning them into wizards. */
@@ -33942,6 +33953,22 @@ window.__fcBuildV1065={build:'v1065',basedOn:'v1064',flyerRenderer:'exact v1056 
     build: 'v1077',
     phase: 'Production Hardening',
     focus: 'single-source Challenge Detail actions',
+    newEdgeFunctions: 0,
+    edgeFunctionChanges: 0,
+    sqlChanges: 0
+  };
+})();
+</script>
+
+<script id="fc-v1078-challenge-detail-rendering-pipeline-marker-js">
+(() => {
+  window.__fcBuildV1078 = {
+    build: 'v1078',
+    phase: 'Production Hardening',
+    focus: 'single ordered Challenge Detail rendering pipeline',
+    pipeline: ['live-race','score-eligibility','rules-and-score-panel','compact-status-brief'],
+    sharedState: ['phase','moderation','visibleEntries','actions','emptyState'],
+    removedWrappers: 7,
     newEdgeFunctions: 0,
     edgeFunctionChanges: 0,
     sqlChanges: 0
