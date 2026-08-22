@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1078 — Challenge Detail Rendering Pipeline</title>
+<title>FlamesChallenge v1079 — Entry Card & Viewer Layout</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1078 · challenge-detail-rendering-pipeline" />
-<meta name="fc-whatsnew" content="Consolidates Challenge Detail into one ordered rendering pipeline with shared phase, moderation, entry, action, and empty-state logic." />
+<meta name="fc-build" content="v1079 · entry-card-viewer-layout" />
+<meta name="fc-whatsnew" content="Makes entry cards media-aware, moves competitor identity above the media, adds a clear position count, and opens entries in a full-screen viewer." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -9357,18 +9357,18 @@ window.__fcBuildV1071={build:'v1071',basedOn:'v1070',fix:'normal iPhone horizont
 <!-- FIND PEOPLE MODAL -->
 <!-- ENTRY VIEWER SHEET -->
 <div class="modal-backdrop" id="entryViewerSheet" onclick="if(event.target===this)closeEntryViewer()">
-  <div class="entry-viewer-modal">
+  <div class="entry-viewer-modal fc-entry-viewer-v1079">
     <div class="entry-viewer-header">
       <div class="entry-viewer-user">
         <div class="avatar" id="evAvatar" style="width:40px;height:40px;font-size:18px;flex-shrink:0;overflow:hidden;border-radius:50%;background:linear-gradient(135deg,var(--ember),var(--coral));display:grid;place-items:center;">🔥</div>
-        <div>
+        <div class="fc-ev-user-copy-v1079">
           <div id="evName" style="font-weight:700;font-size:15px"></div>
           <div id="evChallenge" style="font-size:12px;color:var(--text-muted)"></div>
         </div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <span id="evCounter" style="font-size:12px;color:var(--text-muted);"></span>
-        <button onclick="closeEntryViewer()" style="background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.25);border-radius:50%;width:36px;height:36px;color:#fff;font-size:20px;cursor:pointer;display:grid;place-items:center;flex-shrink:0;line-height:1;">×</button>
+      <div class="fc-ev-header-actions-v1079">
+        <span id="evCounter"></span>
+        <button class="fc-ev-close-v1079" onclick="closeEntryViewer()" aria-label="Close entry viewer">×</button>
       </div>
     </div>
     <!-- Swipeable media container -->
@@ -9377,11 +9377,11 @@ window.__fcBuildV1071={build:'v1071',basedOn:'v1070',fix:'normal iPhone horizont
       <button id="evPrev" onclick="evNavigate(-1)" style="display:none;position:absolute;left:8px;top:50%;transform:translateY(-50%);z-index:10;background:rgba(0,0,0,0.5);border:none;color:white;font-size:24px;width:40px;height:40px;border-radius:50%;cursor:pointer;align-items:center;justify-content:center;">‹</button>
       <button id="evNext" onclick="evNavigate(1)" style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);z-index:10;background:rgba(0,0,0,0.5);border:none;color:white;font-size:24px;width:40px;height:40px;border-radius:50%;cursor:pointer;align-items:center;justify-content:center;">›</button>
     </div>
+    <div id="evCaption" class="fc-ev-caption-v1079"></div>
     <div class="entry-viewer-actions">
       <button id="evLikeBtn" class="flame-btn">🔥 <span id="evLikeCount">0</span></button>
       <button id="evFollowBtn" class="btn btn-primary" style="padding:8px 20px;font-size:13px">+ Follow</button>
     </div>
-    <div id="evCaption" style="padding:0 16px 12px;font-size:14px;color:var(--text-dim)"></div>
   </div>
 </div>
 
@@ -17944,7 +17944,7 @@ function _renderEvEntry() {
   });
 
   const mediaContent = document.createElement('div');
-  mediaContent.style.cssText = 'width:100%;';
+  mediaContent.className = 'fc-ev-media-content-v1079';
   // Fall back to challenge media_type if entry's own is missing
   const entryMediaType = entry.media_type || _evChallenge?.media_type;
   if (entry.moderation_status === 'rejected') {
@@ -17955,24 +17955,30 @@ function _renderEvEntry() {
       <div class="cd-entry-blocked-sub">This entry was removed for violating community guidelines and is no longer visible, including to you.</div>
     </div>`;
   } else if (entryMediaType === 'photo' && entry.media_url) {
-    mediaContent.innerHTML = `<img src="${escapeHtml(entry.media_url)}" alt="" style="width:100%;max-height:60vh;object-fit:contain;display:block;">`;
+    const photoUrl = escapeHtml(entry.media_url);
+    mediaContent.classList.add('fc-ev-stage-v1079');
+    mediaContent.innerHTML = `<img class="fc-ev-backdrop-v1079" src="${photoUrl}" alt="" aria-hidden="true"><img class="fc-ev-media-v1079" src="${photoUrl}" alt="${escapeHtml(sub.name || 'Competitor')} entry">`;
   } else if (entryMediaType === 'video' && entry.media_url) {
     // Free decoder slots — pause all other videos before autoplay with sound
     document.querySelectorAll('video').forEach(v => { try { v.pause(); } catch(_) {} });
     // iOS Safari plays HLS (.m3u8) natively via the src attribute — no extra handling needed
-    mediaContent.innerHTML = `<video
+    const posterUrl = entry.poster_url ? escapeHtml(entry.poster_url) : '';
+    mediaContent.classList.add('fc-ev-stage-v1079');
+    mediaContent.innerHTML = `${posterUrl ? `<img class="fc-ev-backdrop-v1079" src="${posterUrl}" alt="" aria-hidden="true">` : ''}<video class="fc-ev-media-v1079"
       src="${escapeHtml(entry.media_url)}"
       ${_videoPosterAttr(entry.media_url, entry.poster_url)}
-      controls autoplay playsinline preload="auto"
-      style="width:100%;max-height:60vh;display:block;">
+      controls autoplay playsinline preload="auto">
     </video>`;
     attachHlsIfNeeded(mediaContent.querySelector('video'));
     _validateVideoPosters(mediaContent);
   } else if (entryMediaType === 'audio' && entry.media_url) {
-    mediaContent.innerHTML = `<div style="padding:20px;"><audio src="${escapeHtml(entry.media_url)}" controls preload="metadata" style="width:100%"></audio></div>`;
+    mediaContent.classList.add('fc-ev-simple-v1079');
+    mediaContent.innerHTML = `<div style="padding:20px;width:100%;"><audio src="${escapeHtml(entry.media_url)}" controls preload="metadata" style="width:100%"></audio></div>`;
   } else if (entry.caption) {
+    mediaContent.classList.add('fc-ev-simple-v1079');
     mediaContent.innerHTML = `<div style="padding:24px;font-size:18px;line-height:1.5;color:var(--text)">${escapeHtml(entry.caption)}</div>`;
   } else {
+    mediaContent.classList.add('fc-ev-simple-v1079');
     mediaContent.innerHTML = `<div style="padding:40px;font-size:48px;text-align:center">🎬</div>`;
   }
   mediaEl.appendChild(mediaContent);
@@ -23615,31 +23621,42 @@ function fcEntryPreviewUrlV1060(e) {
   }
   return e.media_url;
 }
+function fcFitEntryCardMediaV1079(img) {
+  const card = img?.closest?.('.fcc-entry-card');
+  if (!card || !img.naturalWidth || !img.naturalHeight) return;
+  const ratio = img.naturalWidth / img.naturalHeight;
+  card.classList.remove('fc-entry-landscape-v1079', 'fc-entry-square-v1079', 'fc-entry-portrait-v1079');
+  if (ratio >= 1.2) card.classList.add('fc-entry-landscape-v1079');
+  else if (ratio >= 0.86) card.classList.add('fc-entry-square-v1079');
+  else card.classList.add('fc-entry-portrait-v1079');
+}
 function fcEntryCardMediaV1060(e, ch) {
   const label = e.submitter?.name || 'Competitor';
   const url = fcEntryPreviewUrlV1060(e);
   const type = String(e.media_type || ch?.media_type || '').toLowerCase();
   if (type === 'text') {
-    return `<div class="fcc-entry-media fcc-text-entry"><span>${escapeHtml(e.caption || 'Text entry')}</span></div>`;
+    return `<div class="fcc-entry-media fcc-text-entry fc-entry-text-v1079"><span>${escapeHtml(e.caption || 'Text entry')}</span></div>`;
   }
   if (type === 'audio' && !url) {
-    return `<div class="fcc-entry-media fcc-entry-placeholder" aria-label="Audio entry"><span style="font-size:34px">♪</span></div>`;
+    return `<div class="fcc-entry-media fcc-entry-placeholder fc-entry-audio-v1079" aria-label="Audio entry"><span style="font-size:34px">♪</span></div>`;
   }
   if (!url) {
     return `<div class="fcc-entry-media fcc-entry-placeholder fc-real-processing-v1060"><div><strong>${escapeHtml(label)}</strong><span>${type === 'video' ? 'Video preview processing' : 'Preview processing'}</span></div></div>`;
   }
   if (type === 'video') {
-    return `<div class="fcc-entry-media fcc-video-thumb fc-entry-stage-v1060"><img class="fc-entry-blur-v1060" src="${escapeHtml(url)}" alt="" aria-hidden="true" loading="lazy"><img class="fc-entry-contain-v1060" src="${escapeHtml(url)}" alt="${escapeHtml(label)}'s video entry" loading="lazy"><span class="fcc-play-overlay" aria-hidden="true">▶</span></div>`;
+    // Bunny preview images are commonly padded to 16:9 even when the source
+    // video is portrait. Keep video cards in the proven portrait stage until
+    // the actual video dimensions are available in the viewer.
+    return `<div class="fcc-entry-media fcc-video-thumb fc-entry-stage-v1060 fc-entry-video-v1079"><img class="fc-entry-blur-v1060" src="${escapeHtml(url)}" alt="" aria-hidden="true" loading="lazy"><img class="fc-entry-contain-v1060" src="${escapeHtml(url)}" alt="${escapeHtml(label)}'s video entry" loading="lazy"><span class="fcc-play-overlay" aria-hidden="true">▶</span></div>`;
   }
-  return `<div class="fcc-entry-media fc-entry-stage-v1060"><img class="fc-entry-blur-v1060" src="${escapeHtml(url)}" alt="" aria-hidden="true" loading="lazy"><img class="fc-entry-contain-v1060" src="${escapeHtml(url)}" alt="${escapeHtml(label)}'s entry" loading="lazy"></div>`;
+  return `<div class="fcc-entry-media fc-entry-stage-v1060"><img class="fc-entry-blur-v1060" src="${escapeHtml(url)}" alt="" aria-hidden="true" loading="lazy"><img class="fc-entry-contain-v1060" src="${escapeHtml(url)}" alt="${escapeHtml(label)}'s entry" loading="lazy" onload="fcFitEntryCardMediaV1079(this)"></div>`;
 }
 function fcEntryRailV1060(ch, entries) {
   if (!entries.length) return `<div class="chc-empty"><div class="chc-empty-ov"><div class="chc-plus">+</div><div class="chc-empty-msg">No entries yet — be the first</div></div></div>`;
-  return `<div class="fcc-entries-wrap fc-entry-rail-v1060"><div class="fcc-entries-scroll">${entries.map((e,i) => {
+  return `<div class="fcc-entries-wrap fc-entry-rail-v1060 fc-entry-rail-v1079"><div class="fcc-entries-scroll">${entries.map((e,i) => {
     const sub = e.submitter || {};
     const av = sub.avatar && /^https?:/.test(sub.avatar) ? `<img src="${escapeHtml(sub.avatar)}" alt="">` : escapeHtml((sub.name || '?').charAt(0).toUpperCase());
-    const votes = Number(state.feedVoteCounts?.[e.id] || 0);
-    return `<article class="fcc-entry-card" data-entry-open="${ch.id}" data-entry-id="${e.id}" aria-label="Entry ${i+1} of ${entries.length}">${fcEntryCardMediaV1060(e,ch)}<footer class="fcc-entry-footer"><span class="fcc-entry-avatar">${av}</span><span class="fcc-entry-name">${escapeHtml(sub.name || `Entry ${i+1}`)}</span>${votes ? `<span class="fcc-entry-counts">${votes} ${votes===1?'vote':'votes'}</span>` : ''}</footer></article>`;
+    return `<article class="fcc-entry-card fc-entry-portrait-v1079" data-entry-open="${ch.id}" data-entry-id="${e.id}" aria-label="Entry ${i+1} of ${entries.length}"><header class="fcc-entry-head-v1079"><span class="fcc-entry-avatar">${av}</span><span class="fcc-entry-name-v1079">${escapeHtml(sub.name || `Entry ${i+1}`)}</span><span class="fcc-entry-position-v1079">${i+1} of ${entries.length}</span></header>${fcEntryCardMediaV1060(e,ch)}</article>`;
   }).join('')}</div>${_entryDotsHtml(entries.length)}</div>`;
 }
 
@@ -33976,5 +33993,109 @@ window.__fcBuildV1065={build:'v1065',basedOn:'v1064',flyerRenderer:'exact v1056 
 })();
 </script>
 
+
+<style id="fc-v1079-entry-card-viewer-css">
+/* v1079 — entry cards show identity first, size to the actual photo shape, and
+   expose a deliberate 14px next-card peek without the old broken-looking sliver. */
+.fc-entry-rail-v1079 .fcc-entries-scroll{
+  gap:10px!important;
+  padding:0 14px 8px!important;
+  scroll-padding-left:14px!important;
+}
+.fc-entry-rail-v1079 .fcc-entry-card{
+  flex:0 0 calc(100% - 10px)!important;
+  min-width:calc(100% - 10px)!important;
+  width:calc(100% - 10px)!important;
+  display:flex!important;
+  flex-direction:column!important;
+  background:var(--surface-2)!important;
+}
+.fc-entry-rail-v1079 .fcc-entry-head-v1079{
+  min-height:48px;
+  display:flex;
+  align-items:center;
+  gap:9px;
+  padding:9px 11px;
+  background:var(--surface);
+  border-bottom:1px solid var(--border);
+}
+.fc-entry-rail-v1079 .fcc-entry-head-v1079 .fcc-entry-avatar{width:28px;height:28px;font-size:12px}
+.fc-entry-rail-v1079 .fcc-entry-name-v1079{
+  flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  color:var(--text);font-size:13px;font-weight:750;
+}
+.fc-entry-rail-v1079 .fcc-entry-position-v1079{
+  flex-shrink:0;color:var(--text-muted);font-size:11.5px;font-weight:700;
+  font-variant-numeric:tabular-nums;
+}
+.fc-entry-rail-v1079 .fcc-entry-media{height:auto!important;min-height:0!important;transition:aspect-ratio .18s ease}
+.fc-entry-rail-v1079 .fc-entry-portrait-v1079 .fcc-entry-media{aspect-ratio:4/5!important}
+.fc-entry-rail-v1079 .fc-entry-square-v1079 .fcc-entry-media{aspect-ratio:1/1!important}
+.fc-entry-rail-v1079 .fc-entry-landscape-v1079 .fcc-entry-media{aspect-ratio:16/9!important}
+.fc-entry-rail-v1079 .fc-entry-text-v1079,
+.fc-entry-rail-v1079 .fc-entry-audio-v1079{aspect-ratio:1/1!important}
+.fc-entry-rail-v1079 .fcc-dots{display:none!important}
+
+/* v1079 — the direct entry viewer is a real full-screen viewer, not a short
+   bottom tray. Media stays complete over a quiet blurred fill. */
+#entryViewerSheet{align-items:stretch!important;background:#000!important}
+.entry-viewer-modal.fc-entry-viewer-v1079{
+  width:100%!important;
+  height:100dvh!important;
+  max-height:100dvh!important;
+  border-radius:0!important;
+  display:flex!important;
+  flex-direction:column!important;
+  overflow:hidden!important;
+  background:var(--surface)!important;
+  animation:none!important;
+}
+.fc-entry-viewer-v1079 .entry-viewer-header{
+  flex:0 0 auto;
+  padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px!important;
+  background:var(--surface)!important;
+}
+.fc-entry-viewer-v1079 .entry-viewer-user{min-width:0;flex:1}
+.fc-entry-viewer-v1079 .fc-ev-user-copy-v1079{min-width:0}
+.fc-entry-viewer-v1079 #evName,
+.fc-entry-viewer-v1079 #evChallenge{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fc-entry-viewer-v1079 .fc-ev-header-actions-v1079{display:flex;align-items:center;gap:12px;flex-shrink:0}
+.fc-entry-viewer-v1079 #evCounter{font-size:12px;color:var(--text-muted);font-weight:700;font-variant-numeric:tabular-nums}
+.fc-entry-viewer-v1079 .fc-ev-close-v1079{
+  width:40px;height:40px;border-radius:50%;display:grid;place-items:center;
+  background:var(--overlay-2);border:1px solid var(--border-bright);color:var(--text);
+  font-size:24px;line-height:1;cursor:pointer;
+}
+.fc-entry-viewer-v1079 .entry-viewer-media{
+  flex:1 1 auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  overflow:hidden!important;
+  background:#090807!important;
+}
+.fc-entry-viewer-v1079 .fc-ev-media-content-v1079{width:100%;height:100%;min-height:0}
+.fc-entry-viewer-v1079 .fc-ev-stage-v1079{
+  position:relative;width:100%;height:100%;display:grid;place-items:center;overflow:hidden;background:#090807;
+}
+.fc-entry-viewer-v1079 .fc-ev-backdrop-v1079{
+  position:absolute;inset:-8%;width:116%;height:116%;object-fit:cover;
+  filter:blur(30px) brightness(.42) saturate(1.1);transform:scale(1.08);opacity:.9;
+}
+.fc-entry-viewer-v1079 .fc-ev-media-v1079{
+  position:relative;z-index:1;width:100%;height:100%;object-fit:contain;display:block;background:transparent;
+}
+.fc-entry-viewer-v1079 .fc-ev-simple-v1079{height:100%;display:flex;align-items:center;justify-content:center;background:var(--surface-2)}
+.fc-entry-viewer-v1079 .fc-ev-caption-v1079{
+  flex:0 0 auto;padding:10px 16px 0;font-size:14px;color:var(--text-dim);
+  max-height:86px;overflow:auto;display:none;
+}
+.fc-entry-viewer-v1079 .entry-viewer-actions{
+  flex:0 0 auto;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px))!important;
+  border-top:1px solid var(--border);background:var(--surface);
+}
+</style>
+<script id="fc-v1079-entry-card-viewer-marker-js">
+window.__fcBuildV1079={build:'v1079',basedOn:'v1078',focus:'media-aware entry cards and full-screen direct entry viewer',entryIdentityMovedAboveMedia:true,entryPositionShown:true,dotPagerHidden:true,nextCardPeekPx:14,photoAspectClasses:['portrait','square','landscape'],viewerMode:'full-screen',mediaCropping:false,blurredContainBackdrop:true,navigationChanged:false,onboardingChanged:false,scoringChanged:false,moderationChanged:false,backendChanged:false,sqlChanges:0,edgeFunctionChanges:0};
+</script>
 </body>
 </html>
