@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1079 — Entry Card & Viewer Layout</title>
+<title>FlamesChallenge v1080 — Adaptive Entry Card Height</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1079 · entry-card-viewer-layout" />
-<meta name="fc-whatsnew" content="Makes entry cards media-aware, moves competitor identity above the media, adds a clear position count, and opens entries in a full-screen viewer." />
+<meta name="fc-build" content="v1080 · adaptive-entry-card-height" />
+<meta name="fc-whatsnew" content="Makes each entry card and carousel row match the active submission’s actual shape, removing the tall empty space beneath landscape photos." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -34097,5 +34097,127 @@ window.__fcBuildV1065={build:'v1065',basedOn:'v1064',flyerRenderer:'exact v1056 
 <script id="fc-v1079-entry-card-viewer-marker-js">
 window.__fcBuildV1079={build:'v1079',basedOn:'v1078',focus:'media-aware entry cards and full-screen direct entry viewer',entryIdentityMovedAboveMedia:true,entryPositionShown:true,dotPagerHidden:true,nextCardPeekPx:14,photoAspectClasses:['portrait','square','landscape'],viewerMode:'full-screen',mediaCropping:false,blurredContainBackdrop:true,navigationChanged:false,onboardingChanged:false,scoringChanged:false,moderationChanged:false,backendChanged:false,sqlChanges:0,edgeFunctionChanges:0};
 </script>
+
+
+<style id="fc-v1080-adaptive-entry-card-height-css">
+/* v1080 — A horizontal flex row takes the height of its tallest card. With a
+   landscape entry beside a portrait entry, that kept the whole rail portrait-
+   tall and stretched the active landscape card into a large empty box. Cards
+   now keep their own natural height, while JS makes the rail follow the active
+   snapped card. The numeric position already communicates that more entries
+   exist, so the broken-looking next-card strip is removed. */
+.fc-entry-rail-v1079 .fcc-entries-scroll{
+  align-items:flex-start!important;
+  transition:height .18s ease!important;
+  gap:8px!important;
+}
+.fc-entry-rail-v1079 .fcc-entry-card{
+  align-self:flex-start!important;
+  flex:0 0 100%!important;
+  min-width:100%!important;
+  width:100%!important;
+}
+</style>
+<script id="fc-v1080-adaptive-entry-card-height-js">
+(function(){
+  'use strict';
+
+  function activeCard(sc){
+    const cards=Array.from(sc?.querySelectorAll?.('.fcc-entry-card')||[]);
+    if(!cards.length) return null;
+    if(cards.length===1) return cards[0];
+    let nearest=cards[0];
+    let distance=Math.abs(sc.scrollLeft-cards[0].offsetLeft);
+    for(let i=1;i<cards.length;i++){
+      const next=Math.abs(sc.scrollLeft-cards[i].offsetLeft);
+      if(next<distance){distance=next;nearest=cards[i];}
+    }
+    return nearest;
+  }
+
+  function sync(sc){
+    if(!sc?.isConnected) return;
+    const card=activeCard(sc);
+    if(!card) return;
+    const cardHeight=card.getBoundingClientRect().height||card.offsetHeight||0;
+    const css=getComputedStyle(sc);
+    const railPadding=(parseFloat(css.paddingTop)||0)+(parseFloat(css.paddingBottom)||0);
+    const height=Math.ceil(cardHeight+railPadding);
+    if(height>0 && Math.abs((parseFloat(sc.style.height)||0)-height)>1){
+      sc.style.height=height+'px';
+    }
+  }
+
+  function wire(sc){
+    if(!sc || sc.dataset.fcAdaptiveHeightV1080==='1') return;
+    sc.dataset.fcAdaptiveHeightV1080='1';
+    let raf=0;
+    const queue=()=>{
+      if(raf) return;
+      raf=requestAnimationFrame(()=>{raf=0;sync(sc);});
+    };
+    sc.addEventListener('scroll',queue,{passive:true});
+    sc.addEventListener('touchend',queue,{passive:true});
+    sc.addEventListener('pointerup',queue,{passive:true});
+    if('ResizeObserver' in window){
+      const ro=new ResizeObserver(queue);
+      sc.querySelectorAll('.fcc-entry-card').forEach(card=>ro.observe(card));
+      sc._fcAdaptiveHeightObserverV1080=ro;
+    }
+    requestAnimationFrame(()=>requestAnimationFrame(queue));
+  }
+
+  function scan(root){
+    const scope=root?.querySelectorAll?root:document;
+    scope.querySelectorAll('.fc-entry-rail-v1079 .fcc-entries-scroll').forEach(wire);
+  }
+
+  const baseFit=window.fcFitEntryCardMediaV1079;
+  if(typeof baseFit==='function'){
+    window.fcFitEntryCardMediaV1079=function(img){
+      const result=baseFit.apply(this,arguments);
+      const sc=img?.closest?.('.fcc-entries-scroll');
+      if(sc){wire(sc);requestAnimationFrame(()=>sync(sc));}
+      return result;
+    };
+  }
+
+  const observer=new MutationObserver(records=>{
+    for(const record of records){
+      for(const node of record.addedNodes){
+        if(node.nodeType!==1) continue;
+        if(node.matches?.('.fc-entry-rail-v1079 .fcc-entries-scroll')) wire(node);
+        scan(node);
+      }
+    }
+  });
+
+  function start(){
+    scan(document);
+    observer.observe(document.body,{childList:true,subtree:true});
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',start,{once:true});
+  else start();
+
+  window.__fcBuildV1080={
+    build:'v1080',
+    basedOn:'v1079',
+    focus:'active entry card controls carousel height',
+    rootCause:'flex row inherited tallest entry height',
+    adaptiveRailHeight:true,
+    landscapeBlankSpaceRemoved:true,
+    nextCardPeekPx:0,
+    viewerChanged:false,
+    navigationChanged:false,
+    onboardingChanged:false,
+    scoringChanged:false,
+    moderationChanged:false,
+    backendChanged:false,
+    sqlChanges:0,
+    edgeFunctionChanges:0
+  };
+})();
+</script>
+
 </body>
 </html>
