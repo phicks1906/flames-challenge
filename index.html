@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1085 — Direct Card Voting & Notification Cleanup</title>
+<title>FlamesChallenge v1086 — Voting Count & Button Correction</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1085 · direct-card-voting-notification-cleanup" />
-<meta name="fc-whatsnew" content="Lets you vote directly on Compete cards, keeps entry order consistent when opened, and adds notification deletion and Clear all." />
+<meta name="fc-build" content="v1086 · voting-count-button-correction" />
+<meta name="fc-whatsnew" content="Corrects entry viewer counts and makes Vote and Change vote controls compact without changing carousel scrolling." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -17882,9 +17882,12 @@ async function openEntryViewer(entryId, chId) {
   const displayedIdsV1085 = fcDisplayedEntryOrderV1085(entryId, chId);
   const allEntriesV1085 = fcEntriesForChallengeV1060(ch);
   const byIdV1085 = new Map(allEntriesV1085.map(e => [String(e.id), e]));
-  _evEntries = displayedIdsV1085.length
+  const orderedEntriesV1086 = displayedIdsV1085.length
     ? displayedIdsV1085.map(id => byIdV1085.get(String(id))).filter(Boolean)
     : allEntriesV1085;
+  // v1086 — one database entry must equal one viewer position even if an older
+  // rail contains repeated data-entry-id hooks inside the same card.
+  _evEntries = [...new Map(orderedEntriesV1086.map(e => [String(e.id), e])).values()];
 
   // If entry not in state, fetch it
   let entry = _evEntries.find(e => e.id === entryId);
@@ -18142,7 +18145,7 @@ function syncEvVoteButtonV1083() {
   btn.classList.toggle('selected', selected);
   btn.disabled = selected;
   btn.setAttribute('aria-current', selected ? 'true' : 'false');
-  btn.textContent = selected ? '✓ Your vote' : (_evHasAnyVoteV1083 ? 'Change vote to this entry' : 'Vote for this entry');
+  btn.textContent = selected ? '✓ Your vote' : (_evHasAnyVoteV1083 ? 'Change vote' : 'Vote here');
   btn.onclick = selected ? null : evVoteCurrentEntryV1083;
 }
 
@@ -21350,7 +21353,7 @@ function renderChallengeDetail() {
     if (isVotingPhase(status)) {
       if (state.profile) {
         // Everyone — including the submitter — can cast their one vote
-        const voteLabel = iVoted ? '✓ Your vote' : (iHaveVoted ? 'Change vote to this entry' : 'Vote for this entry');
+        const voteLabel = iVoted ? '✓ Your vote' : (iHaveVoted ? 'Change vote' : 'Vote here');
         actionsHtml = `${isMyEntry ? '<span class="cd-entry-tag">Your entry</span> ' : ''}<button class="btn-vote ${iVoted ? 'is-voted' : 'not-voted'}" data-vote-entry="${entry.id}" ${iVoted ? 'disabled aria-current="true"' : ''}>${voteLabel}</button>`;
       }
     }
@@ -23785,7 +23788,7 @@ function fcEntryRailV1060(ch, entries) {
     const voteClassV1083 = selectedV1085 ? ' fc-your-vote-v1083' : '';
     const votesV1085 = Number(state.feedVoteCounts?.[e.id] || 0);
     const pctV1085 = voteTotalV1085 > 0 ? Math.round((votesV1085 / voteTotalV1085) * 100) : 0;
-    const voteLabelV1085 = selectedV1085 ? '✓ Your vote' : (selectedVoteIdV1083 ? 'Change vote to this entry' : 'Vote for this entry');
+    const voteLabelV1085 = selectedV1085 ? '✓ Your vote' : (selectedVoteIdV1083 ? 'Change vote' : 'Vote here');
     const voteFooterV1085 = votingV1085 ? `<footer class="fcc-direct-vote-foot-v1085"><button type="button" class="fcc-direct-vote-btn-v1085${selectedV1085 ? ' selected' : ''}" data-fcc-direct-vote-v1085 data-challenge-id="${ch.id}" data-entry-id="${e.id}" ${selectedV1085 ? 'disabled aria-current="true"' : ''} onclick="event.stopPropagation();voteFromCompeteCardV1085(this)">${voteLabelV1085}</button><span class="fcc-direct-vote-total-v1085" data-fcc-direct-total-v1085="${e.id}">${votesV1085} vote${votesV1085 === 1 ? '' : 's'} · ${pctV1085}%</span></footer>` : '';
     return `<article class="fcc-entry-card fc-entry-square-v1082${voteClassV1083}" data-entry-open="${ch.id}" data-entry-id="${e.id}" aria-label="Entry ${i+1} of ${entries.length}"><header class="fcc-entry-head-v1079"><span class="fcc-entry-avatar">${av}</span><span class="fcc-entry-name-v1079">${escapeHtml(sub.name || `Entry ${i+1}`)}</span><span class="fcc-entry-position-v1079">${i+1} of ${entries.length}</span></header>${fcEntryCardMediaV1060(e,ch)}${voteFooterV1085}</article>`;
   }).join('')}</div>${_entryDotsHtml(entries.length)}</div>`;
@@ -34703,15 +34706,15 @@ window.__fcBuildV1084={
 
 
 
-<style id="fc-v1085-direct-card-voting-notifications-css">
-/* v1085 — voting happens on the visible Compete preview card. There is no
-   separate navigation CTA required to cast or change a ballot. */
+<style id="fc-v1086-voting-count-button-correction-css">
+/* v1086 — direct voting remains on the visible Compete preview card. Viewer
+   positions are unique and the compact controls no longer dominate the card. */
 .fcc-direct-vote-foot-v1085{
   display:flex;align-items:center;gap:10px;padding:12px 14px 14px;
   border-top:1px solid var(--border);background:var(--surface);
 }
 .fcc-direct-vote-btn-v1085{
-  flex:1;min-height:44px;border:0;border-radius:14px;padding:10px 12px;
+  flex:0 0 auto;min-width:126px;max-width:164px;min-height:44px;border:0;border-radius:14px;padding:10px 16px;
   background:linear-gradient(135deg,var(--ember),var(--flame));color:#fff;
   font-family:var(--font-body);font-size:13px;font-weight:850;cursor:pointer;
 }
@@ -34742,11 +34745,12 @@ window.__fcBuildV1084={
 .notif-delete-v1085:active{transform:scale(.92);color:var(--text)}
 .notif-item{position:relative}
 @media(max-width:390px){
-  .fcc-direct-vote-foot-v1085{align-items:stretch;flex-direction:column}
-  .fcc-direct-vote-total-v1085{text-align:center}
+  .fcc-direct-vote-foot-v1085{align-items:center;flex-direction:row}
+  .fcc-direct-vote-btn-v1085{min-width:118px;max-width:150px;padding-inline:12px}
+  .fcc-direct-vote-total-v1085{margin-left:auto;text-align:right;font-size:11px}
 }
 </style>
-<script id="fc-v1085-direct-card-voting-notifications-js">
+<script id="fc-v1086-voting-count-button-correction-js">
 (function(){
   const DISMISS_PREFIX='fc_notif_dismissed_v1085_';
 
@@ -34811,9 +34815,11 @@ window.__fcBuildV1084={
     if(!clicked)return [];
     const rail=clicked.closest('.fcc-entries-scroll, .cd-entries-grid');
     if(!rail)return [];
-    return [...rail.querySelectorAll('[data-entry-id]')]
+    const orderedIds=[...rail.querySelectorAll('.fcc-entry-card[data-entry-id], .cd-entry[data-entry-id]')]
+      .filter(el=>el.closest('.fcc-entries-scroll, .cd-entries-grid')===rail)
       .filter(el=>String(el.dataset.entryOpen||el.closest('[data-cid]')?.dataset.cid||chId)===String(chId)||!el.dataset.entryOpen)
-      .map(el=>el.dataset.entryId).filter(Boolean);
+      .map(el=>String(el.dataset.entryId||'')).filter(Boolean);
+    return [...new Set(orderedIds)];
   };
 
   function directEntries(chId){
@@ -34831,7 +34837,7 @@ window.__fcBuildV1084={
       if(btn){
         btn.disabled=isSelected;btn.classList.toggle('selected',isSelected);
         btn.setAttribute('aria-current',isSelected?'true':'false');
-        btn.textContent=isSelected?'✓ Your vote':(selected?'Change vote to this entry':'Vote for this entry');
+        btn.textContent=isSelected?'✓ Your vote':(selected?'Change vote':'Vote here');
       }
       const stat=card.querySelector('[data-fcc-direct-total-v1085]');
       if(stat){const v=Number(state.feedVoteCounts?.[eid]||0);const pct=total?Math.round(v/total*100):0;stat.textContent=`${v} vote${v===1?'':'s'} · ${pct}%`;}
@@ -34873,9 +34879,9 @@ window.__fcBuildV1084={
   };
 
   window.__fcBuildV1085={
-    build:'v1085',basedOn:'v1084',focus:'direct Compete-card voting, consistent viewer order, and notification ownership',
+    build:'v1086',basedOn:'v1085',focus:'correct viewer counts and compact direct-vote controls',
     separateReviewEntriesStepRequired:false,directCompeteCardVoting:true,liveCardTotals:true,voteChangeSupported:true,
-    viewerUsesDisplayedOrder:true,notificationDelete:true,notificationClearAll:true,generatedNotificationDismissalsPersistLocally:true,
+    viewerUsesDisplayedOrder:true,viewerEntryIdsDeduplicated:true,compactVoteControls:true,notificationDelete:true,notificationClearAll:true,generatedNotificationDismissalsPersistLocally:true,
     nativeHorizontalScrollPreserved:true,carouselScrollCodeChanged:false,backendChanged:false,sqlChanges:0,edgeFunctionChanges:0
   };
 })();
