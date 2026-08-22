@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1086 — Voting Count & Button Correction</title>
+<title>FlamesChallenge v1087 — Compact Voting & Viewer Action</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1086 · voting-count-button-correction" />
-<meta name="fc-whatsnew" content="Corrects entry viewer counts and makes Vote and Change vote controls compact without changing carousel scrolling." />
+<meta name="fc-build" content="v1087 · compact-voting-viewer-action" />
+<meta name="fc-whatsnew" content="Tightens the Home live module, makes voting controls smaller, and restores voting while viewing entry media." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -9382,6 +9382,7 @@ window.__fcBuildV1071={build:'v1071',basedOn:'v1070',fix:'normal iPhone horizont
     </div>
     <div id="evCaption" class="fc-ev-caption-v1079"></div>
     <div class="entry-viewer-actions">
+      <button id="evVoteBtn" class="fc-ev-vote-v1083" type="button" style="display:none">Vote here</button>
       <button id="evLikeBtn" class="flame-btn">🔥 <span id="evLikeCount">0</span></button>
       <button id="evFollowBtn" class="btn btn-primary" style="padding:8px 20px;font-size:13px">+ Follow</button>
     </div>
@@ -29358,7 +29359,7 @@ document.addEventListener('click', (e) => {
     const shelfTitle=document.getElementById('fcHomeLiveTitle');
     const uid=state.profile?.id;
     const allOwned=!!uid && rows.every(({ch})=>String(ch.creator_id||ch.creator?.id||ch.user_id)===String(uid));
-    if(shelfTitle) shelfTitle.textContent=allOwned?'Other live challenges':'Enter or vote now';
+    if(shelfTitle) shelfTitle.textContent=allOwned?'Other challenges':'Enter or vote now';
     shelf.style.display='block';
     list.innerHTML=rows.map(({ch,s,action})=>{
       const copy=fcSplitTitle(ch), count=fcEntryCount(ch);
@@ -34885,6 +34886,106 @@ window.__fcBuildV1084={
     nativeHorizontalScrollPreserved:true,carouselScrollCodeChanged:false,backendChanged:false,sqlChanges:0,edgeFunctionChanges:0
   };
 })();
+</script>
+
+
+
+<style id="fc-v1087-compact-voting-viewer-action-css">
+/* v1087 — The Home live shelf stays secondary, direct-vote controls stop
+   dominating the entry card, and voting remains available while inspecting
+   the full entry. The working native carousel and its gesture code are untouched. */
+#feedView #fcHomeLive{
+  padding:12px!important;
+}
+#feedView #fcHomeLive .fc-home-live-head{
+  margin-bottom:8px!important;
+  align-items:center!important;
+}
+#feedView #fcHomeLive h2{
+  font-size:17px!important;
+  line-height:1.08!important;
+  letter-spacing:-.01em!important;
+}
+#feedView #fcHomeLive .fc-home-live-all{
+  font-size:11.5px!important;
+}
+
+.fcc-direct-vote-foot-v1085{
+  gap:8px!important;
+  padding:10px 12px 12px!important;
+}
+.fcc-direct-vote-btn-v1085{
+  flex:0 0 auto!important;
+  min-width:96px!important;
+  max-width:132px!important;
+  min-height:40px!important;
+  padding:8px 13px!important;
+  border-radius:12px!important;
+  font-size:12px!important;
+  line-height:1.1!important;
+  box-shadow:none!important;
+  white-space:nowrap!important;
+}
+.fcc-direct-vote-total-v1085{
+  font-size:11.5px!important;
+}
+
+.fc-entry-viewer-v1079 .entry-viewer-actions{
+  display:flex!important;
+  flex-wrap:nowrap!important;
+  align-items:center!important;
+  gap:8px!important;
+}
+.fc-entry-viewer-v1079 .fc-ev-vote-v1083{
+  order:0!important;
+  flex:0 0 auto!important;
+  min-width:104px!important;
+  max-width:132px!important;
+  min-height:42px!important;
+  border:0!important;
+  border-radius:13px!important;
+  padding:9px 13px!important;
+  background:linear-gradient(135deg,var(--ember),var(--flame))!important;
+  color:#fff!important;
+  font-family:var(--font-body)!important;
+  font-size:12.5px!important;
+  font-weight:850!important;
+  line-height:1.1!important;
+  white-space:nowrap!important;
+  cursor:pointer!important;
+  box-shadow:none!important;
+}
+.fc-entry-viewer-v1079 .fc-ev-vote-v1083.selected{
+  background:rgba(74,222,128,.14)!important;
+  color:var(--success)!important;
+  border:1px solid rgba(74,222,128,.38)!important;
+}
+.fc-entry-viewer-v1079 #evLikeBtn{
+  flex:0 0 auto!important;
+  min-height:42px!important;
+}
+.fc-entry-viewer-v1079 #evFollowBtn{
+  flex:0 1 auto!important;
+  min-height:42px!important;
+  padding:8px 14px!important;
+  font-size:12px!important;
+}
+@media(max-width:390px){
+  #feedView #fcHomeLive{padding:11px!important}
+  #feedView #fcHomeLive h2{font-size:16.5px!important}
+  .fcc-direct-vote-btn-v1085{min-width:92px!important;max-width:124px!important;padding-inline:11px!important}
+  .fc-entry-viewer-v1079 .fc-ev-vote-v1083{min-width:96px!important;max-width:122px!important;padding-inline:11px!important}
+  .fc-entry-viewer-v1079 #evFollowBtn{padding-inline:11px!important}
+}
+</style>
+<script id="fc-v1087-build-marker">
+window.__fcBuildV1087={
+  build:'v1087',basedOn:'v1086',focus:'compact Home live hierarchy, smaller vote controls, and synchronized viewer voting',
+  homeLiveTitle:'Other challenges',homeLiveHeadingReduced:true,homeLivePaddingReduced:true,
+  compactPreviewVoteControls:true,viewerVoteControlRestored:true,viewerVoteStateSynchronized:true,
+  nativeHorizontalScrollPreserved:true,carouselScrollCodeChanged:false,viewerSizingChanged:false,
+  backendChanged:false,sqlChanges:0,edgeFunctionChanges:0
+};
 </script>
 
 </body>
