@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1084 — Voting Inside Challenge Detail</title>
+<title>FlamesChallenge v1085 — Direct Card Voting & Notification Cleanup</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1084 · voting-inside-challenge-detail" />
-<meta name="fc-whatsnew" content="Keeps voting on the Challenge Detail entry cards, removes the extra Vote Now step, and returns the media viewer to viewing only." />
+<meta name="fc-build" content="v1085 · direct-card-voting-notification-cleanup" />
+<meta name="fc-whatsnew" content="Lets you vote directly on Compete cards, keeps entry order consistent when opened, and adds notification deletion and Clear all." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -8929,7 +8929,10 @@ window.__fcBuildV1071={build:'v1071',basedOn:'v1070',fix:'normal iPhone horizont
   <div class="cd-sheet-header">
     <button class="cd-close" onclick="closeNotifs()" aria-label="Close">×</button>
     <h2>Notifications</h2>
-    <button class="notif-settings-btn" onclick="openNotifSettings()" aria-label="Notification settings">⚙️</button>
+    <div class="notif-head-actions-v1085">
+      <button class="notif-clear-all-v1085" id="notifClearAllV1085" onclick="clearAllNotificationsV1085()" aria-label="Clear all notifications">Clear all</button>
+      <button class="notif-settings-btn" onclick="openNotifSettings()" aria-label="Notification settings">⚙️</button>
+    </div>
   </div>
   <div class="cd-sheet-inner">
     <div class="notif-tabs" id="notifTabs" style="display:none"></div>
@@ -12618,7 +12621,7 @@ function setNotifPref(cat, enabled) {
   applyNotifPrefs();
 }
 function applyNotifPrefs() {
-  state.notifs = (state.notifsAll || []).filter(n => isNotifTypeEnabled(n.type));
+  state.notifs = (state.notifsAll || []).filter(n => isNotifTypeEnabled(n.type) && (!window.isNotificationDismissedV1085 || !isNotificationDismissedV1085(n)));
   renderNotifBadge();
   if (document.getElementById('notifSheet')?.classList.contains('open')) renderNotifs();
 }
@@ -13111,6 +13114,8 @@ function renderNotifs() {
   const tabsEl = document.getElementById('notifTabs');
   if (!list) return;
   const all = state.notifs || [];
+  const clearBtnV1085 = document.getElementById('notifClearAllV1085');
+  if (clearBtnV1085) clearBtnV1085.style.display = all.length ? 'inline-flex' : 'none';
   const requests = all.filter(n => n.isRequest);
   const main = all.filter(n => !n.isRequest);
   // requests tab only exists when there are requests; otherwise force 'all'
@@ -13158,10 +13163,21 @@ function renderNotifs() {
         ${time ? `<div class="notif-time">${time}</div>` : ''}
       </div>
       ${unread ? '<div class="notif-unread-dot"></div>' : ''}
+      <button type="button" class="notif-delete-v1085" data-notif-delete-v1085="${i}" aria-label="Delete notification">×</button>
     </div>`;
   }).join('');
   list.querySelectorAll('.notif-item').forEach(el => {
-    el.addEventListener('click', () => openNotifTarget(shown[+el.dataset.notif]));
+    el.addEventListener('click', e => {
+      if (e.target.closest('[data-notif-delete-v1085]')) return;
+      openNotifTarget(shown[+el.dataset.notif]);
+    });
+  });
+  list.querySelectorAll('[data-notif-delete-v1085]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      dismissNotificationV1085(shown[+btn.dataset.notifDeleteV1085], btn);
+    });
   });
 }
 
@@ -17859,11 +17875,16 @@ async function openEntryViewer(entryId, chId) {
   const ch = state.challenges.find(c => c.id === chId) || state.currentChallenge;
   if (!ch) return;
 
-  // Build entry list — prefer currentEntries (challenge detail) then feedEntries (feed)
+  // v1085 — use the exact order shown in the tapped carousel. The old viewer
+  // rebuilt from state.currentEntries, whose order could differ from the visible
+  // Compete rail, so tapping card 1 could open as 3 / 3.
   _evChallenge = ch;
-  const fromDetail = (state.currentEntries || []).filter(e => e.challenge_id === chId);
-  const fromFeed = (state.feedEntries || []).filter(e => e.challenge_id === chId);
-  _evEntries = (fromDetail.length ? fromDetail : fromFeed).filter(fcEntryCompetesV1060);
+  const displayedIdsV1085 = fcDisplayedEntryOrderV1085(entryId, chId);
+  const allEntriesV1085 = fcEntriesForChallengeV1060(ch);
+  const byIdV1085 = new Map(allEntriesV1085.map(e => [String(e.id), e]));
+  _evEntries = displayedIdsV1085.length
+    ? displayedIdsV1085.map(id => byIdV1085.get(String(id))).filter(Boolean)
+    : allEntriesV1085;
 
   // If entry not in state, fetch it
   let entry = _evEntries.find(e => e.id === entryId);
@@ -23754,11 +23775,19 @@ function fcEntryRailV1060(ch, entries) {
   const selectedVoteIdV1083 = state.entryVoteSelectionsV1083 instanceof Map
     ? state.entryVoteSelectionsV1083.get(String(ch.id))
     : null;
+  const statusV1085 = ch.computedStatus || computeChallengeStatus(ch);
+  const votingV1085 = isVotingPhase(statusV1085);
+  const voteTotalV1085 = entries.reduce((sum, e) => sum + Number(state.feedVoteCounts?.[e.id] || 0), 0);
   return `<div class="fcc-entries-wrap fc-entry-rail-v1060 fc-entry-rail-v1079"><div class="fcc-entries-scroll">${entries.map((e,i) => {
     const sub = e.submitter || {};
     const av = sub.avatar && /^https?:/.test(sub.avatar) ? `<img src="${escapeHtml(sub.avatar)}" alt="">` : escapeHtml((sub.name || '?').charAt(0).toUpperCase());
-    const voteClassV1083 = selectedVoteIdV1083 && String(selectedVoteIdV1083) === String(e.id) ? ' fc-your-vote-v1083' : '';
-    return `<article class="fcc-entry-card fc-entry-square-v1082${voteClassV1083}" data-entry-open="${ch.id}" data-entry-id="${e.id}" aria-label="Entry ${i+1} of ${entries.length}"><header class="fcc-entry-head-v1079"><span class="fcc-entry-avatar">${av}</span><span class="fcc-entry-name-v1079">${escapeHtml(sub.name || `Entry ${i+1}`)}</span><span class="fcc-entry-position-v1079">${i+1} of ${entries.length}</span></header>${fcEntryCardMediaV1060(e,ch)}</article>`;
+    const selectedV1085 = selectedVoteIdV1083 && String(selectedVoteIdV1083) === String(e.id);
+    const voteClassV1083 = selectedV1085 ? ' fc-your-vote-v1083' : '';
+    const votesV1085 = Number(state.feedVoteCounts?.[e.id] || 0);
+    const pctV1085 = voteTotalV1085 > 0 ? Math.round((votesV1085 / voteTotalV1085) * 100) : 0;
+    const voteLabelV1085 = selectedV1085 ? '✓ Your vote' : (selectedVoteIdV1083 ? 'Change vote to this entry' : 'Vote for this entry');
+    const voteFooterV1085 = votingV1085 ? `<footer class="fcc-direct-vote-foot-v1085"><button type="button" class="fcc-direct-vote-btn-v1085${selectedV1085 ? ' selected' : ''}" data-fcc-direct-vote-v1085 data-challenge-id="${ch.id}" data-entry-id="${e.id}" ${selectedV1085 ? 'disabled aria-current="true"' : ''} onclick="event.stopPropagation();voteFromCompeteCardV1085(this)">${voteLabelV1085}</button><span class="fcc-direct-vote-total-v1085" data-fcc-direct-total-v1085="${e.id}">${votesV1085} vote${votesV1085 === 1 ? '' : 's'} · ${pctV1085}%</span></footer>` : '';
+    return `<article class="fcc-entry-card fc-entry-square-v1082${voteClassV1083}" data-entry-open="${ch.id}" data-entry-id="${e.id}" aria-label="Entry ${i+1} of ${entries.length}"><header class="fcc-entry-head-v1079"><span class="fcc-entry-avatar">${av}</span><span class="fcc-entry-name-v1079">${escapeHtml(sub.name || `Entry ${i+1}`)}</span><span class="fcc-entry-position-v1079">${i+1} of ${entries.length}</span></header>${fcEntryCardMediaV1060(e,ch)}${voteFooterV1085}</article>`;
   }).join('')}</div>${_entryDotsHtml(entries.length)}</div>`;
 }
 
@@ -23870,7 +23899,7 @@ function fcCardAction(ch, status) {
     return { label:'Enter challenge', mode:'enter' };
   }
   if (isVotingPhase(status)) {
-    return { label:'Review entries', mode:'vote' };
+    return { label:'', mode:'direct-vote', hidden:true };
   }
   return { label:'View result', mode:'view', ghost:true };
 }
@@ -23977,7 +24006,7 @@ function buildChallengeCardShell(ch, surface = 'compete') {
       <div class="fc-compete-card-foot-v1059">
         <div class="fc-compete-card-status-v1059">${statusParts.map(x=>`<span>${escapeHtml(x)}</span>`).join('<i aria-hidden="true">·</i>')}</div>
         <button type="button" class="fc-compete-card-score-v1059" data-fc-compete-score-v1059="${ch.id}">${escapeHtml(scoreContext)} <span aria-hidden="true">ⓘ</span></button>
-        <button class="chc-cta fc-compete-card-action-v1059${ctaCls}" data-chc-act="${ch.id}" data-chc-mode="${action.mode}">${action.label}</button>
+        ${action.hidden ? '' : `<button class="chc-cta fc-compete-card-action-v1059${ctaCls}" data-chc-act="${ch.id}" data-chc-mode="${action.mode}">${action.label}</button>`}
       </div>`;
   }
 
@@ -24001,7 +24030,7 @@ function buildChallengeCardShell(ch, surface = 'compete') {
       ${counts.join('')}
       ${deadline ? `<span class="chc-rt">${escapeHtml(deadline)}</span>` : ''}
     </div>
-    <button class="chc-cta${ctaCls}" data-chc-act="${ch.id}" data-chc-mode="${action.mode}">${action.label}</button>`;
+    ${action.hidden ? '' : `<button class="chc-cta${ctaCls}" data-chc-act="${ch.id}" data-chc-mode="${action.mode}">${action.label}</button>`}`;
 }
 
 function _fcFeedCategoryIconV1058(category) {
@@ -34659,7 +34688,7 @@ window.__fcBuildV1084={
   focus:'one voting surface inside Challenge Detail',
   challengeDetailEntryCardsAreVotingSurface:true,
   extraVoteNowStepRemoved:true,
-  challengeCardAction:'Review entries',
+  challengeCardAction:'superseded-by-v1085',
   mediaViewerVotingRemoved:true,
   mediaViewerRemainsAvailable:true,
   liveTotalsPreserved:true,
@@ -34670,6 +34699,186 @@ window.__fcBuildV1084={
   sqlChanges:0,
   edgeFunctionChanges:0
 };
+</script>
+
+
+
+<style id="fc-v1085-direct-card-voting-notifications-css">
+/* v1085 — voting happens on the visible Compete preview card. There is no
+   separate navigation CTA required to cast or change a ballot. */
+.fcc-direct-vote-foot-v1085{
+  display:flex;align-items:center;gap:10px;padding:12px 14px 14px;
+  border-top:1px solid var(--border);background:var(--surface);
+}
+.fcc-direct-vote-btn-v1085{
+  flex:1;min-height:44px;border:0;border-radius:14px;padding:10px 12px;
+  background:linear-gradient(135deg,var(--ember),var(--flame));color:#fff;
+  font-family:var(--font-body);font-size:13px;font-weight:850;cursor:pointer;
+}
+.fcc-direct-vote-btn-v1085:active{transform:scale(.985)}
+.fcc-direct-vote-btn-v1085.selected{
+  background:rgba(74,222,128,.14);color:var(--success);
+  border:1px solid rgba(74,222,128,.38);
+}
+.fcc-direct-vote-btn-v1085:disabled{opacity:1;cursor:default}
+.fcc-direct-vote-total-v1085{
+  flex:0 0 auto;font-size:12px;font-weight:750;color:var(--text-muted);
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+
+/* Notification ownership controls. */
+.notif-head-actions-v1085{margin-left:auto;display:flex;align-items:center;gap:4px}
+.notif-head-actions-v1085 .notif-settings-btn{margin-left:0}
+.notif-clear-all-v1085{
+  display:none;align-items:center;justify-content:center;background:none;border:0;
+  color:var(--ember-bright);font-family:var(--font-body);font-size:13px;font-weight:800;
+  padding:8px 6px;cursor:pointer;white-space:nowrap;
+}
+.notif-delete-v1085{
+  width:34px;height:34px;display:grid;place-items:center;flex:0 0 auto;
+  border:1px solid var(--border);border-radius:50%;background:var(--surface-2);
+  color:var(--text-muted);font-size:21px;line-height:1;cursor:pointer;margin-top:4px;
+}
+.notif-delete-v1085:active{transform:scale(.92);color:var(--text)}
+.notif-item{position:relative}
+@media(max-width:390px){
+  .fcc-direct-vote-foot-v1085{align-items:stretch;flex-direction:column}
+  .fcc-direct-vote-total-v1085{text-align:center}
+}
+</style>
+<script id="fc-v1085-direct-card-voting-notifications-js">
+(function(){
+  const DISMISS_PREFIX='fc_notif_dismissed_v1085_';
+
+  window.notifDismissKeyV1085=function(n){
+    if(!n)return '';
+    if(n.notifId)return 'db:'+String(n.notifId);
+    const t=n.target||{};
+    return ['local',n.type||'',n.actorId||'',t.kind||'',t.id||'',n.ts||'',n.text||''].join('|');
+  };
+  function dismissedStorageKey(){return DISMISS_PREFIX+(state.profile?.id||'anon');}
+  function readDismissed(){
+    try{return new Set(JSON.parse(localStorage.getItem(dismissedStorageKey())||'[]'));}
+    catch(e){return new Set();}
+  }
+  function writeDismissed(set){
+    try{localStorage.setItem(dismissedStorageKey(),JSON.stringify([...set].slice(-500)));}catch(e){}
+  }
+  window.isNotificationDismissedV1085=function(n){
+    const k=notifDismissKeyV1085(n);return !!k&&readDismissed().has(k);
+  };
+  window.dismissNotificationV1085=async function(n,btn){
+    if(!n)return;
+    const key=notifDismissKeyV1085(n);const dismissed=readDismissed();dismissed.add(key);writeDismissed(dismissed);
+    state.notifsAll=(state.notifsAll||[]).filter(x=>notifDismissKeyV1085(x)!==key);
+    applyNotifPrefs();
+    try{
+      if(n.notifId&&state.profile?.id){
+        const {error}=await db.from('notifications').delete().eq('id',n.notifId).eq('user_id',state.profile.id);
+        if(error)throw error;
+      }
+      toast('Notification deleted');
+    }catch(err){
+      console.warn('delete notification',err);
+      toast('Removed on this device');
+    }
+  };
+  window.clearAllNotificationsV1085=async function(){
+    const all=[...(state.notifsAll||[])];
+    if(!all.length)return;
+    if(!confirm('Clear all notifications?'))return;
+    const dismissed=readDismissed();all.forEach(n=>dismissed.add(notifDismissKeyV1085(n)));writeDismissed(dismissed);
+    state.notifsAll=[];state.notifs=[];renderNotifs();renderNotifBadge();
+    try{
+      if(state.profile?.id){
+        const ids=all.map(n=>n.notifId).filter(Boolean);
+        if(ids.length){
+          const {error}=await db.from('notifications').delete().eq('user_id',state.profile.id).in('id',ids);
+          if(error)throw error;
+        }
+      }
+      toast('Notifications cleared');
+    }catch(err){
+      console.warn('clear notifications',err);
+      toast('Cleared on this device');
+    }
+  };
+
+  window.fcDisplayedEntryOrderV1085=function(entryId,chId){
+    const esc=window.CSS&&CSS.escape?CSS.escape(String(entryId)):String(entryId).replace(/"/g,'\\"');
+    const candidates=[...document.querySelectorAll(`.fcc-entry-card[data-entry-id="${esc}"], .cd-entry[data-entry-id="${esc}"]`)];
+    const clicked=candidates.find(el=>el.getClientRects().length)||candidates[0];
+    if(!clicked)return [];
+    const rail=clicked.closest('.fcc-entries-scroll, .cd-entries-grid');
+    if(!rail)return [];
+    return [...rail.querySelectorAll('[data-entry-id]')]
+      .filter(el=>String(el.dataset.entryOpen||el.closest('[data-cid]')?.dataset.cid||chId)===String(chId)||!el.dataset.entryOpen)
+      .map(el=>el.dataset.entryId).filter(Boolean);
+  };
+
+  function directEntries(chId){
+    const ch=(state.challenges||[]).find(c=>String(c.id)===String(chId));
+    return ch?fcEntriesForChallengeV1060(ch):[];
+  }
+  function syncDirectVoteCards(chId){
+    const selected=state.entryVoteSelectionsV1083 instanceof Map?state.entryVoteSelectionsV1083.get(String(chId)):null;
+    const entries=directEntries(chId);
+    const total=entries.reduce((n,e)=>n+Number(state.feedVoteCounts?.[e.id]||0),0);
+    document.querySelectorAll(`.fcc-entry-card[data-entry-open="${chId}"]`).forEach(card=>{
+      const eid=card.dataset.entryId;const isSelected=!!selected&&String(selected)===String(eid);
+      card.classList.toggle('fc-your-vote-v1083',isSelected);
+      const btn=card.querySelector('[data-fcc-direct-vote-v1085]');
+      if(btn){
+        btn.disabled=isSelected;btn.classList.toggle('selected',isSelected);
+        btn.setAttribute('aria-current',isSelected?'true':'false');
+        btn.textContent=isSelected?'✓ Your vote':(selected?'Change vote to this entry':'Vote for this entry');
+      }
+      const stat=card.querySelector('[data-fcc-direct-total-v1085]');
+      if(stat){const v=Number(state.feedVoteCounts?.[eid]||0);const pct=total?Math.round(v/total*100):0;stat.textContent=`${v} vote${v===1?'':'s'} · ${pct}%`;}
+    });
+  }
+  window.voteFromCompeteCardV1085=async function(btn){
+    if(!btn)return;
+    if(!state.profile){toast('Sign in to vote');return;}
+    const chId=btn.dataset.challengeId,entryId=btn.dataset.entryId;
+    const ch=(state.challenges||[]).find(c=>String(c.id)===String(chId));
+    if(!ch||!isVotingPhase(ch.computedStatus||computeChallengeStatus(ch))){toast("Voting isn't open right now");return;}
+    const previous=state.entryVoteSelectionsV1083 instanceof Map?state.entryVoteSelectionsV1083.get(String(chId)):null;
+    if(previous&&String(previous)===String(entryId))return;
+    if(!state.feedVoteCounts)state.feedVoteCounts={};
+    if(previous)state.feedVoteCounts[previous]=Math.max(0,Number(state.feedVoteCounts[previous]||0)-1);
+    state.feedVoteCounts[entryId]=Number(state.feedVoteCounts[entryId]||0)+1;
+    fcRecordEntryVoteV1083(chId,entryId);syncDirectVoteCards(chId);
+    btn.disabled=true;
+    try{
+      const sdRound=ch.sd_phase==='voting'?(ch.sd_round||0):0;
+      let {error}=await db.from('entry_votes').upsert({challenge_id:chId,entry_id:entryId,voter_id:state.profile.id,sd_round:sdRound},{onConflict:'challenge_id,voter_id'});
+      if(error&&/sd_round/.test(error.message||''))({error}=await db.from('entry_votes').upsert({challenge_id:chId,entry_id:entryId,voter_id:state.profile.id},{onConflict:'challenge_id,voter_id'}));
+      if(error)throw error;
+      if(state.currentChallenge&&String(state.currentChallenge.id)===String(chId)){
+        state.myCurrentVote=entryId;
+        state.currentVotes=(state.currentVotes||[]).filter(v=>String(v.voter_id)!==String(state.profile.id));
+        state.currentVotes.push({challenge_id:chId,entry_id:entryId,voter_id:state.profile.id});
+      }
+      toast(previous?'Vote changed':'Vote recorded');
+      try{fcTrackAttributedConversionV1048('attributed_vote',chId,{entry_id:entryId});}catch(e){}
+      try{navigator.vibrate&&navigator.vibrate(10);}catch(e){}
+    }catch(err){
+      console.error('direct card vote',err);
+      state.feedVoteCounts[entryId]=Math.max(0,Number(state.feedVoteCounts[entryId]||0)-1);
+      if(previous)state.feedVoteCounts[previous]=Number(state.feedVoteCounts[previous]||0)+1;
+      fcRecordEntryVoteV1083(chId,previous||null);syncDirectVoteCards(chId);
+      toast('Vote failed: '+(err.message||'unknown'));
+    }
+  };
+
+  window.__fcBuildV1085={
+    build:'v1085',basedOn:'v1084',focus:'direct Compete-card voting, consistent viewer order, and notification ownership',
+    separateReviewEntriesStepRequired:false,directCompeteCardVoting:true,liveCardTotals:true,voteChangeSupported:true,
+    viewerUsesDisplayedOrder:true,notificationDelete:true,notificationClearAll:true,generatedNotificationDismissalsPersistLocally:true,
+    nativeHorizontalScrollPreserved:true,carouselScrollCodeChanged:false,backendChanged:false,sqlChanges:0,edgeFunctionChanges:0
+  };
+})();
 </script>
 
 </body>
