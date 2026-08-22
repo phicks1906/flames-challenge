@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1083 — Direct Voting & Faster Entry Swipes</title>
+<title>FlamesChallenge v1084 — Voting Inside Challenge Detail</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1083 · direct-voting-faster-entry-swipes" />
-<meta name="fc-whatsnew" content="Makes voting direct from entry previews and removes the slow carousel settle for quicker, more responsive swipes." />
+<meta name="fc-build" content="v1084 · voting-inside-challenge-detail" />
+<meta name="fc-whatsnew" content="Keeps voting on the Challenge Detail entry cards, removes the extra Vote Now step, and returns the media viewer to viewing only." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -9379,7 +9379,6 @@ window.__fcBuildV1071={build:'v1071',basedOn:'v1070',fix:'normal iPhone horizont
     </div>
     <div id="evCaption" class="fc-ev-caption-v1079"></div>
     <div class="entry-viewer-actions">
-      <button id="evVoteBtn" class="fc-ev-vote-v1083" style="display:none">Vote for this entry</button>
       <button id="evLikeBtn" class="flame-btn">🔥 <span id="evLikeCount">0</span></button>
       <button id="evFollowBtn" class="btn btn-primary" style="padding:8px 20px;font-size:13px">+ Follow</button>
     </div>
@@ -21330,7 +21329,7 @@ function renderChallengeDetail() {
     if (isVotingPhase(status)) {
       if (state.profile) {
         // Everyone — including the submitter — can cast their one vote
-        const voteLabel = iVoted ? '✓ Your vote' : (iHaveVoted ? 'Change vote' : 'Vote for this entry');
+        const voteLabel = iVoted ? '✓ Your vote' : (iHaveVoted ? 'Change vote to this entry' : 'Vote for this entry');
         actionsHtml = `${isMyEntry ? '<span class="cd-entry-tag">Your entry</span> ' : ''}<button class="btn-vote ${iVoted ? 'is-voted' : 'not-voted'}" data-vote-entry="${entry.id}" ${iVoted ? 'disabled aria-current="true"' : ''}>${voteLabel}</button>`;
       }
     }
@@ -23871,8 +23870,7 @@ function fcCardAction(ch, status) {
     return { label:'Enter challenge', mode:'enter' };
   }
   if (isVotingPhase(status)) {
-    if (voted) return { label:'View or change vote', mode:'vote' };
-    return { label: ch.is_championship ? 'Vote for champion' : 'Vote now', mode:'vote' };
+    return { label:'Review entries', mode:'vote' };
   }
   return { label:'View result', mode:'view', ghost:true };
 }
@@ -33485,7 +33483,7 @@ body.theme-light .fc-score-metric-v1032,body.theme-light .fc-score-cutoff-v1032,
       if(mine)return {k:'Entries open',t:left(ch.submission_deadline),h:'Your entry is live',p:'You can edit or withdraw it until entries close.',primary:'edit',mine};
       return {k:'Entries open',t:left(ch.submission_deadline),h:'Submit before the deadline',p:`${entries.length} approved entr${entries.length===1?'y':'ies'} so far. Voting begins after entries close.`,primary:'enter'};
     }
-    if(status==='voting'||status==='sudden_death')return {k:status==='sudden_death'?'Sudden-death voting':'Voting is open',t:left(ch.voting_end),h:'Choose the strongest entry',p:'You have one ballot and can change it until voting closes.',primary:'vote'};
+    if(status==='voting'||status==='sudden_death')return {k:status==='sudden_death'?'Sudden-death voting':'Voting is open',t:left(ch.voting_end),h:'Choose the strongest entry',p:'Swipe the entries below and vote directly on the card. You can change it until voting closes.'};
     if(status==='sd_submitting')return {k:'Sudden-death entries',t:left(ch.sd_submit_end),h:'Tied finalists are submitting new work',p:'New entries reveal together for a fresh runoff.',primary:mine?'edit':null,mine};
     if(status==='voided')return {k:'No contest',t:'Final',h:'No winner was awarded',p:'Fewer than two eligible competitors remained when entries closed.'};
     return {k:'Final result',t:'Final',h:'Voting is complete',p:'Review the winner, final totals, and any Championship Score awarded.',primary:'results'};
@@ -33495,14 +33493,13 @@ body.theme-light .fc-score-metric-v1032,body.theme-light .fc-score-cutoff-v1032,
     document.getElementById('fcChallengeBriefV1054')?.remove();
     const status=computeChallengeStatus(ch),d=statusCopy(ch,status),box=document.createElement('section');box.id='fcChallengeBriefV1054';box.className='fc-challenge-brief-v1054';
     if(status==='submitting'&&ch.is_public!==false&&!ch.is_championship){const approved=(state.currentEntries||[]).filter(e=>!e.moderation_status||e.moderation_status==='clear'||e.moderation_status==='approved');const mine=approved.some(e=>e.user_id===state.profile?.id);const ids=[...new Set(approved.map(e=>e.user_id).filter(id=>id&&(!mine||id!==state.profile?.id)))];const value=ids.reduce((n,id)=>n+Number(getLadderStatus(id)?.points||0),0);d.p+=` Current field value: ${value} Opponent Point${value===1?'':'s'} before turnout.`;}
-    let primary='';if(d.primary==='edit')primary='<button class="primary" data-v1054-action="edit">Edit entry</button>';else if(d.primary==='enter')primary='<button class="primary" data-v1054-action="enter">Enter challenge</button>';else if(d.primary==='vote')primary='<button class="primary" data-v1054-action="vote">Vote now</button>';else if(d.primary==='results')primary='<button class="primary" data-v1054-action="results">View results</button>';
+    let primary='';if(d.primary==='edit')primary='<button class="primary" data-v1054-action="edit">Edit entry</button>';else if(d.primary==='enter')primary='<button class="primary" data-v1054-action="enter">Enter challenge</button>';else if(d.primary==='results')primary='<button class="primary" data-v1054-action="results">View results</button>';
     const pendingReview=d.k==='Entry under review';
     const insights=(!pendingReview&&(ch.creator_id===state.profile?.id||ch.creator?.id===state.profile?.id))?'<button data-v1054-action="insights">Insights</button>':'';
     box.innerHTML=`<div class="fc-challenge-brief-top-v1054"><div><div class="fc-challenge-brief-state-v1054">${esc(d.k)}</div><strong>${esc(d.h)}</strong></div><div class="fc-challenge-brief-time-v1054">${esc(d.t)}</div></div><p>${esc(d.p)}</p><div class="fc-challenge-actions-v1054">${primary}${insights}<button class="help" data-v1054-action="ember">Ask Ember</button></div>`;
     hero.insertAdjacentElement('afterend',box);
     box.querySelector('[data-v1054-action="edit"]')?.addEventListener('click',()=>openSubmitEntry(d.mine));
     box.querySelector('[data-v1054-action="enter"]')?.addEventListener('click',()=>openSubmitEntry());
-    box.querySelector('[data-v1054-action="vote"]')?.addEventListener('click',()=>document.getElementById('cdEntriesGrid')?.scrollIntoView({behavior:'smooth',block:'start'}));
     box.querySelector('[data-v1054-action="results"]')?.addEventListener('click',()=>document.getElementById('cdResultsPanel')?.scrollIntoView({behavior:'smooth',block:'start'}));
     box.querySelector('[data-v1054-action="insights"]')?.addEventListener('click',()=>openCreatorInsightsV1048(ch.id));
     box.querySelector('[data-v1054-action="ember"]')?.addEventListener('click',()=>fcOpenEmberWithQuestion?.('What matters next in this challenge?'));
@@ -34637,6 +34634,38 @@ window.__fcBuildV1083={
   nativeHorizontalScrollPreserved:true,
   scrollPreventDefault:false,
   previewDimensionsChanged:false,
+  backendChanged:false,
+  sqlChanges:0,
+  edgeFunctionChanges:0
+};
+</script>
+
+
+<style id="fc-v1084-single-voting-surface-css">
+/* v1084 — Voting lives on the Challenge Detail entry cards. The full-screen
+   media viewer is for inspection only and no longer becomes another voting
+   destination. Preserve the native entry rail and its v1083 swipe behavior. */
+.fc-entry-viewer-v1079 .entry-viewer-actions{
+  flex-wrap:nowrap!important;
+}
+#challengeDetailSheet .fc-challenge-brief-v1054 [data-v1054-action="vote"]{
+  display:none!important;
+}
+</style>
+<script id="fc-v1084-single-voting-surface-marker-js">
+window.__fcBuildV1084={
+  build:'v1084',
+  basedOn:'v1083',
+  focus:'one voting surface inside Challenge Detail',
+  challengeDetailEntryCardsAreVotingSurface:true,
+  extraVoteNowStepRemoved:true,
+  challengeCardAction:'Review entries',
+  mediaViewerVotingRemoved:true,
+  mediaViewerRemainsAvailable:true,
+  liveTotalsPreserved:true,
+  voteChangePreserved:true,
+  nativeHorizontalScrollPreserved:true,
+  carouselScrollCodeChanged:false,
   backendChanged:false,
   sqlChanges:0,
   edgeFunctionChanges:0
