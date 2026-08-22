@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1075 — You Primary Navigation Page</title>
+<title>FlamesChallenge v1076 — Challenge Detail Notification Cleanup</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1075 · you-primary-navigation-page" />
-<meta name="fc-whatsnew" content="Brings Live Now rows into the same visual system as Your Next Move with larger media, clearer status wording, and consistent spacing." />
+<meta name="fc-build" content="v1076 · challenge-detail-notification-cleanup" />
+<meta name="fc-whatsnew" content="Replaces oversized long-message bubbles with compact notifications and makes pending-entry challenge states accurate." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -1514,14 +1514,16 @@ html { scroll-padding-top: var(--nav-h); }
   opacity: 0; visibility: hidden; pointer-events: none;
   background: var(--surface);
   border: 1px solid var(--ember);
-  border-radius: 100px;
-  padding: 14px 24px;
-  font-size: 14px; font-weight: 600;
+  border-radius: 16px;
+  padding: 13px 14px 13px 16px;
+  font-size: 14px; font-weight: 600; line-height: 1.35;
   z-index: 9000;
-  box-shadow: var(--shadow-warm);
+  box-shadow: 0 16px 40px rgba(0,0,0,0.48), 0 0 0 1px rgba(255,106,44,0.08);
   transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease, visibility 0s linear 0.4s;
-  display: flex; align-items: center; gap: 10px;
-  max-width: calc(100vw - 40px);
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; column-gap: 10px;
+  width: max-content;
+  max-width: min(390px, calc(100vw - 32px));
+  overflow-wrap: anywhere;
 }
 .toast.show {
   transform: translateX(-50%) translateY(0);
@@ -1529,7 +1531,7 @@ html { scroll-padding-top: var(--nav-h); }
   transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease, visibility 0s;
 }
 .toast { cursor: pointer; touch-action: manipulation; -webkit-user-select: none; user-select: none; }
-.toast::after { content: '✕'; font-size: 11px; opacity: 0.45; margin-left: 2px; }
+.toast::after { content: '✕'; font-size: 11px; line-height: 1.35; opacity: 0.45; margin-left: 2px; align-self: start; }
 
 /* ============ FOOTER ============ */
 footer {
@@ -21117,8 +21119,14 @@ function renderChallengeDetail() {
   const prevBtn = document.getElementById('cdEntryPrev');
   const nextBtn = document.getElementById('cdEntryNext');
   if (sortedEntries.length === 0) {
+    const _hasPrivatePendingEntry = (state.currentEntries || []).some(e =>
+      e.user_id === state.profile?.id &&
+      ['pending', 'flagged', 'escalated'].includes(String(e.moderation_status || '').toLowerCase())
+    );
     const _emptyMsg = ch.sd_phase === 'submitting'
       ? '🔒 Sudden Death in progress — entries are hidden until voting opens.'
+      : _hasPrivatePendingEntry
+      ? 'No approved entries are public yet.'
       : 'No entries yet. Be the first!';
     grid.innerHTML = `<div class="cd-entries-pager-empty">${_emptyMsg}</div>`;
     if (navEl) navEl.style.display = 'none';
@@ -22043,7 +22051,7 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
       // Re-trigger moderation for the swapped-in video
       if (editSwappedVideo && seState.editingEntry.id) {
         triggerVideoModeration(seState.editingEntry.id, mediaUrl);
-        toast('✅ Entry updated — awaiting review. Only you and moderators can see the preview until approved.');
+        toast('Entry updated — awaiting review.');
       } else {
         toast('✅ Entry updated!');
       }
@@ -22085,7 +22093,7 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
       // Kick off async video moderation — non-blocking, entry already saved.
       if (entryData && ch.media_type === 'video' && mediaUrl) {
         triggerVideoModeration(entryData.id, mediaUrl);
-        toast('Entry submitted — awaiting review. Only you and moderators can see it until approved.');
+        toast('Entry submitted — awaiting review.');
       } else {
         toast('🔥 Entry submitted!');
       }
@@ -33911,6 +33919,19 @@ window.__fcBuildV1065={build:'v1065',basedOn:'v1064',flyerRenderer:'exact v1056 
   window.__fcYouPrimaryPageV1075={
     close:forceCloseOwnPage,
     isOpen:ownOpen
+  };
+})();
+</script>
+
+<script id="fc-v1076-challenge-detail-notification-cleanup-js">
+(() => {
+  window.__fcBuildV1076 = {
+    build: 'v1076',
+    phase: 'Production Hardening',
+    focus: 'compact notifications + accurate pending-entry empty state',
+    newEdgeFunctions: 0,
+    edgeFunctionChanges: 0,
+    sqlChanges: 0
   };
 })();
 </script>
