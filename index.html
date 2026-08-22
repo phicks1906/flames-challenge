@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1095 — Reliable Session Boot</title>
+<title>FlamesChallenge v1096 — Unified Voting State</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1095 · reliable-session-boot" />
-<meta name="fc-whatsnew" content="Prevents blank signed-in loads and login-screen flashes with a reliable session boot gate, critical-data retries, and a visible retry path." />
+<meta name="fc-build" content="v1096 · unified-voting-state" />
+<meta name="fc-whatsnew" content="Keeps vote selection and totals synchronized across Compete cards, Challenge Detail, and both entry viewers, including rollback after failed writes." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -18291,11 +18291,8 @@ async function evVoteCurrentEntryV1083() {
   const ch = _evChallenge;
   const btn = document.getElementById('evVoteBtn');
   if (!entry || !ch || !state.profile || !isVotingPhase(computeChallengeStatus(ch))) return;
-  const previousVote = _evMyVoteEntryId;
-  const previousHadVote = _evHasAnyVoteV1083;
-  _evMyVoteEntryId = entry.id;
-  _evHasAnyVoteV1083 = true;
-  fcRecordEntryVoteV1083(ch.id, entry.id);
+  const previousVote = fcCurrentVoteForChallengeV1096(ch.id);
+  fcApplyUnifiedVoteStateV1096(ch.id, entry.id, previousVote);
   syncEvVoteButtonV1083();
   markEntryVoteCardsV1083(ch.id, entry.id);
   try { navigator.vibrate && navigator.vibrate(10); } catch (e) {}
@@ -18311,11 +18308,6 @@ async function evVoteCurrentEntryV1083() {
         { onConflict: 'challenge_id,voter_id' }));
     }
     if (upErr) throw upErr;
-    if (state.currentChallenge && String(state.currentChallenge.id) === String(ch.id)) {
-      state.myCurrentVote = entry.id;
-      state.currentVotes = (state.currentVotes || []).filter(v => v.voter_id !== state.profile.id);
-      state.currentVotes.push({ challenge_id: ch.id, entry_id: entry.id, voter_id: state.profile.id });
-    }
     toast(previousVote ? 'Vote changed' : 'Vote recorded');
     try { fcTrackAttributedConversionV1048('attributed_vote', ch.id, { entry_id: entry.id }); } catch (e) {}
     if (typeof renderChallenges === 'function') renderChallenges();
@@ -18323,9 +18315,7 @@ async function evVoteCurrentEntryV1083() {
     spawnEmberBurst(btn);
   } catch (err) {
     console.error('entry viewer vote', err);
-    _evMyVoteEntryId = previousVote || null;
-    _evHasAnyVoteV1083 = previousHadVote;
-    fcRecordEntryVoteV1083(ch.id, previousVote || null);
+    fcApplyUnifiedVoteStateV1096(ch.id, previousVote || null, entry.id);
     syncEvVoteButtonV1083();
     markEntryVoteCardsV1083(ch.id, previousVote || null);
     toast('Vote failed: ' + (err.message || 'unknown'));
@@ -21823,13 +21813,10 @@ async function voteOnEntry(entryId) {
 
   const challengeId = ch.id;
   const me = state.profile.id;
-  const previousVote = state.myCurrentVote;
+  const previousVote = fcCurrentVoteForChallengeV1096(challengeId);
 
-  // Optimistic selection: the chosen card becomes unmistakable immediately.
-  state.currentVotes = state.currentVotes.filter(v => v.voter_id !== me);
-  state.currentVotes.push({ entry_id: entryId, voter_id: me });
-  state.myCurrentVote = entryId;
-  fcRecordEntryVoteV1083(challengeId, entryId);
+  // Optimistic selection: update every shared vote cache in one transaction.
+  fcApplyUnifiedVoteStateV1096(challengeId, entryId, previousVote);
   renderChallengeDetail();
   requestAnimationFrame(() => {
     const chosen = document.querySelector(`.cd-entry[data-entry-id="${entryId}"]`);
@@ -21858,10 +21845,7 @@ async function voteOnEntry(entryId) {
     refreshChallengeVotes(challengeId);
   } catch (err) {
     console.error('vote error', err);
-    state.currentVotes = state.currentVotes.filter(v => v.voter_id !== me);
-    if (previousVote) state.currentVotes.push({ entry_id: previousVote, voter_id: me });
-    state.myCurrentVote = previousVote || null;
-    fcRecordEntryVoteV1083(challengeId, previousVote || null);
+    fcApplyUnifiedVoteStateV1096(challengeId, previousVote || null, entryId);
     renderChallengeDetail();
     toast('Vote failed: ' + (err.message || 'unknown'));
   }
@@ -21877,9 +21861,11 @@ async function refreshChallengeVotes(challengeId) {
     if (res.error || !res.data) return;
     if (!state.currentChallenge || state.currentChallenge.id !== challengeId) return;
     state.currentVotes = res.data;
+    fcReplaceChallengeVoteCountsV1096(challengeId, state.currentVotes);
     state.myCurrentVote = state.profile
-      ? (state.currentVotes.find(v => v.voter_id === state.profile.id)?.entry_id || null)
+      ? (state.currentVotes.find(v => String(v.voter_id) === String(state.profile.id))?.entry_id || null)
       : null;
+    fcRecordEntryVoteV1083(challengeId, state.myCurrentVote);
     if (state.myCurrentVote) {
       const _validEntryIdsV1047 = new Set((state.currentEntries || []).filter(e => e.moderation_status !== 'rejected').map(e => e.id));
       if (!_validEntryIdsV1047.has(state.myCurrentVote)) state.myCurrentVote = null;
@@ -24022,6 +24008,80 @@ function fcRecordEntryVoteV1083(challengeId, entryId) {
   if (entryId) state.emberVotedChallengeIds.add(String(challengeId));
   else state.emberVotedChallengeIds.delete(String(challengeId));
   state.entryVoteSelectionsV1083At = Date.now();
+}
+
+// v1096 — one local vote-state transaction for every voting surface. The old
+// paths each updated a different subset of caches, so a successful vote could
+// leave Home/Compete totals or Challenge Detail selection stale until reload.
+function fcCurrentVoteForChallengeV1096(challengeId) {
+  const key = String(challengeId);
+  if (state.entryVoteSelectionsV1083 instanceof Map && state.entryVoteSelectionsV1083.has(key)) {
+    return state.entryVoteSelectionsV1083.get(key) || null;
+  }
+  if (state.currentChallenge && String(state.currentChallenge.id) === key && state.myCurrentVote) {
+    return state.myCurrentVote;
+  }
+  if (typeof _evChallenge !== 'undefined' && _evChallenge && String(_evChallenge.id) === key && _evMyVoteEntryId) {
+    return _evMyVoteEntryId;
+  }
+  return null;
+}
+
+function fcAdjustVoteCountV1096(counts, previousEntryId, nextEntryId) {
+  if (!counts || String(previousEntryId || '') === String(nextEntryId || '')) return;
+  if (previousEntryId) counts[previousEntryId] = Math.max(0, Number(counts[previousEntryId] || 0) - 1);
+  if (nextEntryId) counts[nextEntryId] = Number(counts[nextEntryId] || 0) + 1;
+}
+
+function fcApplyUnifiedVoteStateV1096(challengeId, nextEntryId, previousEntryId) {
+  const key = String(challengeId);
+  const next = nextEntryId || null;
+  const previous = previousEntryId || null;
+  const voterId = state.profile?.id || null;
+
+  if (!(state.feedVoteCounts && typeof state.feedVoteCounts === 'object')) state.feedVoteCounts = {};
+  fcAdjustVoteCountV1096(state.feedVoteCounts, previous, next);
+
+  if (typeof _fvChallenge !== 'undefined' && _fvChallenge && String(_fvChallenge.id) === key) {
+    if (!(_fvVoteCounts && typeof _fvVoteCounts === 'object')) _fvVoteCounts = {};
+    fcAdjustVoteCountV1096(_fvVoteCounts, previous, next);
+  }
+
+  fcRecordEntryVoteV1083(challengeId, next);
+
+  if (state.currentChallenge && String(state.currentChallenge.id) === key) {
+    state.myCurrentVote = next;
+    if (voterId) {
+      state.currentVotes = (state.currentVotes || []).filter(v => String(v.voter_id) !== String(voterId));
+      if (next) state.currentVotes.push({ challenge_id: challengeId, entry_id: next, voter_id: voterId });
+    }
+  }
+
+  if (typeof _evChallenge !== 'undefined' && _evChallenge && String(_evChallenge.id) === key) {
+    _evMyVoteEntryId = next;
+    _evHasAnyVoteV1083 = !!next;
+  }
+
+  return next;
+}
+
+function fcReplaceChallengeVoteCountsV1096(challengeId, voteRows) {
+  const key = String(challengeId);
+  const entryIds = new Set();
+  [...(state.feedEntries || []), ...(state.currentEntries || []), ...(state.challengeEntriesV1060 || [])]
+    .forEach(e => { if (e && String(e.challenge_id) === key && e.id) entryIds.add(String(e.id)); });
+  if (!(state.feedVoteCounts && typeof state.feedVoteCounts === 'object')) state.feedVoteCounts = {};
+  entryIds.forEach(id => { state.feedVoteCounts[id] = 0; });
+  const authoritative = {};
+  (voteRows || []).forEach(v => {
+    if (!v?.entry_id) return;
+    const id = String(v.entry_id);
+    authoritative[id] = (authoritative[id] || 0) + 1;
+    state.feedVoteCounts[v.entry_id] = authoritative[id];
+  });
+  if (typeof _fvChallenge !== 'undefined' && _fvChallenge && String(_fvChallenge.id) === key) {
+    _fvVoteCounts = { ...authoritative };
+  }
 }
 function fcCardHasVoted(ch) {
   if (state.entryVoteSelectionsV1083 instanceof Map && state.entryVoteSelectionsV1083.has(String(ch.id))) return true;
@@ -26299,9 +26359,11 @@ async function fvVote(btn, chId) {
   if (btn.classList.contains('selected')) return;
   try { navigator.vibrate && navigator.vibrate(10); } catch(e) {}
 
-  const previous = document.querySelector('#fvEntries [data-fv-vote].selected')?.dataset.fvVote || null;
+  const previous = fcCurrentVoteForChallengeV1096(chId)
+    || document.querySelector('#fvEntries [data-fv-vote].selected')?.dataset.fvVote
+    || null;
+  fcApplyUnifiedVoteStateV1096(chId, entryId, previous);
   syncFvVoteSelectionV1024(entryId);
-  fcRecordEntryVoteV1083(chId, entryId);
   renderFvVotingNoticeV1024(ch, status, entryId, (_fvVoteCounts && Object.values(_fvVoteCounts).reduce((a,b)=>a+b,0)) || 0);
   spawnEmberBurst(btn);
 
@@ -26322,17 +26384,19 @@ async function fvVote(btn, chId) {
 
     const { data: votes, error: vErr } = await db.from('entry_votes').select('entry_id, voter_id').eq('challenge_id', chId);
     if (!vErr) {
-      _fvVoteCounts = {};
-      (votes || []).forEach(v => { _fvVoteCounts[v.entry_id] = (_fvVoteCounts[v.entry_id] || 0) + 1; });
+      fcReplaceChallengeVoteCountsV1096(chId, votes || []);
+      if (state.currentChallenge && String(state.currentChallenge.id) === String(chId)) {
+        state.currentVotes = votes || [];
+        state.myCurrentVote = (votes || []).find(v => String(v.voter_id) === String(state.profile.id))?.entry_id || null;
+      }
       renderFvVotingNoticeV1024(ch, status, entryId, (votes || []).length);
     }
   } catch(e) {
     console.error('fvVote error', e);
+    fcApplyUnifiedVoteStateV1096(chId, previous || null, entryId);
     if (previous) {
       syncFvVoteSelectionV1024(previous);
-      fcRecordEntryVoteV1083(chId, previous);
     } else {
-      fcRecordEntryVoteV1083(chId, null);
       const list=document.getElementById('fvEntries');
       list?.querySelectorAll('[data-fv-entry-id]').forEach(s=>s.classList.remove('selected'));
       list?.querySelectorAll('[data-fv-vote]').forEach(b=>{b.classList.remove('selected');b.disabled=false;b.removeAttribute('aria-current');b.textContent='Vote for this entry';});
@@ -34789,31 +34853,21 @@ body.fc-insights-unavailable-v1081 .pm-tile[onclick*="openCreatorInsightsV1048"]
     const chId=btn.dataset.challengeId,entryId=btn.dataset.entryId;
     const ch=(state.challenges||[]).find(c=>String(c.id)===String(chId));
     if(!ch||!isVotingPhase(ch.computedStatus||computeChallengeStatus(ch))){toast("Voting isn't open right now");return;}
-    const previous=state.entryVoteSelectionsV1083 instanceof Map?state.entryVoteSelectionsV1083.get(String(chId)):null;
+    const previous=fcCurrentVoteForChallengeV1096(chId);
     if(previous&&String(previous)===String(entryId))return;
-    if(!state.feedVoteCounts)state.feedVoteCounts={};
-    if(previous)state.feedVoteCounts[previous]=Math.max(0,Number(state.feedVoteCounts[previous]||0)-1);
-    state.feedVoteCounts[entryId]=Number(state.feedVoteCounts[entryId]||0)+1;
-    fcRecordEntryVoteV1083(chId,entryId);syncDirectVoteCards(chId);
+    fcApplyUnifiedVoteStateV1096(chId,entryId,previous);syncDirectVoteCards(chId);
     btn.disabled=true;
     try{
       const sdRound=ch.sd_phase==='voting'?(ch.sd_round||0):0;
       let {error}=await db.from('entry_votes').upsert({challenge_id:chId,entry_id:entryId,voter_id:state.profile.id,sd_round:sdRound},{onConflict:'challenge_id,voter_id'});
       if(error&&/sd_round/.test(error.message||''))({error}=await db.from('entry_votes').upsert({challenge_id:chId,entry_id:entryId,voter_id:state.profile.id},{onConflict:'challenge_id,voter_id'}));
       if(error)throw error;
-      if(state.currentChallenge&&String(state.currentChallenge.id)===String(chId)){
-        state.myCurrentVote=entryId;
-        state.currentVotes=(state.currentVotes||[]).filter(v=>String(v.voter_id)!==String(state.profile.id));
-        state.currentVotes.push({challenge_id:chId,entry_id:entryId,voter_id:state.profile.id});
-      }
       toast(previous?'Vote changed':'Vote recorded');
       try{fcTrackAttributedConversionV1048('attributed_vote',chId,{entry_id:entryId});}catch(e){}
       try{navigator.vibrate&&navigator.vibrate(10);}catch(e){}
     }catch(err){
       console.error('direct card vote',err);
-      state.feedVoteCounts[entryId]=Math.max(0,Number(state.feedVoteCounts[entryId]||0)-1);
-      if(previous)state.feedVoteCounts[previous]=Number(state.feedVoteCounts[previous]||0)+1;
-      fcRecordEntryVoteV1083(chId,previous||null);syncDirectVoteCards(chId);
+      fcApplyUnifiedVoteStateV1096(chId,previous||null,entryId);syncDirectVoteCards(chId);
       toast('Vote failed: '+(err.message||'unknown'));
     }
   };
