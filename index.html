@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1100 — Safe Areas, Dialogs & Accessible Motion</title>
+<title>FlamesChallenge v1101 — Authoritative Results & Database Recovery</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1100 · safe-areas-dialogs-accessible-motion" />
-<!-- v1100: adds safe-area consistency, accessible dialogs and controls, larger touch targets, contrast repairs, and Reduced Motion support while preserving challenge preview autoplay. -->
+<meta name="fc-build" content="v1101 · authoritative-results-database-recovery" />
+<!-- v1101: makes settled results server-authoritative, adds bounded mutation recovery, atomic challenge workflows, and uploaded-media cleanup. -->
 <meta name="fc-whatsnew" content="Safer iPhone spacing, accessible sheets and controls, clearer contrast, and Reduced Motion support." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
@@ -11232,6 +11232,98 @@ function fcWithTimeoutV1099(promise, ms, label) {
   ]);
 }
 
+/* v1101 — one bounded Supabase result contract for reads and mutations.
+   Supabase returns {data,error}; merely awaiting a query does not throw an
+   RLS, network, or PostgREST error. All critical writes route through here. */
+async function fcDbResultV1101(operation, label, options = {}) {
+  const timeout = Number(options.timeout || 20000);
+  const requestLabel = label || 'Database request';
+  let timer;
+  let controller = null;
+  let boundedOperation = operation;
+
+  // PostgREST query builders expose abortSignal(). Attach it before awaiting so
+  // a timed-out mutation is actually cancelled instead of completing silently
+  // after the UI has already reported failure and allowed a retry.
+  if (typeof AbortController !== 'undefined' && boundedOperation && typeof boundedOperation.abortSignal === 'function') {
+    controller = new AbortController();
+    boundedOperation = boundedOperation.abortSignal(controller.signal);
+  }
+
+  const result = await Promise.race([
+    Promise.resolve(boundedOperation).finally(() => clearTimeout(timer)),
+    new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        try { controller?.abort(); } catch (_) {}
+        reject(new Error(requestLabel + ' timed out'));
+      }, timeout);
+    })
+  ]);
+
+  if (!result || typeof result !== 'object') {
+    throw new Error(requestLabel + ' returned no result');
+  }
+  if (result.error) {
+    const err = result.error instanceof Error ? result.error : new Error(result.error.message || String(result.error));
+    if (!err.code && result.error.code) err.code = result.error.code;
+    throw err;
+  }
+  if (options.requireRows) {
+    const rows = Array.isArray(result.data) ? result.data : (result.data ? [result.data] : []);
+    if (!rows.length) throw new Error((label || 'Database mutation') + ' changed no rows');
+  }
+  if (options.requireData && (result.data === null || result.data === undefined)) {
+    throw new Error(requestLabel + ' returned no data');
+  }
+  return result;
+}
+
+async function fcDbReadV1101(operation, label, timeout = 20000) {
+  return (await fcDbResultV1101(operation, label, { timeout })).data;
+}
+
+async function fcDbMutationV1101(operation, label, options = {}) {
+  return fcDbResultV1101(operation, label, {
+    timeout: Number(options.timeout || 25000),
+    requireRows: !!options.requireRows,
+    requireData: !!options.requireData
+  });
+}
+
+async function fcCleanupUploadedAssetV1101(asset) {
+  if (!asset) return;
+  try {
+    if (asset.kind === 'storage' && asset.bucket && asset.path) {
+      const result = await fcWithTimeoutV1099(
+        db.storage.from(asset.bucket).remove([asset.path]),
+        15000,
+        'Uploaded file cleanup'
+      );
+      if (result?.error) throw result.error;
+      return;
+    }
+    if (asset.kind === 'bunny' && asset.videoId) {
+      const response = await fcWithTimeoutV1099(fetch(
+        `https://video.bunnycdn.com/library/${BUNNY_LIBRARY_ID}/videos/${asset.videoId}`,
+        { method: 'DELETE', headers: { AccessKey: BUNNY_API_KEY } }
+      ), 15000, 'Video cleanup');
+      if (!response.ok && response.status !== 404) {
+        throw new Error(`Video cleanup failed (${response.status})`);
+      }
+      if (asset.posterPath) {
+        const posterResult = await fcWithTimeoutV1099(
+          db.storage.from('challenge-media').remove([asset.posterPath]),
+          15000,
+          'Poster cleanup'
+        );
+        if (posterResult?.error) throw posterResult.error;
+      }
+    }
+  } catch (error) {
+    console.warn('uploaded media cleanup', error);
+  }
+}
+
 /* ---------- AUTH STATE LISTENER ---------- */
 // IMPORTANT: this callback must NOT be async and must NOT await Supabase calls
 // directly — doing so deadlocks the auth client (login hangs). We defer any DB
@@ -11986,485 +12078,275 @@ async function loadFeedActivity(opts = {}) {
   }
 }
 
-async function loadLeaderboardCoreV1098() {
+async function loadLeaderboardCoreV1101() {
   const now = new Date();
-  const MONTH_START = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  // v749 — also bound the PREVIOUS calendar month, so a championship launched
-  // early in a new month (after the board reset to zero) can still qualify off
-  // the month that just ended. This is the fix for "I was top 3 but got no
-  // invite": qualification was reading the reset current month.
-  const PREV_MONTH_START = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
-  const PREV_MONTH_END = MONTH_START; // [prevStart, monthStart)
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const previousMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
 
-  // ── Step 1a: ALL closed challenges (lifetime wins / rank chips) ───────────────
-  // ── Step 1b: This month only (monthly leaderboard ranking) ───────────────────
-  const [allChRes, monthChRes, prevMonthChRes] = await Promise.all([
-    db.from('challenges').select('id, category, voting_end, sd_round, sd_phase, sudden_death, is_championship, is_public').lte('voting_end', now.toISOString()).limit(2000),
-    db.from('challenges').select('id').gte('voting_end', MONTH_START).lte('voting_end', now.toISOString()).limit(500),
-    db.from('challenges').select('id').gte('voting_end', PREV_MONTH_START).lt('voting_end', PREV_MONTH_END).limit(500), // v749
-  ]);
+  state.leaderboardErrorV1101 = null;
 
-  const allChs = allChRes.data || [];
-  // A challenge still mid-Sudden-Death (sd_phase set) is NOT decided yet — exclude
-  // it from win/score tallies until its final round closes.
-  const decidedChs = allChs.filter(c => !c.sd_phase);
-  const chIds = decidedChs.map(c => c.id);
-  const chInfo = {};
-  decidedChs.forEach(c => { chInfo[c.id] = { category: c.category, votingEnd: c.voting_end, sdRound: c.sd_round || 0, suddenDeath: !!c.sudden_death, isChampionship: !!c.is_championship, isPublic: c.is_public !== false }; });
-
-  // Monthly subset — monthly / leaderboard ranking only
-  const thisMonthChIds = new Set((monthChRes.data || []).map(c => c.id));
-  const prevMonthChIds = new Set((prevMonthChRes.data || []).map(c => c.id)); // v749
-
-  // No challenges at all → empty leaderboard
-  if (!chIds.length) {
-    state.leaderboardData = { users: [], leaders: {}, champions: {} };
-    state.lbCategory = state.lbCategory || 'All';
-    state.leaders = [];
-    return;
-  }
-
-  // ── Step 2: Entries only for those challenges ─────────────────────────────────
-  const { data: entries } = await db.from('entries')
-    .select('id, challenge_id, user_id, sd_round, moderation_status')
-    .in('challenge_id', chIds);
-
-  // For challenges that went through Sudden Death, only the FINAL round's entries
-  // count. For normal challenges sd_round is 0 on both challenge and entries.
-  const allEntries = (entries || []).filter(e => {
-    if (e.moderation_status === 'rejected') return false; // v1047: rejected/disqualified entries cannot decide results or Score
-    const finalRound = chInfo[e.challenge_id]?.sdRound || 0;
-    return (e.sd_round || 0) === finalRound;
-  });
-  const entryIds = allEntries.map(e => e.id);
-
-  // ── Step 3: Votes only for those entries ──────────────────────────────────────
-  const allVotesByEntry = {};
-  if (entryIds.length) {
-    const { data: votes } = await db.from('entry_votes')
-      .select('entry_id, voter_id, sd_round')
-      .in('entry_id', entryIds);
-    // entryIds already only contains final-round entries, so any vote on them is
-    // valid — but guard on sd_round too in case an entry id was reused across rounds.
-    const _entryRound = {};
-    allEntries.forEach(e => { _entryRound[e.id] = e.sd_round || 0; });
-    (votes || []).forEach(v => {
-      if ((v.sd_round || 0) !== (_entryRound[v.entry_id] || 0)) return;
-      if (!allVotesByEntry[v.entry_id]) allVotesByEntry[v.entry_id] = [];
-      allVotesByEntry[v.entry_id].push(v.voter_id);
-    });
-  }
-
-  // ── Step 4: Profiles only for users with entries (not all profiles) ───────────
-  const participantIds = [...new Set(allEntries.map(e => e.user_id))];
-  let allProfiles = [];
-  if (participantIds.length) {
-    const { data: profs } = await db.from('profiles')
-      .select('id, name, avatar')
-      .in('id', participantIds);
-    allProfiles = profs || [];
-  }
-
-  // ── Compute wins/losses per user from scoped data ─────────────────────────────
-  const entriesByCh = {};
-  allEntries.forEach(e => {
-    if (!entriesByCh[e.challenge_id]) entriesByCh[e.challenge_id] = [];
-    entriesByCh[e.challenge_id].push(e);
-  });
-
-  const winsByUser = {};
-  const lossesByUser = {};
-  const scoreByUser = {};   // weighted competitive score
-  const ensureUser = id => {
-    if (!winsByUser[id]) winsByUser[id] = { allTime: 0, monthly: 0, byCategory: {}, monthlyByCategory: {}, prevMonthByCategory: {} }; // v749 prevMonth
-    if (!lossesByUser[id]) lossesByUser[id] = { allTime: 0, monthly: 0 };
-    if (!scoreByUser[id]) scoreByUser[id] = 0;
-  };
-
-  // -- Boost ledger (v627): load existing rows so we only settle challenges that
-  // haven't been boosted yet, and stash them for standings/display reads.
-  const boostByChallenge = {};
-  const scoreCreatesV1098 = [];
-  const scoreUpgradesV1098 = [];
-  const upsetCandidatesV1098 = new Map();
   try {
-    const { data: bl } = await db.from('boost_ledger').select('*').in('challenge_id', chIds);
-    (bl || []).forEach(r => { boostByChallenge[r.challenge_id] = r; });
-  } catch (e) { console.warn('boost ledger load', e); }
-  state.boostByChallenge = boostByChallenge;
+    const results = await fcDbReadV1101(
+      db.from('challenge_results')
+        .select('challenge_id, category, month, resolved_at, final_round, resolution, is_public, is_championship, eligible_competitor_count, final_entry_count, valid_ballots, max_votes, winner_count, score_awarded, snapshot')
+        .eq('is_public', true)
+        .order('resolved_at', { ascending: false })
+        .limit(2000),
+      'Authoritative results'
+    ) || [];
 
-  // v1054: reconstruct the visible level each participant held immediately
-  // before every resolved challenge. This keeps Opponent Points auditable:
-  // regular wins drive Spark–Inferno, Championship titles drive Legend–GOAT,
-  // and the value is frozen at resolution rather than borrowed from today's badge.
-  const levelSnapshotByChallenge = {};
-  const regularWinsForLevels = {};
-  const champWinsForLevels = {};
-  const hofEvents=(state.hofData||[]).map(r=>({
-    userId:r.userId,
-    at:new Date(r.createdAt||chInfo[r.challengeId]?.votingEnd||0).getTime()||0
-  })).sort((a,b)=>a.at-b.at);
-  let hofPtr=0;
-  function resolveLevelWinners(chId,entries){
-    const info=chInfo[chId]||{},went=(info.sdRound||0)>0||!!info.suddenDeath;
-    if(!went&&entries.length<2)return [];
-    let max=0,tops=[];
-    entries.forEach(e=>{const v=(allVotesByEntry[e.id]||[]).length;if(v>max){max=v;tops=[e]}else if(v===max&&v>0)tops.push(e)});
-    if(went&&entries.length===1&&max===0)return [entries[0].user_id];
-    if(went&&entries.length>1&&max===0)return [...new Set(entries.map(e=>e.user_id).filter(Boolean))];
-    if(max>0&&tops.length===1)return [tops[0].user_id];
-    if(max>0&&tops.length>1&&went)return [...new Set(tops.map(e=>e.user_id).filter(Boolean))];
-    return [];
-  }
-  Object.keys(entriesByCh).sort((a,b)=>new Date(chInfo[a]?.votingEnd||0)-new Date(chInfo[b]?.votingEnd||0)).forEach(chId=>{
-    const at=new Date(chInfo[chId]?.votingEnd||0).getTime()||0;
-    while(hofPtr<hofEvents.length&&hofEvents[hofPtr].at<at){const ev=hofEvents[hofPtr++];champWinsForLevels[ev.userId]=(champWinsForLevels[ev.userId]||0)+1;}
-    const entries=entriesByCh[chId]||[]; const snap={};
-    [...new Set(entries.map(e=>e.user_id).filter(Boolean))].forEach(uid=>{
-      snap[uid]=visibleLevelKeyForCounts(regularWinsForLevels[uid]||0,champWinsForLevels[uid]||0);
-    });
-    levelSnapshotByChallenge[chId]=snap;
-    const info=chInfo[chId]||{};
-    if(!info.isChampionship&&info.isPublic!==false){
-      resolveLevelWinners(chId,entries).forEach(uid=>regularWinsForLevels[uid]=(regularWinsForLevels[uid]||0)+1);
-    }
-    while(hofPtr<hofEvents.length&&hofEvents[hofPtr].at<=at){const ev=hofEvents[hofPtr++];champWinsForLevels[ev.userId]=(champWinsForLevels[ev.userId]||0)+1;}
-  });
-  while(hofPtr<hofEvents.length){const ev=hofEvents[hofPtr++];champWinsForLevels[ev.userId]=(champWinsForLevels[ev.userId]||0)+1;}
-  state._fcLevelSnapshotByChallengeV1054=levelSnapshotByChallenge;
-  state._fcRegularWinsAllTimeV1054=regularWinsForLevels;
-
-  Object.entries(entriesByCh).forEach(([chId, entries]) => {
-    const cat = chInfo[chId]?.category || 'Other';
-
-    // Vote counts and voter lists per entry
-    let max = 0, topEntries = [];
-    entries.forEach(e => {
-      const v = (allVotesByEntry[e.id] || []).length;
-      if (v > max) { max = v; topEntries = [e]; }
-      else if (v === max && v > 0) topEntries.push(e);
-    });
-
-    const wentThroughSD = (chInfo[chId]?.sdRound || 0) > 0 || !!chInfo[chId]?.suddenDeath;
-
-    // v773 — NO CONTEST: a non-SD challenge with a single entrant produced no
-    // win for anyone. No opponent, no victory — and no boost_ledger row, which
-    // is why an uncontested win showed "0 Boost" instead of simply not existing.
-    if (!wentThroughSD && entries.length < 2) return;
-
-    // ── Forfeit walkover: Sudden Death happened but only ONE tied player
-    // resubmitted. Their lone final-round entry has zero votes (voting never
-    // opened), so the normal max>0 paths can't see it — the sole survivor
-    // wins outright. (No losses recorded: the no-shows' entries live in an
-    // earlier round and aren't in this final-round set.)
-    if (wentThroughSD && entries.length === 1 && max === 0) {
-      const uid = entries[0].user_id;
-      ensureUser(uid);
-      winsByUser[uid].allTime++;
-      winsByUser[uid].byCategory[cat] = (winsByUser[uid].byCategory[cat] || 0) + 1;
-      if (thisMonthChIds.has(chId)) {
-        winsByUser[uid].monthly++;
-        winsByUser[uid].monthlyByCategory[cat] = (winsByUser[uid].monthlyByCategory[cat] || 0) + 1;
-      }
-      if (prevMonthChIds.has(chId)) winsByUser[uid].prevMonthByCategory[cat] = (winsByUser[uid].prevMonthByCategory[cat] || 0) + 1;
+    const challengeIds = results.map(r => r.challenge_id).filter(Boolean);
+    if (!challengeIds.length) {
+      state.challengeResultsV1101 = {};
+      state.challengeResultWinnersV1101 = {};
+      state.boostByChallenge = {};
+      state._fcRegularWinsAllTimeV1054 = {};
+      state.leaderboardData = { users: [], leaders: {}, champions: {} };
+      state.lbCategory = state.lbCategory || 'All';
+      state.leaders = [];
       return;
     }
 
+    const [winnerRows, entryRows] = await Promise.all([
+      fcDbReadV1101(
+        db.from('challenge_result_winners')
+          .select('challenge_id, user_id, entry_id, vote_count, is_co_winner, visible_level, opponent_pts, turnout_pts, championship_score, detail')
+          .in('challenge_id', challengeIds),
+        'Authoritative winners'
+      ),
+      fcDbReadV1101(
+        db.from('entries')
+          .select('id, challenge_id, user_id, sd_round, moderation_status')
+          .in('challenge_id', challengeIds),
+        'Leaderboard participants'
+      )
+    ]);
 
-    // v1025 — if a sudden-death runoff opens but nobody casts a ballot, every
-    // finalist who submitted new work shares the win. There is no admin ruling
-    // and no extension; the same rule applies to regular challenges and Championships.
-    if (wentThroughSD && entries.length > 1 && max === 0) {
-      const coWinnerIds = [...new Set(entries.map(e => e.user_id).filter(Boolean))];
-      coWinnerIds.forEach(uid => {
+    const resultByChallenge = {};
+    results.forEach(r => { resultByChallenge[r.challenge_id] = r; });
+
+    const winnersByChallenge = {};
+    (winnerRows || []).forEach(w => {
+      (winnersByChallenge[w.challenge_id] ||= []).push(w);
+    });
+
+    const entriesByChallenge = {};
+    (entryRows || []).forEach(e => {
+      const result = resultByChallenge[e.challenge_id];
+      if (!result) return;
+      if (String(e.moderation_status || '').toLowerCase() === 'rejected') return;
+      if (Number(e.sd_round || 0) !== Number(result.final_round || 0)) return;
+      (entriesByChallenge[e.challenge_id] ||= []).push(e);
+    });
+
+    const participantIds = new Set();
+    Object.values(entriesByChallenge).flat().forEach(e => e.user_id && participantIds.add(e.user_id));
+    (winnerRows || []).forEach(w => w.user_id && participantIds.add(w.user_id));
+
+    let allProfiles = [];
+    if (participantIds.size) {
+      allProfiles = await fcDbReadV1101(
+        db.from('profiles').select('id, name, avatar').in('id', [...participantIds]),
+        'Leaderboard profiles'
+      ) || [];
+    }
+
+    const winsByUser = {};
+    const lossesByUser = {};
+    const weightedByUser = {};
+    const regularWinsForLevels = {};
+    const ensureUser = id => {
+      if (!id) return;
+      if (!winsByUser[id]) winsByUser[id] = {
+        allTime: 0, monthly: 0, byCategory: {},
+        monthlyByCategory: {}, prevMonthByCategory: {}
+      };
+      if (!lossesByUser[id]) lossesByUser[id] = { allTime: 0, monthly: 0 };
+      if (!weightedByUser[id]) weightedByUser[id] = 0;
+    };
+
+    results.forEach(result => {
+      const cat = result.category || 'Other';
+      const winners = winnersByChallenge[result.challenge_id] || [];
+      const winnerIds = new Set(winners.map(w => w.user_id).filter(Boolean));
+      const participants = [...new Set((entriesByChallenge[result.challenge_id] || []).map(e => e.user_id).filter(Boolean))];
+      const hasFinalResult = winners.length > 0;
+
+      winners.forEach(w => {
+        const uid = w.user_id;
         ensureUser(uid);
-        winsByUser[uid].allTime++;
+        winsByUser[uid].allTime += 1;
         winsByUser[uid].byCategory[cat] = (winsByUser[uid].byCategory[cat] || 0) + 1;
-        if (thisMonthChIds.has(chId)) {
-          winsByUser[uid].monthly++;
+        if (result.month === currentMonth) {
+          winsByUser[uid].monthly += 1;
           winsByUser[uid].monthlyByCategory[cat] = (winsByUser[uid].monthlyByCategory[cat] || 0) + 1;
         }
-        if (prevMonthChIds.has(chId)) winsByUser[uid].prevMonthByCategory[cat] = (winsByUser[uid].prevMonthByCategory[cat] || 0) + 1;
-      });
-      return;
-    }
-
-    if (max > 0 && topEntries.length === 1) {
-      // ── Clean single winner ───────────────────────────────────────────────
-      const winner = topEntries[0];
-      const uid = winner.user_id;
-      ensureUser(uid);
-      winsByUser[uid].allTime++;
-      winsByUser[uid].byCategory[cat] = (winsByUser[uid].byCategory[cat] || 0) + 1;
-      entries.filter(e => e.user_id !== uid).forEach(e => {
-        ensureUser(e.user_id); lossesByUser[e.user_id].allTime++;
-      });
-
-      // -- Championship Score snapshot (formula v3 visible-level opponent values). Public, non-Championship
-      // decisive wins earn Opponent Points + Turnout Points. Turnout is based on
-      // UNIQUE valid ballots across the final round, not votes on the winner alone.
-      // Legacy rows are upgraded in place: frozen opponent points remain unchanged;
-      // only turnout and the total are recalculated from the recorded ballots.
-      const totalValidBallots = new Set(
-        entries.flatMap(e => (allVotesByEntry[e.id] || []).filter(Boolean))
-      ).size;
-      const existingScoreRow = boostByChallenge[chId] || null;
-      const existingDetail = existingScoreRow && typeof existingScoreRow.detail === 'object' && existingScoreRow.detail
-        ? existingScoreRow.detail : {};
-      const formulaVersion = Number(existingDetail.formulaVersion || 1);
-      const scoreEligible = !chInfo[chId]?.isChampionship && chInfo[chId]?.isPublic !== false;
-      if (scoreEligible && (!existingScoreRow || formulaVersion < 3)) {
-        const opponents = [...new Set(entries.filter(e => e.user_id !== uid).map(e => e.user_id))];
-        const isNewScoreRow = !existingScoreRow;
-        const snap = computeBoostSnapshot(opponents, totalValidBallots, levelSnapshotByChallenge[chId] || {});
-        const _d = new Date(chInfo[chId]?.votingEnd || Date.now());
-        // Upset broadcasts only happen when the score row is first created. A
-        // formula migration must never rebroadcast an old result.
-        const _winnerIdx = levelIndexForKey((levelSnapshotByChallenge[chId]||{})[uid] || tierKeyForUser(uid));
-        let _upset = null;
-        if (isNewScoreRow) {
-          (snap.detail.opponents || []).forEach(o => {
-            const _oIdx = levelIndexForKey(o.tier);
-            if (_oIdx - _winnerIdx >= BOOST_CFG.upsetTierGap) {
-              if (!_upset || _oIdx > _upset.idx) _upset = { opponentId: o.opponent_id, tier: o.tier, idx: _oIdx };
-            }
-          });
+        if (result.month === previousMonth) {
+          winsByUser[uid].prevMonthByCategory[cat] = (winsByUser[uid].prevMonthByCategory[cat] || 0) + 1;
         }
-        const _row = {
-          challenge_id: chId, winner_id: uid, category: cat,
-          month: `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}`,
-          opponent_pts: snap.opponentPts, vote_pts: snap.votePts,
-          total_boost: snap.totalBoost, detail: snap.detail,
-        };
-        if (isNewScoreRow) scoreCreatesV1098.push(_row);
-        else scoreUpgradesV1098.push(_row);
-        if (_upset) upsetCandidatesV1098.set(chId, { chId, winnerId: uid, winnerName: (allProfiles.find(p => p.id === uid)?.name) || 'Someone', victimId: _upset.opponentId, victimTier: _upset.tier, category: cat });
-      }
+        if (!result.is_championship) {
+          regularWinsForLevels[uid] = (regularWinsForLevels[uid] || 0) + 1;
+        }
 
-      // ── Weighted score: log2(entrants) × log2(voters)² × √(MOV) ──────────
-      const entrants = entries.length;
-      const winnerVoters = (allVotesByEntry[winner.id] || []).filter(v => v !== uid);
-      if (entrants >= 2 && winnerVoters.length >= 1) {
-        const totalVotes = entries.reduce((s, e) => s + (allVotesByEntry[e.id] || []).length, 0);
-        const margin = max / totalVotes;
-        const wscore = Math.log2(entrants) * Math.pow(Math.log2(Math.max(totalVotes, 2)), 2) * Math.sqrt(margin);
-        scoreByUser[uid] = (scoreByUser[uid] || 0) + wscore;
-      }
+        const entrants = Number(result.final_entry_count || 0);
+        const ballots = Number(result.valid_ballots || 0);
+        const maxVotes = Number(result.max_votes || 0);
+        if (entrants >= 2 && ballots >= 1 && maxVotes >= 1) {
+          const margin = Math.max(0, Math.min(1, maxVotes / ballots));
+          weightedByUser[uid] += Math.log2(entrants) *
+            Math.pow(Math.log2(Math.max(ballots, 2)), 2) *
+            Math.sqrt(margin);
+        }
+      });
 
-      if (thisMonthChIds.has(chId)) {
-        winsByUser[uid].monthly++;
-        winsByUser[uid].monthlyByCategory[cat] = (winsByUser[uid].monthlyByCategory[cat] || 0) + 1;
-        entries.filter(e => e.user_id !== uid).forEach(e => {
-          ensureUser(e.user_id); lossesByUser[e.user_id].monthly++;
+      if (hasFinalResult) {
+        participants.filter(uid => !winnerIds.has(uid)).forEach(uid => {
+          ensureUser(uid);
+          lossesByUser[uid].allTime += 1;
+          if (result.month === currentMonth) lossesByUser[uid].monthly += 1;
         });
       }
-      if (prevMonthChIds.has(chId)) winsByUser[uid].prevMonthByCategory[cat] = (winsByUser[uid].prevMonthByCategory[cat] || 0) + 1;
-    } else if (max > 0 && topEntries.length > 1 && wentThroughSD) {
-      // ── Re-tie after Sudden Death → SPLIT the win (both/all credited) ─────
-      // No infinite loop: a challenge already through SD doesn't re-trigger it,
-      // so a still-tied result simply credits every tied user with the win.
-      const tiedUids = [...new Set(topEntries.map(e => e.user_id))];
-      tiedUids.forEach(uid => {
-        ensureUser(uid);
-        winsByUser[uid].allTime++;
-        winsByUser[uid].byCategory[cat] = (winsByUser[uid].byCategory[cat] || 0) + 1;
-        if (thisMonthChIds.has(chId)) {
-          winsByUser[uid].monthly++;
-          winsByUser[uid].monthlyByCategory[cat] = (winsByUser[uid].monthlyByCategory[cat] || 0) + 1;
-        }
-        if (prevMonthChIds.has(chId)) winsByUser[uid].prevMonthByCategory[cat] = (winsByUser[uid].prevMonthByCategory[cat] || 0) + 1; // v749
-      });
-      // Non-tied entrants take a loss
-      entries.filter(e => !tiedUids.includes(e.user_id)).forEach(e => {
-        ensureUser(e.user_id); lossesByUser[e.user_id].allTime++;
-        if (thisMonthChIds.has(chId)) lossesByUser[e.user_id].monthly++;
-      });
-      // Weighted score for a split: each tied user gets the score as if they won,
-      // since they proved equal at the top of a real field.
-      const entrants = entries.length;
-      const totalVotes = entries.reduce((s, e) => s + (allVotesByEntry[e.id] || []).length, 0);
-      if (entrants >= 2 && totalVotes >= 2) {
-        const margin = max / totalVotes;
-        const wscore = Math.log2(entrants) * Math.pow(Math.log2(Math.max(totalVotes, 2)), 2) * Math.sqrt(margin);
-        tiedUids.forEach(uid => { scoreByUser[uid] = (scoreByUser[uid] || 0) + wscore; });
+      participants.forEach(ensureUser);
+    });
+
+    const boostByChallenge = {};
+    const levelSnapshotByChallenge = {};
+    (winnerRows || []).forEach(w => {
+      (levelSnapshotByChallenge[w.challenge_id] ||= {})[w.user_id] = w.visible_level || 'spark';
+      const score = Number(w.championship_score || 0);
+      if (score <= 0) return;
+      const result = resultByChallenge[w.challenge_id];
+      if (!result) return;
+      const detailRoot = (w.detail && typeof w.detail === 'object') ? w.detail : {};
+      const scoreDetail = (detailRoot.score && typeof detailRoot.score === 'object')
+        ? detailRoot.score : detailRoot;
+      boostByChallenge[w.challenge_id] = {
+        challenge_id: w.challenge_id,
+        winner_id: w.user_id,
+        category: result.category || 'Other',
+        month: result.month,
+        opponent_pts: Number(w.opponent_pts || 0),
+        vote_pts: Number(w.turnout_pts || 0),
+        total_boost: score,
+        detail: scoreDetail
+      };
+    });
+
+    const streakByUser = {};
+    const sortedResults = [...results].sort((a, b) => new Date(b.resolved_at || 0) - new Date(a.resolved_at || 0));
+    participantIds.forEach(uid => {
+      let streak = 0;
+      for (const result of sortedResults) {
+        const participants = new Set((entriesByChallenge[result.challenge_id] || []).map(e => e.user_id));
+        if (!participants.has(uid)) continue;
+        const winners = new Set((winnersByChallenge[result.challenge_id] || []).map(w => w.user_id));
+        if (!winners.size) continue;
+        if (winners.has(uid)) streak += 1;
+        else break;
       }
-    }
-  });
+      streakByUser[uid] = streak;
+    });
 
-  // v1098 — Persist Score before exposing it. New rows use the unique
-  // challenge_id key with DO NOTHING semantics, so only the caller that actually
-  // creates the ledger row may emit first-settlement side effects. Formula upgrades
-  // update existing rows but never rebroadcast an old result.
-  const confirmedNewScoreIdsV1098 = new Set();
-  const scoreCandidateIdsV1098 = [...new Set([
-    ...scoreCreatesV1098.map(r => r.challenge_id),
-    ...scoreUpgradesV1098.map(r => r.challenge_id),
-  ])];
-
-  if (scoreCreatesV1098.length) {
-    try {
-      const { data: createdRows, error } = await db.from('boost_ledger')
-        .upsert(scoreCreatesV1098, { onConflict: 'challenge_id', ignoreDuplicates: true })
-        .select('*');
-      if (error) throw error;
-      (createdRows || []).forEach(r => { if (r?.challenge_id) confirmedNewScoreIdsV1098.add(r.challenge_id); });
-    } catch (e) { console.warn('score ledger create', e); }
-  }
-
-  if (scoreUpgradesV1098.length) {
-    try {
-      const { error } = await db.from('boost_ledger')
-        .upsert(scoreUpgradesV1098, { onConflict: 'challenge_id' });
-      if (error) throw error;
-    } catch (e) { console.warn('score ledger upgrade', e); }
-  }
-
-  // Reload the exact rows from Supabase. A failed or losing concurrent write is
-  // therefore never represented as visible local Score.
-  if (scoreCandidateIdsV1098.length) {
-    try {
-      const { data: confirmedRows, error } = await db.from('boost_ledger')
-        .select('*').in('challenge_id', scoreCandidateIdsV1098);
-      if (error) throw error;
-      (confirmedRows || []).forEach(r => { if (r?.challenge_id) boostByChallenge[r.challenge_id] = r; });
-    } catch (e) { console.warn('score ledger confirm', e); }
-  }
-  state.boostByChallenge = boostByChallenge;
-
-  // v1098 — only the transaction that created the unique Score row can send the
-  // upset broadcast. Await the insert so repeated foreground refreshes cannot race
-  // each other inside this client. The database's unique Score key handles other clients.
-  for (const chId of confirmedNewScoreIdsV1098) {
-    const u = upsetCandidatesV1098.get(chId);
-    if (!u) continue;
-    try {
-      const { data: fr, error: followErr } = await db.from('follows').select('follower_id').eq('followee_id', u.victimId);
-      if (followErr) throw followErr;
-      const tierLabel = ({ legend:'Legend', icon:'Icon', immortal:'Immortal', goat:'G.O.A.T.', inferno:'Inferno', blaze:'Blaze' })[u.victimTier] || u.victimTier;
-      const rows = (fr || [])
-        .filter(r => r.follower_id !== u.winnerId)
-        .map(r => ({
-          user_id: r.follower_id, type: 'upset', challenge_id: u.chId,
-          message: `🔥 UPSET! ${u.winnerName} just took down a ${tierLabel} in ${u.category}.`,
-          created_at: new Date().toISOString(),
-        }));
-      if (rows.length) {
-        const { error: notificationErr } = await db.from('notifications').insert(rows);
-        if (notificationErr) throw notificationErr;
-      }
-    } catch (e) { console.warn('upset broadcast', e); }
-  }
-
-  // ── Compute streak per user (consecutive wins newest→oldest) ────────────────
-  const streakByUser = {};
-  const chIdsByDate = Object.entries(chInfo)
-    .filter(([, info]) => info.votingEnd)
-    .sort(([, a], [, b]) => new Date(b.votingEnd) - new Date(a.votingEnd))
-    .map(([id]) => id);
-  for (const uid of participantIds) {
-    let st = 0;
-    for (const chId of chIdsByDate) {
-      const chEntries = entriesByCh[chId] || [];
-      if (!chEntries.find(e => e.user_id === uid)) continue;
-      let mx = 0, winner = null;
-      chEntries.forEach(e => {
-        const v = (allVotesByEntry[e.id] || []).length;
-        if (v > mx) { mx = v; winner = e.user_id; }
-        else if (v === mx && v > 0) winner = null;
-      });
-      // Forfeit walkover: sole final-round entry after Sudden Death wins with 0 votes
-      if (mx === 0 && chEntries.length === 1 && (chInfo[chId]?.sdRound || 0) > 0) winner = chEntries[0].user_id;
-      else if (mx === 0 || winner === null) continue; // pending/tie — skip
-      if (winner === uid) st++;
-      else break;
-    }
-    streakByUser[uid] = st;
-  }
-
-  // -- Championship Score totals and visible components from the auditable ledger.
-  const boostByUser = {};
-  const _ensureBoost = id => {
-    if (!boostByUser[id]) boostByUser[id] = {
-      allTime: 0, month: 0, monthByCat: {}, opponentMonthByCat: {},
-      turnoutMonthByCat: {}, scoringWinsMonthByCat: {}, ballotsMonthByCat: {},
-      prevMonthByCat: {}, opponentPrevMonthByCat: {}, turnoutPrevMonthByCat: {},
-      scoringWinsPrevMonthByCat: {}, ballotsPrevMonthByCat: {}
+    const boostByUser = {};
+    const ensureBoost = id => {
+      if (!boostByUser[id]) boostByUser[id] = {
+        allTime: 0, month: 0, monthByCat: {}, opponentMonthByCat: {},
+        turnoutMonthByCat: {}, scoringWinsMonthByCat: {}, ballotsMonthByCat: {},
+        prevMonthByCat: {}, opponentPrevMonthByCat: {}, turnoutPrevMonthByCat: {},
+        scoringWinsPrevMonthByCat: {}, ballotsPrevMonthByCat: {}
+      };
     };
-  };
-  Object.values(boostByChallenge).forEach(r => {
-    if (!r || !r.winner_id) return;
-    _ensureBoost(r.winner_id);
-    boostByUser[r.winner_id].allTime += Number(r.total_boost || 0);
-    const c = r.category || 'Other';
-    const d = (r.detail && typeof r.detail === 'object') ? r.detail : {};
-    if (thisMonthChIds.has(r.challenge_id)) {
-      boostByUser[r.winner_id].month += Number(r.total_boost || 0);
-      boostByUser[r.winner_id].monthByCat[c] = (boostByUser[r.winner_id].monthByCat[c] || 0) + Number(r.total_boost || 0);
-      boostByUser[r.winner_id].opponentMonthByCat[c] = (boostByUser[r.winner_id].opponentMonthByCat[c] || 0) + Number(r.opponent_pts || 0);
-      boostByUser[r.winner_id].turnoutMonthByCat[c] = (boostByUser[r.winner_id].turnoutMonthByCat[c] || 0) + Number(r.vote_pts || 0);
-      boostByUser[r.winner_id].scoringWinsMonthByCat[c] = (boostByUser[r.winner_id].scoringWinsMonthByCat[c] || 0) + 1;
-      boostByUser[r.winner_id].ballotsMonthByCat[c] = (boostByUser[r.winner_id].ballotsMonthByCat[c] || 0) + Number(d.totalBallots || 0);
-    }
-    if (prevMonthChIds.has(r.challenge_id)) {
-      boostByUser[r.winner_id].prevMonthByCat[c] = (boostByUser[r.winner_id].prevMonthByCat[c] || 0) + Number(r.total_boost || 0);
-      boostByUser[r.winner_id].opponentPrevMonthByCat[c] = (boostByUser[r.winner_id].opponentPrevMonthByCat[c] || 0) + Number(r.opponent_pts || 0);
-      boostByUser[r.winner_id].turnoutPrevMonthByCat[c] = (boostByUser[r.winner_id].turnoutPrevMonthByCat[c] || 0) + Number(r.vote_pts || 0);
-      boostByUser[r.winner_id].scoringWinsPrevMonthByCat[c] = (boostByUser[r.winner_id].scoringWinsPrevMonthByCat[c] || 0) + 1;
-      boostByUser[r.winner_id].ballotsPrevMonthByCat[c] = (boostByUser[r.winner_id].ballotsPrevMonthByCat[c] || 0) + Number(d.totalBallots || 0);
-    }
-  });
+    Object.values(boostByChallenge).forEach(row => {
+      ensureBoost(row.winner_id);
+      const b = boostByUser[row.winner_id];
+      const cat = row.category || 'Other';
+      const detail = row.detail || {};
+      b.allTime += Number(row.total_boost || 0);
+      if (row.month === currentMonth) {
+        b.month += Number(row.total_boost || 0);
+        b.monthByCat[cat] = (b.monthByCat[cat] || 0) + Number(row.total_boost || 0);
+        b.opponentMonthByCat[cat] = (b.opponentMonthByCat[cat] || 0) + Number(row.opponent_pts || 0);
+        b.turnoutMonthByCat[cat] = (b.turnoutMonthByCat[cat] || 0) + Number(row.vote_pts || 0);
+        b.scoringWinsMonthByCat[cat] = (b.scoringWinsMonthByCat[cat] || 0) + 1;
+        b.ballotsMonthByCat[cat] = (b.ballotsMonthByCat[cat] || 0) + Number(detail.totalBallots || 0);
+      }
+      if (row.month === previousMonth) {
+        b.prevMonthByCat[cat] = (b.prevMonthByCat[cat] || 0) + Number(row.total_boost || 0);
+        b.opponentPrevMonthByCat[cat] = (b.opponentPrevMonthByCat[cat] || 0) + Number(row.opponent_pts || 0);
+        b.turnoutPrevMonthByCat[cat] = (b.turnoutPrevMonthByCat[cat] || 0) + Number(row.vote_pts || 0);
+        b.scoringWinsPrevMonthByCat[cat] = (b.scoringWinsPrevMonthByCat[cat] || 0) + 1;
+        b.ballotsPrevMonthByCat[cat] = (b.ballotsPrevMonthByCat[cat] || 0) + Number(detail.totalBallots || 0);
+      }
+    });
 
-  const users = allProfiles.map(p => ({
-    ...p,
-    isReal: true,
-    wins: winsByUser[p.id]?.allTime || 0,
-    regularWins: regularWinsForLevels[p.id] || 0,
-    losses: lossesByUser[p.id]?.allTime || 0,
-    monthly: winsByUser[p.id]?.monthly || 0,
-    monthlyLosses: lossesByUser[p.id]?.monthly || 0,
-    byCategory: winsByUser[p.id]?.byCategory || {},
-    monthlyByCategory: winsByUser[p.id]?.monthlyByCategory || {},
-    prevMonthByCategory: winsByUser[p.id]?.prevMonthByCategory || {}, // v749
-    weightedScore: scoreByUser[p.id] || 0,
-    boostAllTime: boostByUser[p.id]?.allTime || 0,
-    boostMonth: boostByUser[p.id]?.month || 0,
-    boostMonthByCat: boostByUser[p.id]?.monthByCat || {},
-    opponentPtsMonthByCat: boostByUser[p.id]?.opponentMonthByCat || {},
-    turnoutPtsMonthByCat: boostByUser[p.id]?.turnoutMonthByCat || {},
-    scoreWinsMonthByCat: boostByUser[p.id]?.scoringWinsMonthByCat || {},
-    ballotsMonthByCat: boostByUser[p.id]?.ballotsMonthByCat || {},
-    boostPrevMonthByCat: boostByUser[p.id]?.prevMonthByCat || {},
-    opponentPtsPrevMonthByCat: boostByUser[p.id]?.opponentPrevMonthByCat || {},
-    turnoutPtsPrevMonthByCat: boostByUser[p.id]?.turnoutPrevMonthByCat || {},
-    scoreWinsPrevMonthByCat: boostByUser[p.id]?.scoringWinsPrevMonthByCat || {},
-    ballotsPrevMonthByCat: boostByUser[p.id]?.ballotsPrevMonthByCat || {},
-    streak: streakByUser[p.id] || 0,
-  }));
+    const users = allProfiles.map(profile => {
+      const wins = winsByUser[profile.id] || {};
+      const losses = lossesByUser[profile.id] || {};
+      const score = boostByUser[profile.id] || {};
+      return {
+        ...profile,
+        isReal: true,
+        wins: wins.allTime || 0,
+        regularWins: regularWinsForLevels[profile.id] || 0,
+        losses: losses.allTime || 0,
+        monthly: wins.monthly || 0,
+        monthlyLosses: losses.monthly || 0,
+        byCategory: wins.byCategory || {},
+        monthlyByCategory: wins.monthlyByCategory || {},
+        prevMonthByCategory: wins.prevMonthByCategory || {},
+        weightedScore: weightedByUser[profile.id] || 0,
+        boostAllTime: score.allTime || 0,
+        boostMonth: score.month || 0,
+        boostMonthByCat: score.monthByCat || {},
+        opponentPtsMonthByCat: score.opponentMonthByCat || {},
+        turnoutPtsMonthByCat: score.turnoutMonthByCat || {},
+        scoreWinsMonthByCat: score.scoringWinsMonthByCat || {},
+        ballotsMonthByCat: score.ballotsMonthByCat || {},
+        boostPrevMonthByCat: score.prevMonthByCat || {},
+        opponentPtsPrevMonthByCat: score.opponentPrevMonthByCat || {},
+        turnoutPtsPrevMonthByCat: score.turnoutPrevMonthByCat || {},
+        scoreWinsPrevMonthByCat: score.scoringWinsPrevMonthByCat || {},
+        ballotsPrevMonthByCat: score.ballotsPrevMonthByCat || {},
+        streak: streakByUser[profile.id] || 0
+      };
+    });
 
-  const leaders = {};
-  CATEGORIES.forEach(cat => {
-    const ranked = [...users]
-      .filter(u => (u.monthlyByCategory[cat] || 0) > 0)
-      .sort((a, b) => (b.monthlyByCategory[cat] || 0) - (a.monthlyByCategory[cat] || 0));
-    if (ranked.length > 0) leaders[cat] = ranked[0].id;
-  });
-  const overallRanked = [...users].filter(u => u.monthly > 0).sort((a, b) => b.monthly - a.monthly);
-  if (overallRanked.length > 0) leaders['All'] = overallRanked[0].id;
+    const leaders = {};
+    CATEGORIES.forEach(cat => {
+      const ranked = [...users]
+        .filter(u => Number(u.monthlyByCategory[cat] || 0) > 0)
+        .sort((a, b) => Number(b.monthlyByCategory[cat] || 0) - Number(a.monthlyByCategory[cat] || 0));
+      if (ranked.length) leaders[cat] = ranked[0].id;
+    });
+    const overall = [...users].filter(u => u.monthly > 0).sort((a, b) => b.monthly - a.monthly);
+    if (overall.length) leaders.All = overall[0].id;
 
-  state.leaderboardData = { users, leaders, champions: {} };
-  state.lbCategory = state.lbCategory || 'All';
-  state.leaders = [...users].sort((a, b) => b.monthly - a.monthly).slice(0, 10);
+    state.challengeResultsV1101 = resultByChallenge;
+    state.challengeResultWinnersV1101 = winnersByChallenge;
+    state.boostByChallenge = boostByChallenge;
+    state._fcLevelSnapshotByChallengeV1054 = levelSnapshotByChallenge;
+    state._fcRegularWinsAllTimeV1054 = regularWinsForLevels;
+    state.leaderboardData = { users, leaders, champions: {} };
+    state.lbCategory = state.lbCategory || 'All';
+    state.leaders = [...users].sort((a, b) => b.monthly - a.monthly).slice(0, 10);
+  } catch (error) {
+    state.leaderboardErrorV1101 = error?.message || 'Results are temporarily unavailable.';
+    console.error('authoritative leaderboard load', error);
+    throw error;
+  }
 }
 
-let _fcLeaderboardLoadPromiseV1098 = null;
+
+let _fcLeaderboardLoadPromiseV1101 = null;
 async function loadLeaderboard() {
-  if (_fcLeaderboardLoadPromiseV1098) return _fcLeaderboardLoadPromiseV1098;
-  const run = loadLeaderboardCoreV1098();
-  _fcLeaderboardLoadPromiseV1098 = run;
+  if (_fcLeaderboardLoadPromiseV1101) return _fcLeaderboardLoadPromiseV1101;
+  const run = loadLeaderboardCoreV1101();
+  _fcLeaderboardLoadPromiseV1101 = run;
   try {
     return await run;
   } finally {
-    if (_fcLeaderboardLoadPromiseV1098 === run) _fcLeaderboardLoadPromiseV1098 = null;
+    if (_fcLeaderboardLoadPromiseV1101 === run) _fcLeaderboardLoadPromiseV1101 = null;
   }
 }
 
@@ -13136,23 +13018,28 @@ function openRecordSheet(filter) {
     if (list) list.innerHTML = '<div class="record-empty">Couldn\'t load your record. Try again.</div>';
   });
 }
-function followFromRecord(userId) {
+async function followFromRecord(userId) {
   if (!state.profile || !userId) return;
-  if (state.myFollowing && state.myFollowing.has(userId)) return; // already following
-  db.from('follows').insert({ follower_id: state.profile.id, followee_id: userId })
-    .then(({ error }) => {
-      if (!error) {
-        if (!state.myFollowing) state.myFollowing = new Set();
-        state.myFollowing.add(userId);
-        state.followerCounts = state.followerCounts || {};
-        state.followerCounts[userId] = (state.followerCounts[userId] || 0) + 1;
-        renderRecord();
-        try { fcTrackFollowConversionV1048(userId); } catch(e) {}
-        toast('Following!');
-      } else {
-        console.warn('followFromRecord', error);
-      }
-    });
+  if (state.myFollowing && state.myFollowing.has(userId)) return;
+  try {
+    await fcDbMutationV1101(
+      db.from('follows')
+        .insert({ follower_id: state.profile.id, followee_id: userId })
+        .select('follower_id'),
+      'Follow',
+      { requireRows: true }
+    );
+    if (!state.myFollowing) state.myFollowing = new Set();
+    state.myFollowing.add(userId);
+    state.followerCounts = state.followerCounts || {};
+    state.followerCounts[userId] = (state.followerCounts[userId] || 0) + 1;
+    renderRecord();
+    try { fcTrackFollowConversionV1048(userId); } catch(e) {}
+    toast('Following!');
+  } catch (error) {
+    console.warn('followFromRecord', error);
+    toast('Follow failed: ' + (error.message || 'try again'));
+  }
 }
 function closeRecordSheet() {
   document.getElementById('recordSheet').classList.remove('open');
@@ -13178,18 +13065,14 @@ async function loadMyRecord() {
   if (!state.profile) { state.myRecord = []; return; }
   const me = state.profile.id;
 
-  // v1094 — the old record loader downloaded every challenge, every entry and
-  // every entry vote in the database, even when this user had entered only a
-  // handful. First find this user's entries, then scope every supporting query
-  // to only those challenge ids. The result is identical and scales with the
-  // user's record instead of the whole product.
-  const { data: myEntriesData, error: myEntriesError } = await db.from('entries')
-    .select('id, challenge_id, created_at, caption, media_type, media_url, sd_round')
-    .eq('user_id', me)
-    .order('created_at', { ascending: false });
-  if (myEntriesError) throw myEntriesError;
+  const myEntries = await fcDbReadV1101(
+    db.from('entries')
+      .select('id, challenge_id, created_at, caption, media_type, media_url, sd_round')
+      .eq('user_id', me)
+      .order('created_at', { ascending: false }),
+    'Competitive record entries'
+  ) || [];
 
-  const myEntries = myEntriesData || [];
   const challengeIds = [...new Set(myEntries.map(e => e.challenge_id).filter(Boolean))];
   if (!challengeIds.length) {
     state.myRecord = [];
@@ -13197,102 +13080,92 @@ async function loadMyRecord() {
     return;
   }
 
-  const [challengesRes, entriesRes, votesRes] = await Promise.all([
-    db.from('challenges')
-      .select('id, title, category, submission_deadline, voting_end, is_public, creator_id, status, sd_round, sd_phase')
-      .in('id', challengeIds),
-    db.from('entries')
-      .select('id, challenge_id, user_id, sd_round')
-      .in('challenge_id', challengeIds),
-    db.from('entry_votes')
-      .select('entry_id, challenge_id')
-      .in('challenge_id', challengeIds),
+  const [challenges, results, winners, myVotes] = await Promise.all([
+    fcDbReadV1101(
+      db.from('challenges')
+        .select('id, title, category, submission_deadline, voting_end, is_public, creator_id, status, sd_round, sd_phase')
+        .in('id', challengeIds),
+      'Competitive record challenges'
+    ),
+    fcDbReadV1101(
+      db.from('challenge_results')
+        .select('challenge_id, resolution, final_round, winner_count, final_entry_count')
+        .in('challenge_id', challengeIds),
+      'Competitive record results'
+    ),
+    fcDbReadV1101(
+      db.from('challenge_result_winners')
+        .select('challenge_id, user_id, entry_id, vote_count, is_co_winner')
+        .in('challenge_id', challengeIds),
+      'Competitive record winners'
+    ),
+    fcDbReadV1101(
+      db.from('entry_votes').select('entry_id').in('entry_id', myEntries.map(e => e.id)),
+      'Competitive record votes'
+    )
   ]);
-  if (challengesRes.error) throw challengesRes.error;
-  if (entriesRes.error) throw entriesRes.error;
-  if (votesRes.error) throw votesRes.error;
 
-  const challengeMap = {};
-  (challengesRes.data || []).forEach(ch => { challengeMap[ch.id] = ch; });
-
-  const entriesByChallenge = {};
-  (entriesRes.data || []).forEach(e => {
-    if (!entriesByChallenge[e.challenge_id]) entriesByChallenge[e.challenge_id] = [];
-    entriesByChallenge[e.challenge_id].push(e);
-  });
-
+  const challengeMap = Object.fromEntries((challenges || []).map(ch => [ch.id, ch]));
+  const resultMap = Object.fromEntries((results || []).map(r => [r.challenge_id, r]));
+  const winnersByChallenge = {};
+  (winners || []).forEach(w => (winnersByChallenge[w.challenge_id] ||= []).push(w));
   const votesByEntry = {};
-  (votesRes.data || []).forEach(v => {
-    votesByEntry[v.entry_id] = (votesByEntry[v.entry_id] || 0) + 1;
-  });
+  (myVotes || []).forEach(v => { votesByEntry[v.entry_id] = (votesByEntry[v.entry_id] || 0) + 1; });
 
-  // For Sudden Death challenges I re-entered, show one record row per challenge.
   const myBestRound = {};
   myEntries.forEach(e => {
-    const r = e.sd_round || 0;
-    if (myBestRound[e.challenge_id] === undefined || r > myBestRound[e.challenge_id]) myBestRound[e.challenge_id] = r;
+    const round = Number(e.sd_round || 0);
+    if (myBestRound[e.challenge_id] === undefined || round > myBestRound[e.challenge_id]) {
+      myBestRound[e.challenge_id] = round;
+    }
   });
 
-  state.myRecord = myEntries.map(e => {
-    const ch = challengeMap[e.challenge_id];
-    if (!ch) return null;
-    if ((e.sd_round || 0) !== myBestRound[e.challenge_id]) return null;
+  state.myRecord = myEntries.map(entry => {
+    const challenge = challengeMap[entry.challenge_id];
+    if (!challenge) return null;
+    if (Number(entry.sd_round || 0) !== Number(myBestRound[entry.challenge_id] || 0)) return null;
 
-    const finalR = ch.sd_round || 0;
-    const chEntriesAll = entriesByChallenge[ch.id] || [];
-    const chEntries = chEntriesAll.filter(en => (en.sd_round || 0) === finalR);
-    const mineIsFinal = (e.sd_round || 0) === finalR;
-    const allChEntries = (!mineIsFinal || chEntries.some(en => en.id === e.id))
-      ? chEntries
-      : [...chEntries, { id: e.id, challenge_id: e.challenge_id, user_id: me }];
-
-    const status = computeChallengeStatusFromCh(ch, chEntriesAll.length);
+    const resultRow = resultMap[entry.challenge_id] || null;
+    const winnerRows = winnersByChallenge[entry.challenge_id] || [];
+    const myWinnerRow = winnerRows.find(w => String(w.user_id) === String(me));
     let result = 'pending';
 
-    if (ch.sd_phase) {
+    if (resultRow) {
+      if (myWinnerRow) result = myWinnerRow.is_co_winner ? 'tied' : 'won';
+      else if (winnerRows.length) result = 'lost';
+      else if (resultRow.resolution === 'unresolved_tie') result = 'tied';
+      else result = 'voided';
+    } else if (challenge.sd_phase) {
       result = 'pending';
-    } else if (status === 'closed') {
-      const counts = allChEntries.map(en => votesByEntry[en.id] || 0);
-      const maxVotes = counts.length ? Math.max(...counts) : 0;
-      const myVotes = mineIsFinal ? (votesByEntry[e.id] || 0) : 0;
-      const topCount = counts.filter(c => c === maxVotes).length;
-      const forfeitWin = finalR > 0 && allChEntries.length === 1 && maxVotes === 0;
-      if (forfeitWin) {
-        result = allChEntries[0].user_id === me || (mineIsFinal && allChEntries[0].id === e.id) ? 'won' : 'lost';
-      } else if (!mineIsFinal) {
-        result = maxVotes > 0 ? 'lost' : 'voided';
-      } else if (maxVotes === 0 || (finalR === 0 && allChEntries.length < 2)) {
-        result = 'voided';
-      } else if (myVotes === maxVotes) {
-        result = topCount > 1 ? 'tied' : 'won';
-      } else {
-        result = 'lost';
-      }
-    } else if (status === 'voided') {
+    } else if (computeChallengeStatusFromCh(challenge, 2) === 'voided') {
       result = 'voided';
     }
 
-    let winnerUserId = null;
-    if (!ch.sd_phase && status === 'closed' && allChEntries.length > 0) {
-      const counts = allChEntries.map(en => votesByEntry[en.id] || 0);
-      const maxVotes = Math.max(...counts);
-      if (maxVotes > 0 || (finalR > 0 && allChEntries.length === 1)) {
-        const winnerEntry = allChEntries.find(en => (votesByEntry[en.id] || 0) === maxVotes);
-        if (winnerEntry && winnerEntry.user_id !== me) winnerUserId = winnerEntry.user_id;
-      }
-    }
-    return { challenge: ch, myEntryId: e.id, myCreated: e.created_at, result, myMediaType: e.media_type, myMediaUrl: e.media_url, myVotes: votesByEntry[e.id] || 0, entryCount: allChEntries.length, winnerUserId };
+    const otherWinner = winnerRows.find(w => String(w.user_id) !== String(me));
+    return {
+      challenge,
+      myEntryId: entry.id,
+      myCreated: entry.created_at,
+      result,
+      myMediaType: entry.media_type,
+      myMediaUrl: entry.media_url,
+      myVotes: votesByEntry[entry.id] || Number(myWinnerRow?.vote_count || 0),
+      entryCount: Number(resultRow?.final_entry_count || 0),
+      winnerUserId: otherWinner?.user_id || null
+    };
   }).filter(Boolean);
 
   const winnerIds = [...new Set(state.myRecord.filter(r => r.winnerUserId).map(r => r.winnerUserId))];
+  state.winnerProfiles = {};
   if (winnerIds.length) {
-    const { data: wp } = await db.from('profiles').select('id, name, avatar').in('id', winnerIds);
-    state.winnerProfiles = {};
-    (wp || []).forEach(p => { state.winnerProfiles[p.id] = p; });
-  } else {
-    state.winnerProfiles = {};
+    const profiles = await fcDbReadV1101(
+      db.from('profiles').select('id, name, avatar').in('id', winnerIds),
+      'Competitive record winner profiles'
+    ) || [];
+    profiles.forEach(p => { state.winnerProfiles[p.id] = p; });
   }
 }
+
 
 function renderRecord() {
   const list = document.getElementById('recordList');
@@ -15936,6 +15809,17 @@ function renderLeaderboard() {
     return;
   }
 
+  if (state.leaderboardErrorV1101) {
+    if (bannerEl) bannerEl.innerHTML = '';
+    if (tabsEl) tabsEl.innerHTML = '';
+    list.innerHTML = `<div role="alert" style="margin:18px;padding:18px;border:1px solid var(--border);border-radius:14px;background:var(--surface);text-align:center">
+      <strong style="display:block;margin-bottom:7px">Results unavailable</strong>
+      <span style="display:block;color:var(--text-muted);font-size:13px;line-height:1.45">${escapeHtml(state.leaderboardErrorV1101)}</span>
+      <button type="button" class="btn btn-primary" style="margin-top:14px" onclick="loadLeaderboard().then(renderLeaderboard).catch(()=>renderLeaderboard())">Retry</button>
+    </div>`;
+    return;
+  }
+
   const data = state.leaderboardData;
   if (!data) { list.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted)">No data yet</div>`; return; }
 
@@ -16194,17 +16078,35 @@ async function lbToggleFollow(btn) {
   btn.disabled = true;
   try {
     if (wasFollowing) {
-      await db.from('follows').delete().eq('follower_id', state.profile.id).eq('followee_id', uid);
+      await fcDbMutationV1101(
+        db.from('follows')
+          .delete()
+          .eq('follower_id', state.profile.id)
+          .eq('followee_id', uid)
+          .select('follower_id'),
+        'Unfollow',
+        { requireRows: true }
+      );
       state.myFollowing.delete(uid);
     } else {
-      await db.from('follows').insert({ follower_id: state.profile.id, followee_id: uid });
+      await fcDbMutationV1101(
+        db.from('follows')
+          .insert({ follower_id: state.profile.id, followee_id: uid })
+          .select('follower_id'),
+        'Follow',
+        { requireRows: true }
+      );
       state.myFollowing.add(uid);
     }
     btn.textContent = state.myFollowing.has(uid) ? '✓' : '+ Follow';
     btn.classList.toggle('following', state.myFollowing.has(uid));
     if (state.currentView === 'feed') renderFeed();
-  } catch(err) { toast('Follow failed'); }
-  finally { btn.disabled = false; }
+  } catch(err) {
+    console.warn('leaderboard follow', err);
+    toast((wasFollowing ? 'Unfollow' : 'Follow') + ' failed: ' + (err.message || 'try again'));
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 /* ---------- LEADERBOARD TABS ---------- */
@@ -18405,10 +18307,23 @@ function _renderEvEntry() {
       const wasFollowing = state.myFollowing.has(sub.id);
       try {
         if (wasFollowing) {
-          await db.from('follows').delete().eq('follower_id', state.profile.id).eq('followee_id', sub.id);
+          await fcDbMutationV1101(
+            db.from('follows').delete()
+              .eq('follower_id', state.profile.id)
+              .eq('followee_id', sub.id)
+              .select('follower_id'),
+            'Unfollow',
+            { requireRows: true }
+          );
           state.myFollowing.delete(sub.id);
         } else {
-          await db.from('follows').insert({ follower_id: state.profile.id, followee_id: sub.id });
+          await fcDbMutationV1101(
+            db.from('follows')
+              .insert({ follower_id: state.profile.id, followee_id: sub.id })
+              .select('follower_id'),
+            'Follow',
+            { requireRows: true }
+          );
           state.myFollowing.add(sub.id);
         }
         const nowFollowing = state.myFollowing.has(sub.id);
@@ -18416,8 +18331,9 @@ function _renderEvEntry() {
         followBtn.className = `btn ${nowFollowing ? 'btn-ghost' : 'btn-primary'}`;
         followBtn.style.cssText = 'padding:8px 20px;font-size:13px';
         if (state.currentView === 'feed') renderFeed();
-      } catch(e) { toast('Failed'); }
-      finally { followBtn.disabled = false; }
+      } catch(e) {
+        toast((wasFollowing ? 'Unfollow' : 'Follow') + ' failed: ' + (e.message || 'try again'));
+      } finally { followBtn.disabled = false; }
     };
   }
 
@@ -18443,12 +18359,18 @@ function _renderEvEntry() {
       // considers "deleted nothing you were allowed to see" a success. Trusting
       // error alone made the app toast 'Entry deleted' over a row that is still
       // there. Row count is the only honest signal.
-      const { data: delRows, error } = await db.from('entries').delete()
-        .eq('id', entry.id).eq('user_id', state.profile.id).select('id');
-      if (error) { toast('Delete failed: ' + error.message); delBtn.disabled = false; delBtn.textContent = '🗑 Delete'; return; }
-      if (!delRows || !delRows.length) {
-        dlog('del', 'rls-blocked', { entry: String(entry.id).slice(0, 8) });
-        toast("Couldn't delete — you may not have permission");
+      try {
+        await fcDbMutationV1101(
+          db.from('entries').delete()
+            .eq('id', entry.id)
+            .eq('user_id', state.profile.id)
+            .select('id'),
+          'Delete entry',
+          { requireRows: true }
+        );
+      } catch (error) {
+        dlog('del', 'rls-blocked', { entry: String(entry.id).slice(0, 8), error: String(error.message || error).slice(0, 80) });
+        toast('Delete failed: ' + (error.message || 'try again'));
         delBtn.disabled = false; delBtn.textContent = '🗑 Delete'; return;
       }
       // Purge from local caches immediately — incremental fetch never removes deleted rows
@@ -18613,15 +18535,30 @@ async function openLikersSheet(type, id) {
         btn.disabled = true;
         try {
           if (wasFollowing) {
-            await db.from('follows').delete().eq('follower_id', state.profile.id).eq('followee_id', uid);
+            await fcDbMutationV1101(
+              db.from('follows').delete()
+                .eq('follower_id', state.profile.id)
+                .eq('followee_id', uid)
+                .select('follower_id'),
+              'Unfollow',
+              { requireRows: true }
+            );
             state.myFollowing.delete(uid);
           } else {
-            await db.from('follows').insert({ follower_id: state.profile.id, followee_id: uid });
+            await fcDbMutationV1101(
+              db.from('follows')
+                .insert({ follower_id: state.profile.id, followee_id: uid })
+                .select('follower_id'),
+              'Follow',
+              { requireRows: true }
+            );
             state.myFollowing.add(uid);
           }
           btn.textContent = state.myFollowing.has(uid) ? '✓' : '+ Follow';
           btn.classList.toggle('following', state.myFollowing.has(uid));
-        } catch(err) { toast('Failed'); }
+        } catch(err) {
+          toast((wasFollowing ? 'Unfollow' : 'Follow') + ' failed: ' + (err.message || 'try again'));
+        }
         finally { btn.disabled = false; }
       });
     });
@@ -20598,6 +20535,7 @@ document.getElementById('createChallengeForm').addEventListener('submit', async 
   btn.disabled = true;
   const orig = btn.textContent;
 
+  let uploadedAssetV1101 = null;
   try {
     let mediaUrl = null;
     let posterUrl = null;
@@ -20632,7 +20570,14 @@ document.getElementById('createChallengeForm').addEventListener('submit', async 
           btn.textContent = `Uploading... ${pct}%`;
         });
         mediaUrl  = bunny.mediaUrl;
-        posterUrl = bunny.posterUrl; // Bunny auto-generates thumbnail
+        posterUrl = bunny.posterUrl;
+        uploadedAssetV1101 = {
+          kind: 'bunny',
+          videoId: bunny.videoId,
+          posterPath: bunny.posterUrl && !bunny.posterUrl.includes(BUNNY_CDN_HOST)
+            ? `${state.profile.id}/poster-${bunny.videoId}.jpg`
+            : null
+        };
       } else {
         const rawExt = (ccState.file.name.split('.').pop() || 'bin').toLowerCase();
         const ext = (ccShouldCompress && fileToUpload !== ccState.file) ? 'mp4' : rawExt;
@@ -20651,70 +20596,50 @@ document.getElementById('createChallengeForm').addEventListener('submit', async 
           mediaResult = { publicUrl: pub.publicUrl };
         }
         mediaUrl = mediaResult.publicUrl;
+        uploadedAssetV1101 = { kind: 'storage', bucket: 'challenge-media', path: filename };
         // No poster needed: photos ARE the image; Bunny generates video thumbnails
       }
     }
 
-    btn.textContent = 'Creating...';
-    const { data: chData, error: chError } = await db.from('challenges').insert({
-      creator_id: state.profile.id,
-      title,
-      rules: rules || null,
-      category: ccState.category,
-      media_type: ccState.mediaType,
-      submission_deadline: new Date(subDeadline).toISOString(),
-      voting_end: new Date(voteEnd).toISOString(),
-      is_public: ccState.visibility === 'public',
-      allow_sudden_death: !!document.getElementById('ccSuddenDeathCheck')?.checked,
-      status: 'submitting',
-    }).select().single();
-    if (chError) throw new Error('Challenge create failed: ' + chError.message);
-
-    if (ccState.competeSelf !== false) {
-      btn.textContent = 'Adding entry...';
-      // Moderate photo entries BEFORE creating the entry — same gate the normal
-      // entry-submission path uses. Without this, photos inserted straight to
-      // 'clear' and went live with zero moderation (critical bug found in beta).
-      if (ccState.mediaType === 'photo' && mediaUrl) {
-        btn.textContent = 'Checking...';
-        if (!await moderateImage(mediaUrl, 'entry')) {
-          // moderateImage already toasted the user. Roll back the challenge we
-          // just created so we don't leave an empty challenge behind.
-          try { await db.from('challenges').delete().eq('id', chData.id); } catch (e) {}
-          btn.disabled = false; btn.textContent = orig;
-          return;
-        }
+    if (ccState.competeSelf !== false && ccState.mediaType === 'photo' && mediaUrl) {
+      btn.textContent = 'Checking...';
+      if (!await moderateImage(mediaUrl, 'entry')) {
+        await fcCleanupUploadedAssetV1101(uploadedAssetV1101);
+        uploadedAssetV1101 = null;
+        return;
       }
-      // The creator's first entry needs moderation too, exactly like a normal
-      // entry submission. Video entries insert as 'pending' and get triggered below.
-      const ccEntryRow = {
-        challenge_id: chData.id,
-        user_id: state.profile.id,
-        media_url: mediaUrl,
-        media_type: ccState.mediaType,
-        caption: ccState.mediaType === 'text' ? textEntry : (caption || null),
-        poster_url: posterUrl,
-        moderation_status: ccState.mediaType === 'video' ? 'pending' : 'clear',
-      };
-      let ccEntryData, entryError;
-      ({ data: ccEntryData, error: entryError } = await db.from('entries').insert(ccEntryRow).select('id').single());
-      if (entryError && /moderation_status/.test(entryError.message || '')) {
-        delete ccEntryRow.moderation_status;
-        ({ data: ccEntryData, error: entryError } = await db.from('entries').insert(ccEntryRow).select('id').single());
-      }
-      if (entryError) throw new Error('Entry create failed: ' + entryError.message);
-      // Kick off async video moderation for the creator's entry
-      if (ccEntryData && ccState.mediaType === 'video' && mediaUrl) {
-        triggerVideoModeration(ccEntryData.id, mediaUrl);
-      }
-
     }
-    // Insert invites if private
-    if (ccState.visibility === 'private' && invitees.length > 0) {
-      btn.textContent = 'Sending invites...';
-      const inviteRows = invitees.map(i => ({ challenge_id: chData.id, invited_user_id: i.id }));
-      const { error: inviteError } = await db.from('challenge_invites').insert(inviteRows);
-      if (inviteError) throw new Error('Invite creation failed: ' + inviteError.message);
+
+    btn.textContent = 'Creating...';
+    const rpcResult = await fcDbMutationV1101(
+      db.rpc('fc_create_challenge_v1101', {
+        p_title: title,
+        p_rules: rules || null,
+        p_category: ccState.category,
+        p_media_type: ccState.mediaType,
+        p_submission_deadline: new Date(subDeadline).toISOString(),
+        p_voting_end: new Date(voteEnd).toISOString(),
+        p_is_public: ccState.visibility === 'public',
+        p_allow_sudden_death: !!document.getElementById('ccSuddenDeathCheck')?.checked,
+        p_compete_self: ccState.competeSelf !== false,
+        p_media_url: mediaUrl,
+        p_caption: ccState.competeSelf === false
+          ? null
+          : (ccState.mediaType === 'text' ? textEntry : (caption || null)),
+        p_poster_url: posterUrl,
+        p_moderation_status: ccState.mediaType === 'video' ? 'pending' : 'clear',
+        p_invited_user_ids: invitees.map(i => i.id)
+      }),
+      'Create challenge',
+      { timeout: 30000, requireData: true }
+    );
+    const chData = rpcResult.data?.challenge;
+    const creatorEntryId = rpcResult.data?.entry_id;
+    if (!chData?.id) throw new Error('Challenge creation returned no challenge');
+
+    uploadedAssetV1101 = null;
+    if (creatorEntryId && ccState.mediaType === 'video' && mediaUrl) {
+      triggerVideoModeration(creatorEntryId, mediaUrl);
     }
 
     toast(ccState.visibility === 'private' ? `🔥 Private challenge created — ${invitees.length} invited` : '🔥 Challenge created!');
@@ -20733,6 +20658,10 @@ document.getElementById('createChallengeForm').addEventListener('submit', async 
     }
   } catch (err) {
     console.error(err);
+    if (uploadedAssetV1101) {
+      await fcCleanupUploadedAssetV1101(uploadedAssetV1101);
+      uploadedAssetV1101 = null;
+    }
     showCcError(err.message);
   } finally {
     btn.disabled = false;
@@ -21131,7 +21060,7 @@ async function loadChallengeDetail(challengeId) {
   );
   if (entriesRes.error) {
     console.error('entries load error', entriesRes.error);
-    state.currentEntries = [];
+    throw entriesRes.error;
   } else {
     const allFetched = entriesRes.data || [];
     // Video moderation visibility: pending/rejected/escalated/flagged entries
@@ -21164,13 +21093,40 @@ async function loadChallengeDetail(challengeId) {
   );
   if (votesRes.error) {
     console.error('votes load error', votesRes.error);
-    state.currentVotes = [];
+    throw votesRes.error;
   } else {
     state.currentVotes = votesRes.data || [];
   }
   state.myCurrentVote = state.profile
     ? (state.currentVotes.find(v => v.voter_id === state.profile.id)?.entry_id || null)
     : null;
+
+  const resultResV1101 = await withTimeout(
+    db.from('challenge_results')
+      .select('challenge_id, category, month, resolved_at, final_round, resolution, is_public, is_championship, eligible_competitor_count, final_entry_count, valid_ballots, max_votes, winner_count, score_awarded, snapshot')
+      .eq('challenge_id', challengeId)
+      .maybeSingle(),
+    12000,
+    'Authoritative result'
+  );
+  if (resultResV1101.error) throw resultResV1101.error;
+  state.challengeResultsV1101 = state.challengeResultsV1101 || {};
+  state.challengeResultWinnersV1101 = state.challengeResultWinnersV1101 || {};
+  if (resultResV1101.data) {
+    state.challengeResultsV1101[challengeId] = resultResV1101.data;
+    const winnersResV1101 = await withTimeout(
+      db.from('challenge_result_winners')
+        .select('challenge_id, user_id, entry_id, vote_count, is_co_winner, visible_level, opponent_pts, turnout_pts, championship_score, detail')
+        .eq('challenge_id', challengeId),
+      12000,
+      'Authoritative winners'
+    );
+    if (winnersResV1101.error) throw winnersResV1101.error;
+    state.challengeResultWinnersV1101[challengeId] = winnersResV1101.data || [];
+  } else {
+    delete state.challengeResultsV1101[challengeId];
+    delete state.challengeResultWinnersV1101[challengeId];
+  }
   if (state.myCurrentVote) {
     const _validEntryIdsV1047 = new Set(state.currentEntries.filter(e => e.moderation_status !== 'rejected').map(e => e.id));
     if (!_validEntryIdsV1047.has(state.myCurrentVote)) state.myCurrentVote = null;
@@ -21464,17 +21420,11 @@ function renderChallengeDetail() {
     if (!confirm(`Delete "${ch.title}"? This removes all entries and cannot be undone.`)) return;
     deleteBtn.disabled = true; deleteBtn.textContent = 'Deleting…';
     try {
-      // Delete entries first (FK safety), then challenge
-      await db.from('entry_votes').delete().eq('challenge_id', ch.id);
-      await db.from('entries').delete().eq('challenge_id', ch.id);
-      // v691 — row count, not error. RLS reports a blocked DELETE as success with
-      // zero rows, so `error === null` proves nothing. Same lie as v688/v689.
-      const { data: chRows, error } = await db.from('challenges').delete().eq('id', ch.id).select('id');
-      if (error) throw error;
-      if (!chRows || !chRows.length) {
-        dlog('del', 'challenge-blocked', { ch: String(ch.id).slice(0, 8) });
-        throw new Error('no permission to delete this challenge');
-      }
+      await fcDbMutationV1101(
+        db.rpc('fc_delete_challenge_v1101', { p_challenge_id: ch.id }),
+        'Delete challenge',
+        { requireData: true }
+      );
       toast('Challenge deleted');
       closeChallengeDetail();
       state.challenges = (state.challenges || []).filter(c => c.id !== ch.id);
@@ -21926,13 +21876,37 @@ function renderChallengeResults() {
   // renders the Final Standings summary once the challenge closes.
   if (!isClosed) { panel.style.display = 'none'; return; }
 
+  const authoritativeResultV1101 = state.challengeResultsV1101?.[ch.id] || null;
+  const authoritativeWinnersV1101 = state.challengeResultWinnersV1101?.[ch.id] || [];
+  if (!authoritativeResultV1101) {
+    panel.innerHTML = `<div class="cd-results-panel"><div class="cd-results-title">Result processing</div><div style="font-size:13px;color:var(--text-muted);line-height:1.45">The final result has not been settled by the database yet. Refresh after settlement completes.</div></div>`;
+    panel.style.display = 'block';
+    return;
+  }
+  const authoritativeWinnerIdsV1101 = new Set(authoritativeWinnersV1101.map(w => String(w.user_id)));
+  const authoritativeCoWinnerIdsV1101 = new Set(authoritativeWinnersV1101.filter(w => w.is_co_winner).map(w => String(w.user_id)));
+
+  // Vote totals remain useful for the final standings display, but winner status
+  // comes only from challenge_result_winners.
   // Sudden Death: final standings come from the FINAL round only.
-  const _finalR = ch.sd_round || 0;
+  const _finalR = Number(authoritativeResultV1101.final_round ?? ch.sd_round ?? 0);
   const _eligibleResultEntries = state.currentEntries.filter(e => e.moderation_status !== 'rejected');
-  const _resultEntries = _finalR > 0
-    ? _eligibleResultEntries.filter(e => (e.sd_round || 0) === _finalR)
+  const _finalRoundEntries = _finalR > 0
+    ? _eligibleResultEntries.filter(e => Number(e.sd_round || 0) === _finalR)
     : _eligibleResultEntries;
-  const _resultEntryIds = new Set(_resultEntries.map(e => e.id));
+  // A no-submission sudden-death resolution has durable co-winners but no
+  // final-round entry rows. Use each winner's latest eligible prior entry only
+  // for identity/media display; the winner status still comes exclusively from
+  // challenge_result_winners.
+  const _winnerFallbackEntries = authoritativeWinnersV1101
+    .map(w => _eligibleResultEntries
+      .filter(e => String(e.user_id) === String(w.user_id))
+      .sort((a, b) => Number(b.sd_round || 0) - Number(a.sd_round || 0))[0])
+    .filter(Boolean);
+  const _resultEntries = _finalRoundEntries.length
+    ? _finalRoundEntries
+    : [...new Map(_winnerFallbackEntries.map(e => [e.user_id, e])).values()];
+  const _resultEntryIds = new Set(_finalRoundEntries.map(e => e.id));
   const _resultVotes = state.currentVotes.filter(v => _resultEntryIds.has(v.entry_id));
   const _isForfeit = _finalR > 0 && _resultEntries.length === 1 && _resultVotes.length === 0;
 
@@ -21963,14 +21937,17 @@ function renderChallengeResults() {
     const sub = e.submitter || { name: 'Unknown', avatar: '🔥' };
     const rank = rankByIndex[i];
     const isTied = votes > 0 && isTiedAtIndex(i);
-    const isLeading = (rank === 1 && votes > 0 && !isTied) || _isForfeit;
+    const isAuthoritativeWinnerV1101 = authoritativeWinnerIdsV1101.has(String(e.user_id));
+    const isAuthoritativeCoWinnerV1101 = authoritativeCoWinnerIdsV1101.has(String(e.user_id));
+    const isLeading = isAuthoritativeWinnerV1101;
     const isMyPick = state.myCurrentVote === e.id;
     // Rank 1-3 → medal (shared when tied). Rank 4+ → plain number. No votes → positional #.
     const rankIcon = _isForfeit ? medals[0]
       : votes === 0 ? '#' + (i + 1)
       : (rank <= 3 ? medals[rank - 1] : rank);
     const ordinal = rank === 1 ? 'Winner' : rank === 2 ? '2nd' : rank === 3 ? '3rd' : '#' + rank;
-    const rankLabel = _isForfeit ? 'Winner · walkover'
+    const rankLabel = isAuthoritativeCoWinnerV1101 ? 'Co-winner'
+      : isAuthoritativeWinnerV1101 ? (authoritativeResultV1101.resolution === 'decisive_default' ? 'Winner · walkover' : 'Winner')
       : votes === 0 ? 'No votes'
       : isTied ? `Tied · ${ordinal}`
       : ordinal;
@@ -22033,14 +22010,23 @@ async function voteOnEntry(entryId) {
 
   try {
     const sdRound = ch.sd_phase === 'voting' ? (ch.sd_round || 0) : 0;
-    let { error: upErr } = await db.from('entry_votes').upsert(
-      { challenge_id: challengeId, entry_id: entryId, voter_id: me, sd_round: sdRound },
-      { onConflict: 'challenge_id,voter_id' }
+    let { error: upErr } = await fcWithTimeoutV1099(
+      db.from('entry_votes').upsert(
+        { challenge_id: challengeId, entry_id: entryId, voter_id: me, sd_round: sdRound },
+        { onConflict: 'challenge_id,voter_id' }
+      ),
+      20000,
+      'Record vote'
     );
     if (upErr && /sd_round/.test(upErr.message || '')) {
-      ({ error: upErr } = await db.from('entry_votes').upsert(
-        { challenge_id: challengeId, entry_id: entryId, voter_id: me },
-        { onConflict: 'challenge_id,voter_id' }));
+      ({ error: upErr } = await fcWithTimeoutV1099(
+        db.from('entry_votes').upsert(
+          { challenge_id: challengeId, entry_id: entryId, voter_id: me },
+          { onConflict: 'challenge_id,voter_id' }
+        ),
+        20000,
+        'Record vote'
+      ));
     }
     if (upErr) throw upErr;
 
@@ -22342,6 +22328,8 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
   btn.disabled = true; const orig = btn.textContent;
   seState._mediaHash = null; // recomputed below only when a file is present
   let _slowTipTimer = null;
+  let uploadedEntryAssetV1101 = null;
+  let entryWriteCommittedV1101 = false;
   { const st = document.getElementById('seSlowTip'); if (st) st.style.display = 'none'; }
 
   // Block a second entry from the same user (only when creating, not editing).
@@ -22438,7 +22426,14 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
           btn.textContent = `Uploading... ${pct}%`;
         });
         mediaUrl  = bunny.mediaUrl;
-        posterUrl = bunny.posterUrl; // Bunny auto-generates thumbnail
+        posterUrl = bunny.posterUrl;
+        uploadedEntryAssetV1101 = {
+          kind: 'bunny',
+          videoId: bunny.videoId,
+          posterPath: bunny.posterUrl && !bunny.posterUrl.includes(BUNNY_CDN_HOST)
+            ? `${state.profile.id}/poster-${bunny.videoId}.jpg`
+            : null
+        };
       } else {
         const seRawExt = ((seState.file.name || '').split('.').pop() || 'jpg').toLowerCase();
         const ext = (seShouldCompress && seFileToUpload !== seState.file) ? 'mp4' : seRawExt;
@@ -22457,12 +22452,14 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
           seMediaResult = { publicUrl: spub.publicUrl };
         }
         mediaUrl = seMediaResult.publicUrl;
+        uploadedEntryAssetV1101 = { kind: 'storage', bucket: 'challenge-media', path: filename };
         // No poster needed: photos ARE the image; Bunny generates video thumbnails
         // Moderate the photo before the entry is created.
         if (ch.media_type === 'photo') {
           btn.textContent = 'Checking...';
           if (!await moderateImage(mediaUrl, 'entry')) {
-            await removeUploadedMedia(filename);
+            await fcCleanupUploadedAssetV1101(uploadedEntryAssetV1101);
+            uploadedEntryAssetV1101 = null;
             if (_slowTipTimer) { clearTimeout(_slowTipTimer); _slowTipTimer = null; }
             btn.disabled = false; btn.textContent = orig;
             return;
@@ -22507,14 +22504,14 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
         .update(updates)
         .eq('id', editId)
         .eq('user_id', state.profile.id); // safety check
-      ({ error: entryError } = await runUpdate());
+      ({ error: entryError } = await fcWithTimeoutV1099(runUpdate(), 25000, 'Update entry'));
       if (entryError && /moderation_status/.test(entryError.message || '')) {
         delete updates.moderation_status;
-        ({ error: entryError } = await runUpdate());
+        ({ error: entryError } = await fcWithTimeoutV1099(runUpdate(), 25000, 'Update entry'));
       }
       if (entryError && /media_hash/.test(entryError.message || '')) {
         delete updates.media_hash;
-        ({ error: entryError } = await runUpdate());
+        ({ error: entryError } = await fcWithTimeoutV1099(runUpdate(), 25000, 'Update entry'));
       }
       if (entryError) throw new Error('Update failed: ' + entryError.message);
       entryData = { id: editId };
@@ -22538,19 +22535,19 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
         sd_round: _sdSubmitting ? (ch.sd_round || 0) : 0,
         moderation_status: ch.media_type === 'video' ? 'pending' : 'clear',
       };
-      ({ data: entryData, error: entryError } = await db.from('entries').insert(newEntry).select('id').single());
+      ({ data: entryData, error: entryError } = await fcWithTimeoutV1099(db.from('entries').insert(newEntry).select('id').single(), 25000, 'Submit entry'));
       if (entryError && /sd_round/.test(entryError.message || '')) {
         delete newEntry.sd_round;
-        ({ data: entryData, error: entryError } = await db.from('entries').insert(newEntry).select('id').single());
+        ({ data: entryData, error: entryError } = await fcWithTimeoutV1099(db.from('entries').insert(newEntry).select('id').single(), 25000, 'Submit entry'));
       }
       if (entryError && /media_hash/.test(entryError.message || '')) {
         delete newEntry.media_hash;
-        ({ data: entryData, error: entryError } = await db.from('entries').insert(newEntry).select('id').single());
+        ({ data: entryData, error: entryError } = await fcWithTimeoutV1099(db.from('entries').insert(newEntry).select('id').single(), 25000, 'Submit entry'));
       }
       if (entryError && /moderation_status/.test(entryError.message || '')) {
         // moderation columns not migrated yet — retry without them so submit still works
         delete newEntry.moderation_status;
-        ({ data: entryData, error: entryError } = await db.from('entries').insert(newEntry).select('id').single());
+        ({ data: entryData, error: entryError } = await fcWithTimeoutV1099(db.from('entries').insert(newEntry).select('id').single(), 25000, 'Submit entry'));
       }
       if (entryError) {
         if (entryError.code === '23505' || /duplicate|unique/i.test(entryError.message || '')) {
@@ -22568,6 +22565,8 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
         toast('🔥 Entry submitted!');
       }
     }
+    entryWriteCommittedV1101 = true;
+    uploadedEntryAssetV1101 = null;
     closeSubmitEntry();
     await loadChallengeDetail(ch.id);
     renderChallengeDetail();
@@ -22578,6 +22577,10 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
     if (state.currentView === 'feed') renderFeed();
   } catch (err) {
     console.error(err);
+    if (uploadedEntryAssetV1101 && !entryWriteCommittedV1101) {
+      await fcCleanupUploadedAssetV1101(uploadedEntryAssetV1101);
+      uploadedEntryAssetV1101 = null;
+    }
     errBox.textContent = err.message;
     errBox.classList.add('show');
   } finally {
@@ -25157,7 +25160,7 @@ async function submitReport() {
   const btn = document.getElementById('reportSubmitBtn');
   btn.disabled = true; btn.textContent = 'Submitting…';
   try {
-    await db.from('moderation_queue').insert({
+    await fcDbMutationV1101(db.from('moderation_queue').insert({
       content_type: _reportState.type,
       content_id: _reportState.id,
       user_id: state.profile?.id,
@@ -25165,7 +25168,7 @@ async function submitReport() {
       categories: [selected.value],
       confidence: 'medium',
       status: 'pending',
-    });
+    }).select('id'), 'Submit report', { requireRows: true });
     closeReportSheet();
     toast('Report submitted. We\'ll review it.');
   } catch (e) {
@@ -25843,8 +25846,21 @@ function renderFollowList(list, profiles, competingIds, mode, iFollow) {
       const name = btn.dataset.unfollowName;
       if (!confirm(`Unfollow ${name}?`)) return;
       btn.textContent = '…'; btn.disabled = true;
-      const { error } = await db.from('follows').delete().eq('follower_id', state.profile.id).eq('followee_id', uid);
-      if (error) { toast('Unfollow failed'); btn.disabled = false; return; }
+      try {
+        await fcDbMutationV1101(
+          db.from('follows').delete()
+            .eq('follower_id', state.profile.id)
+            .eq('followee_id', uid)
+            .select('follower_id'),
+          'Unfollow',
+          { requireRows: true }
+        );
+      } catch (error) {
+        toast('Unfollow failed: ' + (error.message || 'try again'));
+        btn.textContent = 'Unfollow';
+        btn.disabled = false;
+        return;
+      }
       toast(`Unfollowed ${name}`);
       if (state.following) state.following.delete(uid);
       switchFollowTab(_fsActiveTab);
@@ -25857,8 +25873,20 @@ function renderFollowList(list, profiles, competingIds, mode, iFollow) {
       e.stopPropagation();
       const uid = btn.dataset.followId;
       btn.textContent = '…'; btn.disabled = true;
-      const { error } = await db.from('follows').insert({ follower_id: state.profile.id, followee_id: uid });
-      if (error) { toast('Follow failed'); btn.disabled = false; return; }
+      try {
+        await fcDbMutationV1101(
+          db.from('follows')
+            .insert({ follower_id: state.profile.id, followee_id: uid })
+            .select('follower_id'),
+          'Follow',
+          { requireRows: true }
+        );
+      } catch (error) {
+        toast('Follow failed: ' + (error.message || 'try again'));
+        btn.textContent = 'Follow';
+        btn.disabled = false;
+        return;
+      }
       btn.textContent = 'Following';
       btn.style.background = 'none';
       btn.style.border = '1px solid var(--border)';
@@ -26289,8 +26317,16 @@ async function openFeedViewer(chId, startEntryId = null) {
             // Delete challenge (entries cascade)
             if (!confirm('Delete this challenge? This cannot be undone.')) return;
             btn.textContent = 'Deleting…'; btn.disabled = true;
-            const { error } = await db.from('challenges').delete().eq('id', chId).eq('creator_id', state.profile.id);
-            if (error) { toast('Delete failed: ' + error.message); btn.disabled = false; btn.textContent = '🗑 Delete'; return; }
+            try {
+              await fcDbMutationV1101(
+                db.rpc('fc_delete_challenge_v1101', { p_challenge_id: chId }),
+                'Delete challenge',
+                { requireData: true }
+              );
+            } catch (error) {
+              toast('Delete failed: ' + (error.message || 'try again'));
+              btn.disabled = false; btn.textContent = '🗑 Delete'; return;
+            }
             toast('Challenge deleted');
             closeFeedViewer();
             // Remove from state and re-render
@@ -26305,12 +26341,18 @@ async function openFeedViewer(chId, startEntryId = null) {
         btn.textContent = 'Deleting…'; btn.disabled = true;
         // v688 — see note on the entry-viewer delete: row count, not error, is
         // the only honest signal that a DELETE actually removed anything.
-        const { data: delRows, error } = await db.from('entries').delete()
-          .eq('id', entryId).eq('user_id', state.profile.id).select('id');
-        if (error) { toast('Delete failed: ' + error.message); btn.disabled = false; btn.textContent = '🗑 Delete'; return; }
-        if (!delRows || !delRows.length) {
-          dlog('del', 'rls-blocked', { entry: String(entryId).slice(0, 8) });
-          toast("Couldn't delete — you may not have permission");
+        try {
+          await fcDbMutationV1101(
+            db.from('entries').delete()
+              .eq('id', entryId)
+              .eq('user_id', state.profile.id)
+              .select('id'),
+            'Delete entry',
+            { requireRows: true }
+          );
+        } catch (error) {
+          dlog('del', 'rls-blocked', { entry: String(entryId).slice(0, 8), error: String(error.message || error).slice(0, 80) });
+          toast('Delete failed: ' + (error.message || 'try again'));
           btn.disabled = false; btn.textContent = '🗑 Delete'; return;
         }
         // Purge from local caches — incremental fetch never removes deleted rows
@@ -26584,14 +26626,23 @@ async function fvVote(btn, chId) {
 
   try {
     const sdRound = ch?.sd_phase === 'voting' ? (ch.sd_round || 0) : 0;
-    let { error: upErr } = await db.from('entry_votes').upsert(
-      { challenge_id: chId, entry_id: entryId, voter_id: state.profile.id, sd_round: sdRound },
-      { onConflict: 'challenge_id,voter_id' }
+    let { error: upErr } = await fcWithTimeoutV1099(
+      db.from('entry_votes').upsert(
+        { challenge_id: chId, entry_id: entryId, voter_id: state.profile.id, sd_round: sdRound },
+        { onConflict: 'challenge_id,voter_id' }
+      ),
+      20000,
+      'Record vote'
     );
     if (upErr && /sd_round/.test(upErr.message || '')) {
-      ({ error: upErr } = await db.from('entry_votes').upsert(
-        { challenge_id: chId, entry_id: entryId, voter_id: state.profile.id },
-        { onConflict: 'challenge_id,voter_id' }));
+      ({ error: upErr } = await fcWithTimeoutV1099(
+        db.from('entry_votes').upsert(
+          { challenge_id: chId, entry_id: entryId, voter_id: state.profile.id },
+          { onConflict: 'challenge_id,voter_id' }
+        ),
+        20000,
+        'Record vote'
+      ));
     }
     if (upErr) throw upErr;
     toast(previous ? 'Vote changed' : 'Vote recorded');
@@ -26683,10 +26734,21 @@ async function shareFeedViewerChallenge() {
 
 async function deleteFvEntry(entryId, chId) {
   if (!confirm('Delete your entry? This cannot be undone.')) return;
-  const { error } = await db.from('entries').delete().eq('id', entryId).eq('user_id', state.profile.id);
-  if (error) { toast('Delete failed'); return; }
-  toast('Entry deleted');
-  openFeedViewer(chId);
+  try {
+    await fcDbMutationV1101(
+      db.from('entries')
+        .delete()
+        .eq('id', entryId)
+        .eq('user_id', state.profile.id)
+        .select('id'),
+      'Delete entry',
+      { requireRows: true }
+    );
+    toast('Entry deleted');
+    openFeedViewer(chId);
+  } catch (error) {
+    toast('Delete failed: ' + (error.message || 'try again'));
+  }
 }
 
 function closeFeedViewer() {
@@ -27842,11 +27904,22 @@ async function toggleFollowFromSheet(userId) {
 
   try {
     if (wasFollowing) {
-      const { error } = await db.from('follows').delete().eq('follower_id', state.profile.id).eq('followee_id', userId);
-      if (error) throw error;
+      await fcDbMutationV1101(
+        db.from('follows').delete()
+          .eq('follower_id', state.profile.id)
+          .eq('followee_id', userId)
+          .select('follower_id'),
+        'Unfollow',
+        { requireRows: true }
+      );
     } else {
-      const { error } = await db.from('follows').insert({ follower_id: state.profile.id, followee_id: userId });
-      if (error) throw error;
+      await fcDbMutationV1101(
+        db.from('follows')
+          .insert({ follower_id: state.profile.id, followee_id: userId })
+          .select('follower_id'),
+        'Follow',
+        { requireRows: true }
+      );
       try { fcTrackFollowConversionV1048(userId); } catch(e) {}
     }
     if (state.currentView === 'feed') renderFeed();
@@ -27969,20 +28042,28 @@ async function renderFindPeopleResults(query) {
         btn.disabled = true;
         try {
           if (wasFollowing) {
-            const { error } = await db.from('follows')
-              .delete()
-              .eq('follower_id', state.profile.id)
-              .eq('followee_id', uid);
-            if (error) throw error;
+            await fcDbMutationV1101(
+              db.from('follows')
+                .delete()
+                .eq('follower_id', state.profile.id)
+                .eq('followee_id', uid)
+                .select('follower_id'),
+              'Unfollow',
+              { requireRows: true }
+            );
             state.myFollowing.delete(uid);
             state.followerCounts[uid] = Math.max(0, (state.followerCounts[uid] || 1) - 1);
             state.followingCounts[state.profile.id] = Math.max(0, (state.followingCounts[state.profile.id] || 1) - 1);
             btn.textContent = '+ Follow';
             btn.classList.remove('following');
           } else {
-            const { error } = await db.from('follows')
-              .insert({ follower_id: state.profile.id, followee_id: uid });
-            if (error) throw error;
+            await fcDbMutationV1101(
+              db.from('follows')
+                .insert({ follower_id: state.profile.id, followee_id: uid })
+                .select('follower_id'),
+              'Follow',
+              { requireRows: true }
+            );
             state.myFollowing.add(uid);
             state.followerCounts[uid] = (state.followerCounts[uid] || 0) + 1;
             state.followingCounts[state.profile.id] = (state.followingCounts[state.profile.id] || 0) + 1;
@@ -28800,22 +28881,27 @@ async function loadAdminContentList() {
 
 async function adminDelete(table, id, label) {
   if (!await confirmSheet(`Delete this ${label}?`, 'Delete', 'Cancel')) return;
-  // Challenges have FK-linked records that must be removed first
-  if (table === 'challenges') {
-    await db.from('entry_votes').delete().eq('challenge_id', id);
-    await db.from('entries').delete().eq('challenge_id', id);
-    await db.from('challenge_invites').delete().eq('challenge_id', id);
+  try {
+    if (table === 'challenges') {
+      await fcDbMutationV1101(
+        db.rpc('fc_delete_challenge_v1101', { p_challenge_id: id }),
+        'Delete challenge',
+        { requireData: true }
+      );
+      state.champLaunches = (state.champLaunches || []).filter(l => l.challenge_id !== id);
+      await loadChallenges();
+    } else {
+      await fcDbMutationV1101(
+        db.from(table).delete().eq('id', id).select('id'),
+        `Delete ${label}`,
+        { requireRows: true }
+      );
+    }
+    toast(label.charAt(0).toUpperCase() + label.slice(1) + ' deleted');
+    renderAdminContent();
+  } catch (error) {
+    toast('Delete failed: ' + (error.message || 'try again'));
   }
-  const { data, error } = await db.from(table).delete().eq('id', id).select();
-  if (error) { toast('Delete failed: ' + error.message); return; }
-  if (!data || data.length === 0) { toast('Blocked — RLS prevented delete (0 rows)'); return; }
-  toast(label.charAt(0).toUpperCase() + label.slice(1) + ' deleted');
-  if (table === 'challenges') {
-    // Clear stale launch records pointing at the deleted challenge & refresh challenges in memory
-    state.champLaunches = (state.champLaunches || []).filter(l => l.challenge_id !== id);
-    await loadChallenges();
-  }
-  renderAdminContent();
 }
 
 async function renderAdminFlags() {
@@ -28990,10 +29076,20 @@ async function renderAdminFlags() {
     if (rds) rds.innerHTML = '';
   }
 
-  const { data: queue } = await db.from('moderation_queue').select('*').eq('status','pending').order('created_at',{ascending:false}).limit(50);
   const qs = document.getElementById('modQueueSection');
   if (!qs) return;
-  if (!queue || queue.length === 0) {
+  let queue;
+  try {
+    queue = await fcDbReadV1101(
+      db.from('moderation_queue').select('*').eq('status','pending').order('created_at',{ascending:false}).limit(50),
+      'Moderation queue'
+    ) || [];
+  } catch (error) {
+    console.error('moderation queue load', error);
+    qs.innerHTML = `<div style="font-size:15px;font-weight:700;margin-bottom:8px">🚩 Moderation Queue</div><div style="color:var(--danger);font-size:13px;padding:8px 0 16px">Queue unavailable. ${escapeHtml(error.message || 'Try again.')}</div><button type="button" class="btn btn-ghost" onclick="renderAdminFlags()">Retry</button>`;
+    return;
+  }
+  if (queue.length === 0) {
     qs.innerHTML = `<div style="font-size:15px;font-weight:700;margin-bottom:8px">🚩 Moderation Queue</div><div style="color:var(--text-dim);font-size:13px;padding:8px 0 16px">No items pending review ✅</div><hr style="border:none;border-top:1px solid var(--border);margin-bottom:16px">`;
     return;
   }
@@ -29040,13 +29136,19 @@ async function approveVideoEntry(entryId, urgent = false) {
   // an UPDATE the owner-scoped policy cannot permit, and RLS reports that as
   // success-with-zero-rows. This used to toast 'now live' over an entry that
   // stayed hidden forever. Never trust error alone on a cross-user write.
-  const { data: rows, error } = await db.from('entries')
-    .update({ moderation_status: 'approved', moderation_checked_at: new Date().toISOString() })
-    .eq('id', entryId).select('id');
-  if (error) { toast('Approve failed: ' + error.message); return; }
-  if (!rows || !rows.length) {
-    dlog('mod', 'approve-blocked', { entry: String(entryId).slice(0, 8) });
-    toast('Approve failed — no permission to update this entry'); return;
+  try {
+    await fcDbMutationV1101(
+      db.from('entries')
+        .update({ moderation_status: 'approved', moderation_checked_at: new Date().toISOString() })
+        .eq('id', entryId)
+        .select('id'),
+      'Approve entry',
+      { requireRows: true }
+    );
+  } catch (error) {
+    dlog('mod', 'approve-blocked', { entry: String(entryId).slice(0, 8), error: String(error.message || error).slice(0, 80) });
+    toast('Approve failed: ' + (error.message || 'try again'));
+    return;
   }
   toast('✅ Entry approved — now live');
   await _refreshAfterModeration(); // v701
@@ -29057,11 +29159,19 @@ async function approveVideoEntry(entryId, urgent = false) {
 // 'flagged' is the safe direction — hidden from everyone but the submitter and
 // admin until someone decides again. Never guess back to a MORE permissive state.
 async function undoModeration(entryId) {
-  const { data: rows, error } = await db.from('entries')
-    .update({ moderation_status: 'flagged', moderation_checked_at: new Date().toISOString() })
-    .eq('id', entryId).select('id');
-  if (error) { toast('Undo failed: ' + error.message); return; }
-  if (!rows || !rows.length) { toast('Undo failed — no permission to update this entry'); return; }
+  try {
+    await fcDbMutationV1101(
+      db.from('entries')
+        .update({ moderation_status: 'flagged', moderation_checked_at: new Date().toISOString() })
+        .eq('id', entryId)
+        .select('id'),
+      'Undo moderation',
+      { requireRows: true }
+    );
+  } catch (error) {
+    toast('Undo failed: ' + (error.message || 'try again'));
+    return;
+  }
   toast('↩️ Back in the review queue');
   await _refreshAfterModeration();
   renderAdminFlags();
@@ -29072,11 +29182,21 @@ async function approveAllFlagged() {
   // are deliberately excluded — those always require individual review.
   if (!confirm('Approve all non-urgent flagged videos? Urgent ones are not included.')) return;
   // v701 — row count, not error (v689 fixed the singles and missed this one).
-  const { data: rows, error } = await db.from('entries')
-    .update({ moderation_status: 'approved', moderation_checked_at: new Date().toISOString() })
-    .eq('moderation_status', 'flagged').select('id');
-  if (error) { toast('Bulk approve failed: ' + error.message); return; }
-  if (!rows || !rows.length) { toast('Nothing approved — no permission, or none left'); return; }
+  let rows;
+  try {
+    const result = await fcDbMutationV1101(
+      db.from('entries')
+        .update({ moderation_status: 'approved', moderation_checked_at: new Date().toISOString() })
+        .eq('moderation_status', 'flagged')
+        .select('id'),
+      'Bulk approve',
+      { requireRows: true }
+    );
+    rows = result.data || [];
+  } catch (error) {
+    toast('Bulk approve failed: ' + (error.message || 'nothing eligible'));
+    return;
+  }
   toast(`✅ ${rows.length} video${rows.length === 1 ? '' : 's'} approved`);
   await _refreshAfterModeration();
   renderAdminFlags();
@@ -29119,13 +29239,19 @@ async function rejectVideoEntry(entryId) {
   // v689 — row count, not error. See approveVideoEntry. A silently-failed REJECT
   // is the worse direction of this bug: it tells the admin bad content is gone
   // while it stays live.
-  const { data: rows, error } = await db.from('entries')
-    .update({ moderation_status: 'rejected', moderation_checked_at: new Date().toISOString() })
-    .eq('id', entryId).select('id');
-  if (error) { toast('Reject failed: ' + error.message); return; }
-  if (!rows || !rows.length) {
-    dlog('mod', 'reject-blocked', { entry: String(entryId).slice(0, 8) });
-    toast('Reject failed — no permission to update this entry'); return;
+  try {
+    await fcDbMutationV1101(
+      db.from('entries')
+        .update({ moderation_status: 'rejected', moderation_checked_at: new Date().toISOString() })
+        .eq('id', entryId)
+        .select('id'),
+      'Reject entry',
+      { requireRows: true }
+    );
+  } catch (error) {
+    dlog('mod', 'reject-blocked', { entry: String(entryId).slice(0, 8), error: String(error.message || error).slice(0, 80) });
+    toast('Reject failed: ' + (error.message || 'try again'));
+    return;
   }
   notifyEntryModerated(entryId, 'rejected');
   toast('🚫 Entry rejected — hidden from everyone, submitter notified');
@@ -29138,11 +29264,16 @@ async function removeVideoEntry(entryId) {
   // v689 — row count, not error (see approveVideoEntry). This one has a real
   // admin policy behind it, so it should pass — but a moderation tool must never
   // report an action it did not perform.
-  const { data: rows, error } = await db.from('entries').delete().eq('id', entryId).select('id');
-  if (error) { toast('Delete failed: ' + error.message); return; }
-  if (!rows || !rows.length) {
-    dlog('mod', 'delete-blocked', { entry: String(entryId).slice(0, 8) });
-    toast('Delete failed — no permission to delete this entry'); return;
+  try {
+    await fcDbMutationV1101(
+      db.from('entries').delete().eq('id', entryId).select('id'),
+      'Delete entry',
+      { requireRows: true }
+    );
+  } catch (error) {
+    dlog('mod', 'delete-blocked', { entry: String(entryId).slice(0, 8), error: String(error.message || error).slice(0, 80) });
+    toast('Delete failed: ' + (error.message || 'try again'));
+    return;
   }
   toast('🗑️ Entry deleted — submitter notified');
   await _refreshAfterModeration(); // v701
@@ -29150,19 +29281,38 @@ async function removeVideoEntry(entryId) {
 }
 
 async function approveModerationItem(queueId) {
-  await db.from('moderation_queue').update({ status:'approved', reviewed_by: state.profile.id, reviewed_at: new Date().toISOString() }).eq('id', queueId);
-  renderAdminFlags();
+  try {
+    await fcDbMutationV1101(
+      db.rpc('fc_resolve_moderation_item_v1101', {
+        p_queue_id: queueId,
+        p_action: 'approved'
+      }),
+      'Approve moderation item',
+      { requireData: true }
+    );
+    toast('✅ Report approved');
+    await renderAdminFlags();
+  } catch (error) {
+    toast('Approve failed: ' + (error.message || 'try again'));
+  }
 }
 
 async function removeModerationItem(queueId, contentType, contentId) {
   if (!confirm('Remove this content permanently?')) return;
-  if (contentId) {
-    const tableMap = { post:'posts', comment:'comments', challenge:'challenges', entry:'entries' };
-    const table = tableMap[contentType];
-    if (table) await db.from(table).delete().eq('id', contentId);
+  try {
+    await fcDbMutationV1101(
+      db.rpc('fc_resolve_moderation_item_v1101', {
+        p_queue_id: queueId,
+        p_action: 'removed'
+      }),
+      'Remove reported content',
+      { requireData: true }
+    );
+    toast('🗑️ Content removed');
+    await renderAdminFlags();
+  } catch (error) {
+    toast('Remove failed: ' + (error.message || 'try again'));
   }
-  await db.from('moderation_queue').update({ status:'removed', reviewed_by: state.profile.id, reviewed_at: new Date().toISOString() }).eq('id', queueId);
-  renderAdminFlags();
 }
 
 // Delegated click handler for admin tabs and row actions
@@ -30356,7 +30506,7 @@ document.addEventListener('click', (e) => {
   async function loadFuCreators(){try{const {data}=await db.from('profiles').select('id,name,avatar,interests').neq('id',state.profile.id).limit(100);const chosen=fuInterests;fuSuggestions=(data||[]).map(p=>({...p,overlap:(p.interests||[]).filter(i=>chosen.has(i)).length})).filter(p=>p.overlap>0).sort((a,b)=>b.overlap-a.overlap).slice(0,5);if(!fuSuggestions.length)fuSuggestions=(data||[]).slice(0,5);renderFirstUse();}catch(e){fuSuggestions=[];const el=document.getElementById('fcFuCreators');if(el)el.innerHTML='<div style="padding:20px;text-align:center;color:#a99d95">Creator suggestions will appear in your feed.</div>';}}
   function creatorRows(){return fuSuggestions.map(p=>`<div class="fc-fu-creator"><div class="fc-fu-creator-avatar">${avatar(p.avatar)}</div><div class="fc-fu-creator-info"><b>${safe(p.name||'Creator')}</b><span>${p.overlap?`${p.overlap} shared interest${p.overlap===1?'':'s'}`:'Active creator'}</span></div><button type="button" class="fc-fu-follow ${fuFollows.has(p.id)?'on':''}" data-fu-follow="${safe(p.id)}">${fuFollows.has(p.id)?'Following ✓':'+ Follow'}</button></div>`).join('')}
   function wireCreatorRows(){document.querySelectorAll('[data-fu-follow]').forEach(b=>b.onclick=()=>{const id=b.dataset.fuFollow;if(fuFollows.has(id))fuFollows.delete(id);else fuFollows.add(id);renderFirstUse();});}
-  async function saveFuFollows(){if(fuFollows.size){try{const rows=[...fuFollows].map(id=>({follower_id:state.profile.id,followee_id:id}));await db.from('follows').upsert(rows,{onConflict:'follower_id,followee_id',ignoreDuplicates:true});fuFollows.forEach(id=>state.myFollowing.add(id));}catch(e){console.warn('first use follows',e)}}fuStep=3;renderFirstUse();}
+  async function saveFuFollows(){if(fuFollows.size){try{const rows=[...fuFollows].map(id=>({follower_id:state.profile.id,followee_id:id}));await fcDbMutationV1101(db.from('follows').upsert(rows,{onConflict:'follower_id,followee_id',ignoreDuplicates:true}).select('followee_id'),'Save suggested follows',{requireRows:true});fuFollows.forEach(id=>state.myFollowing.add(id));}catch(e){console.warn('first use follows',e);toast('Some follows could not be saved. You can try again from profiles.')}}fuStep=3;renderFirstUse();}
   function finishFu(action){try{localStorage.setItem(firstUseKey(),'1');localStorage.removeItem(NEW_SIGNUP_KEY);localStorage.setItem(TOUR_KEY,'1');}catch(e){}document.getElementById('fcFirstUseSheet')?.classList.remove('open');if(action==='create')openCreateChallenge();else{state.cFilter='active';switchView('challenges');}}
 
   // v1039 — account creation now requires an appearance choice and interests
@@ -35099,8 +35249,8 @@ body.fc-insights-unavailable-v1081 .pm-tile[onclick*="openCreatorInsightsV1048"]
     btn.disabled=true;
     try{
       const sdRound=ch.sd_phase==='voting'?(ch.sd_round||0):0;
-      let {error}=await db.from('entry_votes').upsert({challenge_id:chId,entry_id:entryId,voter_id:state.profile.id,sd_round:sdRound},{onConflict:'challenge_id,voter_id'});
-      if(error&&/sd_round/.test(error.message||''))({error}=await db.from('entry_votes').upsert({challenge_id:chId,entry_id:entryId,voter_id:state.profile.id},{onConflict:'challenge_id,voter_id'}));
+      let {error}=await fcWithTimeoutV1099(db.from('entry_votes').upsert({challenge_id:chId,entry_id:entryId,voter_id:state.profile.id,sd_round:sdRound},{onConflict:'challenge_id,voter_id'}),20000,'Record vote');
+      if(error&&/sd_round/.test(error.message||''))({error}=await fcWithTimeoutV1099(db.from('entry_votes').upsert({challenge_id:chId,entry_id:entryId,voter_id:state.profile.id},{onConflict:'challenge_id,voter_id'}),20000,'Record vote'));
       if(error)throw error;
       toast(previous?'Vote changed':'Vote recorded');
       try{fcTrackAttributedConversionV1048('attributed_vote',chId,{entry_id:entryId});}catch(e){}
