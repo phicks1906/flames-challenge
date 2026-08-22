@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1096 — Unified Voting State</title>
+<title>FlamesChallenge v1097 — Entry Moderation & Withdrawal Integrity</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1096 · unified-voting-state" />
-<meta name="fc-whatsnew" content="Keeps vote selection and totals synchronized across Compete cards, Challenge Detail, and both entry viewers, including rollback after failed writes." />
+<meta name="fc-build" content="v1097 · entry-moderation-withdrawal-integrity" />
+<meta name="fc-whatsnew" content="Keeps resubmitted entries from remaining rejected and limits self-service entry deletion to the open entry window." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -18224,7 +18224,12 @@ function _renderEvEntry() {
   const actionsEl = document.querySelector('.entry-viewer-actions');
   const existingDel = document.getElementById('evDeleteBtn');
   if (existingDel) existingDel.remove();
-  if (isMe && entry.id && actionsEl) {
+  // v1097 — self-service withdrawal is allowed only while entries are open.
+  // The feed viewer already enforced this rule, but this direct media viewer
+  // exposed Delete during voting and after results, allowing a competitor to
+  // remove a live ballot option and corrupt public counts.
+  const canWithdrawEntry = isMe && entry.id && actionsEl && computeChallengeStatus(ch) === 'submitting';
+  if (canWithdrawEntry) {
     const delBtn = document.createElement('button');
     delBtn.id = 'evDeleteBtn';
     delBtn.textContent = '🗑 Delete';
@@ -22278,8 +22283,18 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
       // If a NEW video was uploaded during edit, it must be re-moderated —
       // reset to pending and re-trigger after save. A caption-only edit doesn't.
       const editSwappedVideo = mediaUrl && ch.media_type === 'video';
+      const editReplacedMedia = !!mediaUrl;
+      const editRewroteText = ch.media_type === 'text';
+      const priorModeration = String(seState.editingEntry?.moderation_status || '').toLowerCase();
+      const needsResubmissionReset = ['pending', 'flagged', 'escalated', 'rejected'].includes(priorModeration);
       if (mediaUrl) { updates.media_url = mediaUrl; updates.poster_url = posterUrl; updates.media_hash = seState._mediaHash || null; }
+      // v1097 — a rejected/flagged entry that passes the replacement-content
+      // checks must not remain permanently hidden. Video replacements re-enter
+      // async review; photo, audio, and rewritten text follow the same 'clear'
+      // state used by a new accepted submission. Caption-only edits never change
+      // moderation state.
       if (editSwappedVideo) updates.moderation_status = 'pending';
+      else if (needsResubmissionReset && (editReplacedMedia || editRewroteText)) updates.moderation_status = 'clear';
       // v672: do NOT chain .select().single() onto the UPDATE. When this edit
       // sets moderation_status='pending', the row can momentarily stop matching
       // the entries_select RLS policy, so the post-update SELECT returns zero
