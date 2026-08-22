@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1099 — Cache, Update & Boot Reliability</title>
+<title>FlamesChallenge v1100 — Safe Areas, Dialogs & Accessible Motion</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1099 · cache-update-boot-reliability" />
-<!-- v1099: preserves the installed worker and push registration, blocks stale downgrade prompts, and releases the app after critical data is ready. -->
-<meta name="fc-whatsnew" content="Faster reliable startup and safer automatic updates without destructive cache or service-worker resets." />
+<meta name="fc-build" content="v1100 · safe-areas-dialogs-accessible-motion" />
+<!-- v1100: adds safe-area consistency, accessible dialogs and controls, larger touch targets, contrast repairs, and Reduced Motion support while preserving challenge preview autoplay. -->
+<meta name="fc-whatsnew" content="Safer iPhone spacing, accessible sheets and controls, clearer contrast, and Reduced Motion support." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -65,6 +65,16 @@
     }
   } catch (e) {}
 })();
+</script>
+<script>
+/* v1100 — shared motion preference. Challenge-card video snippets intentionally
+   remain enabled; this helper is for scrolling and decorative motion only. */
+function fcPrefersReducedMotionV1100() {
+  return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+function fcMotionBehaviorV1100() {
+  return fcPrefersReducedMotionV1100() ? 'auto' : 'smooth';
+}
 </script>
 
 <style>
@@ -8151,7 +8161,7 @@ body.fc-boot-ready-v1095 #fcBootGateV1095{
 
           <div class="cc-field" id="ccUploadField">
             <label>Your entry</label>
-            <div class="cc-upload cc-native-upload" id="ccUploadZone" onclick="document.getElementById('ccFile').click()">
+            <div class="cc-upload cc-native-upload" id="ccUploadZone" role="button" tabindex="0" data-fc-upload-control="1" aria-label="Choose challenge entry media from your library" onclick="document.getElementById('ccFile').click()">
               <div class="cc-upload-art" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 14v5h16v-5"/></svg></div>
               <div><div class="text">Choose from your library</div><div class="upload-hint" id="ccUploadHint">Photo, video, or audio · Maximum 500MB</div></div>
             </div>
@@ -8316,7 +8326,7 @@ body.fc-boot-ready-v1095 #fcBootGateV1095{
           <button type="button" id="cpTypePhoto" class="cp-media-type active" onclick="event.stopPropagation();setCpMediaType('photo')">📷 Photo/Video</button>
           <button type="button" id="cpTypeAudio" class="cp-media-type" onclick="event.stopPropagation();setCpMediaType('audio')">🎙️ Audio</button>
         </div>
-        <div class="cc-upload" id="cpUploadZone" onclick="if(cpState.tabSwitching)return;document.getElementById('cpFile').click()">
+        <div class="cc-upload" id="cpUploadZone" role="button" tabindex="0" data-fc-upload-control="1" aria-label="Choose post photo or video from your library" onclick="if(cpState.tabSwitching)return;document.getElementById('cpFile').click()">
           <div class="icon">📤</div>
           <div class="text">Choose from library</div>
           <div class="upload-hint" id="cpUploadHint">Photo or video · Max 500MB</div>
@@ -8329,7 +8339,7 @@ body.fc-boot-ready-v1095 #fcBootGateV1095{
         <div class="cc-preview" id="cpPreview" style="display:none"></div>
         <div id="cpAudioAddZone" style="display:none;margin-top:10px">
           <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:6px">Add audio track <span class="hint">(optional — tap Choose File for audio)</span></label>
-          <div class="cc-upload" style="padding:12px" onclick="document.getElementById('cpAudioFile').click()">
+          <div class="cc-upload" id="cpAudioUploadZone" role="button" tabindex="0" data-fc-upload-control="1" aria-label="Choose an audio track from your library" style="padding:12px" onclick="document.getElementById('cpAudioFile').click()">
             <div class="icon" style="font-size:20px">🎵</div>
             <div class="text" style="font-size:13px">Tap to add audio</div>
           </div>
@@ -8407,7 +8417,7 @@ body.fc-boot-ready-v1095 #fcBootGateV1095{
       <div class="ps-ember" id="psEmber" style="display:none"></div>
       <div class="ps-social-line" id="psSocialLine"></div>
       <div class="ps-stats" id="psStats" style="display:none"></div>
-      <button class="btn btn-primary ps-follow-btn" id="psFollowBtn" style="display:none"></button>
+      <button class="btn btn-primary ps-follow-btn" id="psFollowBtn" style="display:none" aria-label="Follow member"></button>
       <button class="btn ps-msg-btn" id="psMessageBtn" style="display:none" onclick="if(psState&&psState.profile)openDmWith(psState.profile.id)">💬 Message</button>
     </div>
     <div class="ps-tabs">
@@ -9115,8 +9125,8 @@ body.fc-boot-ready-v1095 #fcBootGateV1095{
     <!-- v800 — the old Add/Remove photo row moved into .pm-tools above the
          preview. Hidden stubs kept so updatePromoteMediaButtons() has targets. -->
     <div id="promoteMediaRow" style="display:none">
-      <button id="promoteAddPhotoBtn"></button>
-      <button id="promoteRemovePhotoBtn"></button>
+      <button id="promoteAddPhotoBtn" aria-label="Add or change promotional photo"></button>
+      <button id="promoteRemovePhotoBtn" aria-label="Remove promotional photo"></button>
     </div>
     <div id="flyerGroupPicker" style="display:none;margin-top:10px;background:var(--bg-2);border-radius:var(--radius);padding:10px;">
       <div style="font-size:13px;color:var(--text-muted);margin-bottom:8px;">Choose a group:</div>
@@ -9174,7 +9184,7 @@ body.fc-boot-ready-v1095 #fcBootGateV1095{
         <div id="seTip" style="display:none;background:var(--surface-2);border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:12px;color:var(--text-muted);line-height:1.5;">
           💡 <strong>Tip:</strong> Trim your video to under 2 minutes in your Photos app before uploading for the fastest experience.
         </div>
-        <div class="cc-upload" id="seUploadZone" onclick="document.getElementById('seFile').click()">
+        <div class="cc-upload" id="seUploadZone" role="button" tabindex="0" data-fc-upload-control="1" aria-label="Choose entry media from your library" onclick="document.getElementById('seFile').click()">
           <div class="icon">📤</div>
           <div class="text">Tap to upload</div>
           <div class="upload-hint" id="seUploadHint">Max 500MB · Keep videos under 2 min for best results</div>
@@ -9594,7 +9604,7 @@ body.fc-boot-ready-v1095 #fcBootGateV1095{
     </div>
     <!-- Action bar — true sibling of the scroll region, never nested inside it -->
     <div style="flex-shrink:0;display:flex;gap:10px;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--border);background:var(--surface);z-index:2;">
-      <button id="fvChallengeBtn" class="btn btn-primary" style="flex:1;padding:12px;font-size:14px;" onclick="openFeedViewerChallenge()"></button>
+      <button id="fvChallengeBtn" class="btn btn-primary" style="flex:1;padding:12px;font-size:14px;" onclick="openFeedViewerChallenge()" aria-label="View challenge details"></button>
       <button id="fvPromoteBtn" class="btn btn-ghost" style="flex:0 0 auto;padding:12px 16px;font-size:14px;white-space:nowrap;" onclick="promoteFeedViewerChallenge()">📣 Promote</button>
     </div>
   </div>
@@ -11465,12 +11475,17 @@ function showAuth() {
   resetAuthView();
   const vid = document.getElementById('authBgVideo');
   if (vid) {
-    if (!vid.src) {
-      vid.src = 'https://vz-9735d175-590.b-cdn.net/52fb45a9-d96e-408c-9d2a-bfbfa9545eea/playlist.m3u8';
-      attachHlsIfNeeded(vid);
+    if (fcPrefersReducedMotionV1100()) {
+      try { vid.pause(); } catch (_) {}
+      document.getElementById('authVideoBg').style.display = 'none';
+    } else {
+      if (!vid.src) {
+        vid.src = 'https://vz-9735d175-590.b-cdn.net/52fb45a9-d96e-408c-9d2a-bfbfa9545eea/playlist.m3u8';
+        attachHlsIfNeeded(vid);
+      }
+      vid.play().catch(() => {});
+      document.getElementById('authVideoBg').style.display = 'block';
     }
-    vid.play().catch(() => {});
-    document.getElementById('authVideoBg').style.display = 'block';
   }
 }
 function showApp() {
@@ -11544,7 +11559,7 @@ function switchView(view) {
     // (Ready E 3W, Hicks Inc 2W) were never invited because the manual launch
     // fired on the 7th. The admin ⚡ Launch button remains for beta testing.
   }
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  window.scrollTo({ top: 0, behavior: fcMotionBehaviorV1100() });
 }
 
 /* ---------- CREATE SHEET ---------- */
@@ -11862,7 +11877,7 @@ function applyFeedNewItems() {
   hideFeedNewPill();
   renderFeed();
   state.pendingFeedCount = 0;
-  try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { window.scrollTo(0, 0); }
+  try { window.scrollTo({ top: 0, behavior: fcMotionBehaviorV1100() }); } catch (e) { window.scrollTo(0, 0); }
 }
 
 function updateFeedBaseline() {
@@ -13499,7 +13514,7 @@ function openNotifTarget(n) {
 function scrollToPost(postId) {
   const card = document.querySelector(`.post-card[data-pid="${postId}"]`);
   if (!card) return;
-  try { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
+  try { card.scrollIntoView({ behavior: fcMotionBehaviorV1100(), block: 'center' }); } catch (e) {}
   card.classList.remove('post-highlight'); // restart animation if same post
   void card.offsetWidth;
   card.classList.add('post-highlight');
@@ -15583,7 +15598,7 @@ function jumpToPoll(pollId) {
   const tryScroll = (attempt = 0) => {
     const card = document.querySelector(`#pollsGrid .poll-card[data-pid="${pollId}"]`);
     if (card) {
-      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      card.scrollIntoView({ behavior: fcMotionBehaviorV1100(), block: 'center' });
       card.classList.add('poll-highlight');
       setTimeout(() => card.classList.remove('poll-highlight'), 2000);
     } else if (attempt < 12) {
@@ -19358,10 +19373,9 @@ async function maybeShowCelebration() {
         variant = 'celeb-hof';
         html = `
           <div class="celeb-ring">
-            <video autoplay muted loop playsinline
-              src="https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/media/ring%20hof.mp4"
-              poster="https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/media/ring_hof_poster.jpeg"
-              onerror="this.remove()"></video>
+            ${fcPrefersReducedMotionV1100()
+              ? '<img class="celeb-coin" src="https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/media/ring_hof_poster.jpeg" alt="">'
+              : '<video autoplay muted loop playsinline src="https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/media/ring%20hof.mp4" poster="https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/media/ring_hof_poster.jpeg" onerror="this.remove()"></video>'}
             <img class="celeb-crest" src="${LADDER_BADGE_BASE}${stage.key}.png" onerror="this.remove()" alt="">
           </div>
           <div class="celeb-kicker">Hall of Fame</div>
@@ -22012,7 +22026,7 @@ async function voteOnEntry(entryId) {
   requestAnimationFrame(() => {
     const chosen = document.querySelector(`.cd-entry[data-entry-id="${entryId}"]`);
     if (chosen) {
-      chosen.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      chosen.scrollIntoView({ behavior: fcMotionBehaviorV1100(), inline: 'center', block: 'nearest' });
       spawnEmberBurst(chosen);
     }
   });
@@ -26821,7 +26835,7 @@ function showCpError(msg) {
   // v682: the error div sits above the submit button, so if the sheet is
   // scrolled it can appear off-screen and the failure reads as "I tapped Post
   // and nothing happened". Pull it into view so an error is never silent.
-  try { err.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {}
+  try { err.scrollIntoView({ block: 'center', behavior: fcMotionBehaviorV1100() }); } catch (_) {}
 }
 
 function cpFileChangeHandler(e) {
@@ -27625,6 +27639,7 @@ function renderProfileSheet() {
     btn.style.display = 'inline-flex';
     const isFollowing = state.myFollowing.has(prof.id);
     btn.textContent = isFollowing ? '✓ Following' : '+ Follow';
+    btn.setAttribute('aria-label', isFollowing ? 'Unfollow member' : 'Follow member');
     btn.classList.toggle('following', isFollowing);
     btn.onclick = () => toggleFollowFromSheet(prof.id);
   }
@@ -27821,6 +27836,7 @@ async function toggleFollowFromSheet(userId) {
     state.followingCounts[state.profile.id] = (state.followingCounts[state.profile.id] || 0) + 1;
   }
   btn.textContent = !wasFollowing ? '✓ Following' : '+ Follow';
+  btn.setAttribute('aria-label', !wasFollowing ? 'Unfollow member' : 'Follow member');
   btn.classList.toggle('following', !wasFollowing);
   renderProfileSheet(); // refresh follower stat
 
@@ -28290,7 +28306,7 @@ function openEntrantsSheet() {
       const eid = row.dataset.jumpEntry;
       closeEntrantsSheet();
       const card = document.querySelector(`.cd-entry[data-entry-id="${eid}"]`);
-      if (card) card.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      if (card) card.scrollIntoView({ behavior: fcMotionBehaviorV1100(), inline: 'center', block: 'nearest' });
     });
   });
 
@@ -28426,7 +28442,7 @@ function _wireEntryDots(root) {
       const d = e.target.closest('.fcc-dot');
       if (!d) return;
       const st = step();
-      if (st) sc.scrollTo({ left: (+d.dataset.i || 0) * st, behavior: 'smooth' });
+      if (st) sc.scrollTo({ left: (+d.dataset.i || 0) * st, behavior: fcMotionBehaviorV1100() });
     });
     update();
   });
@@ -30512,7 +30528,7 @@ window.fcPublicFeedDiagnostics = function(){
       const n=Number(el.dataset.ccProgress); el.classList.toggle('active',n===step); el.classList.toggle('done',n<step);
     });
   }
-  function showError(msg){showCcError(msg); byId('ccError')?.scrollIntoView({behavior:'smooth',block:'center'});}
+  function showError(msg){showCcError(msg); byId('ccError')?.scrollIntoView({behavior: fcMotionBehaviorV1100(),block:'center'});}
   function clearError(){byId('ccError')?.classList.remove('show')}
   function selectedHours(id,fallback){const el=byId(id); return parseInt(el?.dataset.hours,10)||fallback}
   function formatDate(value){if(!value)return 'Not set';const d=new Date(value);return isNaN(d)?'Not set':d.toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}
@@ -33650,7 +33666,7 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
     const target=byId('fc-rule-'+section); if(!target)return;
     document.querySelectorAll('#fcRulesBodyV1047 details').forEach(d=>d.open=d===target); target.open=true;
     document.querySelectorAll('#fcRulesNavV1047 [data-fc-rule-nav]').forEach(b=>b.classList.toggle('active',b.dataset.fcRuleNav===section));
-    setTimeout(()=>target.scrollIntoView({behavior:'smooth',block:'start'}),30);
+    setTimeout(()=>target.scrollIntoView({behavior: fcMotionBehaviorV1100(),block:'start'}),30);
   }
   window.openCompetitionRules=function(section='overview'){
     const sheet=byId('competitionRulesSheet'); if(!sheet)return;
@@ -33874,7 +33890,7 @@ body.theme-light .fc-score-metric-v1032,body.theme-light .fc-score-cutoff-v1032,
     hero.insertAdjacentElement('afterend',box);
     box.querySelector('[data-v1054-action="edit"]')?.addEventListener('click',()=>openSubmitEntry(d.mine));
     box.querySelector('[data-v1054-action="enter"]')?.addEventListener('click',()=>openSubmitEntry());
-    box.querySelector('[data-v1054-action="results"]')?.addEventListener('click',()=>document.getElementById('cdResultsPanel')?.scrollIntoView({behavior:'smooth',block:'start'}));
+    box.querySelector('[data-v1054-action="results"]')?.addEventListener('click',()=>document.getElementById('cdResultsPanel')?.scrollIntoView({behavior: fcMotionBehaviorV1100(),block:'start'}));
     box.querySelector('[data-v1054-action="insights"]')?.addEventListener('click',()=>openCreatorInsightsV1048(ch.id));
     box.querySelector('[data-v1054-action="ember"]')?.addEventListener('click',()=>fcOpenEmberWithQuestion?.('What matters next in this challenge?'));
     const info=document.getElementById('fcChallengeInfoV1043');if(info){info.classList.add('fc-v1054-rule-panel');info.open=false;}
@@ -34406,7 +34422,7 @@ html[data-theme="light"] body .fc-score-race-v1032 .fc-score-metric-v1032{box-sh
     if(!id){ if(typeof openProfile==='function') openProfile(); return; }
     if(ownOpen()&&String(psState?.userId||'')===String(id)){
       prepareOwnPage();
-      sheet()?.scrollTo({top:0,behavior:'smooth'});
+      sheet()?.scrollTo({top:0,behavior: fcMotionBehaviorV1100()});
       return;
     }
     return window.openUserProfile(id);
@@ -35639,5 +35655,413 @@ html[data-theme="light"] #profileSheet.fc-profile-v1036 .cd-sheet-header{backgro
   #profileSheet.fc-profile-v1036 .cd-sheet-inner{padding-inline:12px!important}
 }
 </style>
+
+<style id="fc-v1100-safe-dialog-motion-css">
+/* v1100 — Safe Areas, Dialogs & Accessible Motion. No visual redesign. */
+:root{
+  --fc-sheet-header-h:calc(72px + env(safe-area-inset-top,0px));
+  --fc-bottom-nav-clearance:calc(80px + env(safe-area-inset-bottom,0px));
+  --text-muted:#aa9587;
+}
+body.theme-light,
+html[data-theme="light"] body{
+  --text-muted:#74645a;
+  --ember:#c94312;
+  --gold:#8a5a00;
+  --success:#12753a;
+}
+
+/* Fixed navigation must reserve the physical home-indicator area too. */
+main{padding-bottom:var(--fc-bottom-nav-clearance)!important}
+body.ticker-visible main{padding-bottom:calc(112px + env(safe-area-inset-bottom,0px))!important}
+.feed-new-pill{top:calc(var(--nav-h) + 8px)!important}
+
+/* The record tabs sit below the full fixed header, including the status inset. */
+#recordSheet .record-tabs{
+  top:var(--fc-sheet-header-h)!important;
+  margin-top:var(--fc-sheet-header-h)!important;
+}
+
+/* Post and Entry submit controls stay above the home indicator. */
+.cc-submit-area{
+  bottom:calc(-1px - env(safe-area-inset-bottom,0px))!important;
+  padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))!important;
+}
+
+/* Preserve icon scale; enlarge only the surrounding tap area. */
+.fc-a11y-icon-hit-v1100{
+  min-width:44px!important;
+  min-height:44px!important;
+}
+.record-tab,
+.record-sort-btn,
+.ps-tab,
+#leaderboardViewSection .fc-score-you-actions-v1032 button,
+#leaderboardViewSection .fc-level-help-row-v1054 button,
+#profileSheet.fc-profile-v1036 .fc-profile-action-row .btn,
+#profileSheet.fc-profile-v1036 .fc-profile-edit,
+#profileSheet.fc-profile-v1036 .fc-profile-progress-btn{
+  min-height:44px!important;
+}
+
+/* Upload zones remain visually identical but now communicate interaction. */
+[data-fc-upload-control="1"]{cursor:pointer}
+
+/* One visible keyboard-focus system across native and custom controls. */
+:where(button,a[href],input,textarea,select,[role="button"],[tabindex]:not([tabindex="-1"])):focus-visible{
+  outline:3px solid var(--ember-bright)!important;
+  outline-offset:2px!important;
+  box-shadow:0 0 0 2px var(--bg)!important;
+}
+
+body.fc-dialog-open-v1100{overflow:hidden!important}
+.fc-dialog-root-v1100:focus{outline:none}
+
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto!important}
+  #celebrationOverlay.open,
+  .modal-backdrop.open,
+  .cc-sheet.open,
+  .cd-sheet.open,
+  .entrants-backdrop.open{animation:none!important}
+  #authVideoBg video{display:none!important}
+}
+</style>
+<script id="fc-v1100-dialog-accessibility-js">
+/* v1100 — shared accessibility controller for all existing modal/sheet
+   generations. It adds semantics and keyboard behavior without replacing any
+   product-specific open/close functions. */
+(function initDialogAccessibilityV1100(){
+  const SELECTOR = [
+    '.modal-backdrop',
+    '.cc-sheet',
+    '.cd-sheet',
+    '.entrants-backdrop',
+    '#cropModal',
+    '#tourOverlay',
+    '#celebrationOverlay',
+    '.fc-public-browser',
+    '#emberGuidanceModal'
+  ].join(',');
+
+  const labels = {
+    boostSheet:'Championship Score details',
+    promoteModal:'Promote challenge',
+    userProfileModal:'Member profile',
+    entryViewerSheet:'Entry viewer',
+    cropModal:'Crop photo',
+    tourOverlay:'Welcome tour',
+    followingSheet:'Following and followers',
+    feedViewerSheet:'Challenge entry viewer',
+    celebrationOverlay:'Achievement',
+    getAppPrompt:'Get the FlamesChallenge app'
+  };
+
+  const closeFns = {
+    tickerSettingsSheet:'closeTickerSettings', interestsSheet:'closeInterestsSheet',
+    boostSheet:'closeBoostSheet', getAppPrompt:'dismissGetAppPrompt',
+    getAppSheet:'closeGetAppSheet', createSheet:'closeCreateSheet',
+    createChallengeSheet:'closeCreateChallenge', createPollSheet:'closeCreatePoll',
+    createPostSheet:'closeCreatePost', challengeDetailSheet:'closeChallengeDetail',
+    entrantsSheet:'closeEntrantsSheet', profileSheet:'closeProfileSheet',
+    dmListSheet:'closeDmList', dmThreadSheet:'closeDmThread',
+    dmComposeSheet:'closeDmCompose', dmSettingsSheet:'closeDmSettings',
+    notifSheet:'closeNotifs', recordSheet:'closeRecordSheet',
+    postSheet:'closePostView', commentSheet:'closeComments',
+    promoteModal:'closePromote', notifSettingsModal:'closeNotifSettings',
+    submitEntrySheet:'closeSubmitEntry', profileModal:'closeModals',
+    guidelinesModal:'closeGuidelines', competitionRulesSheet:'closeCompetitionRules',
+    creatorInsightsSheetV1048:'closeCreatorInsightsV1048', emberModal:'closeEmber',
+    editProfileModal:'closeEditProfile', userProfileModal:'closeUserProfile',
+    entryViewerSheet:'closeEntryViewer', cropModal:'cancelCrop',
+    tourOverlay:'endTour', followingSheet:'closeFollowingSheet',
+    feedViewerSheet:'closeFeedViewer', likersSheet:'closeLikersSheet',
+    reportSheet:'closeReportSheet', badgeLegendSheet:'closeBadgeLegend',
+    findPeopleModal:'closeFindPeople', groupsModal:'closeGroupsModal',
+    groupEditorModal:'closeGroupEditor', celebrationOverlay:'closeCelebration'
+  };
+
+  const wasOpen = new WeakMap();
+  const openOrder = new WeakMap();
+  const opener = new WeakMap();
+  const isolated = [];
+  let sequence = 0;
+  let lastInteraction = null;
+  let syncQueued = false;
+  let activeRoot = null;
+
+  const focusableSelector = [
+    'button:not([disabled])','a[href]','input:not([disabled]):not([type="hidden"])',
+    'select:not([disabled])','textarea:not([disabled])','[contenteditable="true"]',
+    '[tabindex]:not([tabindex="-1"])','[role="button"]'
+  ].join(',');
+
+  function visible(el){
+    if (!el || el.hidden) return false;
+    const cs = getComputedStyle(el);
+    return cs.display !== 'none' && cs.visibility !== 'hidden';
+  }
+
+  function isOpen(root){
+    if (!root || !visible(root)) return false;
+    if (root.classList.contains('open')) return true;
+    if (root.id === 'cropModal' || root.id === 'tourOverlay') {
+      return getComputedStyle(root).display !== 'none';
+    }
+    if (root.matches('.fc-public-browser')) {
+      return getComputedStyle(root).display !== 'none';
+    }
+    return false;
+  }
+
+  function titleElement(root){
+    return root.querySelector('h1,h2,h3,[data-dialog-title]');
+  }
+
+  function prepare(root){
+    if (!root) return;
+    if (!observedRoots.has(root)) {
+      rootObserver.observe(root,{attributes:true,attributeFilter:['class','style','hidden']});
+      observedRoots.add(root);
+    }
+    if (root.dataset.fcDialogReadyV1100 === '1') return;
+    root.dataset.fcDialogReadyV1100 = '1';
+    root.classList.add('fc-dialog-root-v1100');
+    root.setAttribute('role','dialog');
+    root.setAttribute('aria-modal','true');
+    if (!root.hasAttribute('tabindex')) root.setAttribute('tabindex','-1');
+
+    const title = titleElement(root);
+    if (title) {
+      if (!title.id) title.id = 'fcDialogTitleV1100_' + (root.id || Math.random().toString(36).slice(2));
+      root.setAttribute('aria-labelledby',title.id);
+      root.removeAttribute('aria-label');
+    } else {
+      root.setAttribute('aria-label',labels[root.id] || 'Dialog');
+    }
+  }
+
+  function iconLabel(button){
+    if (button.hasAttribute('aria-label') || button.hasAttribute('aria-labelledby') || button.title) return;
+    const text = (button.textContent || '').trim();
+    const call = button.getAttribute('onclick') || '';
+    let label = '';
+    if (/close|dismiss|cancel|endTour/i.test(call) || /^[×✕✖]$/.test(text)) label = 'Close';
+    else if (/evNavigate\(-1\)/.test(call) || /^[‹←]$/.test(text)) label = 'Previous';
+    else if (/evNavigate\(1\)/.test(call) || /^[›→]$/.test(text)) label = 'Next';
+    else if (text === '✏️') label = 'New message';
+    else if (text === '⚙️') label = 'Settings';
+    else if (text === '➤') label = 'Send';
+    if (label) button.setAttribute('aria-label',label);
+  }
+
+  function isIconOnly(button){
+    const text = (button.textContent || '').trim();
+    if (!text) return !!button.querySelector('svg,img');
+    return text.length <= 2 || /^[×✕✖‹›←→+⋯…⚙️✏️➤🔥]$/u.test(text);
+  }
+
+  function prepareControls(scope){
+    (scope || document).querySelectorAll('button').forEach(button => {
+      iconLabel(button);
+      if (isIconOnly(button)) button.classList.add('fc-a11y-icon-hit-v1100');
+    });
+  }
+
+  function focusables(root){
+    return Array.from(root.querySelectorAll(focusableSelector)).filter(el => {
+      if (!visible(el)) return false;
+      if (el.closest('[inert]')) return false;
+      return true;
+    });
+  }
+
+  function clearIsolation(){
+    while (isolated.length) {
+      const rec = isolated.pop();
+      if (!rec.el || !rec.el.isConnected) continue;
+      rec.el.inert = rec.inert;
+      if (rec.ariaHidden === null) rec.el.removeAttribute('aria-hidden');
+      else rec.el.setAttribute('aria-hidden',rec.ariaHidden);
+    }
+  }
+
+  function isolateBackground(root){
+    clearIsolation();
+    let branch = root;
+    while (branch && branch !== document.body) {
+      const parent = branch.parentElement;
+      if (!parent) break;
+      Array.from(parent.children).forEach(sibling => {
+        if (sibling === branch || /^(SCRIPT|STYLE|LINK)$/.test(sibling.tagName)) return;
+        isolated.push({
+          el:sibling,
+          inert:!!sibling.inert,
+          ariaHidden:sibling.getAttribute('aria-hidden')
+        });
+        sibling.inert = true;
+        sibling.setAttribute('aria-hidden','true');
+      });
+      branch = parent;
+    }
+  }
+
+  function topRoot(openRoots){
+    return openRoots.slice().sort((a,b) => {
+      const za = parseInt(getComputedStyle(a).zIndex,10) || 0;
+      const zb = parseInt(getComputedStyle(b).zIndex,10) || 0;
+      if (za !== zb) return za - zb;
+      return (openOrder.get(a) || 0) - (openOrder.get(b) || 0);
+    }).pop() || null;
+  }
+
+  function focusInitial(root){
+    requestAnimationFrame(() => {
+      if (activeRoot !== root || !isOpen(root)) return;
+      const candidates = focusables(root);
+      const preferred = candidates.find(el => el.hasAttribute('autofocus'))
+        || candidates.find(el => /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))
+        || candidates.find(el => !/close|back/i.test(el.getAttribute('aria-label') || ''))
+        || candidates[0]
+        || root;
+      try { preferred.focus({preventScroll:true}); } catch (_) { try { preferred.focus(); } catch (_) {} }
+    });
+  }
+
+  function sync(){
+    syncQueued = false;
+    const roots = Array.from(document.querySelectorAll(SELECTOR));
+    roots.forEach(prepare);
+    prepareControls(document);
+
+    const openRoots = [];
+    roots.forEach(root => {
+      const open = isOpen(root);
+      const prior = !!wasOpen.get(root);
+      if (open && !prior) {
+        openOrder.set(root,++sequence);
+        const candidate = lastInteraction && !root.contains(lastInteraction) ? lastInteraction : document.activeElement;
+        if (candidate && candidate !== document.body && !root.contains(candidate)) opener.set(root,candidate);
+      }
+      if (!open && prior) {
+        root.setAttribute('aria-hidden','true');
+      } else if (open) {
+        root.removeAttribute('aria-hidden');
+        openRoots.push(root);
+      } else {
+        root.setAttribute('aria-hidden','true');
+      }
+      wasOpen.set(root,open);
+    });
+
+    const next = topRoot(openRoots);
+    if (next) {
+      document.body.classList.add('fc-dialog-open-v1100');
+      isolateBackground(next);
+      if (next !== activeRoot) focusInitial(next);
+    } else {
+      document.body.classList.remove('fc-dialog-open-v1100');
+      clearIsolation();
+      if (activeRoot) {
+        const target = opener.get(activeRoot);
+        if (target && target.isConnected) {
+          requestAnimationFrame(() => {
+            try { target.focus({preventScroll:true}); } catch (_) { try { target.focus(); } catch (_) {} }
+          });
+        }
+      }
+    }
+    activeRoot = next;
+  }
+
+  function queueSync(){
+    if (syncQueued) return;
+    syncQueued = true;
+    requestAnimationFrame(sync);
+  }
+
+  function closeTop(root){
+    const fn = closeFns[root.id];
+    if (fn && typeof window[fn] === 'function') {
+      window[fn]();
+      return;
+    }
+    const candidate = root.querySelector(
+      'button[aria-label="Close"],button[onclick*="close" i],button[onclick*="dismiss" i],button[onclick*="cancel" i],button[onclick*="endTour"]'
+    );
+    if (candidate) candidate.click();
+  }
+
+  document.addEventListener('pointerdown',event => {
+    lastInteraction = event.target instanceof Element ? event.target.closest('button,a,[role="button"],[tabindex],input,textarea,select') || event.target : null;
+  },true);
+
+  document.addEventListener('keydown',event => {
+    const root = activeRoot;
+    if (!root) return;
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      closeTop(root);
+      return;
+    }
+
+    if (event.key === 'Tab') {
+      const items = focusables(root);
+      if (!items.length) {
+        event.preventDefault();
+        root.focus();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      } else if (!root.contains(document.activeElement)) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+  },true);
+
+  document.addEventListener('keydown',event => {
+    if ((event.key === 'Enter' || event.key === ' ') && event.target instanceof Element && event.target.matches('[data-fc-upload-control="1"]')) {
+      event.preventDefault();
+      event.target.click();
+    }
+  });
+
+  const observedRoots = new WeakSet();
+  const rootObserver = new MutationObserver(queueSync);
+  const treeObserver = new MutationObserver(records => {
+    let addedDialog = false;
+    for (const record of records) {
+      record.addedNodes.forEach(node => {
+        if (node.nodeType !== 1) return;
+        prepareControls(node);
+        if (node.matches?.(SELECTOR)) {
+          prepare(node);
+          addedDialog = true;
+        }
+        node.querySelectorAll?.(SELECTOR).forEach(root => {
+          prepare(root);
+          addedDialog = true;
+        });
+      });
+    }
+    if (addedDialog) queueSync();
+  });
+
+  treeObserver.observe(document.documentElement,{subtree:true,childList:true});
+
+  prepareControls(document);
+  sync();
+})();
+</script>
 </body>
 </html>
