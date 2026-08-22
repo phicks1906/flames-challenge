@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1089 — Flame Visual System</title>
+<title>FlamesChallenge v1090 — Three-Theme Appearance</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1089 · flame-visual-system" />
-<meta name="fc-whatsnew" content="Introduces a warmer flame-themed visual system across dark and light modes and removes the manual update control." />
+<meta name="fc-build" content="v1090 · three-theme-appearance" />
+<meta name="fc-whatsnew" content="Adds a third orange-dominant Flame appearance while preserving Dark and Light, and replaces the purple Championship launch action with the FlamesChallenge palette." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -52,11 +52,15 @@
   // a half-dark screen. Both defaults must agree, and both flags must always
   // be written together. Keep this in sync with getTheme().
   try {
-    var t = localStorage.getItem('fc_theme') || 'dark';
+    var saved = localStorage.getItem('fc_theme') || 'dark';
+    var t = (saved === 'light' || saved === 'flame' || saved === 'dark') ? saved : 'dark';
     document.documentElement.setAttribute('data-theme', t);
-    if (t === 'light') {
-      // Body doesn't exist yet — mirror to it once it does.
-      document.addEventListener('DOMContentLoaded', function(){ document.body.classList.add('theme-light'); });
+    if (t === 'light' || t === 'flame') {
+      // Body doesn't exist yet — mirror the selected appearance once it does.
+      document.addEventListener('DOMContentLoaded', function(){
+        document.body.classList.toggle('theme-light', t === 'light');
+        document.body.classList.toggle('theme-flame', t === 'flame');
+      });
     }
   } catch (e) {}
 })();
@@ -1105,7 +1109,8 @@ html { scroll-padding-top: var(--nav-h); }
 .lb-champ-section-cat { font-family: var(--font-display); font-size: 18px; text-transform: uppercase; letter-spacing: 0.04em; flex: 1; }
 .lb-champ-qualifiers { font-size: 12px; color: var(--text-muted); flex-shrink: 0; }
 .lb-champ-launch-btn {
-  background: linear-gradient(135deg, #7c3aed, #6d28d9);
+  background: linear-gradient(135deg, #ffbf54, #ff7b2e 58%, #e93618);
+  box-shadow: 0 10px 26px -16px rgba(255,112,36,.72);
   border: none; color: #fff;
   padding: 6px 12px; border-radius: 100px;
   font-family: inherit; font-weight: 700; font-size: 12px;
@@ -7594,6 +7599,10 @@ window.__fcBuildV1071={build:'v1071',basedOn:'v1070',fix:'normal iPhone horizont
           <span class="fc-signup-theme-preview dark"><i></i><i></i><i></i></span>
           <b>Dark</b><small>Black and bronze competition screens</small>
         </button>
+        <button type="button" class="fc-signup-theme-choice fc-signup-theme-choice-flame" data-signup-theme="flame" role="radio" aria-checked="false">
+          <span class="fc-signup-theme-preview flame"><i></i><i></i><i></i></span>
+          <b>Flame</b><small>Orange-dominant arena with dark competition cards</small>
+        </button>
       </div>
       <div id="signupThemeError" class="fc-signup-step-error" aria-live="polite"></div>
       <button id="signupThemeContinue" class="btn btn-primary" type="button" style="width:100%" disabled>Continue to interests →</button>
@@ -10263,25 +10272,30 @@ function getTheme() {
   try { return localStorage.getItem(THEME_KEY) || 'dark'; } catch (e) { return 'dark'; }
 }
 function applyTheme(t) {
-  // Both flags, always. Styles are written against BOTH html[data-theme] and
-  // body.theme-light; setting only one leaves the page in a mixed state.
-  document.documentElement.setAttribute('data-theme', t === 'light' ? 'light' : 'dark');
-  if (t === 'light') document.body.classList.add('theme-light');
-  else document.body.classList.remove('theme-light');
-  const isLight = t === 'light';
+  // v1090 — three explicit appearances. Keep the html attribute and body
+  // classes synchronized so no screen can inherit a mixed theme.
+  const value = (t === 'light' || t === 'flame' || t === 'dark') ? t : 'dark';
+  document.documentElement.setAttribute('data-theme', value);
+  document.body.classList.remove('theme-light', 'theme-flame');
+  if (value === 'light') document.body.classList.add('theme-light');
+  if (value === 'flame') document.body.classList.add('theme-flame');
+  const isLight = value === 'light';
+  const isFlame = value === 'flame';
+  const pageColor = isLight ? '#fbf6f0' : (isFlame ? '#96290c' : '#050201');
   const themeColor = document.querySelector('meta[name="theme-color"]');
-  if (themeColor) themeColor.setAttribute('content', isLight ? '#f6f5f3' : '#000000');
+  if (themeColor) themeColor.setAttribute('content', pageColor);
   document.documentElement.style.colorScheme = isLight ? 'light' : 'dark';
-  document.documentElement.style.backgroundColor = isLight ? '#f6f5f3' : '#000000';
-  document.body.style.backgroundColor = isLight ? '#f6f5f3' : '#000000';
+  document.documentElement.style.backgroundColor = pageColor;
+  document.body.style.backgroundColor = pageColor;
   const icon = document.getElementById('themeIcon');
   const label = document.getElementById('themeState');
-  if (icon) icon.textContent = t === 'light' ? '☀️' : '🌙';
-  if (label) label.textContent = t === 'light' ? 'Light' : 'Dark';
+  if (icon) icon.textContent = isLight ? '☀️' : (isFlame ? '🔥' : '🌙');
+  if (label) label.textContent = isLight ? 'Light' : (isFlame ? 'Flame' : 'Dark');
 }
 function toggleTheme() {
   const cur = getTheme();
-  const next = cur === 'light' ? 'dark' : 'light';
+  const order = ['dark', 'light', 'flame'];
+  const next = order[(Math.max(0, order.indexOf(cur)) + 1) % order.length];
   try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
   applyTheme(next);
   // v748 — the class flip re-cascades every var(--bg) instantly, but cards
@@ -10592,7 +10606,7 @@ function togglePw(id, btn) {
 
 function switchAuthTab(tab) {
   setSignupOnboardingMode(false);
-  document.getElementById('authView')?.classList.remove('fc-onboarding-light', 'fc-onboarding-dark');
+  document.getElementById('authView')?.classList.remove('fc-onboarding-light', 'fc-onboarding-dark', 'fc-onboarding-flame');
   document.getElementById('signupThemePicker')?.style.setProperty('display', 'none');
   document.getElementById('interestPicker')?.style.setProperty('display', 'none');
   document.querySelectorAll('.auth-tab').forEach(t => t.classList.toggle('active', t.dataset.authtab === tab));
@@ -10852,7 +10866,7 @@ function showSignupThemePicker() {
 }
 
 function selectSignupTheme(theme) {
-  const value = theme === 'light' ? 'light' : 'dark';
+  const value = (theme === 'light' || theme === 'flame') ? theme : 'dark';
   _pendingSignupTheme = value;
   try {
     localStorage.setItem('fc_pending_theme', value);
@@ -10866,6 +10880,7 @@ function selectSignupTheme(theme) {
   });
   document.getElementById('authView')?.classList.toggle('fc-onboarding-light', value === 'light');
   document.getElementById('authView')?.classList.toggle('fc-onboarding-dark', value === 'dark');
+  document.getElementById('authView')?.classList.toggle('fc-onboarding-flame', value === 'flame');
   const next = document.getElementById('signupThemeContinue');
   if (next) next.disabled = false;
   const err = document.getElementById('signupThemeError');
@@ -10875,7 +10890,7 @@ function selectSignupTheme(theme) {
 function continueSignupTheme() {
   if (!_pendingSignupTheme) {
     const err = document.getElementById('signupThemeError');
-    if (err) err.textContent = 'Choose Light or Dark to continue.';
+    if (err) err.textContent = 'Choose Light, Dark, or Flame to continue.';
     return;
   }
   const picker = document.getElementById('signupThemePicker');
@@ -32684,8 +32699,10 @@ html[data-theme="light"] body #challengesGrid > .fcc-challenge-wrap:not(.champ-g
     return `<div class="fc-hw-loop">${Object.entries(FLOW).map(([key,item])=>`<button type="button" class="${flowKey===key?'on':''}" data-hw-flow="${key}" aria-pressed="${flowKey===key?'true':'false'}">${item.label}</button>`).join('')}</div><div class="fc-hw-flow-detail"><b>${FLOW[flowKey].label}</b><span>${FLOW[flowKey].copy}</span></div>`;
   }
   function themeChoices(){
-    const choice = value => `<button type="button" class="fc-hw-theme ${draftTheme===value?'on':''}" data-hw-theme="${value}" aria-pressed="${draftTheme===value?'true':'false'}"><span class="fc-hw-preview ${value}"><i></i><i></i><i></i></span><b>${value==='light'?'Light':'Dark'}</b><small>${value==='light'?'Warm, bright competition screens':'Black and bronze competition screens'}</small><span class="fc-hw-theme-state"><i></i><span></span></span></button>`;
-    return `<div class="fc-hw-choice-instruction">Choose one appearance</div><div class="fc-hw-theme-grid">${choice('light')}${choice('dark')}</div>`;
+    const names = {light:'Light',dark:'Dark',flame:'Flame'};
+    const copy = {light:'Warm, bright competition screens',dark:'Blackened ember competition screens',flame:'Orange-dominant arena with dark competition cards'};
+    const choice = value => `<button type="button" class="fc-hw-theme ${draftTheme===value?'on':''}" data-hw-theme="${value}" aria-pressed="${draftTheme===value?'true':'false'}"><span class="fc-hw-preview ${value}"><i></i><i></i><i></i></span><b>${names[value]}</b><small>${copy[value]}</small><span class="fc-hw-theme-state"><i></i><span></span></span></button>`;
+    return `<div class="fc-hw-choice-instruction">Choose one appearance</div><div class="fc-hw-theme-grid">${choice('light')}${choice('dark')}${choice('flame')}</div>`;
   }
   function interestChoices(){
     const defs = Array.isArray(window.INTEREST_DEFS) ? window.INTEREST_DEFS : (typeof INTEREST_DEFS !== 'undefined' ? INTEREST_DEFS : []);
@@ -32718,14 +32735,14 @@ html[data-theme="light"] body #challengesGrid > .fcc-challenge-wrap:not(.champ-g
     else {
       const rec = actionOptions();
       if (!actionTouched) selectedAction = rec.recommended;
-      body.innerHTML = `<div class="fc-hw-step-label">START</div><h3>Choose your first move.</h3><p>Vote in a live challenge, enter an open competition, or create one of your own.</p><div class="fc-hw-recommendation">${emberArt(58,'directing')}<div><b>Ember’s factual recommendation</b><span>${safe(rec.text)}</span></div></div>${actionChoices(rec)}<div class="fc-hw-summary"><div><span>Appearance</span><b>${draftTheme === 'light' ? 'Light' : 'Dark'}</b></div><div><span>Interests</span><b>${draftInterests.size ? [...draftInterests].join(', ') : 'Choose at least one'}</b></div></div>`;
+      body.innerHTML = `<div class="fc-hw-step-label">START</div><h3>Choose your first move.</h3><p>Vote in a live challenge, enter an open competition, or create one of your own.</p><div class="fc-hw-recommendation">${emberArt(58,'directing')}<div><b>Ember’s factual recommendation</b><span>${safe(rec.text)}</span></div></div>${actionChoices(rec)}<div class="fc-hw-summary"><div><span>Appearance</span><b>${draftTheme === 'light' ? 'Light' : (draftTheme === 'flame' ? 'Flame' : 'Dark')}</b></div><div><span>Interests</span><b>${draftInterests.size ? [...draftInterests].join(', ') : 'Choose at least one'}</b></div></div>`;
     }
     wire();
   }
   function wire(){
     document.querySelectorAll('[data-hw-flow]').forEach(btn => btn.addEventListener('click', () => { flowKey = btn.dataset.hwFlow; render(); }));
     document.querySelectorAll('[data-hw-theme]').forEach(btn => btn.addEventListener('click', () => {
-      draftTheme = btn.dataset.hwTheme === 'light' ? 'light' : 'dark';
+      draftTheme = (btn.dataset.hwTheme === 'light' || btn.dataset.hwTheme === 'flame') ? btn.dataset.hwTheme : 'dark';
       applyTheme(draftTheme); render();
     }));
     document.querySelectorAll('[data-hw-interest]').forEach(btn => btn.addEventListener('click', () => {
@@ -35271,6 +35288,138 @@ window.__fcBuildV1089={
   flameAtmosphere:true,warmSurfaceTokens:true,darkAndLightThemes:true,
   manualUpdateOptionRemoved:true,automaticUpdateHandlingPreserved:true,
   typographyChanged:false,typographyReviewDeferred:true,
+  navigationChanged:false,votingChanged:false,backendChanged:false,sqlChanges:0,edgeFunctionChanges:0
+};
+</script>
+
+
+<style id="fc-v1090-three-theme-css">
+/* v1090 — A true third appearance. Dark and Light remain intact. Flame is
+   intentionally orange-dominant at the page level, with dark neutral cards
+   so competition media and data stay readable. */
+html[data-theme="flame"]{color-scheme:dark}
+html[data-theme="flame"] body,
+body.theme-flame{
+  --bg:#96290c;
+  --bg-1:#b43a12;
+  --bg-2:#681805;
+  --surface:#17100d;
+  --surface-2:#24150f;
+  --border:#74402b;
+  --border-bright:#f09a57;
+  --text:#fff8ef;
+  --text-dim:#e6cbbb;
+  --text-muted:#b88d74;
+  --ember:#ff7a2f;
+  --ember-bright:#ffc06d;
+  --flame:#ff3220;
+  --flame-deep:#a9180e;
+  --gold:#ffd06a;
+  --overlay-1:rgba(255,217,171,.045);
+  --overlay-2:rgba(255,217,171,.075);
+  --overlay-3:rgba(255,217,171,.12);
+  --overlay-4:rgba(255,226,190,.19);
+  --shadow-card:0 22px 48px -30px rgba(48,10,2,.86),0 0 0 1px rgba(255,175,93,.08);
+  --shadow-warm:0 26px 70px -22px rgba(91,16,2,.72);
+  background-color:#96290c!important;
+}
+html[data-theme="flame"] body .bg-layer,
+body.theme-flame .bg-layer{
+  background-color:#96290c!important;
+  background-image:
+    radial-gradient(82% 48% at 50% -8%,rgba(255,211,106,.34),transparent 60%),
+    radial-gradient(68% 54% at -8% 48%,rgba(255,99,30,.42),transparent 68%),
+    radial-gradient(68% 54% at 108% 72%,rgba(150,17,5,.50),transparent 70%),
+    linear-gradient(180deg,#c74816 0%,#9a2a0c 43%,#701a06 100%)!important;
+}
+html[data-theme="flame"] body .bg-layer::before,
+body.theme-flame .bg-layer::before{
+  opacity:.60;
+  filter:blur(48px);
+  background:
+    radial-gradient(32% 28% at 28% 26%,rgba(255,231,153,.34),transparent 72%),
+    radial-gradient(34% 32% at 74% 62%,rgba(255,72,22,.38),transparent 74%);
+}
+html[data-theme="flame"] body #ambientCanvas,
+body.theme-flame #ambientCanvas{opacity:.72}
+html[data-theme="flame"] body .nav,
+body.theme-flame .nav{
+  background:rgba(24,8,3,.91)!important;
+  border-bottom-color:rgba(255,182,103,.28)!important;
+  box-shadow:0 12px 34px -24px rgba(49,8,1,.90)!important;
+}
+html[data-theme="flame"] body .bottom-nav,
+body.theme-flame .bottom-nav{
+  background:rgba(25,8,3,.94)!important;
+  border-top-color:rgba(255,182,103,.28)!important;
+  box-shadow:0 -14px 36px -28px rgba(48,8,1,.92)!important;
+}
+html[data-theme="flame"] body :is(
+  #feedView #emberHomeCard.fc-home-next-module-v1057,
+  #feedView #fcHomeLive,
+  #feedView .heat-check,
+  .ch-card,.poll-card,.leaderboard,.lb-how-card,.cd-hero,.cd-entry,.cd-entry-nav,.modal
+),
+body.theme-flame :is(
+  #feedView #emberHomeCard.fc-home-next-module-v1057,
+  #feedView #fcHomeLive,
+  #feedView .heat-check,
+  .ch-card,.poll-card,.leaderboard,.lb-how-card,.cd-hero,.cd-entry,.cd-entry-nav,.modal
+){
+  background:linear-gradient(180deg,rgba(31,18,12,.985),rgba(15,8,5,.99))!important;
+  border-color:rgba(255,170,94,.25)!important;
+  box-shadow:var(--shadow-card)!important;
+}
+html[data-theme="flame"] body :is(.fc-home-action-row-v1057,#feedView #fcHomeLive .fc-home-live-card,#challengesGrid .feed-challenge-card,#feedContainer .feed-challenge-card),
+body.theme-flame :is(.fc-home-action-row-v1057,#feedView #fcHomeLive .fc-home-live-card,#challengesGrid .feed-challenge-card,#feedContainer .feed-challenge-card){
+  background:linear-gradient(145deg,rgba(38,21,13,.98),rgba(20,10,6,.99))!important;
+  border-color:rgba(255,176,101,.22)!important;
+}
+html[data-theme="flame"] body :is(.section-title,.brand-name-nav,.brand,.cd-sheet-header h2),
+body.theme-flame :is(.section-title,.brand-name-nav,.brand,.cd-sheet-header h2){text-shadow:0 2px 20px rgba(62,9,1,.46)}
+html[data-theme="flame"] body :is(.btn-primary,.bnav-create-circle,.tab.active,.chc-cta:not(.chc-ghost)),
+body.theme-flame :is(.btn-primary,.bnav-create-circle,.tab.active,.chc-cta:not(.chc-ghost)){
+  background:linear-gradient(135deg,#ffd16d 0%,#ff8a30 42%,#ff351f 100%)!important;
+  color:#2b0b02!important;
+  box-shadow:0 16px 38px -20px rgba(73,10,1,.78)!important;
+}
+.lb-champ-launch-btn{
+  background:linear-gradient(135deg,#ffd16d 0%,#ff8a30 52%,#ed361c 100%)!important;
+  color:#2a0a02!important;
+  border:1px solid rgba(255,226,155,.42)!important;
+  box-shadow:0 12px 28px -16px rgba(255,115,36,.72)!important;
+}
+/* Three-option previews used during required signup and the replayable tour. */
+.fc-signup-theme-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.fc-signup-theme-choice-flame{grid-column:1 / -1}
+.fc-signup-theme-preview.flame,
+.fc-hw-preview.flame{background:linear-gradient(160deg,#c84a17,#8d2109)}
+.fc-signup-theme-preview.flame i,
+.fc-hw-preview.flame i{background:#21110a;border:1px solid rgba(255,213,151,.28)}
+.fc-signup-theme-preview.flame i:first-child,
+.fc-hw-preview.flame i:first-child{background:linear-gradient(90deg,#21110a 0 58%,#ffd16d 58%)}
+.fc-hw-theme-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+#authView.fc-signup-onboarding.fc-onboarding-flame.fc-auth-sheet-open .auth-card{
+  color-scheme:dark;
+  --text:#fff8ef;--text-dim:#e6cbbb;--text-muted:#b88d74;--surface:#1d100b;--surface-2:#28160e;--border:#74402b;--border-bright:#f09a57;
+  background:linear-gradient(155deg,#2b160d,#120805 72%)!important;
+  border-color:rgba(255,181,103,.40)!important;
+  box-shadow:0 24px 80px rgba(63,11,2,.48)!important;
+}
+#authView.fc-signup-onboarding.fc-onboarding-flame .interest-opt{background:#28160e;color:#f3d7c4;border-color:#74402b}
+#authView.fc-signup-onboarding.fc-onboarding-flame .interest-opt.selected{color:#2b0b02;border-color:#ffd16d;background:linear-gradient(135deg,#ffd16d,#ff7b2e)}
+@media(max-width:560px){
+  .fc-hw-theme-grid{grid-template-columns:1fr}
+  .fc-signup-theme-grid{grid-template-columns:1fr}
+  .fc-signup-theme-choice-flame{grid-column:auto}
+}
+</style>
+<script id="fc-v1090-build-marker">
+window.__fcBuildV1090={
+  build:'v1090',basedOn:'v1089',phase:'Three-theme appearance',
+  darkPreserved:true,lightPreserved:true,flameThemeAdded:true,flameOrangeDominant:true,darkCardsInFlame:true,
+  signupThemeOptions:3,walkthroughThemeOptions:3,settingsThemeCycle:['Dark','Light','Flame'],
+  championshipLaunchPurpleRemoved:true,typographyChanged:false,
   navigationChanged:false,votingChanged:false,backendChanged:false,sqlChanges:0,edgeFunctionChanges:0
 };
 </script>
