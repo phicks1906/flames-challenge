@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1102 — Authoritative Competitive Profiles</title>
+<title>FlamesChallenge v1103 — Account-Safe Onboarding & Public Product Demo</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,9 +21,10 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1102 · authoritative-competitive-profiles" />
-<!-- v1102: adds approved competitive co-winner scoring and profile-specific authoritative competitive identity. -->
-<meta name="fc-whatsnew" content="Safer iPhone spacing, accessible sheets and controls, clearer contrast, and Reduced Motion support." />
+<meta name="fc-build" content="v1103 · account-safe-onboarding-public-demo" />
+<meta name="fc-commercial-video" content="" />
+<!-- v1103: moves all live user content behind authentication and unifies mandatory setup with the optional first-use guide. -->
+<meta name="fc-whatsnew" content="Private live content, account-safe required setup, and a new public product demo." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -10791,6 +10792,8 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
 loadFlags();
 
 /* ---------- SIGNUP ---------- */
+let _pendingSignupDraftV1103 = null;
+
 document.getElementById('signupForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   clearAuthError();
@@ -10802,52 +10805,48 @@ document.getElementById('signupForm').addEventListener('submit', async (e) => {
     showAuthError('Fill all fields. Password must be 8+ characters.');
     return;
   }
-  const btn = e.target.querySelector('button[type="submit"]');
-  btn.disabled = true; const orig = btn.textContent; btn.textContent = 'Creating account...';
-
-  // If a photo was chosen, stash it as base64 in localStorage — we'll upload
-  // it on first login (the profile row doesn't exist until after email verify).
-  if (pickedAvatarFile) {
-    try {
-      const b64 = await new Promise((res, rej) => {
-        const r = new FileReader();
-        r.onload = () => res(r.result);
-        r.onerror = rej;
-        r.readAsDataURL(pickedAvatarFile);
-      });
-      localStorage.setItem('fc_pending_avatar', b64);
-    } catch (e) { console.warn('pending avatar store failed', e); }
-  } else {
-    localStorage.removeItem('fc_pending_avatar');
-  }
-
   if (!getFlag('fc_flag_signup')) {
     showAuthError('New signups are currently paused. Please check back soon.');
-    btn.disabled = false; btn.textContent = orig;
     return;
   }
 
-  const { data, error } = await db.auth.signUp({
+  const btn = e.target.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = 'Preparing setup…';
+
+  let avatarData = null;
+  if (pickedAvatarFile) {
+    try {
+      avatarData = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(pickedAvatarFile);
+      });
+    } catch (error) {
+      console.warn('signup avatar preparation failed', error);
+      showAuthError('The profile photo could not be prepared. Remove it or choose another image.');
+      btn.disabled = false;
+      btn.textContent = orig;
+      return;
+    }
+  }
+
+  _pendingSignupDraftV1103 = {
+    name,
     email,
     password,
-    options: {
-      data: { name, avatar: pickedAvatar },
-      emailRedirectTo: window.location.origin + window.location.pathname,
-    }
-  });
-
-  btn.disabled = false; btn.textContent = orig;
-
-  if (error) {
-    showAuthError(error.message);
-    return;
-  }
-
-  // Show interest picker first, then verify screen
+    avatar: pickedAvatar,
+    avatarData
+  };
   _pendingVerifyEmail = email;
-  document.getElementById("loginForm").classList.add("hidden");
-  document.getElementById("signupForm").classList.add("hidden");
-  showInterestPicker();
+
+  btn.disabled = false;
+  btn.textContent = orig;
+  document.getElementById('loginForm').classList.add('hidden');
+  document.getElementById('signupForm').classList.add('hidden');
+  showSignupThemePicker();
 });
 
 
@@ -10962,17 +10961,86 @@ function showSignupInterestPickerV1039() {
 }
 
 async function submitInterests() {
+  if (!_pendingSignupTheme) {
+    const err = document.getElementById('signupThemeError');
+    if (err) err.textContent = 'Choose Light or Dark to continue.';
+    showSignupThemePicker();
+    return;
+  }
   if (_pickedInterests.size < 1) {
     const err = document.getElementById('interestSelectionError');
     if (err) err.textContent = 'Choose at least one interest to continue.';
     return;
   }
+  if (!_pendingSignupDraftV1103) {
+    showAuthError('Your signup details expired. Enter them again.');
+    resetAuthView();
+    switchAuthTab('signup');
+    return;
+  }
+
+  const button = document.getElementById('signupInterestContinue');
+  const original = button?.textContent || 'Create account →';
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Creating account…';
+  }
+  const status = document.getElementById('interestSelectionError');
+  if (status) status.textContent = '';
+
+  const draft = _pendingSignupDraftV1103;
   const interests = Array.from(_pickedInterests);
-  try { localStorage.setItem("fc_pending_interests", JSON.stringify(interests)); } catch(e) {}
-  document.getElementById("interestPicker").style.display = "none";
-  setSignupOnboardingMode(false);
-  document.getElementById('authView')?.classList.remove('fc-onboarding-light', 'fc-onboarding-dark');
-  showVerifyScreen();
+  try {
+    const result = await fcWithTimeoutV1099(
+      db.auth.signUp({
+        email: draft.email,
+        password: draft.password,
+        options: {
+          data: {
+            name: draft.name,
+            avatar: draft.avatar,
+            fc_appearance: _pendingSignupTheme,
+            fc_interests: interests,
+            fc_onboarding_required_complete: true,
+            fc_onboarding_version: 1103
+          },
+          emailRedirectTo: window.location.origin + window.location.pathname,
+        }
+      }),
+      18000,
+      'Account creation'
+    );
+    if (result?.error) throw result.error;
+    const userId = result?.data?.user?.id;
+    if (draft.avatarData && userId) {
+      try {
+        localStorage.setItem(`fc_pending_avatar_v1103_${userId}`, draft.avatarData);
+      } catch (error) {
+        console.warn('scoped pending avatar store failed', error);
+      }
+    }
+    try {
+      localStorage.setItem(THEME_KEY, _pendingSignupTheme);
+      localStorage.removeItem('fc_pending_avatar');
+      localStorage.removeItem('fc_pending_interests');
+      localStorage.removeItem('fc_pending_follows');
+    } catch (_) {}
+    applyTheme(_pendingSignupTheme);
+    _pendingVerifyEmail = draft.email;
+    _pendingSignupDraftV1103 = null;
+    document.getElementById('interestPicker').style.display = 'none';
+    setSignupOnboardingMode(false);
+    document.getElementById('authView')?.classList.remove('fc-onboarding-light', 'fc-onboarding-dark');
+    showVerifyScreen();
+  } catch (error) {
+    console.warn('account creation failed', error);
+    if (status) status.textContent = error?.message || 'Could not create the account. Try again.';
+  } finally {
+    if (button) {
+      button.disabled = _pickedInterests.size < 1;
+      button.textContent = original;
+    }
+  }
 }
 
 document.addEventListener('click', event => {
@@ -11397,6 +11465,9 @@ function hydrateApp(force = false) {
         await fcWithTimeoutV1099(loadProfile(), 22000, 'Profile restoration');
       }
       if (!state.profile) return; // banned or signed out — loadProfile handled redirect
+      if (typeof window.fcEnsureAccountSetupV1103 === 'function') {
+        await window.fcEnsureAccountSetupV1103();
+      }
       // A leftover state.currentView from a previous account must never carry
       // into a new non-admin session.
       if (state.currentView === 'admin' && !isAdmin()) state.currentView = 'feed';
@@ -11406,6 +11477,9 @@ function hydrateApp(force = false) {
       showApp();
       showAdminNav();
       await loadAppData();
+      if (typeof window.fcMaybeOpenOptionalGuideV1103 === 'function') {
+        window.fcMaybeOpenOptionalGuideV1103();
+      }
       _appHydratedUserIdV1095 = userId;
 
       // Re-run switchView so the visible page matches currentView after an
@@ -11478,52 +11552,13 @@ async function loadProfile() {
   // Banned users are signed out before any app data loads.
   if (await enforceBanIfBanned()) return;
 
-  // Pending interests and follows affect the first signed-in experience, but
-  // run in parallel and are individually bounded so they cannot trap boot.
-  const pendingBasics = [];
+  // v1103: required setup is account-owned. Never apply anonymous device-wide
+  // pending interests, follows, or appearance to whichever account signs in next.
   try {
-    const pending = localStorage.getItem('fc_pending_interests');
-    if (pending !== null) {
-      const interests = JSON.parse(pending);
-      if (Array.isArray(interests) && interests.length > 0) {
-        pendingBasics.push((async()=>{
-          const res = await fcWithTimeoutV1099(
-            db.from('profiles').update({ interests }).eq('id', state.profile.id),
-            7000,
-            'Signup interests'
-          );
-          if (res?.error) throw res.error;
-          state.profile.interests = interests;
-          localStorage.removeItem('fc_pending_interests');
-        })());
-      } else localStorage.removeItem('fc_pending_interests');
-    }
-  } catch(e) { console.warn('interests apply', e); }
-
-  try {
-    const pendingFollows = localStorage.getItem('fc_pending_follows');
-    if (pendingFollows) {
-      const followIds = JSON.parse(pendingFollows);
-      if (Array.isArray(followIds) && followIds.length > 0) {
-        pendingBasics.push((async()=>{
-          const rows = followIds.map(id => ({ follower_id: state.profile.id, followee_id: id }));
-          const res = await fcWithTimeoutV1099(
-            db.from('follows').upsert(rows, { onConflict: 'follower_id,followee_id', ignoreDuplicates: true }),
-            7000,
-            'Signup follows'
-          );
-          if (res?.error) throw res.error;
-          followIds.forEach(id => state.myFollowing.add(id));
-          localStorage.removeItem('fc_pending_follows');
-        })());
-      } else localStorage.removeItem('fc_pending_follows');
-    }
-  } catch(e) { console.warn('pending follows apply', e); }
-
-  if (pendingBasics.length) {
-    const settled = await Promise.allSettled(pendingBasics);
-    settled.forEach(r => { if (r.status === 'rejected') console.warn('pending profile setup', r.reason); });
-  }
+    localStorage.removeItem('fc_pending_interests');
+    localStorage.removeItem('fc_pending_follows');
+    localStorage.removeItem('fc_pending_theme');
+  } catch (_) {}
 
   // Avatar upload/moderation is useful but not required to reveal the app.
   // Run it after identity is restored so a large phone photo cannot hold boot.
@@ -11532,7 +11567,9 @@ async function loadProfile() {
 
 async function fcApplyPendingAvatarV1099() {
   if (!state.profile) return;
-  const pendingAvatar = localStorage.getItem('fc_pending_avatar');
+  const avatarKey = `fc_pending_avatar_v1103_${state.profile.id}`;
+  const pendingAvatar = localStorage.getItem(avatarKey);
+  try { localStorage.removeItem('fc_pending_avatar'); } catch (_) {}
   if (!pendingAvatar) return;
   const res = await fcWithTimeoutV1099(fetch(pendingAvatar), 8000, 'Signup avatar read');
   const blob = await fcWithTimeoutV1099(res.blob(), 8000, 'Signup avatar conversion');
@@ -11558,7 +11595,7 @@ async function fcApplyPendingAvatarV1099() {
   } else {
     await removeUploadedMedia(filename);
   }
-  localStorage.removeItem('fc_pending_avatar');
+  localStorage.removeItem(avatarKey);
 }
 
 function showAuth() {
@@ -30323,7 +30360,7 @@ document.addEventListener('click', (e) => {
 })();
 </script>
 
-<script id="fc-v1013-public-js">
+<script id="fc-v1013-public-js" type="application/json">
 (function(){
   const PENDING_VOTE_KEY='fc_pending_public_vote_v1013';
   const PUBLIC_SEEN_KEY='fc_public_experience_v1013';
@@ -33273,7 +33310,7 @@ html[data-theme="light"] body #challengesGrid > .fcc-challenge-wrap:not(.champ-g
 }
 </style>
 
-<script id="fc-v1044-walkthrough-feed-cleanup-js">
+<script id="fc-v1044-walkthrough-feed-cleanup-js" type="application/json">
 (() => {
   'use strict';
   const WALKTHROUGH_VERSION = 1043;
@@ -36366,5 +36403,502 @@ body.fc-dialog-open-v1100{overflow:hidden!important}
    competitive co-winners remain winners and can earn formula-v4 Score. */
 window.FC_PROFILE_VERSION = 'v1102';
 </script>
+
+<style id="fc-v1103-onboarding-public-demo-css">
+/* v1103 — no live UGC on the signed-out surface. The commercial slot is a
+   controlled marketing asset; the required account setup and optional guide
+   share one controller and one visual system. */
+#authView.fc-public-auth-v1103{display:block!important;overflow:auto!important;background:#070504!important}
+#authView.fc-public-auth-v1103>.auth-card{display:none!important}
+#authView.fc-public-auth-v1103.fc-auth-sheet-open>.auth-card{
+  display:block!important;position:fixed!important;z-index:2147483400!important;
+  left:50%!important;top:50%!important;transform:translate(-50%,-50%)!important;
+  width:min(480px,calc(100vw - 26px))!important;max-height:min(88dvh,820px)!important;
+  overflow:auto!important;margin:0!important;padding:28px!important;border-radius:24px!important;
+  background:#0e0c0b!important;border:1px solid rgba(255,255,255,.12)!important;
+  box-shadow:0 34px 100px rgba(0,0,0,.75)!important
+}
+#authView.fc-public-auth-v1103.fc-auth-sheet-open:after{content:"";position:fixed;inset:0;z-index:2147483300;background:rgba(0,0,0,.76);backdrop-filter:blur(7px)}
+#authView.fc-public-auth-v1103.fc-auth-sheet-open #fcPublicLandingV1103{filter:blur(3px);pointer-events:none}
+#fcPublicAuthCloseV1103{position:absolute;right:14px;top:14px;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.14);background:#151210;color:#fff;font-size:25px;cursor:pointer}
+#fcPublicLandingV1103{min-height:100dvh;color:#fff;background:radial-gradient(circle at 77% 10%,rgba(255,83,32,.14),transparent 30%),linear-gradient(180deg,#080504,#050505 68%,#080504)}
+.fc-pd-header-v1103{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;padding:calc(10px + env(safe-area-inset-top,0px)) clamp(16px,4vw,38px) 10px;background:rgba(6,5,5,.84);border-bottom:1px solid rgba(255,255,255,.08);backdrop-filter:blur(18px)}
+.fc-pd-brand-v1103{display:flex;align-items:center;gap:9px;font:900 19px var(--font-bricolage);letter-spacing:-.045em}.fc-pd-brand-v1103 .fc-approved-logo{width:46px;height:46px}.fc-pd-brand-v1103 em{font-style:normal;color:#ff6530}
+.fc-pd-auth-v1103{display:flex;gap:8px}.fc-pd-auth-v1103 button{min-height:44px;padding:0 16px;border-radius:999px;font:800 13px var(--font-dm);cursor:pointer}.fc-pd-login-v1103{border:1px solid rgba(255,255,255,.22);background:transparent;color:#fff}.fc-pd-signup-v1103{border:0;background:linear-gradient(135deg,#ffaf39,#ff4629);color:#160804}
+.fc-pd-main-v1103{width:min(1180px,100%);margin:0 auto;padding:clamp(34px,7vw,82px) clamp(18px,5vw,52px) calc(38px + env(safe-area-inset-bottom,0px))}
+.fc-pd-hero-v1103{display:grid;grid-template-columns:minmax(0,.9fr) minmax(360px,1.1fr);align-items:center;gap:clamp(28px,5vw,68px)}
+.fc-pd-kicker-v1103{font:850 11px var(--font-dm);letter-spacing:.19em;color:#ff9d5d}.fc-pd-copy-v1103 h1{font:900 clamp(43px,7vw,80px)/.95 var(--font-bricolage);letter-spacing:-.065em;margin:13px 0 20px}.fc-pd-copy-v1103 h1 em{font-style:normal;color:#ff6230}.fc-pd-copy-v1103>p{max-width:650px;color:#cbbdb4;font-size:clamp(17px,2vw,21px);line-height:1.52;margin:0 0 25px}
+.fc-pd-loop-v1103{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin:0 0 27px}.fc-pd-loop-v1103 span{padding:8px 10px;border:1px solid rgba(255,255,255,.13);border-radius:999px;color:#eee3dc;font:800 11px var(--font-dm)}.fc-pd-loop-v1103 b{color:#ff6b35}
+.fc-pd-actions-v1103{display:flex;gap:10px;flex-wrap:wrap}.fc-pd-actions-v1103 button{min-height:50px;padding:0 21px;border-radius:15px;font:850 14px var(--font-dm);cursor:pointer}.fc-pd-primary-v1103{border:0;background:linear-gradient(135deg,#ffad39,#ff4329);color:#170804}.fc-pd-secondary-v1103{border:1px solid rgba(255,255,255,.20);background:#12100f;color:#fff}
+.fc-commercial-v1103{position:relative;border:1px solid rgba(255,108,47,.36);border-radius:28px;background:#0b0908;overflow:hidden;box-shadow:0 28px 78px rgba(0,0,0,.52);aspect-ratio:16/10;min-height:320px;cursor:pointer}
+.fc-commercial-v1103 video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#120b08}.fc-commercial-v1103:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.02),rgba(0,0,0,.62));pointer-events:none}
+.fc-demo-story-v1103{position:absolute;inset:0;background:radial-gradient(circle at 75% 18%,rgba(255,111,45,.28),transparent 28%),linear-gradient(140deg,#24120d,#080707 65%);overflow:hidden}
+.fc-demo-scene-v1103{position:absolute;inset:0;padding:28px;display:flex;flex-direction:column;justify-content:flex-end;opacity:0;animation:fcDemoScenesV1103 20s infinite}.fc-demo-scene-v1103:nth-child(2){animation-delay:4s}.fc-demo-scene-v1103:nth-child(3){animation-delay:8s}.fc-demo-scene-v1103:nth-child(4){animation-delay:12s}.fc-demo-scene-v1103:nth-child(5){animation-delay:16s}
+.fc-demo-people-v1103{position:absolute;inset:20px 20px 84px;display:flex;align-items:center;justify-content:center;gap:15px}.fc-demo-person-v1103{width:76px;height:116px;position:relative;filter:drop-shadow(0 14px 18px rgba(0,0,0,.3));animation:fcDemoBounceV1103 1.8s ease-in-out infinite}.fc-demo-person-v1103:nth-child(2){animation-delay:.3s}.fc-demo-person-v1103:nth-child(3){animation-delay:.6s}.fc-demo-person-v1103:before{content:"";position:absolute;left:18px;top:0;width:40px;height:40px;border-radius:50%;background:var(--skin,#9a6044);box-shadow:inset 0 -5px rgba(0,0,0,.08)}.fc-demo-person-v1103:after{content:"";position:absolute;left:8px;top:36px;width:60px;height:76px;border-radius:24px 24px 17px 17px;background:var(--shirt,#ff6732)}
+.fc-demo-prop-v1103{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:150px;height:104px;border-radius:18px;border:1px solid rgba(255,255,255,.20);background:rgba(9,8,8,.78);box-shadow:0 18px 45px rgba(0,0,0,.35);display:grid;place-items:center;color:#ff8d52;font:900 42px var(--font-bricolage)}
+.fc-demo-scene-v1103 strong{position:relative;z-index:2;font:900 clamp(24px,4vw,38px)/1 var(--font-bricolage);letter-spacing:-.035em}.fc-demo-scene-v1103 span{position:relative;z-index:2;color:#d6c9c0;font:700 13px/1.4 var(--font-dm);margin-top:7px}
+.fc-commercial-chrome-v1103{position:absolute;z-index:3;left:18px;right:18px;bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:14px}.fc-commercial-badge-v1103{display:flex;align-items:center;gap:8px;color:#fff;font:850 11px var(--font-dm);letter-spacing:.08em}.fc-commercial-badge-v1103:before{content:"";width:8px;height:8px;border-radius:50%;background:#ff6a31;box-shadow:0 0 12px #ff6a31}.fc-commercial-play-v1103{min-width:144px;min-height:46px;border:0;border-radius:999px;background:#fff;color:#16100d;font:900 13px var(--font-dm);cursor:pointer}.fc-commercial-sound-v1103{position:absolute;z-index:3;right:17px;top:16px;padding:7px 10px;border-radius:999px;background:rgba(0,0,0,.54);border:1px solid rgba(255,255,255,.18);color:#fff;font:800 10px var(--font-dm)}
+.fc-pd-how-v1103{margin-top:clamp(56px,8vw,98px)}.fc-pd-section-head-v1103{text-align:center;max-width:650px;margin:0 auto 24px}.fc-pd-section-head-v1103 h2{font:900 clamp(32px,5vw,52px)/1 var(--font-bricolage);letter-spacing:-.05em;margin:8px 0 10px}.fc-pd-section-head-v1103 p{color:#b6a9a0;line-height:1.5}
+.fc-pd-steps-v1103{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}.fc-pd-step-v1103{padding:18px 15px;border:1px solid rgba(255,255,255,.09);border-radius:18px;background:rgba(17,14,13,.72)}.fc-pd-step-v1103 i{width:29px;height:29px;border-radius:50%;display:grid;place-items:center;background:rgba(255,98,43,.13);color:#ff965d;font:900 11px var(--font-dm);font-style:normal}.fc-pd-step-v1103 b{display:block;font:900 18px var(--font-bricolage);margin:12px 0 6px}.fc-pd-step-v1103 span{color:#a99c94;font-size:12px;line-height:1.42}
+.fc-pd-trust-v1103{margin:clamp(46px,7vw,82px) 0 0;padding:clamp(24px,5vw,42px);border:1px solid rgba(255,255,255,.09);border-radius:24px;background:linear-gradient(135deg,rgba(255,91,39,.08),rgba(255,255,255,.025));display:grid;grid-template-columns:1fr auto;align-items:center;gap:24px}.fc-pd-trust-v1103 h2{font:900 clamp(28px,5vw,45px)/1.05 var(--font-bricolage);letter-spacing:-.045em;margin:0 0 9px}.fc-pd-trust-v1103 p{color:#b8aaa1;line-height:1.5;margin:0;max-width:680px}.fc-pd-trust-v1103 button{min-height:50px;padding:0 22px;border:0;border-radius:15px;background:linear-gradient(135deg,#ffad38,#ff4329);color:#160804;font:900 14px var(--font-dm);cursor:pointer}
+#fcCommercialModalV1103{position:fixed;inset:0;z-index:2147483500;display:none;align-items:center;justify-content:center;padding:calc(18px + env(safe-area-inset-top,0px)) 18px calc(18px + env(safe-area-inset-bottom,0px));background:rgba(0,0,0,.88);backdrop-filter:blur(14px)}#fcCommercialModalV1103.open{display:flex}.fc-commercial-modal-panel-v1103{position:relative;width:min(980px,100%);background:#080706;border:1px solid rgba(255,255,255,.13);border-radius:24px;overflow:hidden;box-shadow:0 40px 120px rgba(0,0,0,.76)}.fc-commercial-modal-panel-v1103 video{display:block;width:100%;aspect-ratio:16/9;background:#000}.fc-commercial-modal-fallback-v1103{position:relative;aspect-ratio:16/9;display:grid;place-items:center;padding:40px;text-align:center;overflow:hidden;background:radial-gradient(circle at 50% 20%,rgba(255,94,36,.22),transparent 34%),#090706}.fc-commercial-modal-fallback-v1103 h2{font:900 clamp(32px,6vw,60px)/.98 var(--font-bricolage);letter-spacing:-.055em;margin:0 0 12px}.fc-commercial-modal-fallback-v1103 p{max-width:580px;color:#c0b2a8;line-height:1.5}.fc-commercial-modal-close-v1103{position:absolute;z-index:3;right:12px;top:12px;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.20);background:rgba(0,0,0,.62);color:#fff;font-size:25px;cursor:pointer}.fc-commercial-modal-foot-v1103{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;background:#0c0a09}.fc-commercial-modal-foot-v1103 span{color:#b8aaa1;font-size:12px}.fc-commercial-modal-foot-v1103 button{min-height:44px;padding:0 16px;border:0;border-radius:999px;background:#fff;color:#160d09;font-weight:900;cursor:pointer}
+#fcOnboardingV1103{position:fixed;inset:0;z-index:2147483647;display:none;align-items:center;justify-content:center;padding:calc(18px + env(safe-area-inset-top,0px)) 14px calc(18px + env(safe-area-inset-bottom,0px));background:rgba(5,4,4,.94);backdrop-filter:blur(15px);color:var(--text)}#fcOnboardingV1103.open{display:flex}.fc-ob-shell-v1103{width:min(620px,100%);max-height:94dvh;overflow:auto;border:1px solid var(--border);border-radius:26px;background:var(--surface);box-shadow:0 35px 110px rgba(0,0,0,.62)}.fc-ob-head-v1103{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:21px 22px 15px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:3;background:var(--surface)}.fc-ob-head-v1103 small{display:block;color:var(--ember);font:900 10px var(--font-dm);letter-spacing:.16em}.fc-ob-head-v1103 h2{font:900 27px/1 var(--font-bricolage);letter-spacing:-.04em;margin:5px 0 0}.fc-ob-skip-v1103{min-height:44px;padding:0 13px;border:1px solid var(--border);border-radius:999px;background:var(--surface-2);color:var(--text);font:850 12px var(--font-dm);cursor:pointer}.fc-ob-body-v1103{padding:23px}.fc-ob-step-v1103 h3{font:900 31px/1.02 var(--font-bricolage);letter-spacing:-.045em;margin:0 0 9px}.fc-ob-step-v1103>p{color:var(--text-dim);line-height:1.5;margin:0 0 20px}.fc-ob-progress-v1103{display:grid;gap:5px;padding:0 22px 18px}.fc-ob-progress-v1103 i{height:4px;border-radius:4px;background:var(--border)}.fc-ob-progress-v1103 i.on{background:linear-gradient(90deg,#ff9d3d,#ff4a2a)}.fc-ob-theme-grid-v1103{display:grid;grid-template-columns:1fr 1fr;gap:12px}.fc-ob-choice-v1103{min-height:152px;padding:14px;border:1px solid var(--border);border-radius:18px;background:var(--surface-2);color:var(--text);text-align:left;cursor:pointer}.fc-ob-choice-v1103.on{border-color:var(--ember);box-shadow:0 0 0 2px rgba(255,93,40,.14)}.fc-ob-choice-v1103 strong{display:block;font-size:17px;margin:11px 0 4px}.fc-ob-choice-v1103 span{color:var(--text-dim);font-size:12px}.fc-ob-theme-preview-v1103{height:65px;border-radius:12px;display:grid;grid-template-columns:30% 1fr;gap:7px;padding:9px}.fc-ob-theme-preview-v1103.light{background:#f7f2ed}.fc-ob-theme-preview-v1103.dark{background:#090807}.fc-ob-theme-preview-v1103 i{display:block;border-radius:7px;background:rgba(255,101,45,.72)}.fc-ob-theme-preview-v1103 i+ i{background:rgba(127,115,106,.26)}.fc-ob-interest-grid-v1103{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.fc-ob-interest-v1103{min-height:46px;border:1px solid var(--border);border-radius:13px;background:var(--surface-2);color:var(--text);font:800 13px var(--font-dm);cursor:pointer}.fc-ob-interest-v1103.on{border-color:var(--ember);background:rgba(255,91,40,.12);color:var(--ember-bright)}.fc-ob-loop-v1103{display:flex;flex-wrap:wrap;gap:7px;margin:18px 0}.fc-ob-loop-v1103 span{padding:8px 10px;border:1px solid var(--border);border-radius:999px;font:850 11px var(--font-dm)}.fc-ob-card-v1103{padding:15px;border:1px solid var(--border);border-radius:16px;background:var(--surface-2);margin-top:10px}.fc-ob-card-v1103 b{display:block;margin-bottom:5px}.fc-ob-card-v1103 span{display:block;color:var(--text-dim);font-size:13px;line-height:1.42}.fc-ob-ember-v1103{display:grid;grid-template-columns:74px 1fr;gap:14px;align-items:center}.fc-ob-action-grid-v1103{display:grid;gap:9px}.fc-ob-action-v1103{min-height:70px;padding:13px 14px;border:1px solid var(--border);border-radius:16px;background:var(--surface-2);color:var(--text);text-align:left;cursor:pointer}.fc-ob-action-v1103.on{border-color:var(--ember);box-shadow:0 0 0 2px rgba(255,91,40,.12)}.fc-ob-action-v1103 strong{display:block}.fc-ob-action-v1103 small{display:block;color:var(--text-dim);margin-top:4px;line-height:1.35}.fc-ob-rec-v1103{display:inline-flex;margin-top:7px;padding:4px 7px;border-radius:999px;background:rgba(255,91,40,.12);color:var(--ember-bright);font:900 9px var(--font-dm);letter-spacing:.08em}.fc-ob-status-v1103{min-height:20px;padding:0 23px;color:#d24c42;font:750 12px var(--font-dm)}.fc-ob-foot-v1103{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 22px calc(16px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--border);position:sticky;bottom:0;background:var(--surface)}.fc-ob-foot-v1103 button{min-height:46px;padding:0 18px;border-radius:14px;font:850 13px var(--font-dm);cursor:pointer}.fc-ob-back-v1103{border:1px solid var(--border);background:var(--surface-2);color:var(--text)}.fc-ob-next-v1103{border:0;background:linear-gradient(135deg,#ff9d3d,#ff4629);color:#160804;margin-left:auto}
+@keyframes fcDemoScenesV1103{0%,18%{opacity:1;transform:scale(1)}21%,100%{opacity:0;transform:scale(1.02)}}@keyframes fcDemoBounceV1103{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-7px) rotate(1deg)}}
+@media(max-width:820px){.fc-pd-hero-v1103{grid-template-columns:1fr}.fc-pd-copy-v1103 h1{font-size:50px}.fc-pd-steps-v1103{grid-template-columns:1fr 1fr}.fc-pd-trust-v1103{grid-template-columns:1fr}.fc-commercial-v1103{min-height:300px}.fc-pd-brand-v1103 span:last-child{display:none}}
+@media(max-width:520px){#authView.fc-public-auth-v1103.fc-auth-sheet-open>.auth-card{inset:0!important;left:0!important;top:0!important;transform:none!important;width:100vw!important;max-height:100dvh!important;border-radius:0!important;padding:calc(60px + env(safe-area-inset-top,0px)) 20px calc(24px + env(safe-area-inset-bottom,0px))!important}.fc-pd-main-v1103{padding-top:29px}.fc-pd-copy-v1103 h1{font-size:43px}.fc-pd-copy-v1103>p{font-size:16px}.fc-pd-actions-v1103{display:grid}.fc-pd-actions-v1103 button{width:100%}.fc-commercial-v1103{min-height:258px;aspect-ratio:4/3}.fc-demo-person-v1103{transform:scale(.78);margin:-8px}.fc-pd-steps-v1103{grid-template-columns:1fr}.fc-pd-trust-v1103 button{width:100%}.fc-ob-shell-v1103{height:100dvh;max-height:100dvh;border-radius:0}.fc-ob-theme-grid-v1103{grid-template-columns:1fr}.fc-ob-interest-grid-v1103{grid-template-columns:1fr 1fr}.fc-ob-body-v1103{padding:21px 18px}.fc-ob-head-v1103,.fc-ob-foot-v1103{padding-left:18px;padding-right:18px}}
+@media(prefers-reduced-motion:reduce){.fc-demo-scene-v1103{animation:none!important;opacity:0}.fc-demo-scene-v1103:first-child{opacity:1}.fc-demo-person-v1103{animation:none!important}}
+</style>
+
+<script id="fc-v1103-onboarding-public-demo-js">
+(() => {
+  'use strict';
+  const SETUP_VERSION = 1103;
+  const GUIDE_VERSION = 1103;
+  const COMMERCIAL_URL = (document.querySelector('meta[name="fc-commercial-video"]')?.content || '').trim();
+  const INTERESTS = [
+    ['Art','🎨'],['Photography','📷'],['Music','🎵'],['Writing','✍️'],['Cooking','🍳'],
+    ['Style','👗'],['Sports','🏆'],['Fitness','💪'],['Comedy','😂'],['Other','🔥']
+  ];
+  let setupPromise = null;
+  let setupResolve = null;
+  let mode = 'required';
+  let step = 0;
+  let draftTheme = 'dark';
+  let draftInterests = new Set();
+  let selectedAction = 'vote';
+  let actionTouched = false;
+  let saving = false;
+  let optionalTimer = 0;
+
+  function safe(value){ try { return escapeHtml(String(value ?? '')); } catch (_) { return String(value ?? ''); } }
+  function profileComplete(){
+    const p = state?.profile;
+    return !!p && ['dark','light'].includes(String(p.appearance || '').toLowerCase())
+      && Array.isArray(p.interests) && p.interests.length > 0
+      && Number(p.onboarding_version || 0) >= SETUP_VERSION
+      && !!p.onboarding_completed_at;
+  }
+  function guideSeen(){ return Number(state?.profile?.walkthrough_seen_version || 0) >= GUIDE_VERSION; }
+  function localThemeExplicit(){
+    try { const value = localStorage.getItem(THEME_KEY); return value === 'light' || value === 'dark' ? value : null; }
+    catch (_) { return null; }
+  }
+  function metadataDraft(){
+    const meta = state?.session?.user?.user_metadata || {};
+    const appearance = meta.fc_appearance === 'light' ? 'light' : (meta.fc_appearance === 'dark' ? 'dark' : null);
+    const interests = Array.isArray(meta.fc_interests) ? meta.fc_interests.filter(Boolean) : [];
+    return appearance && interests.length ? {appearance, interests} : null;
+  }
+  async function saveRequired(appearance, interests){
+    const result = await fcWithTimeoutV1099(
+      db.rpc('fc_complete_onboarding_v1103', {
+        p_appearance: appearance,
+        p_interests: interests,
+        p_version: SETUP_VERSION
+      }),
+      12000,
+      'Required account setup'
+    );
+    if (result?.error) throw result.error;
+    const payload = result?.data || {};
+    state.profile = {
+      ...state.profile,
+      appearance,
+      interests,
+      onboarding_version: Number(payload.onboarding_version || SETUP_VERSION),
+      onboarding_completed_at: payload.onboarding_completed_at || new Date().toISOString(),
+      walkthrough_seen_version: Number(payload.walkthrough_seen_version || state.profile?.walkthrough_seen_version || 0)
+    };
+    try { localStorage.setItem(THEME_KEY, appearance); } catch (_) {}
+    applyTheme(appearance);
+    return payload;
+  }
+  async function markGuideSeen(){
+    if (!state?.profile?.id || guideSeen()) return;
+    try {
+      const result = await fcWithTimeoutV1099(
+        db.rpc('fc_mark_walkthrough_seen_v1103', { p_version: GUIDE_VERSION }),
+        8000,
+        'Walkthrough completion'
+      );
+      if (result?.error) throw result.error;
+      state.profile.walkthrough_seen_version = GUIDE_VERSION;
+    } catch (error) {
+      console.warn('walkthrough marker', error);
+    }
+  }
+
+  function ensurePublicLanding(){
+    const auth = document.getElementById('authView');
+    if (!auth) return null;
+    document.getElementById('fcPublicLanding')?.remove();
+    document.getElementById('fcPublicBrowser')?.remove();
+    let landing = document.getElementById('fcPublicLandingV1103');
+    if (landing) return landing;
+    landing = document.createElement('section');
+    landing.id = 'fcPublicLandingV1103';
+    landing.innerHTML = `
+      <header class="fc-pd-header-v1103">
+        <div class="fc-pd-brand-v1103" aria-label="FlamesChallenge"><span class="fc-approved-logo" aria-hidden="true"></span><span>FLAMES<em>CHALLENGE</em></span></div>
+        <div class="fc-pd-auth-v1103"><button type="button" class="fc-pd-login-v1103" data-v1103-auth="login">Log in</button><button type="button" class="fc-pd-signup-v1103" data-v1103-auth="signup">Create account</button></div>
+      </header>
+      <main class="fc-pd-main-v1103">
+        <section class="fc-pd-hero-v1103">
+          <div class="fc-pd-copy-v1103">
+            <div class="fc-pd-kicker-v1103">CREATE · COMPETE · VOTE · WIN · ADVANCE</div>
+            <h1>Make something. Put it in <em>competition.</em></h1>
+            <p>Create or enter challenges in music, art, photography, fitness, cooking, sports, writing, style, comedy, and more. The crowd chooses the winner. The best advance.</p>
+            <div class="fc-pd-loop-v1103"><span>Create</span><b>→</b><span>Compete</span><b>→</b><span>Vote</span><b>→</b><span>Win</span><b>→</b><span>Advance</span></div>
+            <div class="fc-pd-actions-v1103"><button type="button" class="fc-pd-primary-v1103" data-v1103-auth="signup">Join FlamesChallenge</button><button type="button" class="fc-pd-secondary-v1103" data-v1103-commercial>Watch how it works</button></div>
+          </div>
+          <article class="fc-commercial-v1103${COMMERCIAL_URL ? ' has-video' : ''}" role="button" tabindex="0" aria-label="${COMMERCIAL_URL ? 'Play the FlamesChallenge commercial' : 'Open the FlamesChallenge animated product demo'}" data-v1103-commercial>
+            ${COMMERCIAL_URL ? `<video id="fcCommercialTeaserV1103" autoplay muted loop playsinline preload="metadata" aria-label="Muted FlamesChallenge commercial preview"></video>` : `<div class="fc-demo-story-v1103" aria-hidden="true">
+              ${[
+                ['CREATE','Friends turn an idea into a challenge.','🍳'],
+                ['COMPETE','Creators submit their best work.','🎵'],
+                ['VOTE','The community watches and chooses.','✓'],
+                ['WIN','The result becomes part of your record.','★'],
+                ['ADVANCE','Championship Score opens the next stage.','♛']
+              ].map((item,index)=>`<div class="fc-demo-scene-v1103"><div class="fc-demo-people-v1103"><i class="fc-demo-person-v1103" style="--skin:${['#7b4a35','#c58a67','#5a3529'][index%3]};--shirt:${['#ff6530','#e4a13e','#8d5cff'][index%3]}"></i><div class="fc-demo-prop-v1103">${item[2]}</div><i class="fc-demo-person-v1103" style="--skin:${['#c58a67','#7b4a35','#d9a582'][index%3]};--shirt:${['#388bd8','#ee4f75','#41a46a'][index%3]}"></i></div><strong>${item[0]}</strong><span>${item[1]}</span></div>`).join('')}
+            </div>`}
+            <div class="fc-commercial-sound-v1103">${COMMERCIAL_URL ? 'AUTOPLAY · MUTED' : 'ANIMATED PREVIEW · NO AUDIO'}</div>
+            <div class="fc-commercial-chrome-v1103"><div class="fc-commercial-badge-v1103">PRODUCT DEMO</div><button type="button" class="fc-commercial-play-v1103">${COMMERCIAL_URL ? 'Play with sound ▶' : 'Watch full demo ▶'}</button></div>
+          </article>
+        </section>
+        <section class="fc-pd-how-v1103">
+          <div class="fc-pd-section-head-v1103"><div class="fc-pd-kicker-v1103">HOW IT WORKS</div><h2>One idea becomes a competition.</h2><p>Real challenges and member media stay inside the authenticated community. This public page explains the product without exposing live user content.</p></div>
+          <div class="fc-pd-steps-v1103">
+            ${[['1','Create','Set the prompt, format, audience, and timing.'],['2','Compete','Enter your work before submissions close.'],['3','Vote','Each voter chooses one entry.'],['4','Win','Results become part of your permanent record.'],['5','Advance','Eligible wins add Championship Score.']].map(x=>`<article class="fc-pd-step-v1103"><i>${x[0]}</i><b>${x[1]}</b><span>${x[2]}</span></article>`).join('')}
+          </div>
+        </section>
+        <section class="fc-pd-trust-v1103"><div><h2>Ready to enter the arena?</h2><p>Live challenges, entries, profiles, results, and voting are available after login. Required setup takes only a moment: choose Dark or Light and select at least one interest.</p></div><button type="button" data-v1103-auth="signup">Create your account</button></section>
+      </main>`;
+    auth.prepend(landing);
+    const card = auth.querySelector('.auth-card');
+    if (card && !document.getElementById('fcPublicAuthCloseV1103')) {
+      const close = document.createElement('button');
+      close.id = 'fcPublicAuthCloseV1103';
+      close.type = 'button';
+      close.setAttribute('aria-label','Close login or signup');
+      close.textContent = '×';
+      close.addEventListener('click', closeAuthSheet);
+      card.prepend(close);
+    }
+    landing.querySelectorAll('[data-v1103-auth]').forEach(button => button.addEventListener('click', () => openAuthSheet(button.dataset.v1103Auth)));
+    landing.querySelectorAll('[data-v1103-commercial]').forEach(button => {
+      button.addEventListener('click', openCommercial);
+      button.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openCommercial(); } });
+    });
+    if (COMMERCIAL_URL) attachCommercialSource(document.getElementById('fcCommercialTeaserV1103'), true);
+    return landing;
+  }
+  function openAuthSheet(tab='signup'){
+    const auth = document.getElementById('authView');
+    if (!auth) return;
+    auth.classList.add('fc-auth-sheet-open');
+    try { switchAuthTab(tab); } catch (_) {}
+    requestAnimationFrame(() => document.getElementById(tab === 'login' ? 'loginEmail' : 'signupName')?.focus({preventScroll:true}));
+  }
+  function closeAuthSheet(){ document.getElementById('authView')?.classList.remove('fc-auth-sheet-open'); try { clearAuthError(); } catch (_) {} }
+  function activatePublic(){
+    if (state?.session) return;
+    const auth = document.getElementById('authView');
+    if (!auth) return;
+    ensurePublicLanding();
+    auth.classList.add('fc-public-auth-v1103');
+    auth.classList.remove('fc-auth-sheet-open');
+    const app = document.getElementById('appView');
+    if (app) app.style.display = 'none';
+    const bg = document.getElementById('authVideoBg');
+    if (bg) bg.style.display = 'none';
+    const backgroundVideo = document.getElementById('authBgVideo');
+    if (backgroundVideo) {
+      try {
+        backgroundVideo.pause();
+        backgroundVideo.removeAttribute('src');
+        backgroundVideo.load();
+      } catch (_) {}
+    }
+  }
+
+  function ensureCommercialModal(){
+    let modal = document.getElementById('fcCommercialModalV1103');
+    if (modal) return modal;
+    modal = document.createElement('div');
+    modal.id = 'fcCommercialModalV1103';
+    modal.setAttribute('role','dialog');
+    modal.setAttribute('aria-modal','true');
+    modal.setAttribute('aria-label','FlamesChallenge commercial');
+    modal.innerHTML = `<section class="fc-commercial-modal-panel-v1103"><button type="button" class="fc-commercial-modal-close-v1103" aria-label="Close commercial">×</button>${COMMERCIAL_URL ? '<video id="fcCommercialFullV1103" controls playsinline preload="metadata"><track kind="captions" srclang="en" label="English captions"></video>' : `<div class="fc-commercial-modal-fallback-v1103"><div class="fc-demo-story-v1103" aria-label="Animated FlamesChallenge product demo">
+      ${[
+        ['CREATE','Friends turn an idea into a challenge.','🍳'],
+        ['COMPETE','Creators submit their best work.','🎵'],
+        ['VOTE','The community watches and chooses.','✓'],
+        ['WIN','The result becomes part of your record.','★'],
+        ['ADVANCE','Championship Score opens the next stage.','♛']
+      ].map((item,index)=>`<div class="fc-demo-scene-v1103"><div class="fc-demo-people-v1103"><i class="fc-demo-person-v1103" style="--skin:${['#7b4a35','#c58a67','#5a3529'][index%3]};--shirt:${['#ff6530','#e4a13e','#8d5cff'][index%3]}"></i><div class="fc-demo-prop-v1103">${item[2]}</div><i class="fc-demo-person-v1103" style="--skin:${['#c58a67','#7b4a35','#d9a582'][index%3]};--shirt:${['#388bd8','#ee4f75','#41a46a'][index%3]}"></i></div><strong>${item[0]}</strong><span>${item[1]}</span></div>`).join('')}
+    </div><div class="fc-commercial-sound-v1103">FULL DEMO · NO AUDIO</div></div>`}<footer class="fc-commercial-modal-foot-v1103"><span>${COMMERCIAL_URL ? 'Full commercial · sound controlled by you' : 'Animated product demo · real member content stays behind login'}</span><button type="button" data-v1103-auth-modal>Join FlamesChallenge</button></footer></section>`;
+    document.body.appendChild(modal);
+    modal.querySelector('.fc-commercial-modal-close-v1103').addEventListener('click', closeCommercial);
+    modal.addEventListener('click', event => { if (event.target === modal) closeCommercial(); });
+    modal.querySelector('[data-v1103-auth-modal]').addEventListener('click', () => { closeCommercial(); openAuthSheet('signup'); });
+    if (COMMERCIAL_URL) attachCommercialSource(document.getElementById('fcCommercialFullV1103'), false);
+    return modal;
+  }
+  function attachCommercialSource(video, teaser){
+    if (!video || !COMMERCIAL_URL) return;
+    try {
+      video.src = COMMERCIAL_URL;
+      if (typeof attachHlsIfNeeded === 'function') attachHlsIfNeeded(video);
+      if (teaser) { video.muted = true; video.loop = true; video.play().catch(() => {}); }
+    } catch (error) { console.warn('commercial source', error); }
+  }
+  function openCommercial(){
+    const modal = ensureCommercialModal();
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden','false');
+    const teaser = document.getElementById('fcCommercialTeaserV1103');
+    try { teaser?.pause(); } catch (_) {}
+    const full = document.getElementById('fcCommercialFullV1103');
+    if (full) {
+      try { full.currentTime = 0; full.muted = false; full.play().catch(() => {}); } catch (_) {}
+    }
+    requestAnimationFrame(() => modal.querySelector('.fc-commercial-modal-close-v1103')?.focus({preventScroll:true}));
+  }
+  function closeCommercial(){
+    const modal = document.getElementById('fcCommercialModalV1103');
+    if (!modal) return;
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden','true');
+    const full = document.getElementById('fcCommercialFullV1103');
+    try { full?.pause(); } catch (_) {}
+    const teaser = document.getElementById('fcCommercialTeaserV1103');
+    if (teaser && !fcPrefersReducedMotionV1100()) teaser.play().catch(() => {});
+  }
+
+  function ensureOnboarding(){
+    let overlay = document.getElementById('fcOnboardingV1103');
+    if (overlay) return overlay;
+    overlay = document.createElement('div');
+    overlay.id = 'fcOnboardingV1103';
+    overlay.setAttribute('role','dialog');
+    overlay.setAttribute('aria-modal','true');
+    overlay.setAttribute('aria-label','FlamesChallenge setup and guide');
+    overlay.innerHTML = `<section class="fc-ob-shell-v1103"><header class="fc-ob-head-v1103"><div><small id="fcObKickerV1103">ACCOUNT SETUP</small><h2 id="fcObTitleV1103">Set up FlamesChallenge</h2></div><button type="button" class="fc-ob-skip-v1103" id="fcObSkipV1103">Skip guide</button></header><div class="fc-ob-progress-v1103" id="fcObProgressV1103"></div><main class="fc-ob-body-v1103" id="fcObBodyV1103"></main><div class="fc-ob-status-v1103" id="fcObStatusV1103" aria-live="polite"></div><footer class="fc-ob-foot-v1103"><button type="button" class="fc-ob-back-v1103" id="fcObBackV1103">Back</button><button type="button" class="fc-ob-next-v1103" id="fcObNextV1103">Continue →</button></footer></section>`;
+    document.body.appendChild(overlay);
+    document.getElementById('fcObBackV1103').addEventListener('click', backOnboarding);
+    document.getElementById('fcObNextV1103').addEventListener('click', nextOnboarding);
+    document.getElementById('fcObSkipV1103').addEventListener('click', skipGuide);
+    return overlay;
+  }
+  function guideSteps(){ return 5; }
+  function actionData(){
+    const me = state?.profile?.id;
+    const challenges = Array.isArray(state?.challenges) ? state.challenges : [];
+    const usable = challenges.filter(ch => ch && ch.is_public !== false && ch.is_championship !== true && ch.creator_id !== me);
+    const phase = ch => { try { return computeChallengeStatus(ch); } catch (_) { return ''; } };
+    const interests = new Set(Array.isArray(state?.profile?.interests) ? state.profile.interests.map(x => String(x).toLowerCase()) : []);
+    const ordered = usable.sort((a,b) => Number(interests.has(String(b.category||'').toLowerCase())) - Number(interests.has(String(a.category||'').toLowerCase())));
+    const vote = ordered.find(ch => ['voting','sudden_death'].includes(phase(ch))) || null;
+    const enter = ordered.find(ch => phase(ch) === 'submitting') || null;
+    const recommended = vote ? 'vote' : (enter ? 'enter' : 'create');
+    const text = vote ? `${vote.category || 'A challenge'} is voting now in “${vote.title || 'a live challenge'}.” Start with a vote.` : enter ? `“${enter.title || 'An open challenge'}” is accepting entries. Start there.` : 'No matching challenge is open right now. Start one or open Compete to browse everything.';
+    return {vote, enter, recommended, text};
+  }
+  function renderOnboarding(){
+    const overlay = ensureOnboarding();
+    const required = mode === 'required';
+    const total = required ? 2 : guideSteps();
+    const title = document.getElementById('fcObTitleV1103');
+    const kicker = document.getElementById('fcObKickerV1103');
+    const skip = document.getElementById('fcObSkipV1103');
+    const body = document.getElementById('fcObBodyV1103');
+    const back = document.getElementById('fcObBackV1103');
+    const next = document.getElementById('fcObNextV1103');
+    const status = document.getElementById('fcObStatusV1103');
+    if (status) status.textContent = '';
+    if (kicker) kicker.textContent = required ? 'REQUIRED ACCOUNT SETUP' : 'OPTIONAL PRODUCT GUIDE';
+    if (title) title.textContent = required ? 'Set up FlamesChallenge' : 'How FlamesChallenge works';
+    if (skip) skip.style.display = required ? 'none' : 'inline-flex';
+    if (back) back.style.visibility = step === 0 ? 'hidden' : 'visible';
+    if (next) { next.disabled = false; next.textContent = required ? (step === 1 ? 'Save & continue →' : 'Continue →') : (step === total - 1 ? 'Start competing →' : 'Next →'); }
+    const progress = document.getElementById('fcObProgressV1103');
+    if (progress) { progress.style.gridTemplateColumns = `repeat(${total},1fr)`; progress.innerHTML = Array.from({length:total},(_,i)=>`<i class="${i<=step?'on':''}"></i>`).join(''); }
+    if (!body) return;
+    if (required && step === 0) {
+      body.innerHTML = `<section class="fc-ob-step-v1103"><h3>Choose your appearance.</h3><p>This is saved to your account and follows you across devices. Login and account recovery remain dark.</p><div class="fc-ob-theme-grid-v1103">${['light','dark'].map(value=>`<button type="button" class="fc-ob-choice-v1103 ${draftTheme===value?'on':''}" data-ob-theme="${value}" aria-pressed="${draftTheme===value}"><span class="fc-ob-theme-preview-v1103 ${value}"><i></i><i></i></span><strong>${value==='light'?'Light':'Dark'}</strong><span>${value==='light'?'Warm, bright competition screens':'Black and bronze competition screens'}</span></button>`).join('')}</div></section>`;
+    } else if (required) {
+      body.innerHTML = `<section class="fc-ob-step-v1103"><h3>Choose what you want to see.</h3><p>Select at least one interest. These choices shape Discover, challenge suggestions, and creator recommendations.</p><div class="fc-ob-interest-grid-v1103">${INTERESTS.map(([key,icon])=>`<button type="button" class="fc-ob-interest-v1103 ${draftInterests.has(key)?'on':''}" data-ob-interest="${safe(key)}" aria-pressed="${draftInterests.has(key)}">${icon} ${safe(key)}</button>`).join('')}</div><div class="fc-ob-card-v1103"><b>${draftInterests.size} selected</b><span>You can change these later in Settings.</span></div></section>`;
+    } else if (step === 0) {
+      body.innerHTML = `<section class="fc-ob-step-v1103"><h3>Every competition follows one loop.</h3><p>The guide is optional. Tap through it now or skip directly into the app.</p><div class="fc-ob-loop-v1103"><span>Create</span><span>Compete</span><span>Vote</span><span>Win</span><span>Advance</span></div><div class="fc-ob-card-v1103"><b>Create</b><span>Set the prompt, format, audience, and timing.</span></div><div class="fc-ob-card-v1103"><b>Compete</b><span>Submit work before entries close.</span></div>`;
+    } else if (step === 1) {
+      body.innerHTML = `<section class="fc-ob-step-v1103"><h3>Discover begins with your interests.</h3><p>Your saved categories lead the feed. Following creators adds their activity, and you can change your interests later.</p><div class="fc-ob-card-v1103"><b>Interests set the direction</b><span>They are the explicit signal used for category matches and suggested competitions.</span></div><div class="fc-ob-card-v1103"><b>Compete is the full arena</b><span>Open Compete whenever you want to browse beyond your personalized Home feed.</span></div></section>`;
+    } else if (step === 2) {
+      body.innerHTML = `<section class="fc-ob-step-v1103"><h3>Wins build two different records.</h3><p><strong>Opponent Points + Turnout Points = Championship Score.</strong> Score is the monthly qualification race. Your visible level is permanent career progression.</p><div class="fc-ob-card-v1103"><b>Championship Score</b><span>Measures eligible wins within each category and month.</span></div><div class="fc-ob-card-v1103"><b>Titles and visible level</b><span>Show what you have accomplished over your career.</span></div></section>`;
+    } else if (step === 3) {
+      let ember = '<span aria-hidden="true" style="font-size:54px">🔥</span>';
+      try { if (typeof emberFace === 'function') ember = emberFace(70,'attentive'); } catch (_) {}
+      body.innerHTML = `<section class="fc-ob-step-v1103"><h3>Meet Ember.</h3><div class="fc-ob-ember-v1103">${ember}<div><b>Your competition guide</b><p>Ember can explain phases, interpret recorded scores and results, improve a challenge or entry, and point out a useful next action.</p></div></div><div class="fc-ob-card-v1103"><b>Ember cannot decide outcomes.</b><span>It cannot change votes or invent scores, results, or rules.</span></div></section>`;
+    } else {
+      const data = actionData();
+      if (!actionTouched) selectedAction = data.recommended;
+      const descriptions = {vote:data.vote?`Vote in “${safe(data.vote.title || 'a live challenge')}”`:'Open challenges that are voting',enter:data.enter?`Enter “${safe(data.enter.title || 'an open challenge')}”`:'Find a challenge accepting entries',create:'Start a new challenge with your own prompt'};
+      body.innerHTML = `<section class="fc-ob-step-v1103"><h3>Choose your first move.</h3><p>${safe(data.text)}</p><div class="fc-ob-action-grid-v1103">${['vote','enter','create'].map(action=>`<button type="button" class="fc-ob-action-v1103 ${selectedAction===action?'on':''}" data-ob-action="${action}" aria-pressed="${selectedAction===action}"><strong>${action[0].toUpperCase()+action.slice(1)}</strong><small>${descriptions[action]}</small>${data.recommended===action?'<span class="fc-ob-rec-v1103">EMBER RECOMMENDS</span>':''}</button>`).join('')}</div></section>`;
+    }
+    body.querySelectorAll('[data-ob-theme]').forEach(button => button.addEventListener('click', () => { draftTheme = button.dataset.obTheme === 'light' ? 'light' : 'dark'; applyTheme(draftTheme); renderOnboarding(); }));
+    body.querySelectorAll('[data-ob-interest]').forEach(button => button.addEventListener('click', () => { const key=button.dataset.obInterest; if (draftInterests.has(key)) draftInterests.delete(key); else draftInterests.add(key); renderOnboarding(); }));
+    body.querySelectorAll('[data-ob-action]').forEach(button => button.addEventListener('click', () => { selectedAction=button.dataset.obAction; actionTouched=true; renderOnboarding(); }));
+    overlay.classList.add('open');
+    overlay.setAttribute('aria-hidden','false');
+  }
+  function closeOnboarding(){
+    const overlay = document.getElementById('fcOnboardingV1103');
+    overlay?.classList.remove('open');
+    overlay?.setAttribute('aria-hidden','true');
+  }
+  function backOnboarding(){ if (step > 0) { step--; renderOnboarding(); } }
+  async function nextOnboarding(){
+    const status = document.getElementById('fcObStatusV1103');
+    const next = document.getElementById('fcObNextV1103');
+    if (requiredMode()) {
+      if (step === 0) { step=1; renderOnboarding(); return; }
+      if (draftInterests.size < 1) { if (status) status.textContent='Choose at least one interest to continue.'; return; }
+      if (saving) return;
+      saving=true; if (next) { next.disabled=true; next.textContent='Saving…'; }
+      try {
+        await saveRequired(draftTheme,[...draftInterests]);
+        closeOnboarding();
+        const resolve = setupResolve; setupResolve=null; setupPromise=null; if (resolve) resolve();
+        setTimeout(() => window.fcMaybeOpenOptionalGuideV1103(), 1100);
+      } catch (error) {
+        console.warn('required onboarding', error);
+        if (status) status.textContent=error?.message || 'Could not save setup. Try again.';
+        if (next) { next.disabled=false; next.textContent='Save & continue →'; }
+      } finally { saving=false; }
+      return;
+    }
+    if (step < guideSteps()-1) { step++; renderOnboarding(); return; }
+    await finishGuide(true);
+  }
+  function requiredMode(){ return mode === 'required'; }
+  async function skipGuide(){ if (requiredMode()) return; await finishGuide(false); }
+  async function finishGuide(runAction){
+    await markGuideSeen();
+    closeOnboarding();
+    if (!runAction) return;
+    const data = actionData();
+    setTimeout(() => {
+      try {
+        if (selectedAction === 'create') { openCreateChallenge(); return; }
+        const challenge = selectedAction === 'vote' ? data.vote : data.enter;
+        if (challenge) openChallenge(challenge); else switchView('challenges');
+      } catch (error) { console.warn('first action', error); }
+    },80);
+  }
+  function openGuide(manual=false){
+    if (!state?.profile) return;
+    mode='guide'; step=0; actionTouched=false; selectedAction=actionData().recommended;
+    renderOnboarding();
+    if (manual) document.getElementById('fcObSkipV1103').textContent='Close guide';
+    else document.getElementById('fcObSkipV1103').textContent='Skip guide';
+  }
+
+  window.fcEnsureAccountSetupV1103 = async function(){
+    if (!state?.profile) return;
+    if (profileComplete()) {
+      const appearance = state.profile.appearance === 'light' ? 'light' : 'dark';
+      try { localStorage.setItem(THEME_KEY, appearance); } catch (_) {}
+      applyTheme(appearance);
+      return;
+    }
+    const meta = metadataDraft();
+    if (meta) {
+      await saveRequired(meta.appearance, meta.interests);
+      return;
+    }
+    const local = localThemeExplicit();
+    const existingInterests = Array.isArray(state.profile.interests) ? state.profile.interests.filter(Boolean) : [];
+    if (local && existingInterests.length) {
+      await saveRequired(local, existingInterests);
+      return;
+    }
+    if (setupPromise) return setupPromise;
+    draftTheme = local || 'dark';
+    draftInterests = new Set(existingInterests);
+    mode='required'; step=0;
+    setupPromise = new Promise(resolve => { setupResolve=resolve; });
+    renderOnboarding();
+    return setupPromise;
+  };
+  window.fcMaybeOpenOptionalGuideV1103 = function(){
+    clearTimeout(optionalTimer);
+    if (!state?.profile || !profileComplete() || guideSeen()) return;
+    optionalTimer = setTimeout(() => { if (state?.profile && !guideSeen()) openGuide(false); }, 900);
+  };
+  window.fcOpenHowItWorks = () => openGuide(true);
+  window.fcOpenHowItWorksV1044 = window.fcOpenHowItWorks;
+  window.fcOpenHowItWorksV1043 = window.fcOpenHowItWorks;
+  window.fcOpenHowItWorksV1042 = window.fcOpenHowItWorks;
+  window.startTour = window.fcOpenHowItWorks;
+  window.fcMaybeAutoOnboarding = window.fcMaybeOpenOptionalGuideV1103;
+  window.maybeStartTour = window.fcMaybeOpenOptionalGuideV1103;
+  window.showInterestPicker = showSignupThemePicker;
+  window.fcOpenPublicAuth = openAuthSheet;
+  window.fcOpenCommercialV1103 = openCommercial;
+
+  // Appearance remains a normal one-tap setting, but v1103 now persists the
+  // choice to the signed-in account so it follows the member across devices.
+  const previousToggleThemeV1103 = window.toggleTheme;
+  let themeSaveInFlightV1103 = false;
+  window.toggleTheme = async function(){
+    if (themeSaveInFlightV1103) return;
+    const before = getTheme();
+    const result = previousToggleThemeV1103?.apply(this, arguments);
+    const next = getTheme();
+    if (!state?.profile?.id || !profileComplete() || before === next) return result;
+    themeSaveInFlightV1103 = true;
+    try {
+      await saveRequired(next, Array.isArray(state.profile.interests) ? state.profile.interests : []);
+    } catch (error) {
+      console.warn('appearance sync', error);
+      try { localStorage.setItem(THEME_KEY, before); } catch (_) {}
+      state.profile.appearance = before;
+      applyTheme(before);
+      try { toast('Appearance could not be saved'); } catch (_) {}
+    } finally {
+      themeSaveInFlightV1103 = false;
+    }
+    return result;
+  };
+
+  const previousShowAuth = window.showAuth;
+  window.showAuth = function(){
+    const result = previousShowAuth?.apply(this,arguments);
+    activatePublic();
+    return result;
+  };
+  const previousShowApp = window.showApp;
+  window.showApp = function(){
+    document.getElementById('authView')?.classList.remove('fc-public-auth-v1103','fc-auth-sheet-open');
+    closeCommercial();
+    return previousShowApp?.apply(this,arguments);
+  };
+
+  // Retire device-wide pending intent from the former live guest feed.
+  try {
+    localStorage.removeItem('fc_pending_public_vote_v1013');
+    localStorage.removeItem('fc_public_experience_v1013');
+    localStorage.removeItem('fc_new_signup_v1013');
+  } catch (_) {}
+
+  ensurePublicLanding();
+  if (!state?.session && document.getElementById('authView')?.style.display !== 'none') activatePublic();
+})();
+</script>
+<script id="fc-v1103-source-marker-js">
+window.FC_ONBOARDING_VERSION = 'v1103';
+window.FC_PUBLIC_UGC_MODE = 'authenticated-only';
+</script>
+
 </body>
 </html>
