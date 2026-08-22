@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1087 — Compact Voting & Viewer Action</title>
+<title>FlamesChallenge v1088 — Compact Home & Compete Cards</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1087 · compact-voting-viewer-action" />
-<meta name="fc-whatsnew" content="Tightens the Home live module, makes voting controls smaller, and restores voting while viewing entry media." />
+<meta name="fc-build" content="v1088 · compact-home-compete-cards" />
+<meta name="fc-whatsnew" content="Shortens Home and Compete cards with compact timing, metadata, and Championship Score details behind an info control." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -24008,8 +24008,7 @@ function buildChallengeCardShell(ch, surface = 'compete') {
     const scoreContext=fcCompeteScoreContextV1059(ch,status,Number(entryCount)||0);
     return `${commonTop}
       <div class="fc-compete-card-foot-v1059">
-        <div class="fc-compete-card-status-v1059">${statusParts.map(x=>`<span>${escapeHtml(x)}</span>`).join('<i aria-hidden="true">·</i>')}</div>
-        <button type="button" class="fc-compete-card-score-v1059" data-fc-compete-score-v1059="${ch.id}">${escapeHtml(scoreContext)} <span aria-hidden="true">ⓘ</span></button>
+        <div class="fc-compete-card-status-v1059">${statusParts.map(x=>`<span>${escapeHtml(x)}</span>`).join('<i aria-hidden="true">·</i>')}<button type="button" class="fc-compete-card-score-v1059 fc-score-info-v1088" data-fc-compete-score-v1059="${ch.id}" aria-label="${escapeHtml(scoreContext)}" title="${escapeHtml(scoreContext)}"><span aria-hidden="true">ⓘ</span></button></div>
         ${action.hidden ? '' : `<button class="chc-cta fc-compete-card-action-v1059${ctaCls}" data-chc-act="${ch.id}" data-chc-mode="${action.mode}">${action.label}</button>`}
       </div>`;
   }
@@ -29133,7 +29132,6 @@ document.addEventListener('click', (e) => {
     const ch = best.ch;
     const count = state.entryCounts[ch.id] || 0;
     const deadline = best.status === 'submitting' ? ch.submission_deadline : ch.voting_end;
-    const deadlineLabel = best.status === 'submitting' ? 'Entries close' : 'Voting ends';
     const copy = emberChallengeCopy(ch);
     const reason = emberRecommendationReason(ch, best.status, best.action, profile, best.explicitMatch, best.historyPoints, best.followsCreator);
     return {
@@ -29146,7 +29144,7 @@ document.addEventListener('click', (e) => {
       task:copy.task,
       reason,
       relation:best.action.relation,
-      meta:`${count} entr${count===1?'y':'ies'}${deadline ? ` · ${deadlineLabel} in ${safeCountdown(deadline)}` : ''}`,
+      meta:`${count} entr${count===1?'y':'ies'}${deadline ? ` · ${safeCountdown(deadline)} left` : ''}`,
       action:best.action.label,
       run:best.action.run
     };
@@ -29169,13 +29167,13 @@ document.addEventListener('click', (e) => {
       const isPromote=/promote/i.test(action);
       const isEdit=/edit/i.test(action);
       const concise=isEdit
-        ? 'Your entry is in and still editable.'
+        ? 'Entry editable'
         : isVoting
-          ? (move.relation||'Choose one entry before voting closes.')
+          ? 'Vote directly on an entry'
           : isPromote
-            ? (move.relation||'Your challenge is live. Promote it to bring in more competitors.')
+            ? 'Challenge live'
             : (move.relation||move.task||'');
-      el.innerHTML=`<div class="fc-home-module-head-v1057"><div class="fc-home-module-kicker-v1057">YOUR NEXT MOVE</div></div><article class="fc-home-action-row-v1057"><div class="fc-home-action-media-v1057">${emberHomeThumbV1057(move.challenge,move.pose)}</div><div class="fc-home-action-copy-v1057"><div class="fc-home-action-type-v1057">${escapeHtml(move.category)} · ${escapeHtml(move.media)}</div><strong class="fc-home-action-title-v1057">${escapeHtml(move.displayTitle||'Untitled challenge')}</strong><div class="fc-home-action-meta-v1057">${escapeHtml(concise)}${move.meta?`<span>${escapeHtml(move.meta)}</span>`:''}</div><button type="button" class="fc-home-action-link-v1057" data-ember-guidance-action>${escapeHtml(move.action)} →</button></div></article>`;
+      el.innerHTML=`<div class="fc-home-module-head-v1057"><div class="fc-home-module-kicker-v1057">YOUR NEXT MOVE</div></div><article class="fc-home-action-row-v1057"><div class="fc-home-action-media-v1057">${emberHomeThumbV1057(move.challenge,move.pose)}</div><div class="fc-home-action-copy-v1057"><div class="fc-home-action-type-v1057">${escapeHtml(move.category)} · ${escapeHtml(move.media)}</div><strong class="fc-home-action-title-v1057">${escapeHtml(move.displayTitle||'Untitled challenge')}</strong><div class="fc-home-action-meta-v1057">${escapeHtml(concise)}${move.meta?`<span> · ${escapeHtml(move.meta)}</span>`:''}</div><button type="button" class="fc-home-action-link-v1057" data-ember-guidance-action>${escapeHtml(move.action)} →</button></div></article>`;
       const actionBtn=el.querySelector('[data-ember-guidance-action]');
       if(actionBtn) actionBtn.onclick=(event)=>{event.stopPropagation();move.run();};
       el.onclick=(event)=>{if(!event.target.closest('[data-ember-guidance-action]'))move.run();};
@@ -29365,23 +29363,18 @@ document.addEventListener('click', (e) => {
       const copy=fcSplitTitle(ch), count=fcEntryCount(ch);
       const end=s==='submitting'?ch.submission_deadline:ch.voting_end;
       const timing=end?fcCountdown(end):'';
-      let statusCopy='';
-      if(s==='submitting'){
-        statusCopy=count===0
-          ? `No entries yet${timing?`. Closes in ${timing}.`:'.'}`
-          : `${count} entr${count===1?'y':'ies'}${timing?`. Closes in ${timing}.`:'.'}`;
-      }else if(s==='sudden_death'){
-        statusCopy=`Sudden death is live${count?`. ${count} entr${count===1?'y':'ies'}.`:'.'}${timing?` Ends in ${timing}.`:''}`;
-      }else{
-        statusCopy=`Voting is open${count?`. ${count} entr${count===1?'y':'ies'}.`:'.'}${timing?` Ends in ${timing}.`:''}`;
-      }
+      const phaseLabel=s==='submitting'?'Open':(s==='sudden_death'?'Sudden death':'Voting');
+      const statusParts=[phaseLabel,`${count} entr${count===1?'y':'ies'}`];
+      if(timing)statusParts.push(`${timing} left`);
+      const statusCopy=statusParts.join(' · ');
+      const actionLabel=/^vote now$/i.test(String(action.label||''))?'Vote':String(action.label||'Open');
       return `<article class="fc-home-live-card" data-live-id="${escapeHtml(ch.id)}">
         <div class="fc-home-live-media">${fcMedia(ch)}</div>
         <div class="fc-home-live-copy">
           <div class="fc-home-live-type">${escapeHtml(ch.category||'Challenge')} · ${escapeHtml(fcMediaLabel(ch))}</div>
           <div class="fc-home-live-title">${escapeHtml(copy.title)}</div>
           <div class="fc-home-live-meta">${escapeHtml(statusCopy)}</div>
-          <div class="fc-home-live-action">${escapeHtml(action.label)} →</div>
+          <div class="fc-home-live-action">${escapeHtml(actionLabel)} →</div>
         </div>
       </article>`;
     }).join('');
@@ -34985,6 +34978,103 @@ window.__fcBuildV1087={
   compactPreviewVoteControls:true,viewerVoteControlRestored:true,viewerVoteStateSynchronized:true,
   nativeHorizontalScrollPreserved:true,carouselScrollCodeChanged:false,viewerSizingChanged:false,
   backendChanged:false,sqlChanges:0,edgeFunctionChanges:0
+};
+</script>
+
+
+<style id="fc-v1088-compact-home-compete-css">
+/* v1088 — compactness and hierarchy only. No carousel, voting, viewer, or backend behavior changes. */
+#feedView #emberHomeCard.fc-home-next-module-v1057,
+#feedView #fcHomeLive{
+  padding:10px!important;
+  margin-bottom:12px!important;
+  border-radius:17px!important;
+}
+#feedView #fcHomeLive .fc-home-live-head{
+  margin-bottom:6px!important;
+  align-items:center!important;
+}
+#feedView #fcHomeLive h2{
+  font-size:15px!important;
+  line-height:1.05!important;
+  font-weight:850!important;
+  letter-spacing:0!important;
+}
+#feedView #fcHomeLive .fc-home-live-all{font-size:11px!important;padding:3px 0!important}
+#feedView #fcHomeLive .fc-home-live-card{
+  grid-template-columns:66px minmax(0,1fr)!important;
+  gap:9px!important;
+  padding:7px!important;
+  border-radius:13px!important;
+}
+#feedView #fcHomeLive .fc-home-live-media{
+  width:66px!important;
+  height:66px!important;
+  border-radius:10px!important;
+}
+#feedView #fcHomeLive .fc-home-live-title{font-size:15px!important;margin:2px 0 1px!important}
+#feedView #fcHomeLive .fc-home-live-meta{
+  font-size:10.5px!important;
+  line-height:1.2!important;
+  white-space:nowrap!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+}
+#feedView #fcHomeLive .fc-home-live-action{margin-top:4px!important;font-size:11px!important}
+
+.fc-home-action-row-v1057{
+  grid-template-columns:82px minmax(0,1fr)!important;
+  gap:10px!important;
+  padding:9px!important;
+  border-radius:13px!important;
+}
+.fc-home-action-media-v1057{width:82px!important;height:82px!important;border-radius:13px!important}
+.fc-home-ember-fill-v1057 .ember-prod{width:82px!important;height:82px!important}
+.fc-home-action-title-v1057{font-size:16px!important;margin:3px 0 2px!important}
+.fc-home-action-meta-v1057{font-size:11px!important;line-height:1.25!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+.fc-home-action-meta-v1057 span{display:inline!important;margin:0!important;color:var(--text-muted)!important}
+.fc-home-action-link-v1057{margin-top:5px!important;font-size:11.5px!important}
+
+#challengesGrid .fc-compete-card-foot-v1059{padding:9px 12px 11px!important}
+#challengesGrid .fc-compete-card-status-v1059{
+  flex-wrap:nowrap!important;
+  gap:3px 5px!important;
+  font-size:11px!important;
+  line-height:1.2!important;
+  white-space:nowrap!important;
+}
+#challengesGrid .fc-compete-card-score-v1059.fc-score-info-v1088{
+  display:inline-grid!important;
+  place-items:center!important;
+  flex:0 0 22px!important;
+  width:22px!important;
+  height:22px!important;
+  margin:0 0 0 auto!important;
+  padding:0!important;
+  border:1px solid var(--border)!important;
+  border-radius:50%!important;
+  background:var(--surface-2)!important;
+  color:var(--ember)!important;
+  text-align:center!important;
+  line-height:1!important;
+}
+#challengesGrid .fc-compete-card-score-v1059.fc-score-info-v1088 span{margin:0!important;font-size:11px!important;line-height:1!important}
+#challengesGrid .fc-compete-card-action-v1059{margin-top:9px!important;min-height:43px!important}
+@media(max-width:390px){
+  #feedView #fcHomeLive h2{font-size:14.5px!important}
+  #feedView #fcHomeLive .fc-home-live-card{grid-template-columns:62px minmax(0,1fr)!important}
+  #feedView #fcHomeLive .fc-home-live-media{width:62px!important;height:62px!important}
+  .fc-home-action-row-v1057{grid-template-columns:78px minmax(0,1fr)!important}
+  .fc-home-action-media-v1057,.fc-home-ember-fill-v1057 .ember-prod{width:78px!important;height:78px!important}
+  #challengesGrid .fc-compete-card-status-v1059{font-size:10.5px!important;gap:2px 4px!important}
+}
+</style>
+<script id="fc-v1088-build-marker">
+window.__fcBuildV1088={
+  build:'v1088',basedOn:'v1087',phase:'Production Hardening',focus:'Home and Compete compactness and hierarchy',
+  homeLiveHeadingReduced:true,homeLiveMetadataSingleLine:true,homeNextMoveMetadataCompressed:true,
+  competeStatusSingleLine:true,scoreExplanationBehindInfo:true,visibleScoreExplanationRowRemoved:true,
+  carouselChanged:false,viewerChanged:false,votingChanged:false,backendChanged:false,sqlChanges:0,edgeFunctionChanges:0
 };
 </script>
 
