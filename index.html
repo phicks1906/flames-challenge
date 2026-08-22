@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1098 — Gate 2C Score & Qualification Integrity</title>
+<title>FlamesChallenge v1099 — Cache, Update & Boot Reliability</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1098 · gate-2c-score-qualification-integrity" />
-<!-- v1098: confirmed Score persistence, serialized leaderboard settlement, Score-based cutoff-tie qualification. Server-atomic result settlement remains a separate backend gate. -->
-<meta name="fc-whatsnew" content="Confirms Score before display and qualifies every competitor tied within the top three Score levels." />
+<meta name="fc-build" content="v1099 · cache-update-boot-reliability" />
+<!-- v1099: preserves the installed worker and push registration, blocks stale downgrade prompts, and releases the app after critical data is ready. -->
+<meta name="fc-whatsnew" content="Faster reliable startup and safer automatic updates without destructive cache or service-worker resets." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -10042,6 +10042,20 @@ function _versionId(value){
   const m=String(value||'').match(/\bv?(\d+(?:\.\d+)*)\b/i);
   return m ? ('v' + m[1]).toLowerCase() : '';
 }
+function _versionParts(value){
+  const id=_versionId(value);
+  return id ? id.slice(1).split('.').map(n=>Number(n)||0) : [];
+}
+function _compareVersions(a,b){
+  const av=_versionParts(a), bv=_versionParts(b);
+  if(!av.length || !bv.length) return null;
+  const len=Math.max(av.length,bv.length);
+  for(let i=0;i<len;i++){
+    const diff=(av[i]||0)-(bv[i]||0);
+    if(diff) return diff>0?1:-1;
+  }
+  return 0;
+}
 function _dismissedUpdate(build){
   const id=_versionId(build);
   if(!id) return false;
@@ -10137,26 +10151,35 @@ async function checkForUpdate(force=false) {
   _lastUpdateCheck = now;
   _updateCheckInFlight = (async () => {
     try {
-      // v1031 — one source of truth: the deployed index.html build tag.
       const remote=await _fetchBuildTag();
       const remoteId=_versionId(remote?.build);
       const localId=_versionId(APP_VERSION);
-      if (remoteId && localId && remoteId !== localId) {
+      const comparison=_compareVersions(remoteId,localId);
+
+      // v1099 — a stale CDN/server response must never be offered as an update.
+      if (comparison === 1) {
         if(_dismissedUpdate(remote.build)){
           return {status:'dismissed',build:remote.build};
         }
-        showUpdateBanner(remote.build, remote.news);
+        showUpdateBanner(remote.build, remote.news, false);
         return { status: 'update-available', build: remote.build };
       }
-      // The deployed manifest and this page agree. Clear any stale dismissal
-      // record and do not let an old waiting service worker create a false alert.
-      if(remoteId && remoteId===localId) _clearDismissedUpdate(remote.build);
+
       const sw=await _probeServiceWorkerUpdate();
-      if(sw.waiting && !remoteId){
-        showUpdateBanner('service-worker',remote?.news||'A newer app shell is ready.');
-        return {status:'update-available',build:'service-worker'};
+      if(sw.waiting){
+        const workerBuild=remote?.build || APP_VERSION;
+        if(_dismissedUpdate(workerBuild)){
+          return {status:'dismissed',build:workerBuild,source:'service-worker'};
+        }
+        showUpdateBanner(workerBuild, remote?.news || 'A newer app shell is ready.', true);
+        return {status:'update-available',build:workerBuild,source:'service-worker'};
       }
-      return { status: 'current', build: remote?.build||APP_VERSION };
+
+      if(comparison === 0) _clearDismissedUpdate(remote.build);
+      return {
+        status: comparison === -1 ? 'current-stale-remote' : 'current',
+        build: remote?.build||APP_VERSION
+      };
     } catch (e) {
       console.warn('update check skipped', e);
       return { status: 'error', error: String(e?.message || e) };
@@ -10165,15 +10188,15 @@ async function checkForUpdate(force=false) {
   return _updateCheckInFlight;
 }
 // v1093 — automatic update detection is the only supported update path.
-function showUpdateBanner(build, news) {
-  // Never display an update prompt for the version already running.
+function showUpdateBanner(build, news, waitingWorker=false) {
   const offeredId=_versionId(build), localId=_versionId(APP_VERSION);
-  if(offeredId && localId && offeredId===localId) return;
+  if(!waitingWorker && offeredId && localId && _compareVersions(offeredId,localId)!==1) return;
   if (_updateBannerUp || document.getElementById('fcUpdateBar')) return;
   _updateBannerUp = true;
   const bar = document.createElement('div');
   bar.id = 'fcUpdateBar';
   bar.dataset.build=String(build||'');
+  bar.dataset.waitingWorker=waitingWorker?'1':'0';
   bar.innerHTML = `<div class="fcu-txt"><strong>Update available</strong><span>${_fcuEsc(news || 'A newer version is ready.')}</span></div><button class="fcu-go">Update</button><button class="fcu-later" aria-label="Dismiss">✕</button>`;
   document.body.appendChild(bar);
   bar.querySelector('.fcu-later').onclick = () => {
@@ -10190,10 +10213,9 @@ function showUpdateBanner(build, news) {
   };
 }
 async function applyUpdate(offeredBuild, visibleBar) {
-  // v1027 — iOS can suspend a long async cache-cleanup chain before the final
-  // navigation runs. Close the banner immediately, then use a guarded direct
-  // navigation to the deployed index. Cache/SW cleanup gets a short window but
-  // can never prevent the update navigation.
+  // v1099 — preserve the service-worker registration, push subscription, and
+  // existing shell cache. Activate only a waiting worker, then navigate to a
+  // cache-busted index. Never unregister the worker or delete all site caches.
   const offeredId = _versionId(offeredBuild) || 'latest';
   const withTimeout = (p, ms, fallback) => Promise.race([
     Promise.resolve(p).catch(() => fallback),
@@ -10220,24 +10242,37 @@ async function applyUpdate(offeredBuild, visibleBar) {
     catch (e) { window.location.href = target.toString(); }
   };
 
-  // Navigation is guaranteed even if Safari stalls service-worker or Cache API
-  // calls. A short delay lets cleanup finish without making the button look dead.
-  const navigationFallback = setTimeout(go, 900);
+  const navigationFallback = setTimeout(go, 2600);
   try {
     if ('serviceWorker' in navigator) {
-      const regs = await withTimeout(navigator.serviceWorker.getRegistrations(), 450, []);
-      for (const reg of (regs || [])) {
-        try { reg.waiting?.postMessage({ type: 'SKIP_WAITING' }); } catch (e) {}
-        try { reg.update(); } catch (e) {}
-        try { reg.unregister(); } catch (e) {}
+      const changed = new Promise(resolve => {
+        let done=false;
+        const finish=()=>{ if(done) return; done=true; resolve(true); };
+        navigator.serviceWorker.addEventListener('controllerchange', finish, {once:true});
+        setTimeout(()=>{ if(!done) resolve(false); }, 2200);
+      });
+      const reg = await withTimeout(navigator.serviceWorker.getRegistration(), 700, null);
+      if (reg) {
+        await withTimeout(reg.update(), 1400, null);
+        const activate = worker => {
+          try { worker?.postMessage({ type: 'SKIP_WAITING' }); } catch (e) {}
+        };
+        if (reg.waiting) activate(reg.waiting);
+        else if (reg.installing) {
+          const installing=reg.installing;
+          await withTimeout(new Promise(resolve=>{
+            const finish=()=>resolve(true);
+            installing.addEventListener('statechange',()=>{
+              if(installing.state==='installed' || installing.state==='redundant') finish();
+            });
+          }),1200,false);
+          activate(reg.waiting);
+        }
+        await changed;
       }
     }
-    if ('caches' in window) {
-      const keys = await withTimeout(caches.keys(), 450, []);
-      await withTimeout(Promise.allSettled((keys || []).map(key => caches.delete(key))), 450, []);
-    }
   } catch (e) {
-    console.warn('update cleanup skipped', e);
+    console.warn('worker activation skipped', e);
   } finally {
     clearTimeout(navigationFallback);
     go();
@@ -11176,6 +11211,17 @@ async function acknowledgeGuidelines() {
   if (wasUnacked) maybeStartTour();
 }
 
+/* v1099 — bounded network work for session/profile restoration. */
+function fcWithTimeoutV1099(promise, ms, label) {
+  let timer;
+  return Promise.race([
+    Promise.resolve(promise).finally(() => clearTimeout(timer)),
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error((label || 'Request') + ' timed out')), ms);
+    })
+  ]);
+}
+
 /* ---------- AUTH STATE LISTENER ---------- */
 // IMPORTANT: this callback must NOT be async and must NOT await Supabase calls
 // directly — doing so deadlocks the auth client (login hangs). We defer any DB
@@ -11221,7 +11267,7 @@ async function fcRetryBootV1095() {
   if (retry) retry.disabled = true;
   fcBootStartV1095('Retrying your session and competition data…');
   try {
-    const { data, error } = await db.auth.getSession();
+    const { data, error } = await fcWithTimeoutV1099(db.auth.getSession(), 10000, 'Session restoration');
     if (error) throw error;
     state.session = data?.session || null;
     if (!state.session) {
@@ -11245,7 +11291,9 @@ function hydrateApp(force = false) {
   fcBootStartV1095(force ? 'Retrying your competition data…' : 'Restoring your competition and latest activity…');
   (async () => {
     try {
-      if (!state.profile || String(state.profile.id) !== String(userId)) await loadProfile();
+      if (!state.profile || String(state.profile.id) !== String(userId)) {
+        await fcWithTimeoutV1099(loadProfile(), 22000, 'Profile restoration');
+      }
       if (!state.profile) return; // banned or signed out — loadProfile handled redirect
       // A leftover state.currentView from a previous account must never carry
       // into a new non-admin session.
@@ -11290,7 +11338,7 @@ db.auth.onAuthStateChange((event, session) => {
 setTimeout(async () => {
   if (_authResolvedV1095 || _appLoadInFlight) return;
   try {
-    const { data, error } = await db.auth.getSession();
+    const { data, error } = await fcWithTimeoutV1099(db.auth.getSession(), 10000, 'Session restoration');
     if (error) throw error;
     state.session = data?.session || null;
     if (state.session) hydrateApp(false);
@@ -11300,72 +11348,115 @@ setTimeout(async () => {
 
 async function loadProfile() {
   if (!state.session) return;
-  const { data, error } = await db.from('profiles').select('*').eq('id', state.session.user.id).maybeSingle();
-  if (error) console.error('profile load error', error);
+  const profileResult = await fcWithTimeoutV1099(
+    db.from('profiles').select('*').eq('id', state.session.user.id).maybeSingle(),
+    12000,
+    'Profile query'
+  );
+  const { data, error } = profileResult || {};
+  if (error) throw error;
   if (data) state.profile = data;
   else {
-    // Profile trigger should have created it, but just in case:
+    // Profile trigger should have created it, but just in case.
     const meta = state.session.user.user_metadata || {};
-    const { data: newProf } = await db.from('profiles').insert({
-      id: state.session.user.id,
-      name: meta.name || state.session.user.email.split('@')[0],
-      avatar: meta.avatar || fcInitialsFromName(meta.name || state.session.user.email.split('@')[0]),
-    }).select().single();
-    state.profile = newProf;
+    const created = await fcWithTimeoutV1099(
+      db.from('profiles').insert({
+        id: state.session.user.id,
+        name: meta.name || state.session.user.email.split('@')[0],
+        avatar: meta.avatar || fcInitialsFromName(meta.name || state.session.user.email.split('@')[0]),
+      }).select().single(),
+      12000,
+      'Profile creation'
+    );
+    if (created?.error) throw created.error;
+    state.profile = created?.data || null;
   }
+  if (!state.profile) throw new Error('Profile restoration returned no profile');
+
   // Banned users are signed out before any app data loads.
   if (await enforceBanIfBanned()) return;
-  // Apply pending interests from signup if this is a fresh login
-  try {
-    const pending = localStorage.getItem("fc_pending_interests");
-    if (pending !== null && state.profile) {
-      const interests = JSON.parse(pending);
-      localStorage.removeItem("fc_pending_interests");
-      if (interests.length > 0) {
-        await db.from("profiles").update({ interests }).eq("id", state.profile.id);
-        state.profile.interests = interests;
-      }
-    }
-  } catch(e) { console.warn("interests apply", e); }
 
-  // Apply pending follows from signup suggested follows step
+  // Pending interests and follows affect the first signed-in experience, but
+  // run in parallel and are individually bounded so they cannot trap boot.
+  const pendingBasics = [];
+  try {
+    const pending = localStorage.getItem('fc_pending_interests');
+    if (pending !== null) {
+      const interests = JSON.parse(pending);
+      if (Array.isArray(interests) && interests.length > 0) {
+        pendingBasics.push((async()=>{
+          const res = await fcWithTimeoutV1099(
+            db.from('profiles').update({ interests }).eq('id', state.profile.id),
+            7000,
+            'Signup interests'
+          );
+          if (res?.error) throw res.error;
+          state.profile.interests = interests;
+          localStorage.removeItem('fc_pending_interests');
+        })());
+      } else localStorage.removeItem('fc_pending_interests');
+    }
+  } catch(e) { console.warn('interests apply', e); }
+
   try {
     const pendingFollows = localStorage.getItem('fc_pending_follows');
-    if (pendingFollows && state.profile) {
+    if (pendingFollows) {
       const followIds = JSON.parse(pendingFollows);
-      localStorage.removeItem('fc_pending_follows');
-      if (followIds.length > 0) {
-        const rows = followIds.map(id => ({ follower_id: state.profile.id, followee_id: id }));
-        await db.from('follows').upsert(rows, { onConflict: 'follower_id,followee_id', ignoreDuplicates: true });
-        followIds.forEach(id => state.myFollowing.add(id));
-      }
+      if (Array.isArray(followIds) && followIds.length > 0) {
+        pendingBasics.push((async()=>{
+          const rows = followIds.map(id => ({ follower_id: state.profile.id, followee_id: id }));
+          const res = await fcWithTimeoutV1099(
+            db.from('follows').upsert(rows, { onConflict: 'follower_id,followee_id', ignoreDuplicates: true }),
+            7000,
+            'Signup follows'
+          );
+          if (res?.error) throw res.error;
+          followIds.forEach(id => state.myFollowing.add(id));
+          localStorage.removeItem('fc_pending_follows');
+        })());
+      } else localStorage.removeItem('fc_pending_follows');
     }
   } catch(e) { console.warn('pending follows apply', e); }
 
-  // Apply pending avatar photo from signup if this is a fresh login
-  try {
-    const pendingAvatar = localStorage.getItem("fc_pending_avatar");
-    if (pendingAvatar && state.profile) {
-      localStorage.removeItem("fc_pending_avatar");
-      // Convert base64 data URL to a File and upload to storage
-      const res = await fetch(pendingAvatar);
-      const blob = await res.blob();
-      const ext = blob.type.includes('png') ? 'png' : 'jpg';
-      const filename = `avatars/${state.profile.id}/${Date.now()}.${ext}`;
-      const up = await db.storage.from('challenge-media').upload(filename, blob, { cacheControl: '3600', upsert: false });
-      if (!up.error) {
-        const { data: pub } = db.storage.from('challenge-media').getPublicUrl(filename);
-        const avatarUrl = pub.publicUrl;
-        // Moderate the signup avatar before applying it; skip if flagged.
-        if (await moderateImage(avatarUrl, 'avatar')) {
-          await db.from("profiles").update({ avatar: avatarUrl }).eq("id", state.profile.id);
-          state.profile.avatar = avatarUrl;
-        } else {
-          await removeUploadedMedia(filename);
-        }
-      }
-    }
-  } catch(e) { console.warn("avatar apply", e); }
+  if (pendingBasics.length) {
+    const settled = await Promise.allSettled(pendingBasics);
+    settled.forEach(r => { if (r.status === 'rejected') console.warn('pending profile setup', r.reason); });
+  }
+
+  // Avatar upload/moderation is useful but not required to reveal the app.
+  // Run it after identity is restored so a large phone photo cannot hold boot.
+  setTimeout(() => fcApplyPendingAvatarV1099().catch(e => console.warn('avatar apply', e)), 0);
+}
+
+async function fcApplyPendingAvatarV1099() {
+  if (!state.profile) return;
+  const pendingAvatar = localStorage.getItem('fc_pending_avatar');
+  if (!pendingAvatar) return;
+  const res = await fcWithTimeoutV1099(fetch(pendingAvatar), 8000, 'Signup avatar read');
+  const blob = await fcWithTimeoutV1099(res.blob(), 8000, 'Signup avatar conversion');
+  const ext = blob.type.includes('png') ? 'png' : 'jpg';
+  const filename = `avatars/${state.profile.id}/${Date.now()}.${ext}`;
+  const up = await fcWithTimeoutV1099(
+    db.storage.from('challenge-media').upload(filename, blob, { cacheControl: '3600', upsert: false }),
+    15000,
+    'Signup avatar upload'
+  );
+  if (up?.error) throw up.error;
+  const { data: pub } = db.storage.from('challenge-media').getPublicUrl(filename);
+  const avatarUrl = pub.publicUrl;
+  if (await fcWithTimeoutV1099(moderateImage(avatarUrl, 'avatar'), 15000, 'Signup avatar moderation')) {
+    const saved = await fcWithTimeoutV1099(
+      db.from('profiles').update({ avatar: avatarUrl }).eq('id', state.profile.id),
+      8000,
+      'Signup avatar save'
+    );
+    if (saved?.error) throw saved.error;
+    state.profile.avatar = avatarUrl;
+    renderProfileChip();
+  } else {
+    await removeUploadedMedia(filename);
+  }
+  localStorage.removeItem('fc_pending_avatar');
 }
 
 function showAuth() {
@@ -11506,8 +11597,7 @@ async function loadAppData() {
   };
 
   try {
-    // Wave 1: the minimum state required for a truthful signed-in Home and
-    // Compete screen. These calls are retried and must succeed before boot ends.
+    // Wave 1 alone controls the boot gate: truthful Home/Compete data.
     await Promise.all([
       retryLoad('Challenges', () => loadChallenges({ throwOnError: true })),
       retryLoad('Follows', () => loadFollows({ throwOnError: true })),
@@ -11518,48 +11608,56 @@ async function loadAppData() {
       throw new Error('Critical startup state was not initialized');
     }
 
-    // Wave 2: important but non-blocking feature groups. Controlled sequencing
-    // avoids flooding a mobile connection with every multi-query loader at once.
-    const pollsTask = optionalLoad('Polls', async () => {
-      const [pollsRes, votesRes] = await Promise.all([
-        db.from('polls').select('*').order('created_at', { ascending: true }),
-        db.from('votes').select('poll_id, option_index, user_id'),
-      ]);
-      if (pollsRes.error) throw pollsRes.error;
-      if (votesRes.error) throw votesRes.error;
-      state.polls = pollsRes.data || [];
-      state.voteCountsByPoll = {};
-      state.myVotes = {};
-      (votesRes.data || []).forEach(v => {
-        if (!state.voteCountsByPoll[v.poll_id]) state.voteCountsByPoll[v.poll_id] = {};
-        state.voteCountsByPoll[v.poll_id][v.option_index] = (state.voteCountsByPoll[v.poll_id][v.option_index] || 0) + 1;
-        if (state.profile && v.user_id === state.profile.id) state.myVotes[v.poll_id] = v.option_index;
-      });
-    });
-
-    const standingsTask = optionalLoad('Championship standings', async () => {
-      await loadChampionshipData();
-      await loadLeaderboard();
-    });
-
-    await Promise.all([
-      pollsTask,
-      standingsTask,
-      optionalLoad('Posts', () => loadPosts()),
-      optionalLoad('Entry vote selections', () => hydrateEntryVotesV1083()),
-      optionalLoad('Competitive record', () => loadMyRecord()),
-    ]);
-
     state.loading = false;
-    renderPolls();
-    renderLeaderboard();
     renderChallenges();
     renderHeatCheck();
     renderFeedHello();
     renderFeed();
     requestAnimationFrame(() => setTimeout(wireWinnerReveals, 400));
 
-    // Mentions are not required to paint Home/Compete.
+    // Features outside the initial Home/Compete truth load behind the visible
+    // application. Their failure cannot restore or prolong the full-screen gate.
+    const loadOptionalFeatures = async () => {
+      const pollsTask = optionalLoad('Polls', async () => {
+        const [pollsRes, votesRes] = await Promise.all([
+          db.from('polls').select('*').order('created_at', { ascending: true }),
+          db.from('votes').select('poll_id, option_index, user_id'),
+        ]);
+        if (pollsRes.error) throw pollsRes.error;
+        if (votesRes.error) throw votesRes.error;
+        state.polls = pollsRes.data || [];
+        state.voteCountsByPoll = {};
+        state.myVotes = {};
+        (votesRes.data || []).forEach(v => {
+          if (!state.voteCountsByPoll[v.poll_id]) state.voteCountsByPoll[v.poll_id] = {};
+          state.voteCountsByPoll[v.poll_id][v.option_index] = (state.voteCountsByPoll[v.poll_id][v.option_index] || 0) + 1;
+          if (state.profile && v.user_id === state.profile.id) state.myVotes[v.poll_id] = v.option_index;
+        });
+      });
+
+      const standingsTask = optionalLoad('Championship standings', async () => {
+        await loadChampionshipData();
+        await loadLeaderboard();
+      });
+
+      await Promise.all([
+        pollsTask,
+        standingsTask,
+        optionalLoad('Posts', () => loadPosts()),
+        optionalLoad('Entry vote selections', () => hydrateEntryVotesV1083()),
+        optionalLoad('Competitive record', () => loadMyRecord()),
+      ]);
+
+      renderPolls();
+      renderLeaderboard();
+      renderChallenges();
+      renderHeatCheck();
+      if (state.currentView === 'feed') renderFeed();
+      loadLiveChampTallies().finally(buildTicker);
+    };
+
+    setTimeout(() => loadOptionalFeatures().catch(e => console.warn('optional startup features', e)), 0);
+
     const loadMentionsAfterPaint = () => {
       loadMentionableProfiles().then(() => {
         if (state.currentView === 'feed') renderFeed();
@@ -11575,7 +11673,6 @@ async function loadAppData() {
     setTimeout(() => { try { maybeShowGetAppPrompt(); } catch(e) {} }, 4200);
     _lastNotifPoll = Date.now();
     startLiveUpdates();
-    setTimeout(() => { loadLiveChampTallies().finally(buildTicker); }, 500);
   } catch (e) {
     state.loading = false;
     throw e;
@@ -28096,11 +28193,32 @@ function pushBannerHtml() {
 }
 
 /* ---------- BOOT ---------- */
+// v1099 — preserve worker registration/push state and bypass the HTTP cache
+// when checking the service-worker script.
 // Register the service worker so new deploys show up on a normal reload
 // (no cache-clearing, no private tabs needed — which keeps you logged in).
 if ('serviceWorker' in navigator && /(^|\.)flameschallenge\.com$/i.test(location.hostname)) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(err => console.warn('SW registration failed', err));
+  window.addEventListener('load', async () => {
+    try {
+      const reg = await navigator.serviceWorker.register('/sw.js', {
+        scope: '/',
+        updateViaCache: 'none'
+      });
+      const surfaceWaitingWorker = () => {
+        if (reg.waiting) setTimeout(() => checkForUpdate(true), 0);
+      };
+      surfaceWaitingWorker();
+      reg.addEventListener('updatefound', () => {
+        const worker = reg.installing;
+        if (!worker) return;
+        worker.addEventListener('statechange', () => {
+          if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+            setTimeout(() => checkForUpdate(true), 0);
+          }
+        });
+      });
+      reg.update().catch(() => {});
+    } catch (err) { console.warn('SW registration failed', err); }
   });
 }
 
@@ -28112,13 +28230,15 @@ db.from('users').select('id').limit(1).then(() => {}, () => {});
   const vEl = document.getElementById('appVersion');
   if (vEl) { vEl.textContent = 'FlamesChallenge · ' + APP_VERSION; vEl.style.cursor = 'pointer'; vEl.addEventListener('click', _onVersionTap); }
   { const eqSt = document.getElementById('eqStyleState'); if (eqSt) eqSt.textContent = EQ_LABELS[getEqStyle()]; } // v732
-  // Get initial session
-  const { data: { session } } = await db.auth.getSession();
-  state.session = session;
-  if (session) {
-    hydrateApp();
-  } else {
-    showAuth();
+  try {
+    const result = await fcWithTimeoutV1099(db.auth.getSession(), 10000, 'Initial session restoration');
+    if (result?.error) throw result.error;
+    const session = result?.data?.session || null;
+    state.session = session;
+    if (session) hydrateApp();
+    else { showAuth(); fcBootReleaseV1095(); }
+  } catch (e) {
+    fcBootFailV1095(e);
   }
 })();
 
