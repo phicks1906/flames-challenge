@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1094 — Startup Performance & Query Scope</title>
+<title>FlamesChallenge v1095 — Reliable Session Boot</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1094 · startup-performance-query-scope" />
-<meta name="fc-whatsnew" content="Speeds signed-in startup by loading independent data in parallel and limits competitive-record queries to challenges the user actually entered." />
+<meta name="fc-build" content="v1095 · reliable-session-boot" />
+<meta name="fc-whatsnew" content="Prevents blank signed-in loads and login-screen flashes with a reliable session boot gate, critical-data retries, and a visible retry path." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -7467,8 +7467,64 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
 }
 </style>
 
+
+<style id="fc-v1095-reliable-boot-css">
+/* v1095 — keep authentication restoration and critical Home data behind one
+   stable boot surface. The public landing must never flash over a returning
+   signed-in session, and a failed request must never leave an empty app shell. */
+#fcBootGateV1095{
+  position:fixed;inset:0;z-index:2147483646;
+  display:flex;align-items:center;justify-content:center;
+  padding:calc(28px + env(safe-area-inset-top,0px)) 28px calc(28px + env(safe-area-inset-bottom,0px));
+  background:
+    radial-gradient(circle at 50% 42%,rgba(255,91,35,.18),transparent 31%),
+    radial-gradient(circle at 50% 100%,rgba(255,126,38,.12),transparent 38%),
+    #070504;
+  color:#fff;opacity:1;visibility:visible;pointer-events:auto;
+  transition:opacity .22s ease,visibility .22s step-end;
+}
+body.fc-boot-ready-v1095 #fcBootGateV1095{
+  opacity:0;visibility:hidden;pointer-events:none;
+}
+.fc-boot-card-v1095{width:min(330px,100%);text-align:center}
+.fc-boot-mark-v1095{
+  width:74px;height:74px;margin:0 auto 18px;
+  background-image:var(--fc-approved-crowned-f);
+  background-size:contain;background-position:center;background-repeat:no-repeat;
+  filter:drop-shadow(0 12px 22px rgba(255,88,30,.28));
+}
+.fc-boot-spinner-v1095{
+  width:32px;height:32px;margin:0 auto 16px;border-radius:50%;
+  border:3px solid rgba(255,255,255,.16);border-top-color:#ff6a2c;
+  animation:fcBootSpinV1095 .75s linear infinite;
+}
+@keyframes fcBootSpinV1095{to{transform:rotate(360deg)}}
+.fc-boot-title-v1095{font:800 21px/1.2 var(--font-bricolage);letter-spacing:-.01em}
+.fc-boot-copy-v1095{margin-top:7px;color:#b9aaa0;font:500 14px/1.45 var(--font-body)}
+#fcBootRetryV1095{
+  display:none;margin:18px auto 0;min-height:46px;padding:0 24px;border:0;border-radius:999px;
+  background:linear-gradient(135deg,#ff7b31,#ff3d25);color:#fff;font:800 14px var(--font-body);
+  box-shadow:0 12px 28px rgba(255,70,30,.22);cursor:pointer;
+}
+#fcBootRetryV1095:disabled{opacity:.55}
+@media(prefers-reduced-motion:reduce){.fc-boot-spinner-v1095{animation:none}}
+</style>
+
 </head>
 <body>
+
+<!-- v1095 — stable session/data boot gate. Removed only after the signed-in
+     app has critical Home data, or after a confirmed signed-out session. -->
+<div id="fcBootGateV1095" role="status" aria-live="polite" aria-busy="true">
+  <div class="fc-boot-card-v1095">
+    <div class="fc-boot-mark-v1095" aria-hidden="true"></div>
+    <div class="fc-boot-spinner-v1095" id="fcBootSpinnerV1095" aria-hidden="true"></div>
+    <div class="fc-boot-title-v1095" id="fcBootTitleV1095">Loading FlamesChallenge</div>
+    <div class="fc-boot-copy-v1095" id="fcBootCopyV1095">Restoring your competition and latest activity…</div>
+    <button id="fcBootRetryV1095" type="button" onclick="fcRetryBootV1095()">Retry</button>
+  </div>
+</div>
+
 <!-- v690 — View-as-member banner. Deliberately loud and impossible to miss: the
      one failure mode of this feature is forgetting it's on and concluding admin
      is broken. Fixed, full-width, always on top. -->
@@ -11045,6 +11101,7 @@ async function signOut() {
   // Optimistically swap views right away so the user gets immediate feedback
   state.session = null;
   state.profile = null;
+  _appHydratedUserIdV1095 = null;
   // v654: reset the view so a different account signing in next doesn't land
   // on whatever page THIS account happened to be on — Admin included.
   state.currentView = 'feed';
@@ -11070,6 +11127,7 @@ async function enforceBanIfBanned() {
   if (!state.profile || !state.profile.banned_at) return false;
   state.session = null;
   state.profile = null;
+  _appHydratedUserIdV1095 = null;
   _appLoadInFlight = false;
   try { await db.auth.signOut(); } catch (e) { /* ignore */ }
   showAuth();
@@ -11122,30 +11180,91 @@ async function acknowledgeGuidelines() {
 // directly — doing so deadlocks the auth client (login hangs). We defer any DB
 // work with setTimeout(…, 0) to escape the auth callback context.
 let _appLoadInFlight = false;
-function hydrateApp() {
-  if (_appLoadInFlight || state.profile) return;
+let _appHydratedUserIdV1095 = null;
+let _authResolvedV1095 = false;
+
+function fcBootStartV1095(message) {
+  document.body.classList.remove('fc-boot-ready-v1095');
+  const gate = document.getElementById('fcBootGateV1095');
+  const title = document.getElementById('fcBootTitleV1095');
+  const copy = document.getElementById('fcBootCopyV1095');
+  const spinner = document.getElementById('fcBootSpinnerV1095');
+  const retry = document.getElementById('fcBootRetryV1095');
+  if (gate) { gate.setAttribute('aria-busy','true'); gate.style.display='flex'; }
+  if (title) title.textContent = 'Loading FlamesChallenge';
+  if (copy) copy.textContent = message || 'Restoring your competition and latest activity…';
+  if (spinner) spinner.style.display = 'block';
+  if (retry) { retry.style.display='none'; retry.disabled=false; }
+}
+function fcBootReleaseV1095() {
+  _authResolvedV1095 = true;
+  const gate = document.getElementById('fcBootGateV1095');
+  if (gate) gate.setAttribute('aria-busy','false');
+  document.body.classList.add('fc-boot-ready-v1095');
+}
+function fcBootFailV1095(err) {
+  const title = document.getElementById('fcBootTitleV1095');
+  const copy = document.getElementById('fcBootCopyV1095');
+  const spinner = document.getElementById('fcBootSpinnerV1095');
+  const retry = document.getElementById('fcBootRetryV1095');
+  if (title) title.textContent = 'Couldn’t finish loading';
+  if (copy) copy.textContent = navigator.onLine === false
+    ? 'You appear to be offline. Reconnect, then retry.'
+    : 'Your session is safe. Retry the data connection instead of loading an empty screen.';
+  if (spinner) spinner.style.display = 'none';
+  if (retry) retry.style.display = 'inline-flex';
+  console.error('v1095 boot failed', err);
+}
+async function fcRetryBootV1095() {
+  const retry = document.getElementById('fcBootRetryV1095');
+  if (retry) retry.disabled = true;
+  fcBootStartV1095('Retrying your session and competition data…');
+  try {
+    const { data, error } = await db.auth.getSession();
+    if (error) throw error;
+    state.session = data?.session || null;
+    if (!state.session) {
+      state.profile = null;
+      _appHydratedUserIdV1095 = null;
+      showAuth();
+      fcBootReleaseV1095();
+      return;
+    }
+    hydrateApp(true);
+  } catch (e) {
+    fcBootFailV1095(e);
+  }
+}
+window.fcRetryBootV1095 = fcRetryBootV1095;
+
+function hydrateApp(force = false) {
+  const userId = state.session?.user?.id || null;
+  if (!userId || _appLoadInFlight || (!force && _appHydratedUserIdV1095 === userId)) return;
   _appLoadInFlight = true;
+  fcBootStartV1095(force ? 'Retrying your competition data…' : 'Restoring your competition and latest activity…');
   (async () => {
     try {
-      await loadProfile();
+      if (!state.profile || String(state.profile.id) !== String(userId)) await loadProfile();
       if (!state.profile) return; // banned or signed out — loadProfile handled redirect
-      // v654: a leftover state.currentView from a PREVIOUS account's session
-      // must never carry into a new sign-in — most importantly 'admin', which
-      // would otherwise render for a non-admin account since switchView()'s
-      // admin gate only runs on explicit navigation, not on this render path.
+      // A leftover state.currentView from a previous account must never carry
+      // into a new non-admin session.
       if (state.currentView === 'admin' && !isAdmin()) state.currentView = 'feed';
+
+      // Keep the shell laid out behind the boot gate so renderers can measure it,
+      // but do not expose a temporary empty Home screen to the user.
       showApp();
       showAdminNav();
       await loadAppData();
-      // v664: showApp() only un-hides the app shell — the per-view section
-      // display flags were last set by the PREVIOUS account's switchView() and
-      // persist across an account switch (e.g. Admin stays visible for a new,
-      // non-admin account even though state.currentView was reset to 'feed').
-      // Re-run switchView so the VISIBLE page actually matches currentView.
+      _appHydratedUserIdV1095 = userId;
+
+      // Re-run switchView so the visible page matches currentView after an
+      // account change, then apply any deep link only after data is ready.
       switchView(state.currentView);
       applyDeepLink();
+      requestAnimationFrame(() => requestAnimationFrame(fcBootReleaseV1095));
     } catch (err) {
-      console.error('hydrateApp failed', err);
+      _appHydratedUserIdV1095 = null;
+      fcBootFailV1095(err);
     } finally {
       _appLoadInFlight = false;
     }
@@ -11156,13 +11275,27 @@ db.auth.onAuthStateChange((event, session) => {
   state.session = session;
   if (!session) {
     state.profile = null;
+    _appHydratedUserIdV1095 = null;
     _appLoadInFlight = false;
     showAuth();
+    fcBootReleaseV1095();
     return;
   }
-  // Defer DB work out of the callback to avoid deadlocking auth
-  setTimeout(hydrateApp, 0);
+  // Defer DB work out of the callback to avoid deadlocking auth.
+  setTimeout(() => hydrateApp(false), 0);
 });
+
+// A defensive fallback for iOS/PWA restores where an auth event is delayed.
+setTimeout(async () => {
+  if (_authResolvedV1095 || _appLoadInFlight) return;
+  try {
+    const { data, error } = await db.auth.getSession();
+    if (error) throw error;
+    state.session = data?.session || null;
+    if (state.session) hydrateApp(false);
+    else { showAuth(); fcBootReleaseV1095(); }
+  } catch (e) { fcBootFailV1095(e); }
+}, 4500);
 
 async function loadProfile() {
   if (!state.session) return;
@@ -11343,85 +11476,109 @@ function dismissWelcomeBanner() {
 }
 
 /* ---------- APP DATA LOAD ---------- */
-/* v1094 PERFORMANCE: parallel startup groups + user-scoped competitive record queries. */
+/* v1095 RELIABILITY: preserve v1094 query scoping, but load in controlled
+   waves. Critical Home/Compete reads retry and fail visibly instead of being
+   swallowed into a permanent empty screen. */
 async function loadAppData() {
   state.loading = true;
 
-  // v1094 — Initial app data used to load as a long serial chain. Most of these
-  // reads are independent, so the user waited for the sum of every network trip.
-  // Run independent groups together while preserving the one real dependency:
-  // Championship data must exist before the leaderboard/Score ledger is built.
-  const safeLoad = async (label, work) => {
-    try { return await work(); }
+  const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const withTimeout = (promise, ms, label) => Promise.race([
+    Promise.resolve(promise),
+    new Promise((_, reject) => setTimeout(() => reject(new Error(label + ' timed out')), ms))
+  ]);
+  const retryLoad = async (label, work, attempts = 2) => {
+    let lastError = null;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try { return await withTimeout(work(), 18000, label); }
+      catch (e) {
+        lastError = e;
+        console.warn(`${label} attempt ${attempt} failed`, e);
+        if (attempt < attempts) await delay(450 * attempt);
+      }
+    }
+    throw lastError || new Error(label + ' failed');
+  };
+  const optionalLoad = async (label, work) => {
+    try { return await withTimeout(work(), 18000, label); }
     catch (e) { console.warn(label + ' load failed', e); return null; }
   };
 
-  const pollsTask = safeLoad('Polls', async () => {
-    const [pollsRes, votesRes] = await Promise.all([
-      db.from('polls').select('*').order('created_at', { ascending: true }),
-      db.from('votes').select('poll_id, option_index, user_id'),
+  try {
+    // Wave 1: the minimum state required for a truthful signed-in Home and
+    // Compete screen. These calls are retried and must succeed before boot ends.
+    await Promise.all([
+      retryLoad('Challenges', () => loadChallenges({ throwOnError: true })),
+      retryLoad('Follows', () => loadFollows({ throwOnError: true })),
+      retryLoad('Feed activity', () => loadFeedActivity({ throwOnError: true })),
     ]);
-    state.polls = pollsRes.data || [];
-    state.voteCountsByPoll = {};
-    state.myVotes = {};
-    (votesRes.data || []).forEach(v => {
-      if (!state.voteCountsByPoll[v.poll_id]) state.voteCountsByPoll[v.poll_id] = {};
-      state.voteCountsByPoll[v.poll_id][v.option_index] = (state.voteCountsByPoll[v.poll_id][v.option_index] || 0) + 1;
-      if (state.profile && v.user_id === state.profile.id) state.myVotes[v.poll_id] = v.option_index;
+
+    if (!Array.isArray(state.challenges) || !Array.isArray(state.feedEntries) || !(state.myFollowing instanceof Set)) {
+      throw new Error('Critical startup state was not initialized');
+    }
+
+    // Wave 2: important but non-blocking feature groups. Controlled sequencing
+    // avoids flooding a mobile connection with every multi-query loader at once.
+    const pollsTask = optionalLoad('Polls', async () => {
+      const [pollsRes, votesRes] = await Promise.all([
+        db.from('polls').select('*').order('created_at', { ascending: true }),
+        db.from('votes').select('poll_id, option_index, user_id'),
+      ]);
+      if (pollsRes.error) throw pollsRes.error;
+      if (votesRes.error) throw votesRes.error;
+      state.polls = pollsRes.data || [];
+      state.voteCountsByPoll = {};
+      state.myVotes = {};
+      (votesRes.data || []).forEach(v => {
+        if (!state.voteCountsByPoll[v.poll_id]) state.voteCountsByPoll[v.poll_id] = {};
+        state.voteCountsByPoll[v.poll_id][v.option_index] = (state.voteCountsByPoll[v.poll_id][v.option_index] || 0) + 1;
+        if (state.profile && v.user_id === state.profile.id) state.myVotes[v.poll_id] = v.option_index;
+      });
     });
-  });
 
-  const standingsTask = safeLoad('Championship standings', async () => {
-    // Hall of Fame titles affect the visible level frozen into Opponent Points.
-    await loadChampionshipData();
-    await loadLeaderboard();
-  });
+    const standingsTask = optionalLoad('Championship standings', async () => {
+      await loadChampionshipData();
+      await loadLeaderboard();
+    });
 
-  await Promise.all([
-    pollsTask,
-    standingsTask,
-    safeLoad('Challenges', () => loadChallenges()),
-    safeLoad('Posts', () => loadPosts()),
-    safeLoad('Follows', () => loadFollows()),
-    safeLoad('Feed activity', () => loadFeedActivity()),
-    safeLoad('Entry vote selections', () => hydrateEntryVotesV1083()),
-    safeLoad('Competitive record', () => loadMyRecord()),
-  ]);
+    await Promise.all([
+      pollsTask,
+      standingsTask,
+      optionalLoad('Posts', () => loadPosts()),
+      optionalLoad('Entry vote selections', () => hydrateEntryVotesV1083()),
+      optionalLoad('Competitive record', () => loadMyRecord()),
+    ]);
 
-  state.loading = false;
-  renderPolls();
-  renderLeaderboard();
-  renderChallenges();
-  renderHeatCheck();
-  renderFeedHello();
-  renderFeed();
-  requestAnimationFrame(() => setTimeout(wireWinnerReveals, 400));
+    state.loading = false;
+    renderPolls();
+    renderLeaderboard();
+    renderChallenges();
+    renderHeatCheck();
+    renderFeedHello();
+    renderFeed();
+    requestAnimationFrame(() => setTimeout(wireWinnerReveals, 400));
 
-  // Mentions are not required to paint Home/Compete. Load the full profile list
-  // after the first usable screen, then refresh visible text once so @names gain
-  // their highlight without blocking startup.
-  const loadMentionsAfterPaint = () => {
-    loadMentionableProfiles().then(() => {
-      if (state.currentView === 'feed') renderFeed();
-    }).catch(e => console.warn('Mention profiles load failed', e));
-  };
-  if ('requestIdleCallback' in window) requestIdleCallback(loadMentionsAfterPaint, { timeout: 1800 });
-  else setTimeout(loadMentionsAfterPaint, 700);
+    // Mentions are not required to paint Home/Compete.
+    const loadMentionsAfterPaint = () => {
+      loadMentionableProfiles().then(() => {
+        if (state.currentView === 'feed') renderFeed();
+      }).catch(e => console.warn('Mention profiles load failed', e));
+    };
+    if ('requestIdleCallback' in window) requestIdleCallback(loadMentionsAfterPaint, { timeout: 1800 });
+    else setTimeout(loadMentionsAfterPaint, 700);
 
-  loadNotifications();
-  loadDmBadge();
-  // v757 — celebration check after data is in; delayed so the overlay doesn't
-  // fight the initial paint. hofData/ladder must be loaded before stage math runs.
-  setTimeout(() => { try { maybeShowCelebration(); } catch(e) {} }, 1600);
-  // v758 — keep an already-granted push subscription alive (endpoints rotate)
-  setTimeout(() => { try { ensurePushSubscription(); } catch(e) {} }, 2500);
-  // v763 — one-time install/push nudge for existing users. Last in the queue.
-  setTimeout(() => { try { maybeShowGetAppPrompt(); } catch(e) {} }, 4200);
-  _lastNotifPoll = Date.now();
-  startLiveUpdates();
-  // Live championship tallies feed Ember's ringside commentary; defer until the
-  // first screen is already usable.
-  setTimeout(() => { loadLiveChampTallies().finally(buildTicker); }, 500);
+    loadNotifications();
+    loadDmBadge();
+    setTimeout(() => { try { maybeShowCelebration(); } catch(e) {} }, 1600);
+    setTimeout(() => { try { ensurePushSubscription(); } catch(e) {} }, 2500);
+    setTimeout(() => { try { maybeShowGetAppPrompt(); } catch(e) {} }, 4200);
+    _lastNotifPoll = Date.now();
+    startLiveUpdates();
+    setTimeout(() => { loadLiveChampTallies().finally(buildTicker); }, 500);
+  } catch (e) {
+    state.loading = false;
+    throw e;
+  }
 }
 
 // =========================
@@ -11710,6 +11867,7 @@ async function loadFeedActivity(opts = {}) {
 
   } catch (err) {
     console.error('feed activity load error', err);
+    if (opts.throwOnError) throw err;
     state.feedEntries    = state.feedEntries    || [];
     state.feedVoteCounts = state.feedVoteCounts || {};
   }
@@ -20395,7 +20553,7 @@ async function loadChallenges(opts = {}) {
   if (sinceTs) q = q.gte('created_at', sinceTs).limit(20);
 
   const { data: challenges, error: chErr } = await q;
-  if (chErr) { console.error('challenges load error', chErr); state.challenges = state.challenges || []; return; }
+  if (chErr) { console.error('challenges load error', chErr); if (opts.throwOnError) throw chErr; state.challenges = state.challenges || []; return; }
 
   if (opts.incremental && sinceTs) {
     const existing = new Map((state.challenges || []).map(c => [c.id, c]));
@@ -20425,7 +20583,8 @@ async function loadChallenges(opts = {}) {
   if (opts.incremental && state._challengeEntriesLastTs) {
     entryQ = entryQ.gte('created_at', state._challengeEntriesLastTs).limit(100);
   }
-  const { data: entries } = await entryQ;
+  const { data: entries, error: entryErr } = await entryQ;
+  if (entryErr) { console.error('challenge entries load error', entryErr); if (opts.throwOnError) throw entryErr; }
 
   // v1060 — one complete, deduplicated source for card media and card counts.
   // The previous count query and media query were different windows with different
@@ -26687,7 +26846,7 @@ async function deletePost(postId) {
    PHASE 5: FOLLOWS
    ============================================ */
 
-async function loadFollows() {
+async function loadFollows(opts = {}) {
   // Get all follow rows so we can compute counts and my following
   const { data: follows, error } = await db.from('follows').select('follower_id, followee_id');
   if (error) {
@@ -26695,6 +26854,7 @@ async function loadFollows() {
     state.myFollowing = new Set();
     state.followerCounts = {};
     state.followingCounts = {};
+    if (opts.throwOnError) throw error;
     return;
   }
   const mine = new Set();
