@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1092 — Titles & You Consistency</title>
+<title>FlamesChallenge v1093 — Static Integrity & Obsolete-Code Cleanup</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1092 · titles-you-consistency" />
-<meta name="fc-whatsnew" content="Aligns Titles and profiles with one compact competitive card system, clearer qualification rows, and consistent Dark and Light surfaces." />
+<meta name="fc-build" content="v1093 · static-integrity-obsolete-code-cleanup" />
+<meta name="fc-whatsnew" content="Removes obsolete diagnostic markers and the retired manual update pathway while preserving automatic app updates and all product behavior." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -7401,11 +7401,6 @@ body.fc-authenticated #fcPublicBrowser{display:none!important}
   scroll-snap-align: center !important;
 }
 </style>
-<script id="fc-v1071-build-marker">
-window.__fcBuildV1071={build:'v1071',basedOn:'v1070',fix:'normal iPhone horizontal swipes advance exactly one entry instead of snapping back',preventDefault:false,nativeVerticalScrollPreserved:true,navigationChanged:false,backendChanged:false};
-</script>
-
-
 <style id="fc-v1072-approved-ember-css">
 /* v1072 — approved Ember character direction.
    Compact uses the approved circular avatar; larger uses the full waving character. */
@@ -9964,30 +9959,9 @@ try {
   }
 } catch (e) {}
 
-// v1066 — finish a manual network update check after the fresh shell loads.
-// The initiating page stores its running version, clears SW/cache state, and
-// reloads index.html from the network. This page then reports the comparison.
-(function fcReportManualUpdateResultV1066(){
-  let request = null;
-  try {
-    request = JSON.parse(sessionStorage.getItem('fc_manual_update_check_v1071') || sessionStorage.getItem('fc_manual_update_check_v1070') || sessionStorage.getItem('fc_manual_update_check_v1069') || sessionStorage.getItem('fc_manual_update_check_v1068') || sessionStorage.getItem('fc_manual_update_check_v1067') || sessionStorage.getItem('fc_manual_update_check_v1066') || 'null');
-    if (request) { sessionStorage.removeItem('fc_manual_update_check_v1071'); sessionStorage.removeItem('fc_manual_update_check_v1070'); sessionStorage.removeItem('fc_manual_update_check_v1069'); sessionStorage.removeItem('fc_manual_update_check_v1068'); sessionStorage.removeItem('fc_manual_update_check_v1067'); sessionStorage.removeItem('fc_manual_update_check_v1066'); }
-  } catch (e) {}
-  if (!request) return;
-  const from = String(request.from || '').match(/v?\d+(?:\.\d+)*/i)?.[0]?.toLowerCase().replace(/^v/, '') || '';
-  const current = String(APP_VERSION).match(/v?\d+(?:\.\d+)*/i)?.[0]?.toLowerCase().replace(/^v/, '') || '';
-  const message = from && current && from !== current
-    ? `Updated to v${current}`
-    : `You’re current · v${current || from || 'latest'}`;
-  let tries = 0;
-  const report = () => {
-    if (typeof window.toast === 'function') window.toast(message);
-    else if (typeof toast === 'function') toast(message);
-    else if (tries++ < 40) setTimeout(report, 250);
-  };
-  setTimeout(report, 350);
-})();
+// v1093 — manual update UI and its reload-report path were retired.
 
+/* v1093 HARDENING: automatic update path retained; manual pathway removed. */
 /* ---------- UPDATE CHECK (v1010) ----------
    The previous checker required the host to return HTTP 206 for a Range
    request. Many static hosts and CDN configurations correctly returned 200
@@ -10098,7 +10072,7 @@ async function _probeServiceWorkerUpdate(){
   }catch(e){console.warn('service worker update probe',e)}
   return {waiting:false};
 }
-async function checkForUpdate(force=false, options={}) {
+async function checkForUpdate(force=false) {
   if (_updateBannerUp) return { status: 'banner-visible' };
   const now = Date.now();
   if (!force && now - _lastUpdateCheck < UPDATE_CHECK_MS) return { status: 'throttled' };
@@ -10111,7 +10085,7 @@ async function checkForUpdate(force=false, options={}) {
       const remoteId=_versionId(remote?.build);
       const localId=_versionId(APP_VERSION);
       if (remoteId && localId && remoteId !== localId) {
-        if(!options.manual && _dismissedUpdate(remote.build)){
+        if(_dismissedUpdate(remote.build)){
           return {status:'dismissed',build:remote.build};
         }
         showUpdateBanner(remote.build, remote.news);
@@ -10133,47 +10107,7 @@ async function checkForUpdate(force=false, options={}) {
   })();
   return _updateCheckInFlight;
 }
-window.fcCheckForUpdate = () => checkForUpdate(true,{manual:true});
-window.fcManualUpdateCheck = async function(){
-  try { if (typeof toast === 'function') toast('Checking for updates…'); } catch (e) {}
-  try {
-    sessionStorage.setItem('fc_manual_update_check_v1071', JSON.stringify({ from: APP_VERSION, at: Date.now() }));
-  } catch (e) {}
-
-  let navigated = false;
-  const go = () => {
-    if (navigated) return;
-    navigated = true;
-    const target = new URL('/index.html', location.origin);
-    target.searchParams.set('_fc_manual_check', String(Date.now()));
-    try { window.location.replace(target.toString()); }
-    catch (e) { window.location.href = target.toString(); }
-  };
-
-  const fallback = setTimeout(go, 1200);
-  try {
-    if ('serviceWorker' in navigator) {
-      const regs = await Promise.race([
-        navigator.serviceWorker.getRegistrations().catch(() => []),
-        new Promise(resolve => setTimeout(() => resolve([]), 500))
-      ]);
-      await Promise.allSettled((regs || []).map(reg => reg.unregister()));
-    }
-    if ('caches' in window) {
-      const keys = await Promise.race([
-        caches.keys().catch(() => []),
-        new Promise(resolve => setTimeout(() => resolve([]), 500))
-      ]);
-      await Promise.allSettled((keys || []).map(key => caches.delete(key)));
-    }
-  } catch (e) {
-    console.warn('manual update cleanup skipped', e);
-  } finally {
-    clearTimeout(fallback);
-    go();
-  }
-  return { status: 'reloading' };
-};
+// v1093 — automatic update detection is the only supported update path.
 function showUpdateBanner(build, news) {
   // Never display an update prompt for the version already running.
   const offeredId=_versionId(build), localId=_versionId(APP_VERSION);
@@ -30076,25 +30010,6 @@ window.fcPublicFeedDiagnostics = function(){
 </script>
 
 
-<script id="fc-v1019-public-feed-visual-polish-marker">
-window.__fcPublicFeedVisualPolish={
-  build:'v1019',
-  safeArea:'sticky public header',
-  videoThumbnails:'self-hosted poster → Bunny preview.webp → designed fallback',
-  mobileCards:'compact horizontal layout'
-};
-</script>
-
-<script id="fc-v1020-landing-deduplication-marker">
-window.__fcLandingDeduplication={
-  build:'v1020',
-  explanation:'hero copy only',
-  removed:['standalone four-step explainer','what-makes-this-a-competition panel'],
-  fallback:'process chips remain only when live content cannot load'
-};
-</script>
-
-
 <script id="fc-v1021-native-challenge-creation-js">
 (function(){
   'use strict';
@@ -30227,11 +30142,6 @@ window.__fcLandingDeduplication={
 })();
 </script>
 
-<script id="fc-v1021-native-challenge-creation-marker">
-window.__fcNativeChallengeCreation={build:'v1023',steps:['challenge','entry','timing','audience-and-launch'],draftAutosave:true,finalPreview:true,videoHandling:'original upload with duration guidance; no audio-damaging browser re-encode',clarityAndStateFix:true};
-</script>
-
-
 <script id="fc-v1022-challenge-creation-clarity-js">
 (function(){
   'use strict';
@@ -30346,11 +30256,6 @@ window.__fcNativeChallengeCreation={build:'v1023',steps:['challenge','entry','ti
   if(document.readyState!=='loading')syncHostNote();
 })();
 </script>
-<script id="fc-v1022-challenge-creation-clarity-marker">
-window.__fcChallengeCreationClarity={build:'v1022',stepOneLanguage:'set-the-challenge',titleSuggestions:'short titles only',captionSuggestions:'seed required; no invented details',hostStateFix:true,timingCopy:'concrete',suddenDeathCopy:'revealed together for runoff'};
-</script>
-
-
 <script id="fc-v1023-challenge-creation-final-polish-js">
 (function(){
   'use strict';
@@ -30430,10 +30335,6 @@ window.__fcChallengeCreationClarity={build:'v1022',stepOneLanguage:'set-the-chal
   if(document.readyState!=='loading')install();
 })();
 </script>
-<script id="fc-v1023-challenge-creation-final-polish-marker">
-window.__fcChallengeCreationFinalPolish={build:'v1023',phaseTracker:'safe-area header',emberTitleRole:'polish only; concept preserving',audienceControl:'compact segmented',completed:true};
-</script>
-
 <script id="fc-v1024-voting-experience-integrity-js">
 (function(){
   'use strict';
@@ -30486,11 +30387,6 @@ window.__fcChallengeCreationFinalPolish={build:'v1023',phaseTracker:'safe-area h
   };
 })();
 </script>
-<script id="fc-v1024-voting-experience-integrity-marker">
-window.__fcVotingExperienceIntegrity={build:'v1024',liveTallies:'superseded by v1025 live race',voteChange:'allowed until close',selection:'explicit card state',winnerReveal:true,creationMediaChoices:'compact'};
-</script>
-
-
 <style id="fc-v1025-sudden-death-parity-css">
 /* v1025 — live race visibility and sudden-death parity. */
 .fc-v1025-live-race{margin:10px 0 14px;padding:12px 14px;border:1px solid rgba(255,102,48,.28);border-radius:14px;background:linear-gradient(145deg,rgba(255,87,32,.11),rgba(255,255,255,.018));display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -30628,11 +30524,6 @@ window.__fcVotingExperienceIntegrity={build:'v1024',liveTallies:'superseded by v
   };
 })();
 </script>
-<script id="fc-v1025-sudden-death-parity-marker">
-window.__fcSuddenDeathParity={build:'v1025',regularAndChampionships:'same new-entry runoff',submissionVisibility:'hidden until reveal',runoffTallies:'live',secondTie:'co-winners',noSubmissions:'co-winners',oneSubmission:'default winner',manualReview:false,extension:false};
-</script>
-
-
 <style id="fc-v1030-championship-leaderboard-css">
 /* v1030 — the category Championship race is the primary object; personal stats are secondary. */
 #leaderboardViewSection .section-head{margin-bottom:10px}
@@ -32398,11 +32289,6 @@ html[data-theme="light"] body #authView.fc-public-auth:not(.fc-signup-onboarding
 </style>
 
 
-<script id="fc-v1039-onboarding-marker">
-window.__fcOnboardingV1039={authAlwaysDark:true,appearanceRequired:true,interestsRequired:true,interestUses:['Discover','suggested challenges','creator recommendations'],firstUseSteps:3};
-</script>
-
-
 <style id="fc-v1044-walkthrough-feed-cleanup-css">
 /* v1040 — optional photo + initials identity. Generic illustrated avatar grids
    are removed from signup and profile editing. */
@@ -33359,11 +33245,6 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
   window.__fcCompetitionClarityV1047={version:'v1047',rulesCenter:true,canonicalRulesSource:true,contextualStateActionNext:true,entryRules:true,votingRules:true,rejectedEntriesExcludedFromSettlement:true,newEdgeFunctions:0,edgeFunctionChanges:0};
 })();
 </script>
-<script id="fc-v1047-competition-clarity-rules-marker">
-window.__fcBuildV1047={build:'v1047',phase:'Competition Clarity, Rules & Trust',backendChanges:false,newEdgeFunctions:0,edgeFunctionChanges:0};
-</script>
-
-
 <script id="fc-v1048-creator-insights-js">
 /* v1048 — Creator Insights reads recorded rows only. */
 (function(){
@@ -33454,33 +33335,6 @@ window.__fcBuildV1047={build:'v1047',phase:'Competition Clarity, Rules & Trust',
 })();
 </script>
 
-
-<script id="fc-v1049-production-hardening-marker">
-window.__fcBuildV1049={
-  build:'v1049',
-  phase:'Production Hardening & Release Readiness — Pass 1',
-  hallOfFameNamingCanonical:true,
-  pendingEntryPrivatePreview:true,
-  nativeEntrySwipeOnly:true,
-  undefinedGestureHandlerRemoved:true,
-  backendChanges:false,
-  newEdgeFunctions:0,
-  edgeFunctionChanges:0
-};
-</script>
-
-<script id="fc-v1054-base-marker">
-window.__fcBuildV1054Base={
-  build:'v1054',
-  phase:'Production Hardening & Release Readiness',
-  basedOn:'v1053 stable emergency recovery',
-  navigationArchitectureChanged:false,
-  focus:['progressive disclosure','compact challenge detail','visible level clarity','Hall of Fame separation'],
-  backendChanges:false,
-  newEdgeFunctions:0,
-  edgeFunctionChanges:0
-};
-</script>
 
 <style id="fc-v1054-progressive-guidance-css">
 /* v1054 — teach in layers: interface state, one short cue, deeper help on demand. */
@@ -33819,11 +33673,6 @@ html[data-theme="light"] body .fc-score-race-v1032 .fc-score-metric-v1032{box-sh
 .fc-winner-media-v1058{width:100%;background:#0f0d0c;overflow:hidden}.fc-winner-media-v1058>img,.fc-winner-media-v1058 video{width:100%;aspect-ratio:16/10;max-height:360px;object-fit:cover;display:block}.fc-winner-video-v1058{position:relative;cursor:pointer}.fc-winner-video-v1058>span{position:absolute;inset:0;display:grid;place-items:center;font-size:34px;color:#fff;background:rgba(0,0,0,.18);pointer-events:none}.fc-winner-audio-v1058{display:flex;align-items:center;gap:10px;padding:16px;background:var(--surface-2)}.fc-winner-audio-v1058>span{font-size:28px}.fc-winner-audio-v1058 audio{flex:1;min-width:0}.fc-winner-text-v1058{padding:22px 16px;text-align:center;background:var(--surface-2);cursor:pointer}.fc-winner-text-v1058>span{font-size:38px}.fc-winner-text-v1058 p{margin:8px 0 0;color:var(--text);line-height:1.4}
 
 </style>
-<script id="fc-v1058-build-marker">
-window.__fcBuildV1058={build:'v1058-superseded-challenge-stage',phase:'Production Hardening',focus:'winner card only; fixed challenge stage removed by v1060',basedOn:'v1057',homeTopChanged:false,feedChallengeRebuilt:false,winnerCardRebuilt:true,flyerChanged:false,emberChanged:false,navigationChanged:false,competeChanged:false,titlesChanged:false,createFlowChanged:false,scoringRulesChanged:false,levelThresholdsChanged:false,moderationChanged:false,newEdgeFunctions:0,edgeFunctionChanges:0,sqlChanges:0};
-</script>
-
-
 <style id="fc-v1059-focused-compete-css">
 /* v1059 — Compete only. One purpose, one status line, one Score line, one action. */
 #challengesViewSection .ch-header{align-items:flex-start!important;margin-bottom:14px!important}
@@ -33881,11 +33730,6 @@ window.__fcBuildV1058={build:'v1058-superseded-challenge-stage',phase:'Productio
 /* v1061 — flyer card restored exactly from v1056. */
 
 </style>
-<script id="fc-v1061-build-marker">
-window.__fcBuildV1061={build:'v1061',phase:'Production Hardening',focus:'restore flyer card exactly from v1056',basedOn:'v1060',v1056FlyerRendererRestored:true,v1060FlyerOverridesRemoved:true,entryCarouselPreserved:true,countRecoveryPreserved:true,homeChanged:false,competeChanged:false,titlesChanged:false,createFlowChanged:false,navigationChanged:false,scoringRulesChanged:false,levelThresholdsChanged:false,moderationFunctionChanged:false,newEdgeFunctions:0,edgeFunctionChanges:0,sqlChanges:0};
-</script>
-
-
 <style id="fc-v1065-flyer-winner-recovery">
 /* v1065 — exact v1056 flyer shell restored. Winner remains a normal inset feed card;
    only its media stage is shortened and ratio-safe so it no longer appears stretched. */
@@ -33918,13 +33762,6 @@ window.__fcBuildV1061={build:'v1061',phase:'Production Hardening',focus:'restore
   display:block !important;
 }
 </style>
-<script id="fc-v1065-build-marker">
-window.__fcBuildV1065={build:'v1065',basedOn:'v1064',flyerRenderer:'exact v1056 shell restored',flyerFullBleedRemoved:true,winnerCardInsetPreserved:true,winnerMediaMaxHeight:300,winnerMediaAspect:'16:9',otherFeedCardsChanged:false,navigationChanged:false,backendChanged:false};
-</script>
-
-
-
-<script id="fc-v1073-build-marker">window.__fcBuildV1073={build:'v1073',focus:'Home Your Next Move hierarchy and Ember scale',scope:'Home top card only',navigationChanged:false,scoringChanged:false,backendChanged:false};</script>
 <style id="fc-v1074-live-now-unification-css">
 /* v1074 — Live Now rows use the same anatomy as Your Next Move. */
 #feedView #fcHomeLive .fc-home-live-card{
@@ -33965,10 +33802,6 @@ window.__fcBuildV1065={build:'v1065',basedOn:'v1064',flyerRenderer:'exact v1056 
   #feedView #fcHomeLive .fc-home-live-media{width:88px!important;height:88px!important}
 }
 </style>
-<script id="fc-v1074-build-marker">window.__fcBuildV1074={build:'v1074',focus:'Live Now rows unified with Your Next Move',scope:'Home Live Now only',navigationChanged:false,scoringChanged:false,backendChanged:false};</script>
-
-
-
 <style id="fc-v1075-you-primary-page-css">
 /* v1075 — The signed-in user's own profile is a primary bottom-navigation
    destination. Other competitors continue to open in the closable sheet. */
@@ -34132,49 +33965,6 @@ window.__fcBuildV1065={build:'v1065',basedOn:'v1064',flyerRenderer:'exact v1056 
 })();
 </script>
 
-<script id="fc-v1076-challenge-detail-notification-cleanup-js">
-(() => {
-  window.__fcBuildV1076 = {
-    build: 'v1076',
-    phase: 'Production Hardening',
-    focus: 'compact notifications + accurate pending-entry empty state',
-    newEdgeFunctions: 0,
-    edgeFunctionChanges: 0,
-    sqlChanges: 0
-  };
-})();
-</script>
-
-<script id="fc-v1077-challenge-detail-action-cleanup-js">
-(() => {
-  window.__fcBuildV1077 = {
-    build: 'v1077',
-    phase: 'Production Hardening',
-    focus: 'single-source Challenge Detail actions',
-    newEdgeFunctions: 0,
-    edgeFunctionChanges: 0,
-    sqlChanges: 0
-  };
-})();
-</script>
-
-<script id="fc-v1078-challenge-detail-rendering-pipeline-marker-js">
-(() => {
-  window.__fcBuildV1078 = {
-    build: 'v1078',
-    phase: 'Production Hardening',
-    focus: 'single ordered Challenge Detail rendering pipeline',
-    pipeline: ['live-race','score-eligibility','rules-and-score-panel','compact-status-brief'],
-    sharedState: ['phase','moderation','visibleEntries','actions','emptyState'],
-    removedWrappers: 7,
-    newEdgeFunctions: 0,
-    edgeFunctionChanges: 0,
-    sqlChanges: 0
-  };
-})();
-</script>
-
-
 <style id="fc-v1079-entry-card-viewer-css">
 /* v1079 — entry cards show identity first, size to the actual photo shape, and
    expose a deliberate 14px next-card peek without the old broken-looking sliver. */
@@ -34275,13 +34065,6 @@ window.__fcBuildV1065={build:'v1065',basedOn:'v1064',flyerRenderer:'exact v1056 
   border-top:1px solid var(--border);background:var(--surface);
 }
 </style>
-<script id="fc-v1079-entry-card-viewer-marker-js">
-window.__fcBuildV1079={build:'v1079',basedOn:'v1078',focus:'media-aware entry cards and full-screen direct entry viewer',entryIdentityMovedAboveMedia:true,entryPositionShown:true,dotPagerHidden:true,nextCardPeekPx:14,photoAspectClasses:['portrait','square','landscape'],viewerMode:'full-screen',mediaCropping:false,blurredContainBackdrop:true,navigationChanged:false,onboardingChanged:false,scoringChanged:false,moderationChanged:false,backendChanged:false,sqlChanges:0,edgeFunctionChanges:0};
-</script>
-
-
-
-
 <style id="fc-v1081-challenge-detail-card-polish-css">
 /* v1081 — Challenge Detail visual corrections from signed-in iPhone testing. */
 #challengeDetailSheet > .cd-sheet-header{
@@ -34660,27 +34443,6 @@ body.fc-insights-unavailable-v1081 .pm-tile[onclick*="openCreatorInsightsV1048"]
 }
 .fc-entry-viewer-v1079 .fc-ev-vote-v1083:disabled{cursor:default;opacity:1}
 </style>
-<script id="fc-v1083-direct-voting-fast-swipes-marker-js">
-window.__fcBuildV1083={
-  build:'v1083',
-  basedOn:'v1082',
-  focus:'direct entry voting and faster responsive preview swipes',
-  cardActionUsesVoteStatus:true,
-  creatorCanVoteFromCard:true,
-  directViewerVoteButton:true,
-  voteChangeSupported:true,
-  selectedPreviewMarked:true,
-  slowSmoothSettleRemoved:true,
-  nativeHorizontalScrollPreserved:true,
-  scrollPreventDefault:false,
-  previewDimensionsChanged:false,
-  backendChanged:false,
-  sqlChanges:0,
-  edgeFunctionChanges:0
-};
-</script>
-
-
 <style id="fc-v1084-single-voting-surface-css">
 /* v1084 — Voting lives on the Challenge Detail entry cards. The full-screen
    media viewer is for inspection only and no longer becomes another voting
@@ -34692,28 +34454,6 @@ window.__fcBuildV1083={
   display:none!important;
 }
 </style>
-<script id="fc-v1084-single-voting-surface-marker-js">
-window.__fcBuildV1084={
-  build:'v1084',
-  basedOn:'v1083',
-  focus:'one voting surface inside Challenge Detail',
-  challengeDetailEntryCardsAreVotingSurface:true,
-  extraVoteNowStepRemoved:true,
-  challengeCardAction:'superseded-by-v1085',
-  mediaViewerVotingRemoved:true,
-  mediaViewerRemainsAvailable:true,
-  liveTotalsPreserved:true,
-  voteChangePreserved:true,
-  nativeHorizontalScrollPreserved:true,
-  carouselScrollCodeChanged:false,
-  backendChanged:false,
-  sqlChanges:0,
-  edgeFunctionChanges:0
-};
-</script>
-
-
-
 <style id="fc-v1086-voting-count-button-correction-css">
 /* v1086 — direct voting remains on the visible Compete preview card. Viewer
    positions are unique and the compact controls no longer dominate the card. */
@@ -34985,17 +34725,6 @@ window.__fcBuildV1084={
   .fc-entry-viewer-v1079 #evFollowBtn{padding-inline:11px!important}
 }
 </style>
-<script id="fc-v1087-build-marker">
-window.__fcBuildV1087={
-  build:'v1087',basedOn:'v1086',focus:'compact Home live hierarchy, smaller vote controls, and synchronized viewer voting',
-  homeLiveTitle:'Other challenges',homeLiveHeadingReduced:true,homeLivePaddingReduced:true,
-  compactPreviewVoteControls:true,viewerVoteControlRestored:true,viewerVoteStateSynchronized:true,
-  nativeHorizontalScrollPreserved:true,carouselScrollCodeChanged:false,viewerSizingChanged:false,
-  backendChanged:false,sqlChanges:0,edgeFunctionChanges:0
-};
-</script>
-
-
 <style id="fc-v1088-compact-home-compete-css">
 /* v1088 — compactness and hierarchy only. No carousel, voting, viewer, or backend behavior changes. */
 #feedView #emberHomeCard.fc-home-next-module-v1057,
@@ -35083,15 +34812,6 @@ window.__fcBuildV1087={
   #challengesGrid .fc-compete-card-status-v1059{font-size:10.5px!important;gap:2px 4px!important}
 }
 </style>
-<script id="fc-v1088-build-marker">
-window.__fcBuildV1088={
-  build:'v1088',basedOn:'v1087',phase:'Production Hardening',focus:'Home and Compete compactness and hierarchy',
-  homeLiveHeadingReduced:true,homeLiveMetadataSingleLine:true,homeNextMoveMetadataCompressed:true,
-  competeStatusSingleLine:true,scoreExplanationBehindInfo:true,visibleScoreExplanationRowRemoved:true,
-  carouselChanged:false,viewerChanged:false,votingChanged:false,backendChanged:false,sqlChanges:0,edgeFunctionChanges:0
-};
-</script>
-
 <style id="fc-v1089-flame-visual-system-css">
 /* v1089 — Flame visual system. This pass changes color, atmosphere, and
    surface treatment only. Typography is intentionally deferred to its own
@@ -35280,18 +35000,6 @@ html[data-theme="light"] body #feedContainer .feed-challenge-card{
 }
 @media(prefers-reduced-motion:reduce){.bg-layer::before{animation:none!important}}
 </style>
-<script id="fc-v1089-build-marker">
-window.__fcBuildV1089={
-  build:'v1089',basedOn:'v1088',phase:'Flame-themed visual system',
-  flameAtmosphere:true,warmSurfaceTokens:true,darkAndLightThemes:true,
-  manualUpdateOptionRemoved:true,automaticUpdateHandlingPreserved:true,
-  typographyChanged:false,typographyReviewDeferred:true,
-  navigationChanged:false,votingChanged:false,backendChanged:false,sqlChanges:0,edgeFunctionChanges:0
-};
-</script>
-
-
-
 <style id="fc-v1091-dark-light-css">
 /* v1091 — Remove the experimental orange-dominant appearance while keeping
    the approved gold-to-flame Championship launch action from v1090. */
@@ -35302,19 +35010,6 @@ window.__fcBuildV1089={
   box-shadow:0 12px 28px -16px rgba(255,115,36,.72)!important;
 }
 </style>
-<script id="fc-v1091-build-marker">
-window.__fcBuildV1091={
-  build:'v1091',basedOn:'v1090',phase:'Dark and Light appearance',
-  flameThemeRemoved:true,savedFlameMigratesToDark:true,
-  signupThemeOptions:2,walkthroughThemeOptions:2,settingsThemeCycle:['Dark','Light'],
-  darkPreserved:true,lightPreserved:true,championshipLaunchFlameStylePreserved:true,
-  nextPhase:'Titles and You consistency',typographyReviewDeferred:true,
-  navigationChanged:false,votingChanged:false,backendChanged:false,sqlChanges:0,edgeFunctionChanges:0
-};
-</script>
-
-
-
 <style id="fc-v1092-titles-you-consistency-css">
 /* v1092 — Titles and profiles now share one competitive information system.
    This is a hierarchy, spacing, and surface pass only. Typography is deferred. */
@@ -35474,17 +35169,5 @@ html[data-theme="light"] #profileSheet.fc-profile-v1036 .cd-sheet-header{backgro
   #profileSheet.fc-profile-v1036 .cd-sheet-inner{padding-inline:12px!important}
 }
 </style>
-<script id="fc-v1092-build-marker">
-window.__fcBuildV1092={
-  build:'v1092',basedOn:'v1091',phase:'Titles and You consistency',
-  titlesCompactHierarchy:true,openQualificationRowsCondensed:true,
-  scoreAndProfileSurfacesUnified:true,ownAndPublicProfilesAligned:true,
-  darkAndLightParity:true,typographyChanged:false,typographyReviewDeferred:true,
-  navigationChanged:false,votingChanged:false,scoringLogicChanged:false,
-  backendChanged:false,sqlChanges:0,edgeFunctionChanges:0,
-  nextPhase:'Production hardening and release readiness'
-};
-</script>
-
 </body>
 </html>
