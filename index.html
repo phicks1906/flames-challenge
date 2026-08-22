@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1093 — Static Integrity & Obsolete-Code Cleanup</title>
+<title>FlamesChallenge v1094 — Startup Performance & Query Scope</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1093 · static-integrity-obsolete-code-cleanup" />
-<meta name="fc-whatsnew" content="Removes obsolete diagnostic markers and the retired manual update pathway while preserving automatic app updates and all product behavior." />
+<meta name="fc-build" content="v1094 · startup-performance-query-scope" />
+<meta name="fc-whatsnew" content="Speeds signed-in startup by loading independent data in parallel and limits competitive-record queries to challenges the user actually entered." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -11343,35 +11343,51 @@ function dismissWelcomeBanner() {
 }
 
 /* ---------- APP DATA LOAD ---------- */
+/* v1094 PERFORMANCE: parallel startup groups + user-scoped competitive record queries. */
 async function loadAppData() {
   state.loading = true;
-  const [pollsRes, votesRes] = await Promise.all([
-    db.from('polls').select('*').order('created_at', { ascending: true }),
-    db.from('votes').select('poll_id, option_index, user_id'),
-  ]);
-  state.polls = pollsRes.data || [];
-  state.voteCountsByPoll = {};
-  state.myVotes = {};
-  (votesRes.data || []).forEach(v => {
-    if (!state.voteCountsByPoll[v.poll_id]) state.voteCountsByPoll[v.poll_id] = {};
-    state.voteCountsByPoll[v.poll_id][v.option_index] = (state.voteCountsByPoll[v.poll_id][v.option_index] || 0) + 1;
-    if (state.profile && v.user_id === state.profile.id) {
-      state.myVotes[v.poll_id] = v.option_index;
-    }
+
+  // v1094 — Initial app data used to load as a long serial chain. Most of these
+  // reads are independent, so the user waited for the sum of every network trip.
+  // Run independent groups together while preserving the one real dependency:
+  // Championship data must exist before the leaderboard/Score ledger is built.
+  const safeLoad = async (label, work) => {
+    try { return await work(); }
+    catch (e) { console.warn(label + ' load failed', e); return null; }
+  };
+
+  const pollsTask = safeLoad('Polls', async () => {
+    const [pollsRes, votesRes] = await Promise.all([
+      db.from('polls').select('*').order('created_at', { ascending: true }),
+      db.from('votes').select('poll_id, option_index, user_id'),
+    ]);
+    state.polls = pollsRes.data || [];
+    state.voteCountsByPoll = {};
+    state.myVotes = {};
+    (votesRes.data || []).forEach(v => {
+      if (!state.voteCountsByPoll[v.poll_id]) state.voteCountsByPoll[v.poll_id] = {};
+      state.voteCountsByPoll[v.poll_id][v.option_index] = (state.voteCountsByPoll[v.poll_id][v.option_index] || 0) + 1;
+      if (state.profile && v.user_id === state.profile.id) state.myVotes[v.poll_id] = v.option_index;
+    });
   });
-  // v1054: Hall of Fame titles are part of the visible level used by
-  // Opponent Points, so load them before rebuilding the leaderboard/score ledger.
-  await loadChampionshipData();
-  await loadLeaderboard();
-  await loadChallenges();
-  await loadPosts();
-  await loadFollows();
-  await loadFeedActivity();
-  await hydrateEntryVotesV1083();
-  await loadMentionableProfiles();
-  await loadMyRecord();
-  try { maybeShowCoronation(); } catch (e) {}
-  try { maybeChampRaceToast(); } catch (e) {}
+
+  const standingsTask = safeLoad('Championship standings', async () => {
+    // Hall of Fame titles affect the visible level frozen into Opponent Points.
+    await loadChampionshipData();
+    await loadLeaderboard();
+  });
+
+  await Promise.all([
+    pollsTask,
+    standingsTask,
+    safeLoad('Challenges', () => loadChallenges()),
+    safeLoad('Posts', () => loadPosts()),
+    safeLoad('Follows', () => loadFollows()),
+    safeLoad('Feed activity', () => loadFeedActivity()),
+    safeLoad('Entry vote selections', () => hydrateEntryVotesV1083()),
+    safeLoad('Competitive record', () => loadMyRecord()),
+  ]);
+
   state.loading = false;
   renderPolls();
   renderLeaderboard();
@@ -11380,21 +11396,31 @@ async function loadAppData() {
   renderFeedHello();
   renderFeed();
   requestAnimationFrame(() => setTimeout(wireWinnerReveals, 400));
+
+  // Mentions are not required to paint Home/Compete. Load the full profile list
+  // after the first usable screen, then refresh visible text once so @names gain
+  // their highlight without blocking startup.
+  const loadMentionsAfterPaint = () => {
+    loadMentionableProfiles().then(() => {
+      if (state.currentView === 'feed') renderFeed();
+    }).catch(e => console.warn('Mention profiles load failed', e));
+  };
+  if ('requestIdleCallback' in window) requestIdleCallback(loadMentionsAfterPaint, { timeout: 1800 });
+  else setTimeout(loadMentionsAfterPaint, 700);
+
   loadNotifications();
   loadDmBadge();
   // v757 — celebration check after data is in; delayed so the overlay doesn't
-  // fight the initial paint. hofData/ladder must be loaded (renderLeaderboard
-  // above kicks that off) before the champ_won → stage math runs.
+  // fight the initial paint. hofData/ladder must be loaded before stage math runs.
   setTimeout(() => { try { maybeShowCelebration(); } catch(e) {} }, 1600);
   // v758 — keep an already-granted push subscription alive (endpoints rotate)
   setTimeout(() => { try { ensurePushSubscription(); } catch(e) {} }, 2500);
-  // v763 — one-time install/push nudge for existing users. Last in the queue:
-  // a celebration or the tour takes precedence, and both are checked for.
+  // v763 — one-time install/push nudge for existing users. Last in the queue.
   setTimeout(() => { try { maybeShowGetAppPrompt(); } catch(e) {} }, 4200);
   _lastNotifPoll = Date.now();
   startLiveUpdates();
-  // Build ticker after data is ready. v771 — live championship tallies feed
-  // Ember's ringside commentary; fetch them first so his lines have numbers.
+  // Live championship tallies feed Ember's ringside commentary; defer until the
+  // first screen is already usable.
   setTimeout(() => { loadLiveChampTallies().finally(buildTicker); }, 500);
 }
 
@@ -12821,53 +12847,66 @@ async function loadMyRecord() {
   if (!state.profile) { state.myRecord = []; return; }
   const me = state.profile.id;
 
-  // Fetch my entries — no join, simple query like leaderboard does
-  const [myEntriesRes, allChallengesRes, allEntriesRes, allVotesRes] = await Promise.all([
-    db.from('entries')
-      .select('id, challenge_id, created_at, caption, media_type, media_url, sd_round')
-      .eq('user_id', me)
-      .order('created_at', { ascending: false }),
+  // v1094 — the old record loader downloaded every challenge, every entry and
+  // every entry vote in the database, even when this user had entered only a
+  // handful. First find this user's entries, then scope every supporting query
+  // to only those challenge ids. The result is identical and scales with the
+  // user's record instead of the whole product.
+  const { data: myEntriesData, error: myEntriesError } = await db.from('entries')
+    .select('id, challenge_id, created_at, caption, media_type, media_url, sd_round')
+    .eq('user_id', me)
+    .order('created_at', { ascending: false });
+  if (myEntriesError) throw myEntriesError;
+
+  const myEntries = myEntriesData || [];
+  const challengeIds = [...new Set(myEntries.map(e => e.challenge_id).filter(Boolean))];
+  if (!challengeIds.length) {
+    state.myRecord = [];
+    state.winnerProfiles = {};
+    return;
+  }
+
+  const [challengesRes, entriesRes, votesRes] = await Promise.all([
     db.from('challenges')
-      .select('id, title, category, submission_deadline, voting_end, is_public, creator_id, status, sd_round, sd_phase'),
+      .select('id, title, category, submission_deadline, voting_end, is_public, creator_id, status, sd_round, sd_phase')
+      .in('id', challengeIds),
     db.from('entries')
-      .select('id, challenge_id, user_id, sd_round'),
+      .select('id, challenge_id, user_id, sd_round')
+      .in('challenge_id', challengeIds),
     db.from('entry_votes')
-      .select('entry_id, challenge_id'),
+      .select('entry_id, challenge_id')
+      .in('challenge_id', challengeIds),
   ]);
+  if (challengesRes.error) throw challengesRes.error;
+  if (entriesRes.error) throw entriesRes.error;
+  if (votesRes.error) throw votesRes.error;
 
-  const myEntries = myEntriesRes.data || [];
-
-  // Build lookup maps
   const challengeMap = {};
-  (allChallengesRes.data || []).forEach(ch => { challengeMap[ch.id] = ch; });
+  (challengesRes.data || []).forEach(ch => { challengeMap[ch.id] = ch; });
 
   const entriesByChallenge = {};
-  (allEntriesRes.data || []).forEach(e => {
+  (entriesRes.data || []).forEach(e => {
     if (!entriesByChallenge[e.challenge_id]) entriesByChallenge[e.challenge_id] = [];
     entriesByChallenge[e.challenge_id].push(e);
   });
 
   const votesByEntry = {};
-  (allVotesRes.data || []).forEach(v => {
+  (votesRes.data || []).forEach(v => {
     votesByEntry[v.entry_id] = (votesByEntry[v.entry_id] || 0) + 1;
   });
 
-  // For Sudden Death challenges I re-entered, I have entries in multiple rounds —
-  // show ONE record row per challenge (my latest-round entry carries the result).
+  // For Sudden Death challenges I re-entered, show one record row per challenge.
   const myBestRound = {};
   myEntries.forEach(e => {
     const r = e.sd_round || 0;
-    if (myBestRound[e.challenge_id] === undefined || r > myBestRound[e.challenge_id]) {
-      myBestRound[e.challenge_id] = r;
-    }
+    if (myBestRound[e.challenge_id] === undefined || r > myBestRound[e.challenge_id]) myBestRound[e.challenge_id] = r;
   });
 
   state.myRecord = myEntries.map(e => {
     const ch = challengeMap[e.challenge_id];
     if (!ch) return null;
-    if ((e.sd_round || 0) !== myBestRound[e.challenge_id]) return null; // dedupe SD rounds
+    if ((e.sd_round || 0) !== myBestRound[e.challenge_id]) return null;
 
-    // Sudden Death: only the FINAL round's entries + votes decide the outcome.
     const finalR = ch.sd_round || 0;
     const chEntriesAll = entriesByChallenge[ch.id] || [];
     const chEntries = chEntriesAll.filter(en => (en.sd_round || 0) === finalR);
@@ -12880,7 +12919,7 @@ async function loadMyRecord() {
     let result = 'pending';
 
     if (ch.sd_phase) {
-      result = 'pending'; // mid-Sudden-Death — not decided yet
+      result = 'pending';
     } else if (status === 'closed') {
       const counts = allChEntries.map(en => votesByEntry[en.id] || 0);
       const maxVotes = counts.length ? Math.max(...counts) : 0;
@@ -12888,14 +12927,11 @@ async function loadMyRecord() {
       const topCount = counts.filter(c => c === maxVotes).length;
       const forfeitWin = finalR > 0 && allChEntries.length === 1 && maxVotes === 0;
       if (forfeitWin) {
-        // Sole survivor of a Sudden Death round wins by walkover (no votes cast)
         result = allChEntries[0].user_id === me || (mineIsFinal && allChEntries[0].id === e.id) ? 'won' : 'lost';
       } else if (!mineIsFinal) {
-        result = maxVotes > 0 ? 'lost' : 'voided'; // I didn't make the final round
+        result = maxVotes > 0 ? 'lost' : 'voided';
       } else if (maxVotes === 0 || (finalR === 0 && allChEntries.length < 2)) {
-        // v773 — the comment always said "single entrant or no votes", but the
-        // condition only tested votes. A lone entrant WITH a vote slipped through.
-        result = 'voided'; // single entrant or no votes — not a real win
+        result = 'voided';
       } else if (myVotes === maxVotes) {
         result = topCount > 1 ? 'tied' : 'won';
       } else {
@@ -12905,7 +12941,6 @@ async function loadMyRecord() {
       result = 'voided';
     }
 
-    // Find the winning entry's user_id
     let winnerUserId = null;
     if (!ch.sd_phase && status === 'closed' && allChEntries.length > 0) {
       const counts = allChEntries.map(en => votesByEntry[en.id] || 0);
@@ -12918,8 +12953,6 @@ async function loadMyRecord() {
     return { challenge: ch, myEntryId: e.id, myCreated: e.created_at, result, myMediaType: e.media_type, myMediaUrl: e.media_url, myVotes: votesByEntry[e.id] || 0, entryCount: allChEntries.length, winnerUserId };
   }).filter(Boolean);
 
-  // Fetch profiles for any winners so the follow button works
-  // without requiring the user to visit the Ranks tab first
   const winnerIds = [...new Set(state.myRecord.filter(r => r.winnerUserId).map(r => r.winnerUserId))];
   if (winnerIds.length) {
     const { data: wp } = await db.from('profiles').select('id, name, avatar').in('id', winnerIds);
@@ -12928,7 +12961,6 @@ async function loadMyRecord() {
   } else {
     state.winnerProfiles = {};
   }
-
 }
 
 function renderRecord() {
