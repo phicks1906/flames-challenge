@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1076 — Challenge Detail Notification Cleanup</title>
+<title>FlamesChallenge v1077 — Challenge Detail Action Cleanup</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1076 · challenge-detail-notification-cleanup" />
-<meta name="fc-whatsnew" content="Replaces oversized long-message bubbles with compact notifications and makes pending-entry challenge states accurate." />
+<meta name="fc-build" content="v1077 · challenge-detail-action-cleanup" />
+<meta name="fc-whatsnew" content="Removes duplicate Challenge Detail actions so Promote and Rules each have one authoritative control." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -20913,6 +20913,13 @@ function renderChampionshipHero(ch, status, countdownTarget) {
   // (cdDeleteBtn is wired by the shared handler in renderChallengeDetail)
 }
 
+function challengePromotionBlocked() {
+  return (state.currentEntries || []).some(e =>
+    e.moderation_status === 'pending' ||
+    e.moderation_status === 'flagged' ||
+    e.moderation_status === 'escalated');
+}
+
 function renderChallengeDetail() {
   // Wire lazy preview videos after render completes
   requestAnimationFrame(() => wireLazyVideoThumbnails(document.getElementById('challengeDetailSheet')));
@@ -20940,13 +20947,10 @@ function renderChallengeDetail() {
       <div class="cd-actions-group">
         ${(() => {
           if (!(ch.is_public && status !== 'closed' && status !== 'voided')) return '';
-          // v654: don't let Promote amplify reach to a challenge while any of
-          // its entries are still under moderation review — pending/flagged/
-          // escalated. Approved/clear entries and rejected (already resolved,
-          // hidden) don't block it.
-          const _underReview = (state.currentEntries || []).some(e =>
-            e.moderation_status === 'pending' || e.moderation_status === 'flagged' || e.moderation_status === 'escalated');
-          if (_underReview) return `<button class="cd-share-btn" disabled title="Can't promote while content is under review" style="opacity:0.45;cursor:not-allowed;">📣 Promote</button>`;
+          // v1077: the challenge header is the only Promote source. Keep the
+          // existing moderation rule here so every screen state uses one
+          // authoritative availability decision.
+          if (challengePromotionBlocked()) return `<button class="cd-share-btn" disabled title="Can't promote while content is under review" style="opacity:0.45;cursor:not-allowed;">📣 Promote</button>`;
           return `<button class="cd-share-btn" id="cdShareBtn">📣 Promote</button>`;
         })()}
         ${(ch.creator_id === state.profile?.id || ch.creator?.id === state.profile?.id) ? `<button class="cd-share-btn" type="button" onclick="event.stopPropagation();openCreatorInsightsV1048('${ch.id}')">↗ Insights</button>` : ''}
@@ -33341,27 +33345,23 @@ body.theme-light .fc-score-metric-v1032,body.theme-light .fc-score-cutoff-v1032,
     if(status==='voided')return {k:'No contest',t:'Final',h:'No winner was awarded',p:'Fewer than two eligible competitors remained when entries closed.'};
     return {k:'Final result',t:'Final',h:'Voting is complete',p:'Review the winner, final totals, and any Championship Score awarded.',primary:'results'};
   }
-  function toggleRules(btn){const d=document.getElementById('fcChallengeInfoV1043');if(!d)return openCompetitionRules?.('overview');const show=!d.open;d.open=show;d.classList.add('fc-v1054-rule-panel');btn.textContent=show?'Hide rules':'Rules & scoring';if(show)d.scrollIntoView({behavior:'smooth',block:'nearest'});}
   function renderBrief(){
     const sheet=document.getElementById('challengeDetailSheet'),hero=document.getElementById('cdHero'),ch=state.currentChallenge;if(!sheet||!hero||!ch)return;
     document.getElementById('fcChallengeBriefV1054')?.remove();
     const status=computeChallengeStatus(ch),d=statusCopy(ch,status),box=document.createElement('section');box.id='fcChallengeBriefV1054';box.className='fc-challenge-brief-v1054';
     if(status==='submitting'&&ch.is_public!==false&&!ch.is_championship){const approved=(state.currentEntries||[]).filter(e=>!e.moderation_status||e.moderation_status==='clear'||e.moderation_status==='approved');const mine=approved.some(e=>e.user_id===state.profile?.id);const ids=[...new Set(approved.map(e=>e.user_id).filter(id=>id&&(!mine||id!==state.profile?.id)))];const value=ids.reduce((n,id)=>n+Number(getLadderStatus(id)?.points||0),0);d.p+=` Current field value: ${value} Opponent Point${value===1?'':'s'} before turnout.`;}
     let primary='';if(d.primary==='edit')primary='<button class="primary" data-v1054-action="edit">Edit entry</button>';else if(d.primary==='enter')primary='<button class="primary" data-v1054-action="enter">Enter challenge</button>';else if(d.primary==='vote')primary='<button class="primary" data-v1054-action="vote">Vote now</button>';else if(d.primary==='results')primary='<button class="primary" data-v1054-action="results">View results</button>';
-    const promote=(ch.is_public&&['submitting','voting'].includes(status))?'<button data-v1054-action="promote">Promote</button>':'';
-    const insights=(ch.creator_id===state.profile?.id||ch.creator?.id===state.profile?.id)?'<button data-v1054-action="insights">Insights</button>':'';
-    box.innerHTML=`<div class="fc-challenge-brief-top-v1054"><div><div class="fc-challenge-brief-state-v1054">${esc(d.k)}</div><strong>${esc(d.h)}</strong></div><div class="fc-challenge-brief-time-v1054">${esc(d.t)}</div></div><p>${esc(d.p)}</p><div class="fc-challenge-actions-v1054">${primary}${promote}${insights}<button class="help" data-v1054-action="rules">Rules & scoring</button><button class="help" data-v1054-action="ember">Ask Ember</button></div>`;
+    const pendingReview=d.k==='Entry under review';
+    const insights=(!pendingReview&&(ch.creator_id===state.profile?.id||ch.creator?.id===state.profile?.id))?'<button data-v1054-action="insights">Insights</button>':'';
+    box.innerHTML=`<div class="fc-challenge-brief-top-v1054"><div><div class="fc-challenge-brief-state-v1054">${esc(d.k)}</div><strong>${esc(d.h)}</strong></div><div class="fc-challenge-brief-time-v1054">${esc(d.t)}</div></div><p>${esc(d.p)}</p><div class="fc-challenge-actions-v1054">${primary}${insights}<button class="help" data-v1054-action="ember">Ask Ember</button></div>`;
     hero.insertAdjacentElement('afterend',box);
     box.querySelector('[data-v1054-action="edit"]')?.addEventListener('click',()=>openSubmitEntry(d.mine));
     box.querySelector('[data-v1054-action="enter"]')?.addEventListener('click',()=>openSubmitEntry());
     box.querySelector('[data-v1054-action="vote"]')?.addEventListener('click',()=>document.getElementById('cdEntriesGrid')?.scrollIntoView({behavior:'smooth',block:'start'}));
     box.querySelector('[data-v1054-action="results"]')?.addEventListener('click',()=>document.getElementById('cdResultsPanel')?.scrollIntoView({behavior:'smooth',block:'start'}));
-    box.querySelector('[data-v1054-action="promote"]')?.addEventListener('click',()=>openPromote('challenge',ch));
     box.querySelector('[data-v1054-action="insights"]')?.addEventListener('click',()=>openCreatorInsightsV1048(ch.id));
-    box.querySelector('[data-v1054-action="rules"]')?.addEventListener('click',e=>toggleRules(e.currentTarget));
     box.querySelector('[data-v1054-action="ember"]')?.addEventListener('click',()=>fcOpenEmberWithQuestion?.('What matters next in this challenge?'));
     const info=document.getElementById('fcChallengeInfoV1043');if(info){info.classList.add('fc-v1054-rule-panel');info.open=false;}
-    const share=document.getElementById('cdShareBtn');if(share)share.style.display='none';
     const all=(state.currentEntries||[]).filter(e=>e.moderation_status!=='rejected');const count=all.filter(e=>!e.moderation_status||e.moderation_status==='clear'||e.moderation_status==='approved').length;const privatePreview=all.some(e=>e.user_id===state.profile?.id&&['pending','flagged','escalated'].includes(e.moderation_status));
     const counter=document.getElementById('cdEntriesCounter');if(counter){const m=(counter.textContent.match(/(\d+)\s+of\s+(\d+)/i)||[]);counter.textContent=m[1]?(privatePreview?`${count} live · preview ${m[1]} of ${m[2]}`:`${count} entr${count===1?'y':'ies'} · ${m[1]} of ${m[2]}`):`${count} entr${count===1?'y':'ies'}`;}
   }
@@ -33929,6 +33929,19 @@ window.__fcBuildV1065={build:'v1065',basedOn:'v1064',flyerRenderer:'exact v1056 
     build: 'v1076',
     phase: 'Production Hardening',
     focus: 'compact notifications + accurate pending-entry empty state',
+    newEdgeFunctions: 0,
+    edgeFunctionChanges: 0,
+    sqlChanges: 0
+  };
+})();
+</script>
+
+<script id="fc-v1077-challenge-detail-action-cleanup-js">
+(() => {
+  window.__fcBuildV1077 = {
+    build: 'v1077',
+    phase: 'Production Hardening',
+    focus: 'single-source Challenge Detail actions',
     newEdgeFunctions: 0,
     edgeFunctionChanges: 0,
     sqlChanges: 0
