@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1074 — Unified Home Action Cards</title>
+<title>FlamesChallenge v1075 — You Primary Navigation Page</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,7 +21,7 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1074 · unified-home-action-cards" />
+<meta name="fc-build" content="v1075 · you-primary-navigation-page" />
 <meta name="fc-whatsnew" content="Brings Live Now rows into the same visual system as Your Next Move with larger media, clearer status wording, and consistent spacing." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
@@ -33749,6 +33749,171 @@ window.__fcBuildV1065={build:'v1065',basedOn:'v1064',flyerRenderer:'exact v1056 
 }
 </style>
 <script id="fc-v1074-build-marker">window.__fcBuildV1074={build:'v1074',focus:'Live Now rows unified with Your Next Move',scope:'Home Live Now only',navigationChanged:false,scoringChanged:false,backendChanged:false};</script>
+
+
+
+<style id="fc-v1075-you-primary-page-css">
+/* v1075 — The signed-in user's own profile is a primary bottom-navigation
+   destination. Other competitors continue to open in the closable sheet. */
+#profileSheet.fc-own-profile-page-v1075{
+  inset:var(--nav-h) 0 0 0!important;
+  z-index:90!important;
+  animation:none!important;
+  overscroll-behavior-y:contain;
+}
+#profileSheet.fc-own-profile-page-v1075 .cd-sheet-header{
+  position:sticky!important;
+  top:0!important;
+  left:auto!important;
+  right:auto!important;
+  padding:12px 16px!important;
+  min-height:54px;
+  z-index:12!important;
+}
+#profileSheet.fc-own-profile-page-v1075 .cd-close{
+  display:none!important;
+}
+#profileSheet.fc-own-profile-page-v1075 .cd-sheet-header h2{
+  margin:0!important;
+  text-align:left;
+}
+#profileSheet.fc-own-profile-page-v1075 .cd-sheet-inner{
+  padding-top:14px!important;
+}
+#profileSheet.fc-own-profile-page-v1075 .fc-profile-settings{
+  margin-left:auto;
+}
+</style>
+
+<script id="fc-v1075-you-primary-page-js">
+(function(){
+  'use strict';
+  const sheet=()=>document.getElementById('profileSheet');
+  const ownId=()=>state?.profile?.id||null;
+  const isOwnId=id=>!!id&&String(id)===String(ownId());
+  const ownOpen=()=>!!sheet()?.classList.contains('fc-own-profile-page-v1075');
+  let requestToken=0;
+
+  const baseOpenUserProfile=window.openUserProfile;
+  const baseCloseProfileSheet=window.closeProfileSheet;
+  const baseSwitchView=window.switchView;
+  const baseRenderProfileSheet=window.renderProfileSheet;
+  const baseShowAuth=window.showAuth;
+
+  function setYouActive(){
+    document.querySelectorAll('.bnav-btn').forEach(btn=>{
+      const active=btn.dataset.view==='you';
+      btn.classList.toggle('active',active);
+      if(active) btn.setAttribute('aria-current','page');
+      else btn.removeAttribute('aria-current');
+    });
+  }
+
+  function prepareOwnPage(){
+    const el=sheet(); if(!el) return;
+    el.classList.add('fc-own-profile-page-v1075');
+    document.body.classList.add('fc-own-profile-page-open-v1075');
+    el.classList.add('open');
+    document.body.style.overflow='';
+    if(window.state) state.currentView='you';
+    setYouActive();
+    const title=document.getElementById('psHeaderName');
+    if(title) title.textContent='You';
+    const gear=document.getElementById('psSettingsBtn');
+    if(gear) gear.style.display='grid';
+  }
+
+  function finishOwnPage(){
+    if(!ownOpen()) return;
+    prepareOwnPage();
+    const edit=sheet()?.querySelector('.fc-profile-edit');
+    if(edit){
+      edit.onclick=()=>{ if(typeof openEditProfile==='function') openEditProfile(); };
+    }
+  }
+
+  function forceCloseOwnPage(){
+    requestToken++;
+    const el=sheet();
+    if(el) el.classList.remove('fc-own-profile-page-v1075');
+    document.body.classList.remove('fc-own-profile-page-open-v1075');
+    if(typeof baseCloseProfileSheet==='function') baseCloseProfileSheet();
+    else if(el) el.classList.remove('open');
+    document.body.style.overflow='';
+  }
+
+  window.closeProfileSheet=function(force){
+    if(ownOpen()&&force!==true){
+      document.body.style.overflow='';
+      return;
+    }
+    return typeof baseCloseProfileSheet==='function'
+      ? baseCloseProfileSheet.apply(this,arguments)
+      : undefined;
+  };
+
+  window.openUserProfile=async function(userId){
+    const own=isOwnId(userId);
+    if(!own&&ownOpen()) forceCloseOwnPage();
+    const token=++requestToken;
+    if(own) prepareOwnPage();
+    try{
+      const pending=typeof baseOpenUserProfile==='function'
+        ? baseOpenUserProfile.apply(this,arguments)
+        : undefined;
+      if(own) document.body.style.overflow='';
+      const result=await pending;
+      if(own&&token===requestToken&&state?.currentView==='you') finishOwnPage();
+      return result;
+    }catch(err){
+      if(own&&token===requestToken) finishOwnPage();
+      throw err;
+    }
+  };
+
+  window.openOwnCompetitiveProfile=function(){
+    const id=ownId();
+    if(!id){ if(typeof openProfile==='function') openProfile(); return; }
+    if(ownOpen()&&String(psState?.userId||'')===String(id)){
+      prepareOwnPage();
+      sheet()?.scrollTo({top:0,behavior:'smooth'});
+      return;
+    }
+    return window.openUserProfile(id);
+  };
+
+  window.switchView=function(view){
+    if(view==='you'){
+      window.openOwnCompetitiveProfile();
+      return;
+    }
+    if(ownOpen()) forceCloseOwnPage();
+    return typeof baseSwitchView==='function'
+      ? baseSwitchView.apply(this,arguments)
+      : undefined;
+  };
+
+  if(typeof baseRenderProfileSheet==='function'){
+    window.renderProfileSheet=function(){
+      const result=baseRenderProfileSheet.apply(this,arguments);
+      if(ownOpen()&&isOwnId(psState?.userId)) requestAnimationFrame(finishOwnPage);
+      return result;
+    };
+  }
+
+  if(typeof baseShowAuth==='function'){
+    window.showAuth=function(){
+      if(ownOpen()) forceCloseOwnPage();
+      return baseShowAuth.apply(this,arguments);
+    };
+  }
+
+  window.__fcYouPrimaryPageV1075={
+    close:forceCloseOwnPage,
+    isOpen:ownOpen
+  };
+})();
+</script>
 
 </body>
 </html>
