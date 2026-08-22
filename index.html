@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1082 — Uniform Entry Previews</title>
+<title>FlamesChallenge v1083 — Direct Voting & Faster Entry Swipes</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1082 · uniform-entry-previews" />
-<meta name="fc-whatsnew" content="Makes every entry preview the same square size and removes adaptive carousel-height changes for steadier swiping." />
+<meta name="fc-build" content="v1083 · direct-voting-faster-entry-swipes" />
+<meta name="fc-whatsnew" content="Makes voting direct from entry previews and removes the slow carousel settle for quicker, more responsive swipes." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -9379,6 +9379,7 @@ window.__fcBuildV1071={build:'v1071',basedOn:'v1070',fix:'normal iPhone horizont
     </div>
     <div id="evCaption" class="fc-ev-caption-v1079"></div>
     <div class="entry-viewer-actions">
+      <button id="evVoteBtn" class="fc-ev-vote-v1083" style="display:none">Vote for this entry</button>
       <button id="evLikeBtn" class="flame-btn">🔥 <span id="evLikeCount">0</span></button>
       <button id="evFollowBtn" class="btn btn-primary" style="padding:8px 20px;font-size:13px">+ Follow</button>
     </div>
@@ -11417,6 +11418,7 @@ async function loadAppData() {
   await loadPosts();
   await loadFollows();
   await loadFeedActivity();
+  await hydrateEntryVotesV1083();
   await loadMentionableProfiles();
   await loadMyRecord();
   try { maybeShowCoronation(); } catch (e) {}
@@ -17851,6 +17853,8 @@ let _evEntry = null;
 let _evChallenge = null;
 let _evEntries = []; // all entries for this challenge
 let _evIndex = 0;   // current position
+let _evMyVoteEntryId = null;
+let _evHasAnyVoteV1083 = false;
 
 async function openEntryViewer(entryId, chId) {
   const ch = state.challenges.find(c => c.id === chId) || state.currentChallenge;
@@ -17883,6 +17887,14 @@ async function openEntryViewer(entryId, chId) {
   if (_evIndex === -1) _evIndex = 0;
 
   _evEntry = _evEntries[_evIndex];
+  const mappedVoteV1083 = state.entryVoteSelectionsV1083 instanceof Map
+    ? state.entryVoteSelectionsV1083.get(String(chId))
+    : null;
+  const detailVoteV1083 = state.currentChallenge && String(state.currentChallenge.id) === String(chId)
+    ? state.myCurrentVote
+    : null;
+  _evMyVoteEntryId = mappedVoteV1083 || detailVoteV1083 || null;
+  _evHasAnyVoteV1083 = !!_evMyVoteEntryId || fcCardHasVoted(ch);
   _renderEvEntry();
 
   // Wire swipe gestures
@@ -17896,6 +17908,17 @@ async function openEntryViewer(entryId, chId) {
 
   document.getElementById('entryViewerSheet').classList.add('open');
   document.body.style.overflow = 'hidden';
+  if (state.profile && isVotingPhase(computeChallengeStatus(ch))) {
+    hydrateEntryVotesV1083().then(() => {
+      if (!_evChallenge || String(_evChallenge.id) !== String(chId)) return;
+      _evMyVoteEntryId = state.entryVoteSelectionsV1083 instanceof Map
+        ? (state.entryVoteSelectionsV1083.get(String(chId)) || null)
+        : null;
+      _evHasAnyVoteV1083 = !!_evMyVoteEntryId;
+      syncEvVoteButtonV1083();
+      markEntryVoteCardsV1083(chId, _evMyVoteEntryId);
+    });
+  }
 }
 
 function evNavigate(dir) {
@@ -18003,6 +18026,8 @@ function _renderEvEntry() {
     if (newLiked) spawnFlameFloat(likeBtn);
   };
 
+  syncEvVoteButtonV1083();
+
   // Follow button
   const followBtn = document.getElementById('evFollowBtn');
   const isMe = sub.id === state.profile?.id;
@@ -18077,6 +18102,76 @@ function _renderEvEntry() {
   }
 }
 
+function markEntryVoteCardsV1083(challengeId, entryId) {
+  document.querySelectorAll('.fcc-entry-card[data-entry-open]').forEach(card => {
+    if (String(card.dataset.entryOpen) !== String(challengeId)) return;
+    card.classList.toggle('fc-your-vote-v1083', !!entryId && String(card.dataset.entryId) === String(entryId));
+  });
+}
+
+function syncEvVoteButtonV1083() {
+  const btn = document.getElementById('evVoteBtn');
+  const entry = _evEntry;
+  const ch = _evChallenge;
+  if (!btn || !entry || !ch || !state.profile || !isVotingPhase(computeChallengeStatus(ch))) {
+    if (btn) btn.style.display = 'none';
+    return;
+  }
+  const selected = !!_evMyVoteEntryId && String(_evMyVoteEntryId) === String(entry.id);
+  btn.style.display = 'inline-flex';
+  btn.classList.toggle('selected', selected);
+  btn.disabled = selected;
+  btn.setAttribute('aria-current', selected ? 'true' : 'false');
+  btn.textContent = selected ? '✓ Your vote' : (_evHasAnyVoteV1083 ? 'Change vote to this entry' : 'Vote for this entry');
+  btn.onclick = selected ? null : evVoteCurrentEntryV1083;
+}
+
+async function evVoteCurrentEntryV1083() {
+  const entry = _evEntry;
+  const ch = _evChallenge;
+  const btn = document.getElementById('evVoteBtn');
+  if (!entry || !ch || !state.profile || !isVotingPhase(computeChallengeStatus(ch))) return;
+  const previousVote = _evMyVoteEntryId;
+  const previousHadVote = _evHasAnyVoteV1083;
+  _evMyVoteEntryId = entry.id;
+  _evHasAnyVoteV1083 = true;
+  fcRecordEntryVoteV1083(ch.id, entry.id);
+  syncEvVoteButtonV1083();
+  markEntryVoteCardsV1083(ch.id, entry.id);
+  try { navigator.vibrate && navigator.vibrate(10); } catch (e) {}
+  try {
+    const sdRound = ch.sd_phase === 'voting' ? (ch.sd_round || 0) : 0;
+    let { error: upErr } = await db.from('entry_votes').upsert(
+      { challenge_id: ch.id, entry_id: entry.id, voter_id: state.profile.id, sd_round: sdRound },
+      { onConflict: 'challenge_id,voter_id' }
+    );
+    if (upErr && /sd_round/.test(upErr.message || '')) {
+      ({ error: upErr } = await db.from('entry_votes').upsert(
+        { challenge_id: ch.id, entry_id: entry.id, voter_id: state.profile.id },
+        { onConflict: 'challenge_id,voter_id' }));
+    }
+    if (upErr) throw upErr;
+    if (state.currentChallenge && String(state.currentChallenge.id) === String(ch.id)) {
+      state.myCurrentVote = entry.id;
+      state.currentVotes = (state.currentVotes || []).filter(v => v.voter_id !== state.profile.id);
+      state.currentVotes.push({ challenge_id: ch.id, entry_id: entry.id, voter_id: state.profile.id });
+    }
+    toast(previousVote ? 'Vote changed' : 'Vote recorded');
+    try { fcTrackAttributedConversionV1048('attributed_vote', ch.id, { entry_id: entry.id }); } catch (e) {}
+    if (typeof renderChallenges === 'function') renderChallenges();
+    if (state.currentView === 'feed' && typeof renderFeed === 'function') renderFeed();
+    spawnEmberBurst(btn);
+  } catch (err) {
+    console.error('entry viewer vote', err);
+    _evMyVoteEntryId = previousVote || null;
+    _evHasAnyVoteV1083 = previousHadVote;
+    fcRecordEntryVoteV1083(ch.id, previousVote || null);
+    syncEvVoteButtonV1083();
+    markEntryVoteCardsV1083(ch.id, previousVote || null);
+    toast('Vote failed: ' + (err.message || 'unknown'));
+  }
+}
+
 async function toggleEntryLikeFromViewer(entryId) {
   if (!state.profile) return;
   const wasLiked = state.myEntryLikes.has(entryId);
@@ -18099,6 +18194,8 @@ function closeEntryViewer() {
   _evChallenge = null;
   _evEntries = [];
   _evIndex = 0;
+  _evMyVoteEntryId = null;
+  _evHasAnyVoteV1083 = false;
 }
 
 /* ---------- LIKERS SHEET ---------- */
@@ -21571,6 +21668,7 @@ async function voteOnEntry(entryId) {
   state.currentVotes = state.currentVotes.filter(v => v.voter_id !== me);
   state.currentVotes.push({ entry_id: entryId, voter_id: me });
   state.myCurrentVote = entryId;
+  fcRecordEntryVoteV1083(challengeId, entryId);
   renderChallengeDetail();
   requestAnimationFrame(() => {
     const chosen = document.querySelector(`.cd-entry[data-entry-id="${entryId}"]`);
@@ -21602,6 +21700,7 @@ async function voteOnEntry(entryId) {
     state.currentVotes = state.currentVotes.filter(v => v.voter_id !== me);
     if (previousVote) state.currentVotes.push({ entry_id: previousVote, voter_id: me });
     state.myCurrentVote = previousVote || null;
+    fcRecordEntryVoteV1083(challengeId, previousVote || null);
     renderChallengeDetail();
     toast('Vote failed: ' + (err.message || 'unknown'));
   }
@@ -23653,10 +23752,14 @@ function fcEntryCardMediaV1060(e, ch) {
 }
 function fcEntryRailV1060(ch, entries) {
   if (!entries.length) return `<div class="chc-empty"><div class="chc-empty-ov"><div class="chc-plus">+</div><div class="chc-empty-msg">No entries yet — be the first</div></div></div>`;
+  const selectedVoteIdV1083 = state.entryVoteSelectionsV1083 instanceof Map
+    ? state.entryVoteSelectionsV1083.get(String(ch.id))
+    : null;
   return `<div class="fcc-entries-wrap fc-entry-rail-v1060 fc-entry-rail-v1079"><div class="fcc-entries-scroll">${entries.map((e,i) => {
     const sub = e.submitter || {};
     const av = sub.avatar && /^https?:/.test(sub.avatar) ? `<img src="${escapeHtml(sub.avatar)}" alt="">` : escapeHtml((sub.name || '?').charAt(0).toUpperCase());
-    return `<article class="fcc-entry-card fc-entry-square-v1082" data-entry-open="${ch.id}" data-entry-id="${e.id}" aria-label="Entry ${i+1} of ${entries.length}"><header class="fcc-entry-head-v1079"><span class="fcc-entry-avatar">${av}</span><span class="fcc-entry-name-v1079">${escapeHtml(sub.name || `Entry ${i+1}`)}</span><span class="fcc-entry-position-v1079">${i+1} of ${entries.length}</span></header>${fcEntryCardMediaV1060(e,ch)}</article>`;
+    const voteClassV1083 = selectedVoteIdV1083 && String(selectedVoteIdV1083) === String(e.id) ? ' fc-your-vote-v1083' : '';
+    return `<article class="fcc-entry-card fc-entry-square-v1082${voteClassV1083}" data-entry-open="${ch.id}" data-entry-id="${e.id}" aria-label="Entry ${i+1} of ${entries.length}"><header class="fcc-entry-head-v1079"><span class="fcc-entry-avatar">${av}</span><span class="fcc-entry-name-v1079">${escapeHtml(sub.name || `Entry ${i+1}`)}</span><span class="fcc-entry-position-v1079">${i+1} of ${entries.length}</span></header>${fcEntryCardMediaV1060(e,ch)}</article>`;
   }).join('')}</div>${_entryDotsHtml(entries.length)}</div>`;
 }
 
@@ -23718,9 +23821,42 @@ function fcCardHasEntered(ch) {
   if (state.myEnteredCh && state.myEnteredCh[ch.id]) return true;
   return (state.myRecord || []).some(r => r.challenge?.id === ch.id && r.result !== 'not_entered');
 }
+async function hydrateEntryVotesV1083(force = false) {
+  const uid = state.profile?.id;
+  if (!uid) {
+    state.entryVoteSelectionsV1083 = new Map();
+    state.emberVotedChallengeIds = new Set();
+    return;
+  }
+  const now = Date.now();
+  if (!force && state.entryVoteSelectionsV1083 instanceof Map && state.entryVoteSelectionsV1083User === uid && now - Number(state.entryVoteSelectionsV1083At || 0) < 300000) return;
+  try {
+    const { data, error } = await db.from('entry_votes').select('challenge_id, entry_id').eq('voter_id', uid).limit(2000);
+    if (error) throw error;
+    const map = new Map();
+    (data || []).forEach(v => { if (v.challenge_id && v.entry_id) map.set(String(v.challenge_id), v.entry_id); });
+    state.entryVoteSelectionsV1083 = map;
+    state.entryVoteSelectionsV1083User = uid;
+    state.entryVoteSelectionsV1083At = now;
+    state.emberVotedChallengeIds = new Set(map.keys());
+  } catch (e) {
+    state.entryVoteSelectionsV1083 = state.entryVoteSelectionsV1083 instanceof Map ? state.entryVoteSelectionsV1083 : new Map();
+    state.emberVotedChallengeIds = state.emberVotedChallengeIds instanceof Set ? state.emberVotedChallengeIds : new Set();
+    console.warn('Entry vote selections', e);
+  }
+}
+function fcRecordEntryVoteV1083(challengeId, entryId) {
+  if (!(state.entryVoteSelectionsV1083 instanceof Map)) state.entryVoteSelectionsV1083 = new Map();
+  if (entryId) state.entryVoteSelectionsV1083.set(String(challengeId), entryId);
+  else state.entryVoteSelectionsV1083.delete(String(challengeId));
+  if (!(state.emberVotedChallengeIds instanceof Set)) state.emberVotedChallengeIds = new Set();
+  if (entryId) state.emberVotedChallengeIds.add(String(challengeId));
+  else state.emberVotedChallengeIds.delete(String(challengeId));
+  state.entryVoteSelectionsV1083At = Date.now();
+}
 function fcCardHasVoted(ch) {
-  if (state.emberVotedChallengeIds instanceof Set && state.emberVotedChallengeIds.has(ch.id)) return true;
-  if (state.myVotes && (state.myVotes[ch.id] || Object.values(state.myVotes).some(v => v?.challenge_id === ch.id))) return true;
+  if (state.entryVoteSelectionsV1083 instanceof Map && state.entryVoteSelectionsV1083.has(String(ch.id))) return true;
+  if (state.emberVotedChallengeIds instanceof Set && (state.emberVotedChallengeIds.has(ch.id) || state.emberVotedChallengeIds.has(String(ch.id)))) return true;
   return false;
 }
 function fcCardAction(ch, status) {
@@ -23735,7 +23871,7 @@ function fcCardAction(ch, status) {
     return { label:'Enter challenge', mode:'enter' };
   }
   if (isVotingPhase(status)) {
-    if (isCreator || voted) return { label:'View voting', mode:'view' };
+    if (voted) return { label:'View or change vote', mode:'vote' };
     return { label: ch.is_championship ? 'Vote for champion' : 'Vote now', mode:'vote' };
   }
   return { label:'View result', mode:'view', ghost:true };
@@ -25998,6 +26134,7 @@ async function fvVote(btn, chId) {
 
   const previous = document.querySelector('#fvEntries [data-fv-vote].selected')?.dataset.fvVote || null;
   syncFvVoteSelectionV1024(entryId);
+  fcRecordEntryVoteV1083(chId, entryId);
   renderFvVotingNoticeV1024(ch, status, entryId, (_fvVoteCounts && Object.values(_fvVoteCounts).reduce((a,b)=>a+b,0)) || 0);
   spawnEmberBurst(btn);
 
@@ -26024,8 +26161,11 @@ async function fvVote(btn, chId) {
     }
   } catch(e) {
     console.error('fvVote error', e);
-    if (previous) syncFvVoteSelectionV1024(previous);
-    else {
+    if (previous) {
+      syncFvVoteSelectionV1024(previous);
+      fcRecordEntryVoteV1083(chId, previous);
+    } else {
+      fcRecordEntryVoteV1083(chId, null);
       const list=document.getElementById('fvEntries');
       list?.querySelectorAll('[data-fv-entry-id]').forEach(s=>s.classList.remove('selected'));
       list?.querySelectorAll('[data-fv-vote]').forEach(b=>{b.classList.remove('selected');b.disabled=false;b.removeAttribute('aria-current');b.textContent='Vote for this entry';});
@@ -27812,12 +27952,16 @@ function _wireEntryDots(root) {
       sc.style.scrollBehavior = 'auto';
       sc.scrollLeft = sc.scrollLeft; // stop any remaining native momentum
       requestAnimationFrame(() => {
-        sc.scrollTo({ left: target * st, behavior: 'smooth' });
-        setTimeout(() => {
+        // v1083 — settle immediately after the native swipe. The previous
+        // browser-controlled smooth scroll took roughly 420ms and made a valid
+        // one-card swipe feel sluggish. This keeps the proven touch gesture,
+        // never prevents default scrolling, and restores snap on the next frame.
+        sc.scrollTo({ left: target * st, behavior: 'auto' });
+        requestAnimationFrame(() => {
           sc.style.scrollSnapType = previousSnap;
           sc.style.scrollBehavior = previousBehavior;
           update();
-        }, 420);
+        });
       });
     }, { passive: true });
     sc.addEventListener('touchcancel', () => { swipeStart = null; }, { passive: true });
@@ -34416,6 +34560,87 @@ body.fc-insights-unavailable-v1081 .pm-tile[onclick*="openCreatorInsightsV1048"]
     edgeFunctionChanges:0
   };
 })();
+</script>
+
+
+
+<style id="fc-v1083-direct-voting-fast-swipes-css">
+/* v1083 — Preserve the native, working horizontal rail but remove the forced
+   stop at every snap point. The explicit touchend settle remains one card at a
+   time and now completes immediately instead of using a slow browser smooth scroll. */
+.fc-entry-rail-v1079 .fcc-entries-scroll{
+  scroll-behavior:auto!important;
+  scroll-snap-type:x mandatory!important;
+  -webkit-overflow-scrolling:touch!important;
+  touch-action:auto!important;
+}
+.fc-entry-rail-v1079 .fcc-entry-card,
+.cd-entries-grid>.cd-entry{scroll-snap-stop:normal!important}
+
+/* A recorded ballot is visible on the preview itself, not only in button copy. */
+.fc-entry-rail-v1079 .fcc-entry-card.fc-your-vote-v1083{
+  border-color:rgba(255,106,44,.72)!important;
+  box-shadow:0 0 0 2px rgba(255,106,44,.22)!important;
+}
+.fc-entry-rail-v1079 .fcc-entry-card.fc-your-vote-v1083 .fcc-entry-position-v1079{
+  color:var(--ember-bright)!important;
+}
+.fc-entry-rail-v1079 .fcc-entry-card.fc-your-vote-v1083 .fcc-entry-position-v1079::before{
+  content:'✓ Your vote · ';
+}
+
+/* Direct entry viewer: voting is the primary persistent action. */
+.fc-entry-viewer-v1079 .entry-viewer-actions{
+  display:flex!important;
+  flex-wrap:wrap!important;
+  align-items:center!important;
+  gap:10px!important;
+}
+.fc-entry-viewer-v1079 .fc-ev-vote-v1083{
+  order:-1;
+  flex:1 0 100%;
+  min-height:50px;
+  border:0;
+  border-radius:16px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:12px 18px;
+  background:linear-gradient(135deg,var(--ember),var(--flame));
+  color:#fff;
+  font-family:var(--font-body);
+  font-size:15px;
+  font-weight:850;
+  cursor:pointer;
+  box-shadow:0 14px 34px -18px rgba(255,80,30,.85);
+}
+.fc-entry-viewer-v1079 .fc-ev-vote-v1083:active{transform:scale(.985)}
+.fc-entry-viewer-v1079 .fc-ev-vote-v1083.selected{
+  background:rgba(74,222,128,.14);
+  color:var(--success);
+  border:1px solid rgba(74,222,128,.38);
+  box-shadow:none;
+}
+.fc-entry-viewer-v1079 .fc-ev-vote-v1083:disabled{cursor:default;opacity:1}
+</style>
+<script id="fc-v1083-direct-voting-fast-swipes-marker-js">
+window.__fcBuildV1083={
+  build:'v1083',
+  basedOn:'v1082',
+  focus:'direct entry voting and faster responsive preview swipes',
+  cardActionUsesVoteStatus:true,
+  creatorCanVoteFromCard:true,
+  directViewerVoteButton:true,
+  voteChangeSupported:true,
+  selectedPreviewMarked:true,
+  slowSmoothSettleRemoved:true,
+  nativeHorizontalScrollPreserved:true,
+  scrollPreventDefault:false,
+  previewDimensionsChanged:false,
+  backendChanged:false,
+  sqlChanges:0,
+  edgeFunctionChanges:0
+};
 </script>
 
 </body>
