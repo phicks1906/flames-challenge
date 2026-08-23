@@ -14,16 +14,16 @@
 <meta content="no-cache, no-store, must-revalidate" http-equiv="cache-control"/>
 <meta content="no-cache" http-equiv="pragma"/>
 <meta content="0" http-equiv="expires"/>
-<title>FlamesChallenge v1118 — Fast Navigation, Verified Video Review & Challenge-Aware Ember</title>
+<title>FlamesChallenge v1119 — No-Contest Result Integrity</title>
 <meta content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." name="description"/>
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
      the first kilobyte, so the update check can read it with a tiny ranged
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1118 · fast-navigation-verified-video-review" name="fc-build"/>
-<!-- v1118: verified async video moderation, live moderation recovery, faster cached navigation, and deterministic challenge-aware Ember. -->
-<meta content="Video review dispatch is verified and recoverable, challenge screens update moderation live, navigation reuses rendered views, and Ember understands the open challenge." name="fc-whatsnew"/>
+<meta content="v1119 · no-contest-result-integrity" name="fc-build"/>
+<!-- v1119: no-contest result integrity hotfix; challenges with fewer than two eligible competitors never render a winner or standings. -->
+<meta content="No-contest challenges now stay no-contest after the deadline and never display a false winner, vote result, or final standings." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -20811,8 +20811,15 @@ function computeChallengeStatus(ch) {
   const voteEnd = new Date(ch.voting_end);
   const entryCount = state.entryCounts[ch.id] || 0;
   if (now < subDeadline) return 'submitting';
+
+  // v1119 — minimum-competitor integrity is permanent, not limited to the
+  // voting window. A challenge with fewer than two eligible competitors is a
+  // no-contest both before and after voting_end. Previously it fell through to
+  // "closed" after the deadline, which let pending/owner rows render as a
+  // zero-vote winner.
+  if (entryCount <= 1) return 'voided';
+
   if (now < voteEnd) {
-    if (entryCount <= 1) return 'voided';
     return ch.sudden_death ? 'sudden_death' : 'voting';
   }
   return 'closed';
@@ -21930,8 +21937,27 @@ function renderChallengeResults() {
   const ch = state.currentChallenge;
   if (!ch || !state.currentEntries || !state.currentEntries.length) {
     panel.style.display = 'none';
+    panel.innerHTML = '';
     return;
   }
+
+  // v1119 — never render a winner or standings unless at least two distinct
+  // eligible competitors actually participated. This deliberately ignores
+  // pending, flagged, escalated, rejected, and owner-only fallback rows.
+  const eligibleCompetitorIdsV1119 = new Set(
+    (state.currentEntries || [])
+      .filter(e => typeof fcEntryCompetesV1060 === 'function'
+        ? fcEntryCompetesV1060(e)
+        : String(e.moderation_status || '').toLowerCase() === 'approved')
+      .map(e => String(e.user_id || ''))
+      .filter(Boolean)
+  );
+  if (eligibleCompetitorIdsV1119.size < 2) {
+    panel.style.display = 'none';
+    panel.innerHTML = '';
+    return;
+  }
+
   const status = computeChallengeStatus(ch);
   const isClosed = status === 'closed';
   // Live standings now show inline on each entry card — this panel only
@@ -26449,6 +26475,14 @@ function renderFvStandings(chId, votes, entriesOverride = null) {
   let entries = (entriesOverride && entriesOverride.length)
     ? entriesOverride
     : ((_fvEntries || []).filter(e => e.challenge_id === chId));
+  entries = entries.filter(e => typeof fcEntryCompetesV1060 === 'function'
+    ? fcEntryCompetesV1060(e)
+    : String(e.moderation_status || '').toLowerCase() === 'approved');
+  if (status === 'voided') {
+    panel.style.display = 'none';
+    panel.innerHTML = '';
+    return;
+  }
   const finalRound = ch?.sd_round || 0;
   if (finalRound > 0) entries = entries.filter(e => (e.sd_round || 0) === finalRound);
   if (!entries.length) { panel.style.display = 'none'; return; }
@@ -30823,8 +30857,12 @@ window.fcPublicFeedDiagnostics = function(){
     const ch=state.currentChallenge;
     if(ch&&computeChallengeStatus(ch)==='closed'){
       const panel=byId('cdResultsPanel');
-      const rows=[...(state.currentEntries||[])].map(e=>({e,v:(state.currentVotes||[]).filter(x=>x.entry_id===e.id).length})).sort((a,b)=>b.v-a.v);
-      const winner=rows.length&&(rows.length===1||rows[0].v>rows[1].v)?rows[0]:null;
+      const eligible=(state.currentEntries||[]).filter(e=>typeof fcEntryCompetesV1060==='function'
+        ? fcEntryCompetesV1060(e)
+        : String(e.moderation_status||'').toLowerCase()==='approved');
+      const competitorIds=new Set(eligible.map(e=>String(e.user_id||'')).filter(Boolean));
+      const rows=[...eligible].map(e=>({e,v:(state.currentVotes||[]).filter(x=>x.entry_id===e.id).length})).sort((a,b)=>b.v-a.v);
+      const winner=competitorIds.size>=2&&rows.length&&(rows.length===1||rows[0].v>rows[1].v)?rows[0]:null;
       if(panel&&winner&&!panel.querySelector('.fc-v1024-winner-reveal')){
         const sub=winner.e.submitter||{};
         panel.firstElementChild?.insertAdjacentHTML('afterbegin',`<div class="fc-v1024-winner-reveal"><span>Winner</span><strong>${escapeHtml(sub.name||'Winner')}</strong><small>${winner.v} vote${winner.v===1?'':'s'} · chosen by the crowd</small></div>`);
