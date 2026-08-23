@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1107 — Controlled, Factual Ember Integration</title>
+<title>FlamesChallenge v1108 — You Navigation Recovery</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1107 · controlled-factual-ember" />
-<!-- v1107: consolidates proactive Ember guidance behind one factual, account-safe controller. -->
+<meta name="fc-build" content="v1108 · you-navigation-recovery" />
+<!-- v1108: restores You as a primary page and repairs narrow-screen Ember/header layout. -->
 <meta name="fc-whatsnew" content="Ember guidance now follows Full, Important only, and Off consistently, uses authoritative Championship Score, and limits itself to one proactive intervention per screen." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
@@ -7808,7 +7808,7 @@ body.fc-boot-ready-v1095 #fcBootGateV1095{
     <span class="bnav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m3.5 8.2 4.6 3.2L12 5l3.9 6.4 4.6-3.2-1.7 10.1H5.2z"/><path d="M5.6 21h12.8"/></svg></span>
     <span class="bnav-label">Titles</span>
   </button>
-  <button class="bnav-btn" data-view="you" onclick="openOwnCompetitiveProfile()" aria-label="You">
+  <button class="bnav-btn" data-view="you" onclick="switchView('you')" aria-label="You">
     <span class="bnav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5.5 20c.6-4.2 2.8-6.3 6.5-6.3s5.9 2.1 6.5 6.3"/></svg></span>
     <span class="bnav-label">You</span>
   </button>
@@ -34678,6 +34678,27 @@ html[data-theme="light"] body .fc-score-race-v1032 .fc-score-metric-v1032{box-sh
   const baseRenderProfileSheet=window.renderProfileSheet;
   const baseShowAuth=window.showAuth;
 
+  function restoreAuthenticatedChromeV1108(){
+    if (!(state?.session || state?.profile)) return;
+    document.body.classList.add('fc-authenticated');
+    document.body.classList.remove('fc-public-browser-open');
+    const auth=document.getElementById('authView');
+    const app=document.getElementById('appView');
+    if(auth){
+      auth.classList.remove('fc-public-auth','fc-public-auth-v1103','fc-auth-sheet-open');
+      auth.style.setProperty('display','none','important');
+      auth.style.opacity='';
+      auth.setAttribute('aria-hidden','true');
+    }
+    if(app){
+      app.style.setProperty('display','block','important');
+      app.style.opacity='';
+      app.setAttribute('aria-hidden','false');
+    }
+    const browser=document.getElementById('fcPublicBrowser');
+    if(browser){browser.classList.remove('open');browser.setAttribute('aria-hidden','true');}
+  }
+
   function setYouActive(){
     document.querySelectorAll('.bnav-btn').forEach(btn=>{
       const active=btn.dataset.view==='you';
@@ -34688,8 +34709,15 @@ html[data-theme="light"] body .fc-score-race-v1032 .fc-score-metric-v1032{box-sh
   }
 
   function prepareOwnPage(){
+    restoreAuthenticatedChromeV1108();
     const el=sheet(); if(!el) return;
     el.classList.add('fc-own-profile-page-v1075');
+    el.dataset.fcPrimaryPageV1108='1';
+    el.removeAttribute('role');
+    el.removeAttribute('aria-modal');
+    el.removeAttribute('aria-labelledby');
+    el.removeAttribute('aria-label');
+    el.removeAttribute('tabindex');
     document.body.classList.add('fc-own-profile-page-open-v1075');
     el.classList.add('open');
     document.body.style.overflow='';
@@ -34713,7 +34741,10 @@ html[data-theme="light"] body .fc-score-race-v1032 .fc-score-metric-v1032{box-sh
   function forceCloseOwnPage(){
     requestToken++;
     const el=sheet();
-    if(el) el.classList.remove('fc-own-profile-page-v1075');
+    if(el){
+      el.classList.remove('fc-own-profile-page-v1075');
+      delete el.dataset.fcPrimaryPageV1108;
+    }
     document.body.classList.remove('fc-own-profile-page-open-v1075');
     if(typeof baseCloseProfileSheet==='function') baseCloseProfileSheet();
     else if(el) el.classList.remove('open');
@@ -34732,6 +34763,7 @@ html[data-theme="light"] body .fc-score-race-v1032 .fc-score-metric-v1032{box-sh
 
   window.openUserProfile=async function(userId){
     const own=isOwnId(userId);
+    if(own) restoreAuthenticatedChromeV1108();
     if(!own&&ownOpen()) forceCloseOwnPage();
     const token=++requestToken;
     if(own) prepareOwnPage();
@@ -34750,8 +34782,12 @@ html[data-theme="light"] body .fc-score-race-v1032 .fc-score-metric-v1032{box-sh
   };
 
   window.openOwnCompetitiveProfile=function(){
+    restoreAuthenticatedChromeV1108();
     const id=ownId();
-    if(!id){ if(typeof openProfile==='function') openProfile(); return; }
+    if(!id){
+      if(typeof toast==='function') toast('Your profile is still loading.');
+      return;
+    }
     if(ownOpen()&&String(psState?.userId||'')===String(id)){
       prepareOwnPage();
       sheet()?.scrollTo({top:0,behavior: fcMotionBehaviorV1100()});
@@ -34762,6 +34798,9 @@ html[data-theme="light"] body .fc-score-race-v1032 .fc-score-metric-v1032{box-sh
 
   window.switchView=function(view){
     if(view==='you'){
+      restoreAuthenticatedChromeV1108();
+      if(window.state) state.currentView='you';
+      setYouActive();
       window.openOwnCompetitiveProfile();
       return;
     }
@@ -34781,6 +34820,10 @@ html[data-theme="light"] body .fc-score-race-v1032 .fc-score-metric-v1032{box-sh
 
   if(typeof baseShowAuth==='function'){
     window.showAuth=function(){
+      if(state?.session || state?.profile){
+        restoreAuthenticatedChromeV1108();
+        return;
+      }
       if(ownOpen()) forceCloseOwnPage();
       return baseShowAuth.apply(this,arguments);
     };
@@ -36124,6 +36167,10 @@ body.fc-dialog-open-v1100{overflow:hidden!important}
   let syncQueued = false;
   let activeRoot = null;
 
+  function isPrimaryProfileV1108(root){
+    return !!root && root.id === 'profileSheet' && root.classList.contains('fc-own-profile-page-v1075');
+  }
+
   const focusableSelector = [
     'button:not([disabled])','a[href]','input:not([disabled]):not([type="hidden"])',
     'select:not([disabled])','textarea:not([disabled])','[contenteditable="true"]',
@@ -36138,6 +36185,7 @@ body.fc-dialog-open-v1100{overflow:hidden!important}
 
   function isOpen(root){
     if (!root || !visible(root)) return false;
+    if (isPrimaryProfileV1108(root)) return false;
     if (root.classList.contains('open')) return true;
     if (root.id === 'cropModal' || root.id === 'tourOverlay') {
       return getComputedStyle(root).display !== 'none';
@@ -36157,6 +36205,26 @@ body.fc-dialog-open-v1100{overflow:hidden!important}
     if (!observedRoots.has(root)) {
       rootObserver.observe(root,{attributes:true,attributeFilter:['class','style','hidden']});
       observedRoots.add(root);
+    }
+
+    // The signed-in user's own profile is a primary bottom-navigation page,
+    // not a modal. It must never trap focus or inert the navigation behind it.
+    if (isPrimaryProfileV1108(root)) {
+      root.classList.remove('fc-dialog-root-v1100');
+      root.removeAttribute('role');
+      root.removeAttribute('aria-modal');
+      root.removeAttribute('aria-labelledby');
+      root.removeAttribute('aria-label');
+      root.removeAttribute('tabindex');
+      root.dataset.fcDialogPrimaryV1108 = '1';
+      return;
+    }
+
+    // When the same sheet is reused for another member, restore normal dialog
+    // semantics and behavior.
+    if (root.dataset.fcDialogPrimaryV1108 === '1') {
+      delete root.dataset.fcDialogPrimaryV1108;
+      delete root.dataset.fcDialogReadyV1100;
     }
     if (root.dataset.fcDialogReadyV1100 === '1') return;
     root.dataset.fcDialogReadyV1100 = '1';
@@ -36270,6 +36338,12 @@ body.fc-dialog-open-v1100{overflow:hidden!important}
 
     const openRoots = [];
     roots.forEach(root => {
+      const primaryProfile = isPrimaryProfileV1108(root);
+      if (primaryProfile) {
+        root.removeAttribute('aria-hidden');
+        wasOpen.set(root,false);
+        return;
+      }
       const open = isOpen(root);
       const prior = !!wasOpen.get(root);
       if (open && !prior) {
@@ -37305,6 +37379,168 @@ body[data-fc-ember-important-surface="challenge"] .champ-arena-tape{display:none
 
   window.FC_BUILD_V1107='controlled-factual-ember';
   window.__fcBuildV1107={build:'v1107',basedOn:'v1106',oneProactiveInterventionPerScreen:true,modes:['full','important','off'],askEmberAlwaysAvailable:true,qualificationMetric:'Championship Score',cutoffTiesIncluded:true,accountScopedPreferences:true,accountScopedDismissals:true,requestTimeoutMs:15000,edgeFunctionChanges:0,sqlChanges:0};
+})();
+</script>
+
+
+<style id="fc-v1108-navigation-layout-css">
+/* v1108 — own profile remains a primary page; Compete Ember and Light header
+   controls stay inside narrow iPhone layouts. */
+#profileSheet.fc-own-profile-page-v1075{
+  padding-bottom:var(--fc-bottom-nav-clearance)!important;
+}
+#profileSheet.fc-own-profile-page-v1075[aria-hidden="true"]{
+  visibility:visible!important;
+}
+
+/* v1107's generic Full-mode flex rule placed the module heading beside the
+   content card. Compete owns a vertical module: heading first, card second. */
+body[data-fc-ember-guidance="full"] #emberCompeteCard:not(:empty){
+  display:block!important;
+}
+#challengesViewSection #emberCompeteCard.fc-home-next-module-v1057{
+  width:100%!important;
+  max-width:100%!important;
+  min-width:0!important;
+  box-sizing:border-box!important;
+  overflow:hidden!important;
+  align-items:stretch!important;
+}
+#challengesViewSection #emberCompeteCard .fc-home-module-head-v1057{
+  display:block!important;
+  width:100%!important;
+  margin:0 0 9px!important;
+}
+#challengesViewSection #emberCompeteCard .fc-home-action-row-v1057{
+  width:100%!important;
+  max-width:100%!important;
+  min-width:0!important;
+  box-sizing:border-box!important;
+  grid-template-columns:74px minmax(0,1fr)!important;
+  gap:11px!important;
+  align-items:center!important;
+}
+#challengesViewSection #emberCompeteCard .fc-home-action-media-v1057,
+#challengesViewSection #emberCompeteCard .fc-home-ember-fill-v1057 .ember-prod{
+  width:74px!important;
+  height:74px!important;
+}
+#challengesViewSection #emberCompeteCard .fc-home-action-copy-v1057{
+  width:100%!important;
+  max-width:100%!important;
+  min-width:0!important;
+  overflow:hidden!important;
+}
+#challengesViewSection #emberCompeteCard .fc-home-action-title-v1057{
+  white-space:normal!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+  overflow-wrap:anywhere!important;
+  display:-webkit-box!important;
+  -webkit-box-orient:vertical!important;
+  -webkit-line-clamp:2!important;
+}
+#challengesViewSection #emberCompeteCard .fc-home-action-meta-v1057{
+  white-space:normal!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+  overflow-wrap:anywhere!important;
+  display:block!important;
+}
+#challengesViewSection #emberCompeteCard .fc-home-action-link-v1057{
+  min-height:32px!important;
+  display:inline-flex!important;
+  align-items:center!important;
+}
+
+/* Light mode header actions looked disabled. Keep the same icon geometry while
+   restoring explicit foreground, border, and surface contrast. */
+body.theme-light .nav-icon-btn,
+html[data-theme="light"] body .nav-icon-btn{
+  color:#66584f!important;
+  background:#fffaf5!important;
+  border-color:#d4c8bc!important;
+  opacity:1!important;
+  box-shadow:0 1px 0 rgba(82,57,42,.04)!important;
+}
+body.theme-light .nav-icon-btn svg,
+html[data-theme="light"] body .nav-icon-btn svg{
+  stroke:currentColor!important;
+  opacity:1!important;
+}
+body.theme-light .nav-icon-btn:active,
+html[data-theme="light"] body .nav-icon-btn:active{
+  background:#f4e9df!important;
+  border-color:#bfae9f!important;
+}
+
+@media(max-width:430px){
+  #challengesViewSection #emberCompeteCard .fc-home-action-row-v1057{
+    grid-template-columns:64px minmax(0,1fr)!important;
+    gap:9px!important;
+    padding:10px!important;
+  }
+  #challengesViewSection #emberCompeteCard .fc-home-action-media-v1057,
+  #challengesViewSection #emberCompeteCard .fc-home-ember-fill-v1057 .ember-prod{
+    width:64px!important;
+    height:64px!important;
+  }
+  #challengesViewSection #emberCompeteCard .fc-home-action-title-v1057{
+    font-size:15px!important;
+  }
+}
+</style>
+<script id="fc-v1108-navigation-recovery-js">
+(function(){
+  'use strict';
+  function clearSignedInAuthLayers(){
+    if(!(state?.session || state?.profile)) return;
+    const auth=document.getElementById('authView');
+    const app=document.getElementById('appView');
+    document.body.classList.add('fc-authenticated');
+    document.body.classList.remove('fc-public-browser-open');
+    if(auth){
+      auth.classList.remove('fc-public-auth','fc-public-auth-v1103','fc-auth-sheet-open');
+      auth.style.setProperty('display','none','important');
+      auth.style.opacity='';
+      auth.setAttribute('aria-hidden','true');
+    }
+    if(app){
+      app.style.setProperty('display','block','important');
+      app.style.opacity='';
+      app.setAttribute('aria-hidden','false');
+    }
+  }
+
+  // Inline markup is part of the release artifact; keep the route explicit even
+  // if an older cached DOM survived an installed-app resume.
+  const you=document.querySelector('.bnav-btn[data-view="you"]');
+  if(you){
+    you.setAttribute('onclick',"switchView('you')");
+    you.onclick=function(){ window.switchView?.('you'); };
+  }
+
+  const previousOpenOwn=window.openOwnCompetitiveProfile;
+  window.openOwnCompetitiveProfile=function(){
+    clearSignedInAuthLayers();
+    return previousOpenOwn?.apply(this,arguments);
+  };
+
+  // An installed PWA can resume with the auth sheet class left on the hidden
+  // auth root. Any signed-in primary navigation action clears that stale layer.
+  const previousSwitch=window.switchView;
+  window.switchView=function(view){
+    if(state?.session || state?.profile) clearSignedInAuthLayers();
+    return previousSwitch?.apply(this,arguments);
+  };
+
+  window.FC_BUILD_V1108='you-navigation-recovery';
+  window.__fcBuildV1108={
+    build:'v1108',basedOn:'v1107',youIsPrimaryPage:true,
+    ownProfileModalIsolation:false,falseAuthSheetBlocked:true,
+    competeEmberResponsive:true,lightHeaderContrast:true,
+    sqlChanges:0,serviceWorkerChanges:0
+  };
 })();
 </script>
 
