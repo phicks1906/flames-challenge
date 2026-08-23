@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1108 — You Navigation Recovery</title>
+<title>FlamesChallenge v1109 — Competition Rules, Trust & Integrity</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1108 · you-navigation-recovery" />
-<!-- v1108: restores You as a primary page and repairs narrow-screen Ember/header layout. -->
+<meta name="fc-build" content="v1109 · competition-rules-trust-integrity" />
+<!-- v1109: aligns visible competition rules with authoritative settlement and database-enforced entry/vote integrity. -->
 <meta name="fc-whatsnew" content="Ember guidance now follows Full, Important only, and Off consistently, uses authoritative Championship Score, and limits itself to one proactive intervention per screen." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
@@ -37541,6 +37541,173 @@ html[data-theme="light"] body .nav-icon-btn:active{
     competeEmberResponsive:true,lightHeaderContrast:true,
     sqlChanges:0,serviceWorkerChanges:0
   };
+})();
+</script>
+
+<style id="fc-v1109-competition-integrity-css">
+/* v1109 — one authoritative, readable competition-rules surface. */
+#competitionRulesSheet .fc-rules-inner-v1047{padding-top:2px}
+#competitionRulesSheet .fc-rules-atglance-v1047{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+#competitionRulesSheet .fc-rules-atglance-v1047 div{min-height:72px}
+#competitionRulesSheet .fc-rule-section-v1047 summary{min-height:50px;display:flex;align-items:center}
+#competitionRulesSheet .fc-rule-section-v1047-body li{margin:0 0 9px}
+.fc-rule-enforced-v1109{display:inline-flex;align-items:center;gap:6px;margin-top:9px;padding:6px 9px;border-radius:999px;border:1px solid rgba(77,205,129,.28);background:rgba(55,174,105,.08);color:var(--success);font-size:10px;font-weight:850;letter-spacing:.04em;text-transform:uppercase}
+.fc-rule-enforced-v1109:before{content:'✓';font-weight:950}
+@media(max-width:430px){
+  #competitionRulesSheet .fc-rules-atglance-v1047{grid-template-columns:1fr 1fr!important}
+  #competitionRulesSheet .fc-rules-atglance-v1047 b{font-size:11.5px}
+  #competitionRulesSheet .fc-rules-atglance-v1047 span{font-size:10px}
+}
+</style>
+<script id="fc-v1109-competition-integrity-js">
+(function(){
+  'use strict';
+  const byId=id=>document.getElementById(id);
+  const safe=s=>typeof escapeHtml==='function'?escapeHtml(String(s??'')):String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const RULES=Object.freeze({
+    version:'v1109',
+    lifecycle:Object.freeze({
+      order:Object.freeze(['Create','Enter','Vote','Result','Advance']),
+      summary:'A host sets the prompt, format, audience, and deadlines. Eligible members enter before submissions close, one recorded ballot per member decides the final round, and the durable result drives records, Championship Score, qualification, and titles.'
+    }),
+    eligibility:Object.freeze({
+      validContest:'A scored contest needs at least two eligible competitors when the result is settled. Pending, flagged, escalated, rejected, removed, or disqualified entries do not count.',
+      oneEntry:'Each member may have one entry per challenge round. Sudden death is a new round, so tied finalists submit one fresh entry for that round.',
+      bannedAccounts:'Banned accounts cannot enter or vote. Entries from ineligible accounts cannot receive new ballots.',
+      format:'An entry must match the challenge format and the host’s published eligibility rules.'
+    }),
+    entry:Object.freeze({
+      withdrawal:'You may edit or withdraw your own entry only while that round’s submission window is open. Once voting begins, self-service editing and withdrawal close.',
+      hostDelete:'A host may delete a challenge only while entries are open and before another member has entered. Administrators may remove a challenge for safety or integrity reasons.',
+      moderation:'Only clear or approved entries compete publicly. Replacing rejected or flagged work sends the replacement through the applicable review path.',
+      noContest:'If fewer than two eligible competitors remain when the result is settled, the challenge is a no-contest. No winner and no Championship Score are awarded.'
+    }),
+    voting:Object.freeze({
+      oneBallot:'Each account has one recorded ballot per challenge. Changing your vote replaces your earlier choice.',
+      close:'Ballots are accepted only during the active voting window and only for eligible entries in the final voting round.',
+      selfVote:'Entrants may vote in a challenge they entered, including for their own entry. They still receive only one ballot.',
+      live:'Live vote totals, percentages, and leaders remain visible while voting is open.',
+      manipulation:'Using duplicate accounts, coordinated fake accounts, automation, or other manipulation to enter or vote is prohibited.'
+    }),
+    results:Object.freeze({
+      decisive:'The eligible entry with the most valid final-round ballots wins.',
+      suddenDeath:'When sudden death is enabled and the vote ties, only the tied finalists submit new hidden entries. Those entries reveal together for a fresh runoff.',
+      oneSubmission:'If only one tied finalist submits in sudden death, that finalist wins by default.',
+      noSubmissions:'If no tied finalist submits, the tied finalists are co-winners and receive no Championship Score.',
+      noBallots:'If a sudden-death runoff receives no valid ballots, the eligible finalists are co-winners and receive no Championship Score.',
+      tiedRunoff:'If the runoff ties with valid ballots, the tied finalists are competitive co-winners.',
+      unresolved:'If sudden death was not enabled and the final vote remains tied, there is no decisive winner and no Championship Score.',
+      admin:'Administrators do not choose winners, rewrite ballot totals, manually break ties, or grant discretionary sudden-death extensions.'
+    }),
+    score:Object.freeze({
+      formula:'Championship Score = Opponent Points + Turnout Points.',
+      decisive:'A decisive eligible public regular-challenge winner receives points for every eligible opponent defeated plus the final-round turnout tier.',
+      coWinner:'Competitive co-winners with valid ballots receive Turnout Points plus Opponent Points only for eligible finalists they clearly finished ahead of. Co-winners do not receive Opponent Points for each other.',
+      exclusions:'No-submission co-winners, no-ballot co-winners, private challenges, Championship rounds, no-contests, and unresolved ties do not add monthly Championship Score.',
+      qualification:'At calendar month-end, the top three distinct Championship Score levels in each category qualify. Everyone tied at the cutoff Score advances.',
+      opponent:'Opponent Points use each defeated competitor’s visible level at the time the result is resolved.',
+      turnout:'Turnout Points use total unique valid ballots across all eligible entries in the final voting round.'
+    }),
+    privateChallenges:Object.freeze({
+      access:'A private challenge is visible to its creator and invited members. Only those participants may enter or vote. A Championship contender must accept the invitation before entering.',
+      score:'Private results may appear in participating members’ records, but private challenges do not add Championship Score.'
+    }),
+    moderation:Object.freeze({
+      reports:'A report creates a review item. A report by itself does not delete content, change ballots, or decide a result.',
+      removal:'Administrators may remove entries, challenges, or accounts that violate content, safety, or competition-integrity rules. Removed or rejected entries are excluded from later eligibility and settlement calculations.',
+      scope:'Community Guidelines govern content and conduct. Competition Rules govern eligibility, ballots, results, Score, qualification, and titles.'
+    }),
+    authority:Object.freeze({
+      host:'The host defines the challenge prompt, format, audience, entry deadline, voting deadline, and any published eligibility requirements. The host does not control ballots or choose the winner.',
+      admin:'Administrators enforce content, account, and integrity rules. Their authority is corrective and protective—not a substitute for the recorded competition result.',
+      durable:'Closed results come from the authoritative database settlement record. The browser does not recalculate or rewrite the winner.'
+    })
+  });
+  window.FC_COMPETITION_RULES_V1109=RULES;
+  window.FC_COMPETITION_RULES=RULES;
+
+  const sections=[
+    {id:'overview',label:'Overview',title:'How competition works',intro:RULES.lifecycle.summary,bullets:[
+      'Create: the host publishes the prompt, format, audience, and deadlines.',
+      'Enter: eligible members submit one entry for the active round.',
+      'Vote: each member has one recorded ballot and may change it until voting closes.',
+      'Result: the server settles the final eligible round and stores the durable winner or co-winners.',
+      'Advance: eligible public results add Championship Score and can qualify competitors for monthly Championships.'
+    ]},
+    {id:'eligibility',label:'Eligibility',title:'Eligible competitors and entries',intro:RULES.eligibility.validContest,bullets:[RULES.eligibility.oneEntry,RULES.eligibility.format,RULES.eligibility.bannedAccounts,RULES.entry.moderation],enforced:true},
+    {id:'entering',label:'Entering',title:'Entering, editing, and withdrawing',intro:'The active submission window is the only normal self-service period for changing participation.',bullets:[RULES.entry.withdrawal,RULES.entry.hostDelete,RULES.entry.noContest],enforced:true},
+    {id:'voting',label:'Voting',title:'Voting and valid ballots',intro:RULES.voting.oneBallot,bullets:[RULES.voting.close,RULES.voting.selfVote,RULES.voting.live,RULES.voting.manipulation],enforced:true},
+    {id:'results',label:'Results',title:'Winners, ties, and sudden death',intro:RULES.results.decisive,bullets:[RULES.results.suddenDeath,RULES.results.oneSubmission,RULES.results.noSubmissions,RULES.results.noBallots,RULES.results.tiedRunoff,RULES.results.unresolved,RULES.results.admin],enforced:true},
+    {id:'score',label:'Score',title:'Championship Score and qualification',intro:RULES.score.formula,bullets:[RULES.score.decisive,RULES.score.coWinner,RULES.score.opponent,RULES.score.turnout,RULES.score.exclusions,RULES.score.qualification],callout:'Opponent Points: Spark 1 · Flame 2 · Blaze 4 · Inferno 6 · Legend 10 · Icon 14 · Immortal 18 · G.O.A.T. 24. Turnout: under 10 = 0 · 10–24 = 3 · 25–49 = 6 · 50–99 = 10 · 100–249 = 15 · 250+ = 22.',enforced:true},
+    {id:'championships',label:'Titles',title:'Championship rounds and titles',intro:'Championship standings are category-specific and monthly.',bullets:[RULES.score.qualification,'Qualified contenders compete for the category title. The Championship round itself does not add regular monthly Championship Score.','Championship sudden death uses the same hidden-entry, simultaneous-reveal, fresh-runoff model.'],enforced:true},
+    {id:'private',label:'Private',title:'Private challenges',intro:RULES.privateChallenges.access,bullets:[RULES.privateChallenges.score],enforced:true},
+    {id:'moderation',label:'Reports',title:'Reports, moderation, and removals',intro:RULES.moderation.reports,bullets:[RULES.moderation.removal,RULES.moderation.scope],enforced:true},
+    {id:'authority',label:'Authority',title:'Host and administrator authority',intro:RULES.authority.host,bullets:[RULES.authority.admin,RULES.authority.durable],enforced:true}
+  ];
+
+  function render(section='overview'){
+    const nav=byId('fcRulesNavV1047'),body=byId('fcRulesBodyV1047');if(!nav||!body)return;
+    nav.innerHTML=sections.map(s=>`<button type="button" data-fc-v1109-rule="${s.id}" class="${s.id===section?'active':''}">${safe(s.label)}</button>`).join('');
+    body.innerHTML=`<div class="fc-rules-atglance-v1047"><div><b>1 entry per round</b><span>Sudden death is a fresh round.</span></div><div><b>1 recorded ballot</b><span>Change it until voting closes.</span></div><div><b>2 eligible competitors</b><span>Minimum for a scored contest.</span></div><div><b>3 distinct Score levels</b><span>All cutoff ties qualify.</span></div></div>`+
+      sections.map(s=>`<details class="fc-rule-section-v1047" id="fc-v1109-rule-${s.id}" ${s.id===section?'open':''}><summary>${safe(s.title)}</summary><div class="fc-rule-section-v1047-body"><p>${safe(s.intro)}</p><ul>${s.bullets.map(b=>`<li>${safe(b)}</li>`).join('')}</ul>${s.callout?`<div class="fc-rule-callout-v1047"><b>Current values</b><br>${safe(s.callout)}</div>`:''}${s.enforced?'<div class="fc-rule-enforced-v1109">Database-enforced write rule</div>':''}</div></details>`).join('');
+    nav.querySelectorAll('[data-fc-v1109-rule]').forEach(btn=>btn.onclick=()=>focus(btn.dataset.fcV1109Rule));
+  }
+  function focus(section){
+    const target=byId('fc-v1109-rule-'+section);if(!target)return;
+    document.querySelectorAll('#fcRulesBodyV1047 details').forEach(d=>d.open=d===target);
+    document.querySelectorAll('#fcRulesNavV1047 [data-fc-v1109-rule]').forEach(b=>b.classList.toggle('active',b.dataset.fcV1109Rule===section));
+    setTimeout(()=>target.scrollIntoView({behavior:typeof fcMotionBehaviorV1100==='function'?fcMotionBehaviorV1100():'auto',block:'start'}),30);
+  }
+  window.openCompetitionRules=function(section='overview'){
+    const sheet=byId('competitionRulesSheet');if(!sheet)return;
+    render(section);
+    sheet.dataset.prevOverflow=document.body.style.overflow||'';
+    sheet.classList.add('open');document.body.style.overflow='hidden';
+    setTimeout(()=>focus(section),45);
+  };
+  window.closeCompetitionRules=function(){
+    const sheet=byId('competitionRulesSheet');if(!sheet)return;
+    sheet.classList.remove('open');document.body.style.overflow=sheet.dataset.prevOverflow||'';
+  };
+
+  function updateEntryRule(){
+    const el=byId('fcEntryRulesV1047'),ch=state?.currentChallenge;if(!el||!ch)return;
+    const st=typeof computeChallengeStatus==='function'?computeChallengeStatus(ch):'';
+    let title='Before you enter',copy=RULES.entry.withdrawal,section='entering';
+    if(st==='sd_submitting'){title='Sudden-death entry';copy=RULES.results.suddenDeath+' '+RULES.eligibility.oneEntry;section='results';}
+    else if(ch.is_public===false){title='Private challenge';copy=RULES.privateChallenges.access;section='private';}
+    el.innerHTML=`<div><strong>${safe(title)}</strong><span>${safe(copy)}</span></div><button type="button" class="fc-rule-link-v1047">Competition Rules</button>`;
+    el.querySelector('button').onclick=()=>openCompetitionRules(section);
+  }
+  const oldOpen=window.openSubmitEntry;
+  window.openSubmitEntry=function(){const r=oldOpen?.apply(this,arguments);requestAnimationFrame(updateEntryRule);return r;};
+
+  const oldLocal=window.fcEmberLocalAnswerV1046;
+  window.fcEmberLocalAnswerV1046=function(question){
+    const q=String(question||'').toLowerCase().replace(/[’']/g,"'").replace(/[^a-z0-9.+ -]/g,' ').replace(/\s+/g,' ').trim();
+    if(/co winner|co-winner|shared winner/.test(q))return `${RULES.results.tiedRunoff} ${RULES.score.coWinner} ${RULES.score.exclusions}`;
+    if(/tie|sudden death|runoff/.test(q))return `${RULES.results.suddenDeath} ${RULES.results.oneSubmission} ${RULES.results.noSubmissions} ${RULES.results.noBallots} ${RULES.results.tiedRunoff} ${RULES.results.admin}`;
+    if(/championship score|opponent points|turnout points|qualif/.test(q))return `${RULES.score.formula} ${RULES.score.decisive} ${RULES.score.coWinner} ${RULES.score.exclusions} ${RULES.score.qualification}`;
+    if(/one entry|duplicate entry|second entry/.test(q))return RULES.eligibility.oneEntry;
+    if(/withdraw|delete.*entry|remove my entry|edit.*entry/.test(q))return RULES.entry.withdrawal;
+    if(/valid ballot|one vote|change.*vote|vote.*change/.test(q))return `${RULES.voting.oneBallot} ${RULES.voting.close}`;
+    if(/self vote|vote for my own|vote.*own entry/.test(q))return RULES.voting.selfVote;
+    if(/private challenge/.test(q))return `${RULES.privateChallenges.access} ${RULES.privateChallenges.score}`;
+    if(/report|moderation review|flagged content/.test(q))return `${RULES.moderation.reports} ${RULES.moderation.removal}`;
+    if(/host authority|host.*winner|admin.*winner|administrator.*winner|manual.*tie|extend.*tie/.test(q))return `${RULES.authority.host} ${RULES.results.admin}`;
+    if(/duplicate account|multiple account|alt account|vote manipulation|rig.*vote|abuse/.test(q))return RULES.voting.manipulation;
+    return typeof oldLocal==='function'?oldLocal(question):null;
+  };
+
+  const oldContext=window.buildEmberContext;
+  window.buildEmberContext=function(){
+    const base=typeof oldContext==='function'?oldContext():{};
+    return {...base,competitionRules:{version:RULES.version,lifecycle:RULES.lifecycle.order,eligibility:RULES.eligibility,entry:RULES.entry,voting:RULES.voting,results:RULES.results,score:RULES.score,privateChallenges:RULES.privateChallenges,moderation:RULES.moderation,authority:RULES.authority}};
+  };
+
+  render('overview');
+  window.FC_BUILD_V1109='competition-rules-trust-integrity';
+  window.__fcBuildV1109={build:'v1109',basedOn:'v1108',canonicalRules:true,databaseWriteGuards:true,coWinnerScoreRule:true,oneEntryPerRound:true,oneBallotPerChallenge:true,lateWriteProtection:true,privateAccessProtection:true,bannedAccountProtection:true,sqlRequired:true,serviceWorkerChanges:0};
 })();
 </script>
 
