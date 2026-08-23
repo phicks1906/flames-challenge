@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1109 — Competition Rules, Trust & Integrity</title>
+<title>FlamesChallenge v1110 — Durable Creator Insights</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,8 +21,8 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1109 · competition-rules-trust-integrity" />
-<!-- v1109: aligns visible competition rules with authoritative settlement and database-enforced entry/vote integrity. -->
+<meta name="fc-build" content="v1110 · durable-creator-insights" />
+<!-- v1110: durable, server-validated creator analytics with authoritative result metrics and retry-safe tracking. -->
 <meta name="fc-whatsnew" content="Ember guidance now follows Full, Important only, and Off consistently, uses authoritative Championship Score, and limits itself to one proactive intervention per screen." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
@@ -7521,6 +7521,16 @@ body.fc-boot-ready-v1095 #fcBootGateV1095{
 @media(prefers-reduced-motion:reduce){.fc-boot-spinner-v1095{animation:none}}
 </style>
 
+
+<style id="fc-v1110-durable-creator-insights-css">
+.fc-insights-summary-v1110{margin:0 0 14px;padding:13px;border:1px solid rgba(255,106,44,.24);border-radius:16px;background:linear-gradient(145deg,rgba(255,106,44,.08),var(--surface))}
+.fc-insights-summary-head-v1110{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:10px}.fc-insights-summary-head-v1110 small,.fc-insights-summary-head-v1110 strong{display:block}.fc-insights-summary-head-v1110 small{font-size:8.5px;font-weight:950;letter-spacing:.14em;color:var(--ember)}.fc-insights-summary-head-v1110 strong{font-family:var(--font-bricolage);font-size:17px;color:var(--text);margin-top:2px}.fc-insights-summary-head-v1110>span{max-width:48%;font-size:10px;line-height:1.35;color:var(--text-muted);text-align:right}
+.fc-insights-summary-grid-v1110{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.fc-insights-summary-card-v1110{min-width:0;padding:9px 8px;border:1px solid var(--border);border-radius:11px;background:var(--surface)}.fc-insights-summary-card-v1110 b,.fc-insights-summary-card-v1110 span{display:block}.fc-insights-summary-card-v1110 b{font-family:var(--font-bricolage);font-size:16px;line-height:1.1;color:var(--text)}.fc-insights-summary-card-v1110 span{margin-top:3px;font-size:9px;line-height:1.25;color:var(--text-muted)}
+.fc-insights-outcome-v1110{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding-top:9px;border-top:1px solid var(--border)}.fc-insights-outcome-v1110 b{font-size:11px;color:var(--success)}.fc-insights-outcome-v1110 span{font-size:9.5px;color:var(--text-muted);text-align:right}
+.fc-insights-definition-v1110{margin:8px 1px 0;font-size:10px;line-height:1.45;color:var(--text-muted)}.fc-insights-more-v1110{width:100%;margin-top:12px;min-height:44px}.fc-insights-retry-v1110{margin-top:12px;min-height:44px}.fc-insights-source-v1048 code{font-family:inherit;color:var(--text-dim)}
+@media(max-width:380px){.fc-insights-summary-grid-v1110{grid-template-columns:repeat(2,minmax(0,1fr))}.fc-insights-summary-head-v1110{display:block}.fc-insights-summary-head-v1110>span{display:block;max-width:none;text-align:left;margin-top:4px}}
+</style>
+
 </head>
 <body>
 
@@ -9320,7 +9330,7 @@ body.fc-boot-ready-v1095 #fcBootGateV1095{
 </div>
 
 
-<!-- CREATOR INSIGHTS — v1048 recorded activity only -->
+<!-- CREATOR INSIGHTS — v1110 durable recorded activity -->
 <div class="cd-sheet fc-insights-sheet-v1048" id="creatorInsightsSheetV1048" style="z-index:312">
   <div class="cd-sheet-header">
     <button class="cd-close" onclick="closeCreatorInsightsV1048()" aria-label="Close">×</button>
@@ -9328,9 +9338,9 @@ body.fc-boot-ready-v1095 #fcBootGateV1095{
   </div>
   <div class="cd-sheet-inner fc-insights-inner-v1048">
     <div class="fc-insights-intro-v1048">
-      <div class="fc-insights-kicker-v1048">RECORDED ACTIVITY ONLY</div>
-      <h3>See whether your challenge is getting seen, entered, voted on and shared.</h3>
-      <p>No estimated reach. Existing entry and vote history comes from competition records; views, starts and promotion attribution begin with the v1048 analytics setup.</p>
+      <div class="fc-insights-kicker-v1048">DURABLE CREATOR INSIGHTS</div>
+      <h3>See how your challenges attract competitors, ballots, shares, and Championship impact.</h3>
+      <p>Settled results use the authoritative competition record. Audience activity is server-validated, deduplicated, versioned, and shown with clear coverage limits.</p>
     </div>
     <div id="fcInsightsBodyV1048"><div class="fc-insights-loading-v1048">Loading your challenges…</div></div>
   </div>
@@ -10386,23 +10396,25 @@ const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
 
 
 /* =========================================================
-   v1048 — CREATOR ANALYTICS EVENT LAYER
-   - Direct writes to one Supabase table: public.analytics_events.
-   - No new Edge Function and no changes to existing Edge Functions.
-   - Existing authoritative tables remain the source for completed entries,
-     final ballots, results and follows themselves. This table only preserves
-     behavior that the product otherwise loses: views, starts, promotion work,
-     shared-link opens and attributable conversions.
-   - If the SQL migration has not been run yet, tracking fails silently and the
-     rest of FlamesChallenge continues to work.
+   v1110 — DURABLE CREATOR ANALYTICS EVENT LAYER
+   - All browser events use public.fc_record_analytics_v1110().
+   - auth.uid() and server timestamps are authoritative.
+   - Event keys and dedupe windows are defined by Postgres, not the browser.
+   - Failed transient writes are queued locally and retried without blocking the
+     competition action that produced them.
+   - Existing v1048 helper names remain as compatibility aliases so older call
+     sites do not create a second analytics implementation.
 ========================================================= */
-const FC_ANALYTICS_VERSION_V1048 = 'v1048';
-const FC_ANALYTICS_EVENTS_V1048 = Object.freeze([
-  'challenge_view','entry_start','promotion_generated','promotion_shared',
+const FC_ANALYTICS_VERSION_V1110 = 1110;
+const FC_ANALYTICS_EVENTS_V1110 = Object.freeze([
+  'challenge_open','entry_start','promotion_generated','promotion_shared',
   'shared_link_open','attributed_entry','attributed_vote','attributed_follow'
 ]);
+const FC_ANALYTICS_EVENT_MAP_V1110 = Object.freeze({ challenge_view:'challenge_open' });
+const FC_ANALYTICS_QUEUE_KEY_V1110 = 'fc_analytics_retry_queue_v1110';
 let fcAnalyticsTableReadyV1048 = null;
 let fcAnalyticsWarnedV1048 = false;
+let fcAnalyticsFlushPromiseV1110 = null;
 
 function fcUuidV1048() {
   try { if (crypto?.randomUUID) return crypto.randomUUID(); } catch(e) {}
@@ -10412,10 +10424,11 @@ function fcUuidV1048() {
   });
 }
 function fcVisitorIdV1048() {
-  const key = 'fc_analytics_visitor_v1048';
+  const key = 'fc_analytics_visitor_v1110';
   try {
-    let id = localStorage.getItem(key);
-    if (!id) { id = fcUuidV1048(); localStorage.setItem(key, id); }
+    let id = localStorage.getItem(key) || localStorage.getItem('fc_analytics_visitor_v1048');
+    if (!id) id = fcUuidV1048();
+    localStorage.setItem(key, id);
     return id;
   } catch(e) { return fcUuidV1048(); }
 }
@@ -10437,7 +10450,6 @@ function fcGetAttributionV1048(challengeId) {
     const raw = fcSessionGetV1048('fc_attr_v1048_' + challengeId);
     if (!raw) return null;
     const rec = JSON.parse(raw);
-    // Attribution is visit-scoped. Expire after 24h even if Safari restores a tab.
     if (!rec?.shareId || !rec?.at || Date.now() - rec.at > 86400000) {
       fcSessionDelV1048('fc_attr_v1048_' + challengeId); return null;
     }
@@ -10453,45 +10465,104 @@ function fcLastAttributionV1048() {
   } catch(e) { return null; }
 }
 
-// Capture attribution immediately, before applyDeepLink() later removes query params.
+function fcAnalyticsQueueReadV1110() {
+  try {
+    const rows = JSON.parse(localStorage.getItem(FC_ANALYTICS_QUEUE_KEY_V1110) || '[]');
+    return Array.isArray(rows) ? rows.slice(-100) : [];
+  } catch(e) { return []; }
+}
+function fcAnalyticsQueueWriteV1110(rows) {
+  try { localStorage.setItem(FC_ANALYTICS_QUEUE_KEY_V1110, JSON.stringify((rows || []).slice(-100))); } catch(e) {}
+}
+function fcAnalyticsTransientV1110(error) {
+  const msg = String(error?.message || error || '').toLowerCase();
+  const code = String(error?.code || '').toUpperCase();
+  return !code || /^5/.test(code) || code === 'PGRST000' || /timed out|timeout|network|failed to fetch|fetch failed|abort|offline|connection/.test(msg);
+}
+async function fcSendAnalyticsV1110(item) {
+  const op = db.rpc('fc_record_analytics_v1110', {
+    p_event_type: item.eventType,
+    p_challenge_id: item.challengeId,
+    p_visitor_id: item.visitorId,
+    p_share_id: item.shareId || null,
+    p_source: item.source || null,
+    p_metadata: item.metadata || {}
+  });
+  const result = typeof fcDbResultV1101 === 'function'
+    ? await fcDbResultV1101(op, 'Record analytics activity', { timeout:12000, requireData:true })
+    : await fcWithTimeoutV1099(op, 12000, 'Record analytics activity');
+  if (result?.error) throw result.error;
+  return result?.data ?? result;
+}
+function fcQueueAnalyticsV1110(item) {
+  const rows = fcAnalyticsQueueReadV1110();
+  const fingerprint = [item.eventType,item.challengeId,item.shareId||'',item.source||'',item.ownerId||'',JSON.stringify(item.metadata||{})].join('|');
+  if (!rows.some(r => r.fingerprint === fingerprint)) {
+    rows.push({ ...item, fingerprint, queuedAt:Date.now(), attempts:0 });
+    fcAnalyticsQueueWriteV1110(rows);
+  }
+}
+async function fcFlushAnalyticsQueueV1110() {
+  if (fcAnalyticsFlushPromiseV1110) return fcAnalyticsFlushPromiseV1110;
+  fcAnalyticsFlushPromiseV1110 = (async()=>{
+    const rows = fcAnalyticsQueueReadV1110();
+    if (!rows.length) return;
+    const keep = [];
+    for (const item of rows) {
+      const currentOwner = state?.profile?.id || null;
+      if (item.ownerId && item.ownerId !== currentOwner) { keep.push(item); continue; }
+      try { await fcSendAnalyticsV1110(item); }
+      catch(error) {
+        if (fcAnalyticsTransientV1110(error) && Number(item.attempts||0) < 5 && Date.now() - Number(item.queuedAt||0) < 7*86400000) {
+          keep.push({ ...item, attempts:Number(item.attempts||0)+1 });
+        }
+      }
+    }
+    fcAnalyticsQueueWriteV1110(keep);
+  })().finally(()=>{ fcAnalyticsFlushPromiseV1110 = null; });
+  return fcAnalyticsFlushPromiseV1110;
+}
+
+// Capture attribution and the signed-out landing immediately. This records the
+// visit without loading or exposing the linked challenge's member content.
 try {
   const _p = new URLSearchParams(location.search);
   const _cid = _p.get('c'), _share = _p.get('share'), _src = _p.get('src') || 'shared_link';
-  if (_cid && _share) fcRememberAttributionV1048(_cid, _share, _src);
+  if (_cid && _share) {
+    fcRememberAttributionV1048(_cid, _share, _src);
+    setTimeout(()=>fcTrackAnalyticsV1048('shared_link_open', _cid, {
+      shareId:_share, source:_src, dedupeKey:'landing_' + _cid + '_' + _share
+    }), 0);
+  }
 } catch(e) {}
 
 async function fcTrackAnalyticsV1048(eventType, challengeId, opts={}) {
-  if (!challengeId || !FC_ANALYTICS_EVENTS_V1048.includes(eventType)) return null;
-  const dedupe = opts.dedupeKey ? 'fc_evt_v1048_' + opts.dedupeKey : null;
+  const mapped = FC_ANALYTICS_EVENT_MAP_V1110[eventType] || eventType;
+  if (!challengeId || !FC_ANALYTICS_EVENTS_V1110.includes(mapped)) return null;
+  const ownerId = state?.profile?.id || null;
+  const dedupe = opts.dedupeKey ? 'fc_evt_v1110_' + (ownerId || 'anon') + '_' + opts.dedupeKey : null;
   if (dedupe && fcSessionGetV1048(dedupe)) return null;
-  const actor = state?.profile?.id || null;
-  const row = {
-    event_type: eventType,
-    challenge_id: challengeId,
-    actor_user_id: actor,
-    visitor_id: FC_VISITOR_ID_V1048,
-    share_id: opts.shareId || null,
-    source: opts.source || null,
-    metadata: opts.metadata || {}
+  const item = {
+    eventType:mapped,
+    challengeId,
+    visitorId:FC_VISITOR_ID_V1048,
+    shareId:opts.shareId || null,
+    source:opts.source || null,
+    metadata:opts.metadata || {},
+    ownerId
   };
   try {
-    const { data, error } = await db.from('analytics_events').insert(row);
-    if (error) {
-      // entry_start has a database uniqueness backstop; duplicate means already counted.
-      if (error.code === '23505') { if (dedupe) fcSessionSetV1048(dedupe, '1'); return null; }
-      if (!fcAnalyticsWarnedV1048) {
-        fcAnalyticsWarnedV1048 = true;
-        console.warn('v1048 analytics unavailable — run SUPABASE-ANALYTICS-SETUP.sql', error);
-      }
-      fcAnalyticsTableReadyV1048 = false;
-      return null;
-    }
+    const data = await fcSendAnalyticsV1110(item);
     fcAnalyticsTableReadyV1048 = true;
     if (dedupe) fcSessionSetV1048(dedupe, '1');
     return data || null;
-  } catch(e) {
-    if (!fcAnalyticsWarnedV1048) { fcAnalyticsWarnedV1048 = true; console.warn('v1048 analytics write failed', e); }
+  } catch(error) {
     fcAnalyticsTableReadyV1048 = false;
+    if (fcAnalyticsTransientV1110(error)) fcQueueAnalyticsV1110(item);
+    if (!fcAnalyticsWarnedV1048) {
+      fcAnalyticsWarnedV1048 = true;
+      console.warn('v1110 analytics event was not delivered immediately', error);
+    }
     return null;
   }
 }
@@ -10510,30 +10581,22 @@ function fcPromotionLinkV1048(type, id, shareId, source) {
 }
 function fcTrackChallengeOpenV1048(ch) {
   if (!ch?.id) return;
-  fcTrackAnalyticsV1048('challenge_view', ch.id, { dedupeKey: 'view_' + ch.id });
+  fcTrackAnalyticsV1048('challenge_open', ch.id, { dedupeKey:'open_' + ch.id });
   const attr = fcGetAttributionV1048(ch.id);
-  if (attr) {
-    fcTrackAnalyticsV1048('shared_link_open', ch.id, {
-      shareId: attr.shareId,
-      source: attr.source,
-      dedupeKey: 'shared_open_' + ch.id + '_' + attr.shareId
-    });
-  }
+  if (attr) fcTrackAnalyticsV1048('shared_link_open', ch.id, {
+    shareId:attr.shareId, source:attr.source, dedupeKey:'shared_open_' + ch.id + '_' + attr.shareId
+  });
 }
 function fcTrackEntryStartV1048(ch) {
   if (!ch?.id || !state?.profile?.id) return;
-  fcTrackAnalyticsV1048('entry_start', ch.id, {
-    dedupeKey: 'entry_start_' + ch.id + '_' + state.profile.id
-  });
+  fcTrackAnalyticsV1048('entry_start', ch.id, { dedupeKey:'entry_start_' + ch.id + '_' + state.profile.id });
 }
 function fcTrackAttributedConversionV1048(eventType, challengeId, metadata={}) {
   const attr = fcGetAttributionV1048(challengeId);
   if (!attr || !state?.profile?.id) return;
   fcTrackAnalyticsV1048(eventType, challengeId, {
-    shareId: attr.shareId,
-    source: attr.source,
-    metadata,
-    dedupeKey: eventType + '_' + challengeId + '_' + state.profile.id + '_' + attr.shareId
+    shareId:attr.shareId, source:attr.source, metadata,
+    dedupeKey:eventType + '_' + challengeId + '_' + state.profile.id + '_' + attr.shareId
   });
 }
 async function fcTrackFollowConversionV1048(followedUserId) {
@@ -10545,13 +10608,18 @@ async function fcTrackFollowConversionV1048(followedUserId) {
   let creatorId = ch?.creator_id || ch?.creator?.id || null;
   if (!creatorId) {
     try {
-      const { data } = await db.from('challenges').select('creator_id').eq('id', attr.challengeId).maybeSingle();
+      const data = typeof fcDbReadV1101 === 'function'
+        ? await fcDbReadV1101(db.from('challenges').select('creator_id').eq('id', attr.challengeId).maybeSingle(), 'Load challenge creator', 12000)
+        : (await db.from('challenges').select('creator_id').eq('id', attr.challengeId).maybeSingle()).data;
       creatorId = data?.creator_id || null;
     } catch(e) {}
   }
   if (creatorId !== followedUserId) return;
-  fcTrackAttributedConversionV1048('attributed_follow', attr.challengeId, { followed_user_id: followedUserId });
+  fcTrackAttributedConversionV1048('attributed_follow', attr.challengeId, { followed_user_id:followedUserId });
 }
+
+window.addEventListener('online', ()=>fcFlushAnalyticsQueueV1110());
+setTimeout(()=>fcFlushAnalyticsQueueV1110(), 5000);
 
 function fcAvatarSvg(name, art, c1='#ff4b27', c2='#ffc45c') {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="${name}">
@@ -34073,93 +34141,120 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
   window.__fcCompetitionClarityV1047={version:'v1047',rulesCenter:true,canonicalRulesSource:true,contextualStateActionNext:true,entryRules:true,votingRules:true,rejectedEntriesExcludedFromSettlement:true,newEdgeFunctions:0,edgeFunctionChanges:0};
 })();
 </script>
-<script id="fc-v1048-creator-insights-js">
-/* v1048 — Creator Insights reads recorded rows only. */
+<script id="fc-v1110-creator-insights-js">
+/* v1110 — authoritative creator summary and paginated challenge history. */
 (function(){
+  'use strict';
   const esc=s=>{try{return escapeHtml(String(s??''))}catch(e){return String(s??'').replace(/[&<>\"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}};
-  let cache=null, selectedId=null;
   const sheet=()=>document.getElementById('creatorInsightsSheetV1048');
   const body=()=>document.getElementById('fcInsightsBodyV1048');
   const fmtDate=d=>d?new Date(d).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}):'';
-  const duration=(ms)=>{
-    if (!(ms>=0)) return '—';
-    const mins=Math.round(ms/60000);
+  const durationSec=s=>{
+    if(s===null||s===undefined||Number.isNaN(Number(s)))return '—';
+    const mins=Math.max(0,Math.round(Number(s)/60));
     if(mins<60)return `${mins} min`;
     const hrs=mins/60;if(hrs<24)return `${hrs<10?hrs.toFixed(1):Math.round(hrs)} hr`;
     const days=hrs/24;return `${days<10?days.toFixed(1):Math.round(days)} d`;
   };
-  const uniq=a=>new Set(a).size;
-  const isSetupError=e=>/analytics_events|get_creator_analytics_v1048|schema cache|does not exist|42P01|PGRST202|PGRST205/i.test(String(e?.message||e||''));
+  const pct=v=>v===null||v===undefined?'—':`${Number(v).toFixed(Number(v)%1?1:0)}%`;
+  const outcome=v=>({decisive_vote:'Decisive winner',decisive_default:'Default winner',co_winners_tied_runoff:'Competitive co-winners',co_winners_no_ballots:'Co-winners · no ballots',co_winners_no_submission:'Co-winners · no submissions',no_contest:'No contest',unresolved_tie:'Unresolved tie',unresolved_no_ballots:'No valid ballots'}[v]||'Active');
+  const isSetupError=e=>/analytics_events_v1110|fc_get_creator_insights_v1110|fc_record_analytics_v1110|schema cache|does not exist|42P01|PGRST202|PGRST205/i.test(String(e?.message||e||''));
+  let data=null,selectedId=null,requestSeq=0,accountId=null,loadingMore=false;
 
-  async function load(){
-    if(!state?.profile?.id) throw new Error('Sign in to view creator insights.');
-    const me=state.profile.id;
-    const {data:chs,error:ce}=await db.from('challenges')
-      .select('id,title,category,creator_id,created_at,submission_deadline,voting_end,is_public,is_championship,sd_round,sd_phase')
-      .eq('creator_id',me).order('created_at',{ascending:false}).limit(40);
-    if(ce) throw ce;
-    const challenges=chs||[];
-    if(!challenges.length)return {challenges,analytics:[],entries:[],votes:[]};
-    const ids=challenges.map(c=>c.id);
-    const [anRes,enRes,voRes]=await Promise.all([
-      db.rpc('get_creator_analytics_v1048',{p_challenge_ids:ids}),
-      db.from('entries').select('id,challenge_id,user_id,created_at,moderation_status,sd_round').in('challenge_id',ids),
-      db.from('entry_votes').select('challenge_id,entry_id,voter_id').in('challenge_id',ids)
-    ]);
-    if(anRes.error) throw anRes.error;
-    if(enRes.error) throw enRes.error;
-    if(voRes.error) throw voRes.error;
-    return {challenges,analytics:anRes.data||[],entries:enRes.data||[],votes:voRes.data||[]};
-  }
-
-  function metrics(ch){
-    const a=(cache.analytics||[]).find(r=>r.challenge_id===ch.id)||{};
-    const originalEntries=cache.entries.filter(e=>e.challenge_id===ch.id && (e.sd_round||0)===0 && e.moderation_status!=='rejected');
-    const completedEntrants=[...new Set(originalEntries.map(e=>e.user_id).filter(Boolean))];
-    const finalRound=Number(ch.sd_round||0);
-    const finalEntries=cache.entries.filter(e=>e.challenge_id===ch.id && e.moderation_status!=='rejected' && (e.sd_round||0)===finalRound);
-    const finalIds=new Set(finalEntries.map(e=>e.id));
-    const finalBallots=cache.votes.filter(v=>v.challenge_id===ch.id && finalIds.has(v.entry_id));
-    const views=Number(a.challenge_views||0), starts=Number(a.entry_starts||0);
-    const firstOther=originalEntries.filter(e=>e.user_id!==ch.creator_id).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at))[0];
-    const firstMs=firstOther?new Date(firstOther.created_at)-new Date(ch.created_at):null;
-    return {
-      views,starts,entries:completedEntrants.length,ballots:uniq(finalBallots.map(v=>v.voter_id)),firstMs,
-      generated:Number(a.promotion_generated||0),shares:Number(a.promotion_shares||0),opens:Number(a.shared_link_opens||0),
-      openVisitors:Number(a.shared_link_visitors||0),attrEntries:Number(a.attributed_entries||0),
-      attrVotes:Number(a.attributed_votes||0),attrFollows:Number(a.attributed_follows||0),
-      converted:Number(a.converted_visitors||0),conv:Number(a.conversion_rate||0)
-    };
-  }
   function metric(v,label,wide=false){return `<div class="fc-insights-metric-v1048${wide?' fc-insights-wide-v1048':''}"><b>${esc(v)}</b><span>${esc(label)}</span></div>`}
+  function summaryCard(v,label){return `<div class="fc-insights-summary-card-v1110"><b>${esc(v)}</b><span>${esc(label)}</span></div>`}
+  function challengeById(){return (data?.challenges||[]).find(c=>c.id===selectedId)||data?.challenges?.[0]||null;}
+  function sourceNote(ch){
+    const legacy=Number(ch?.legacy_events||0),validated=Number(ch?.validated_events||0);
+    return `<div class="fc-insights-source-v1048"><b>Coverage:</b> settled ballots and outcomes come from authoritative result records. Entry completions and first-competitor timing are durable database events. Audience opens use a browser visitor identifier and are useful activity signals—not identity-proof evidence.${legacy?` ${legacy} older event${legacy===1?'':'s'} came from the legacy client tracker and are labelled separately.`:''}${validated?` ${validated} event${validated===1?'':'s'} use the v1110 validated or server-derived model.`:''}</div>`;
+  }
   function render(){
-    const el=body();if(!el||!cache)return;
-    if(!cache.challenges.length){el.innerHTML='<div class="fc-insights-empty-v1048">You haven’t created a challenge yet. Creator Insights will appear here after you do.</div>';return}
-    if(!selectedId||!cache.challenges.some(c=>c.id===selectedId))selectedId=cache.challenges[0].id;
-    const ch=cache.challenges.find(c=>c.id===selectedId);const m=metrics(ch);
-    el.innerHTML=`
-      <div class="fc-insights-selector-v1048"><label for="fcInsightsSelectV1048">Challenge</label><select id="fcInsightsSelectV1048">${cache.challenges.map(c=>`<option value="${esc(c.id)}"${c.id===selectedId?' selected':''}>${esc(c.title)}</option>`).join('')}</select></div>
-      <div class="fc-insights-challenge-v1048"><div class="cat">${esc(ch.category||'Challenge')}</div><strong>${esc(ch.title)}</strong><span>Created ${esc(fmtDate(ch.created_at))}${ch.is_public===false?' · Private':''}</span></div>
-      <section class="fc-insights-section-v1048"><h4>Competition activity</h4><div class="fc-insights-grid-v1048">
-        ${metric(m.views,'Challenge views since v1048')}${metric(m.starts,'People who started an entry')}${metric(m.entries,'Completed entries')}${metric(m.ballots,'Final valid ballots')}
-        ${metric(duration(m.firstMs),m.firstMs==null?'No other competitor yet':'Time to first other competitor',true)}
-      </div></section>
-      <section class="fc-insights-section-v1048"><h4>Promotion</h4><div class="fc-insights-grid-v1048">
-        ${metric(m.generated,'Flyers created')}${metric(m.shares,'Promotion shares')}${metric(m.opens,'Shared-link opens')}${metric(m.openVisitors,'Shared-link visitors')}
-        ${metric(m.attrEntries,'Entries from shared links')}${metric(m.attrVotes,'Votes from shared links')}${metric(m.attrFollows,'Followers from shared links')}${metric(m.openVisitors?m.conv+'%':'—','Shared-link visitor conversion')}
-      </div></section>
-      <div class="fc-insights-source-v1048"><b>What is exact:</b> completed entries, final valid ballots and first-competitor timing come from existing competition rows. Views, entry starts, flyer/share activity and shared-link attribution come from recorded <code>analytics_events</code>. Nothing above is estimated. Historical views or shares from before v1048 are not reconstructed.</div>`;
+    const el=body();if(!el||!data)return;
+    const challenges=data.challenges||[],s=data.summary||{};
+    if(!challenges.length && !Number(s.total_challenges||0)){
+      el.innerHTML='<div class="fc-insights-empty-v1048">You haven’t created a challenge yet. Creator Insights will appear here after you do.</div>';return;
+    }
+    if(!selectedId||!challenges.some(c=>c.id===selectedId))selectedId=challenges[0]?.id||null;
+    const ch=challengeById();
+    const avg=durationSec(s.average_time_to_first_competitor_seconds);
+    let html=`
+      <section class="fc-insights-summary-v1110" aria-label="All challenge summary">
+        <div class="fc-insights-summary-head-v1110"><div><small>ALL CHALLENGES</small><strong>${esc(Number(s.total_challenges||0))} created</strong></div>${s.best_category?`<span>Best response · ${esc(s.best_category)}</span>`:''}</div>
+        <div class="fc-insights-summary-grid-v1110">
+          ${summaryCard(Number(s.unique_visitors||0),'Unique visitors')}
+          ${summaryCard(Number(s.completed_entrants||0),'Completed entrants')}
+          ${summaryCard(Number(s.final_valid_ballots||0),'Final valid ballots')}
+          ${summaryCard(avg,'Avg. first competitor')}
+          ${summaryCard(Number(s.score_impact||0),'Score generated')}
+          ${summaryCard(Number(s.no_contests||0),'No-contests')}
+        </div>
+      </section>`;
+    if(ch){
+      html+=`
+        <div class="fc-insights-selector-v1048"><label for="fcInsightsSelectV1048">Challenge</label><select id="fcInsightsSelectV1048">${challenges.map(c=>`<option value="${esc(c.id)}"${c.id===selectedId?' selected':''}>${esc(c.title)}</option>`).join('')}</select></div>
+        <div class="fc-insights-challenge-v1048"><div class="cat">${esc(ch.category||'Challenge')}</div><strong>${esc(ch.title)}</strong><span>Created ${esc(fmtDate(ch.created_at))}${ch.is_public===false?' · Private':''}</span><div class="fc-insights-outcome-v1110"><b>${esc(outcome(ch.resolution))}</b><span>${Number(ch.winner_count||0)} winner${Number(ch.winner_count||0)===1?'':'s'} · ${Number(ch.score_impact||0)} Score generated</span></div></div>
+        <section class="fc-insights-section-v1048"><h4>Competition activity</h4><div class="fc-insights-grid-v1048">
+          ${metric(Number(ch.challenge_opens||0),'Challenge opens')}${metric(Number(ch.unique_visitors||0),'Unique visitors')}
+          ${metric(Number(ch.entry_starters||0),'Entry starters')}${metric(Number(ch.completed_entrants||0),'Completed entrants')}
+          ${metric(Number(ch.final_valid_ballots||0),'Final valid ballots')}${metric(durationSec(ch.time_to_first_competitor_seconds),ch.time_to_first_competitor_seconds==null?'No other competitor yet':'Time to first competitor')}
+        </div></section>
+        <section class="fc-insights-section-v1048"><h4>Promotion</h4><div class="fc-insights-grid-v1048">
+          ${metric(Number(ch.creator_promotions||0),'Your promotion actions')}${metric(Number(ch.community_promotions||0),'Community promotion actions')}
+          ${metric(Number(ch.shared_link_opens||0),'Shared-link opens')}${metric(Number(ch.shared_link_visitors||0),'Shared-link visitors')}
+        </div></section>
+        <section class="fc-insights-section-v1048"><h4>Shared-link conversion</h4><div class="fc-insights-grid-v1048">
+          ${metric(Number(ch.attributed_entries||0),'Visitors who entered')}${metric(pct(ch.entry_conversion_rate),'Entry conversion')}
+          ${metric(Number(ch.attributed_votes||0),'Visitors who voted')}${metric(pct(ch.vote_conversion_rate),'Vote conversion')}
+          ${metric(Number(ch.attributed_follows||0),'Visitors who followed')}${metric(pct(ch.follow_conversion_rate),'Follow conversion')}
+        </div><p class="fc-insights-definition-v1110">Conversion means a recorded shared-link visitor later completed the named action during the visit attribution window. It is not signup conversion.</p></section>
+        ${sourceNote(ch)}`;
+    }
+    if(data.next_cursor)html+=`<button type="button" class="btn btn-ghost fc-insights-more-v1110" id="fcInsightsMoreV1110">Load older challenges</button>`;
+    el.innerHTML=html;
     document.getElementById('fcInsightsSelectV1048')?.addEventListener('change',e=>{selectedId=e.target.value;render()});
+    document.getElementById('fcInsightsMoreV1110')?.addEventListener('click',loadMore);
+  }
+
+  async function fetchPage(cursor=null){
+    if(!state?.profile?.id)throw new Error('Sign in to view Creator Insights.');
+    const token=++requestSeq,owner=state.profile.id;accountId=owner;
+    const op=db.rpc('fc_get_creator_insights_v1110',{p_cursor:cursor,p_limit:25});
+    const result=typeof fcDbReadV1101==='function'
+      ?await fcDbReadV1101(op,'Load Creator Insights',20000)
+      :(await fcWithTimeoutV1099(op,20000,'Load Creator Insights')).data;
+    if(token!==requestSeq||state?.profile?.id!==owner)throw new Error('Creator Insights request was superseded.');
+    return result||{summary:{},challenges:[],next_cursor:null};
+  }
+  async function loadMore(){
+    if(loadingMore||!data?.next_cursor)return;loadingMore=true;
+    const btn=document.getElementById('fcInsightsMoreV1110');if(btn){btn.disabled=true;btn.textContent='Loading…';}
+    try{
+      const next=await fetchPage(data.next_cursor);
+      const seen=new Set((data.challenges||[]).map(c=>c.id));
+      data={...data,summary:next.summary||data.summary,challenges:[...(data.challenges||[]),...(next.challenges||[]).filter(c=>!seen.has(c.id))],next_cursor:next.next_cursor};render();
+    }catch(e){if(!/superseded/i.test(String(e?.message||e)))toast?.('Couldn’t load older challenges.');render();}
+    finally{loadingMore=false;}
+  }
+  async function load(reset=true){
+    const el=body();if(el)el.innerHTML='<div class="fc-insights-loading-v1048">Loading durable creator activity…</div>';
+    try{const next=await fetchPage(null);data=next;selectedId=reset?selectedId:null;render();document.body?.classList.remove('fc-insights-unavailable-v1081');}
+    catch(e){
+      console.warn('creator insights v1110',e);if(!el)return;
+      if(/superseded/i.test(String(e?.message||e)))return;
+      if(isSetupError(e))el.innerHTML='<div class="fc-insights-setup-v1048"><strong>One-time analytics migration needed</strong>Run the supplied <b>FlamesChallenge-v1110-Durable-Creator-Insights.sql</b>, then reopen Creator Insights.</div>';
+      else el.innerHTML=`<div class="fc-insights-empty-v1048">Couldn’t load Creator Insights.<br>${esc(e?.message||'Try again.')}<br><button type="button" class="btn btn-ghost fc-insights-retry-v1110">Retry</button></div>`;
+      el.querySelector('.fc-insights-retry-v1110')?.addEventListener('click',()=>load(true));
+    }
   }
 
   window.openCreatorInsightsV1048=async function(challengeId=null){
     document.getElementById('profileModal')?.classList.remove('open');
     const s=sheet();if(!s)return;selectedId=challengeId||selectedId;s.classList.add('open');document.body.style.overflow='hidden';
-    const el=body();if(el)el.innerHTML='<div class="fc-insights-loading-v1048">Loading recorded activity…</div>';
-    try{cache=await load();render()}
-    catch(e){console.warn('creator insights v1048',e);if(!el)return;if(isSetupError(e)){el.innerHTML='<div class="fc-insights-setup-v1048"><strong>One-time analytics setup needed</strong>Run the supplied <b>SUPABASE-ANALYTICS-SETUP.sql</b> in Supabase SQL Editor, then reopen Creator Insights. No Edge Function is involved.</div>'}else el.innerHTML=`<div class="fc-insights-empty-v1048">Couldn’t load Creator Insights.<br>${esc(e?.message||'Try again.')}</div>`}
+    if(accountId!==state?.profile?.id){data=null;selectedId=challengeId||null;}
+    await load(true);
   };
-  window.closeCreatorInsightsV1048=function(){sheet()?.classList.remove('open');document.body.style.overflow=''};
+  window.closeCreatorInsightsV1048=function(){requestSeq++;sheet()?.classList.remove('open');document.body.style.overflow='';};
+  window.fcReloadCreatorInsightsV1110=()=>load(true);
 })();
 </script>
 
@@ -35068,7 +35163,7 @@ body.fc-insights-unavailable-v1081 .pm-tile[onclick*="openCreatorInsightsV1048"]
 
   let insightsState='unknown';
   let insightsProbe=null;
-  const setupError=e=>/analytics_events|get_creator_analytics_v1048|schema cache|does not exist|42P01|PGRST202|PGRST205/i.test(String(e?.message||e||''));
+  const setupError=e=>/analytics_events_v1110|fc_get_creator_insights_v1110|schema cache|does not exist|42P01|PGRST202|PGRST205/i.test(String(e?.message||e||''));
 
   function paintInsightsAvailability(available){
     insightsState=available?'available':'unavailable';
@@ -35083,9 +35178,7 @@ body.fc-insights-unavailable-v1081 .pm-tile[onclick*="openCreatorInsightsV1048"]
 
     insightsProbe=(async()=>{
       try{
-        const table=await db.from('analytics_events').select('id').limit(1);
-        if(table.error) throw table.error;
-        const rpc=await db.rpc('get_creator_analytics_v1048',{p_challenge_ids:[]});
+        const rpc=await db.rpc('fc_get_creator_insights_v1110',{p_cursor:null,p_limit:1});
         if(rpc.error) throw rpc.error;
         paintInsightsAvailability(true);
         return true;
@@ -37709,6 +37802,17 @@ html[data-theme="light"] body .nav-icon-btn:active{
   window.FC_BUILD_V1109='competition-rules-trust-integrity';
   window.__fcBuildV1109={build:'v1109',basedOn:'v1108',canonicalRules:true,databaseWriteGuards:true,coWinnerScoreRule:true,oneEntryPerRound:true,oneBallotPerChallenge:true,lateWriteProtection:true,privateAccessProtection:true,bannedAccountProtection:true,sqlRequired:true,serviceWorkerChanges:0};
 })();
+</script>
+
+<script id="fc-v1110-build-marker-js">
+window.FC_BUILD_V1110='durable-creator-insights';
+window.__fcBuildV1110={
+  build:'v1110',basedOn:'v1109',validatedAnalyticsRpc:true,serverTimestamps:true,
+  durableEntryCompletion:true,durableFirstCompetitor:true,authoritativeSettledBallots:true,
+  signedOutSharedLanding:true,retryQueue:true,accountScopedRetry:true,paginatedHistory:true,
+  creatorSummary:true,creatorCommunityPromotionSplit:true,metricDefinitions:true,
+  serviceWorkerChanges:0,sqlRequired:true
+};
 </script>
 
 </body>
