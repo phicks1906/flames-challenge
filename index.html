@@ -14,16 +14,16 @@
 <meta content="no-cache, no-store, must-revalidate" http-equiv="cache-control"/>
 <meta content="no-cache" http-equiv="pragma"/>
 <meta content="0" http-equiv="expires"/>
-<title>FlamesChallenge v1117 — Competitive You Page & Settings Separation</title>
+<title>FlamesChallenge v1118 — Fast Navigation, Verified Video Review & Challenge-Aware Ember</title>
 <meta content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." name="description"/>
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
      the first kilobyte, so the update check can read it with a tiny ranged
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1117 · competitive-you-settings-separation" name="fc-build"/>
-<!-- v1117: make You a competitive identity page and move account utilities into a dedicated Settings sheet; v1116 navigation recovery preserved. -->
-<meta content="The approved Crowned F logo is restored in the signed-in header; Titles clarity and all competition behavior are unchanged." name="fc-whatsnew"/>
+<meta content="v1118 · fast-navigation-verified-video-review" name="fc-build"/>
+<!-- v1118: verified async video moderation, live moderation recovery, faster cached navigation, and deterministic challenge-aware Ember. -->
+<meta content="Video review dispatch is verified and recoverable, challenge screens update moderation live, navigation reuses rendered views, and Ember understands the open challenge." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -11584,13 +11584,16 @@ function showApp() {
 
 /* ---------- VIEW SWITCHER ---------- */
 function switchView(view) {
-  // Admin view gated to admin user only
   if (view === 'admin' && !isAdmin()) { toast('Not authorized'); return; }
   if (view === 'polls' && !getFlag('fc_flag_polls')) { toast('Polls are currently disabled.'); return; }
+
+  const previousView = state.currentView;
+  const changed = previousView !== view;
   state.currentView = view;
-  // Sync bottom nav active state
+  state._fcRenderedViewsV1118 = state._fcRenderedViewsV1118 || {};
+  state._fcDirtyViewsV1118 = state._fcDirtyViewsV1118 || {};
+
   document.querySelectorAll('.bnav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
-  // Keep old nav-link sync for admin button
   document.querySelectorAll('.nav-link').forEach(l => l.classList.toggle('active', l.dataset.view === view));
   document.getElementById('feedView').style.display = view === 'feed' ? 'block' : 'none';
   document.getElementById('challengesViewSection').style.display = view === 'challenges' ? 'block' : 'none';
@@ -11598,44 +11601,43 @@ function switchView(view) {
   document.getElementById('leaderboardViewSection').style.display = view === 'leaderboard' ? 'block' : 'none';
   const adminSection = document.getElementById('adminViewSection');
   if (adminSection) adminSection.style.display = view === 'admin' ? 'block' : 'none';
+
+  const renderIfNeeded = (key, fn) => {
+    if (!state._fcRenderedViewsV1118[key] || state._fcDirtyViewsV1118[key]) {
+      fn();
+      state._fcRenderedViewsV1118[key] = true;
+      state._fcDirtyViewsV1118[key] = false;
+    }
+  };
+
   if (view === 'challenges') {
-    // feedEntries powers the entry drawers — ensure loaded
     if (!state.feedEntries || state.feedEntries.length === 0) {
       clearChallengeSearch();
-      loadFeedActivity().then(() => renderChallenges()).catch(() => renderChallenges());
+      loadFeedActivity()
+        .then(() => { state._fcDirtyViewsV1118.challenges = true; renderIfNeeded('challenges', renderChallenges); })
+        .catch(() => renderIfNeeded('challenges', renderChallenges));
     } else {
-      renderChallenges();
+      renderIfNeeded('challenges', renderChallenges);
     }
   }
-  if (view === 'feed') renderFeed();
+  if (view === 'feed') renderIfNeeded('feed', renderFeed);
   if (view === 'admin') renderAdminOverview();
   if (view === 'leaderboard') {
     initLbTabs();
-    // If a Realtime vote arrived while on another view, reload now
     if (state._leaderboardStale) {
       state._leaderboardStale = false;
-      loadLeaderboard().then(() => { renderLeaderboard(); buildTicker(); }).catch(() => {});
+      loadLeaderboard().then(() => {
+        state._fcDirtyViewsV1118.leaderboard = true;
+        renderIfNeeded('leaderboard', renderLeaderboard);
+        buildTicker();
+      }).catch(() => {});
     } else {
-      renderLeaderboard();
+      renderIfNeeded('leaderboard', renderLeaderboard);
+      buildTicker();
     }
-    // Championship crowning is now handled server-side by the pg_cron job
-    // `championship-crown` (auto_detect_championship_winners, every minute),
-    // so champions are crowned + notified without an admin's app open. Client path retired (v499).
-    buildTicker();
-    // Regular sudden-death is now handled server-side by the pg_cron job
-    // `regular-sudden-death` (auto_detect_regular_sudden_death, every minute),
-    // so it fires reliably without an admin's app open. Client path retired (v487).
-    // detectRegularSuddenDeath().catch(e => console.warn('regular sudden death detect', e));
-    // Monthly championship launching is now handled server-side by the pg_cron
-    // job `championship-auto-launch` (auto_launch_monthly_championships, every
-    // minute, acts only on the last day of the month). Client path retired
-    // (v755) — it required an admin to have the app open on exactly the right
-    // day, and when it was missed the manual button got used mid-month instead,
-    // which froze an incomplete standing. July 2026: Photography's real top 2
-    // (Ready E 3W, Hicks Inc 2W) were never invited because the manual launch
-    // fired on the 7th. The admin ⚡ Launch button remains for beta testing.
   }
-  window.scrollTo({ top: 0, behavior: fcMotionBehaviorV1100() });
+
+  if (changed) window.scrollTo({ top: 0, behavior: fcMotionBehaviorV1100() });
 }
 
 /* ---------- CREATE SHEET ---------- */
@@ -11673,7 +11675,7 @@ async function loadAppData() {
   const retryLoad = async (label, work, attempts = 2) => {
     let lastError = null;
     for (let attempt = 1; attempt <= attempts; attempt++) {
-      try { return await withTimeout(work(), 18000, label); }
+      try { return await withTimeout(work(), 7000, label); }
       catch (e) {
         lastError = e;
         console.warn(`${label} attempt ${attempt} failed`, e);
@@ -11683,7 +11685,7 @@ async function loadAppData() {
     throw lastError || new Error(label + ' failed');
   };
   const optionalLoad = async (label, work) => {
-    try { return await withTimeout(work(), 18000, label); }
+    try { return await withTimeout(work(), 10000, label); }
     catch (e) { console.warn(label + ' load failed', e); return null; }
   };
 
@@ -11691,11 +11693,10 @@ async function loadAppData() {
     // Wave 1 alone controls the boot gate: truthful Home/Compete data.
     await Promise.all([
       retryLoad('Challenges', () => loadChallenges({ throwOnError: true })),
-      retryLoad('Follows', () => loadFollows({ throwOnError: true })),
       retryLoad('Feed activity', () => loadFeedActivity({ throwOnError: true })),
     ]);
 
-    if (!Array.isArray(state.challenges) || !Array.isArray(state.feedEntries) || !(state.myFollowing instanceof Set)) {
+    if (!Array.isArray(state.challenges) || !Array.isArray(state.feedEntries)) {
       throw new Error('Critical startup state was not initialized');
     }
 
@@ -11709,6 +11710,13 @@ async function loadAppData() {
     // Features outside the initial Home/Compete truth load behind the visible
     // application. Their failure cannot restore or prolong the full-screen gate.
     const loadOptionalFeatures = async () => {
+      const followsTask = optionalLoad('Follows', async () => {
+        await loadFollows({ throwOnError: true });
+        state._fcDirtyViewsV1118 = state._fcDirtyViewsV1118 || {};
+        state._fcDirtyViewsV1118.challenges = true;
+        state._fcDirtyViewsV1118.feed = true;
+      });
+
       const pollsTask = optionalLoad('Polls', async () => {
         const [pollsRes, votesRes] = await Promise.all([
           db.from('polls').select('*').order('created_at', { ascending: true }),
@@ -11732,6 +11740,7 @@ async function loadAppData() {
       });
 
       await Promise.all([
+        followsTask,
         pollsTask,
         standingsTask,
         optionalLoad('Posts', () => loadPosts()),
@@ -18825,26 +18834,48 @@ const BUNNY_LIBRARY_ID = '681006';
 const BUNNY_API_KEY    = 'dd470d39-fa4b-49b5-8349baec5af4-993d-42ca';
 const BUNNY_CDN_HOST   = 'vz-9735d175-590.b-cdn.net';
 
-// ── Video moderation (v570) ──────────────────────────────────────────────────
-const MODERATE_VIDEO_ENDPOINT = 'https://sioalvawzayfphwzqctq.supabase.co/functions/v1/moderate-video';
-// Fire-and-forget: submit a just-created video entry for async moderation.
-// Never blocks or throws into the submit flow — if this fails, the entry stays
-// 'clear'/unmoderated and an admin can catch it manually; we don't want a
-// moderation outage to block people from posting.
-function triggerVideoModeration(entryId, videoUrl) {
-  // FIRE-AND-FORGET. The moderate-video function now retries the MP4 fetch for up
-  // to ~2.5 min (Bunny encodes the MP4 after HLS), which is far longer than the
-  // client should ever wait on a request. If we await it, iOS Safari kills the
-  // connection with "TypeError: Load failed". So we kick it off and DON'T await —
-  // the entry is already 'pending', and the callback resolves it in the background.
-  const mp4Url = videoUrl.replace('/playlist.m3u8', '/play_720p.mp4');
-  fetch(MODERATE_VIDEO_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ entryId, videoUrl: mp4Url }),
-    keepalive: true,   // let the request outlive the page/interaction
-  }).catch(e => console.warn('[mod] trigger dispatch failed (non-fatal):', e));
-  // Return immediately — no await, no blocking toast.
+// ── Video moderation (v1118) ─────────────────────────────────────────────────
+// Authenticated dispatch through the Supabase Functions client. The entry is
+// saved first, then this confirms Sightengine accepted an asynchronous job.
+async function triggerVideoModeration(entryId) {
+  const id = String(entryId || '').trim();
+  if (!id || !db?.functions?.invoke) return null;
+  const jobs = window.fcModerationJobsV1118 || (window.fcModerationJobsV1118 = new Map());
+  jobs.set(id, { entry_id: id, dispatch_state: 'dispatching', review_state: 'pending', updated_at: new Date().toISOString() });
+  try { window.fcPaintModerationStatusV1118?.(id); } catch (_) {}
+  try {
+    const result = await fcWithTimeoutV1099(
+      db.functions.invoke('moderate-video', { body: { entryId: id } }),
+      15000,
+      'Video review dispatch'
+    );
+    if (result?.error) throw result.error;
+    const data = result?.data || {};
+    if (!data.accepted) throw new Error(data.error || 'Video review was not accepted');
+    jobs.set(id, {
+      entry_id: id,
+      job_id: data.jobId || null,
+      dispatch_state: data.dispatchState || 'submitted',
+      review_state: data.reviewState || 'pending',
+      sightengine_media_id: data.mediaId || null,
+      accepted_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+    try { window.fcPaintModerationStatusV1118?.(id); } catch (_) {}
+    return data;
+  } catch (error) {
+    console.warn('[mod-v1118] dispatch failed', error);
+    jobs.set(id, {
+      entry_id: id,
+      dispatch_state: 'failed',
+      review_state: 'failed',
+      last_error: error?.message || String(error),
+      updated_at: new Date().toISOString(),
+      retryable: true,
+    });
+    try { window.fcPaintModerationStatusV1118?.(id); } catch (_) {}
+    return null;
+  }
 }
 
 // v681 — capture a poster frame from the ORIGINAL file, client-side.
@@ -21618,8 +21649,8 @@ function renderChallengeDetail() {
     const isAdminPreview = !isMyEntry && isPendingReview && typeof isAdmin === 'function' && isAdmin();
     if (entry.moderation_status) {
       if (isMyEntry && isPendingReview) {
-        modBadge = '<div class="cd-medal fc-review-badge-v1049">Under review · Only visible to you</div>';
-        moderationPreviewNotice = '<div class="fc-private-preview-v1049"><strong>Private preview</strong><span>This entry is visible only to you and moderators until it is approved.</span></div>';
+        modBadge = `<div class="cd-medal fc-review-badge-v1049" id="fcModBadgeV1118-${entry.id}">${fcModerationLabelV1118(entry)}</div>`;
+        moderationPreviewNotice = `<div class="fc-private-preview-v1049 fc-private-preview-v1118" id="fcModNoticeV1118-${entry.id}">${fcModerationNoticeInnerV1118(entry)}</div>`;
       } else if (isAdminPreview) {
         modBadge = '<div class="cd-medal fc-review-badge-v1049">Under review · Admin preview</div>';
         moderationPreviewNotice = '<div class="fc-private-preview-v1049 fc-admin-preview-v1049"><strong>Moderation preview</strong><span>This entry is not visible to other members.</span></div>';
@@ -33146,13 +33177,13 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
   // Existing Home/Compete guidance renderers still choose the recommendation,
   // but this observer enforces the user's centralized guidance preference.
   function enforceMode(){applyMode(mode);decorateContextualAccess();}
-  const observer=new MutationObserver(()=>requestAnimationFrame(enforceMode));
+  const observer={observe(){},disconnect(){}}; // v1118: body-wide observer retired; render hooks enforce mode
   document.addEventListener('DOMContentLoaded',()=>{
     ensureGuidanceSheet(); installSettingsRow(); hydrateMode().finally(enforceMode);
-    observer.observe(document.body,{subtree:true,childList:true});
+    // v1118: body-wide Ember observation removed; render hooks below are authoritative.
   },{once:true});
   if(document.readyState!=='loading'){
-    ensureGuidanceSheet();installSettingsRow();hydrateMode().finally(enforceMode);observer.observe(document.body,{subtree:true,childList:true});
+    ensureGuidanceSheet();installSettingsRow();hydrateMode().finally(enforceMode);
   }
   window.addEventListener('pageshow',()=>{installSettingsRow();enforceMode();});
 
@@ -37345,8 +37376,14 @@ window.loadAppData = async function() {
       optional('Message badge', () => loadDmBadge(), 10000)
     ]);
     fcAssertAccountV1112(generation, userId);
-    renderPolls(); renderLeaderboard(); renderChallenges(); renderHeatCheck();
-    if (state.currentView === 'feed') renderFeed();
+    renderPolls();
+    state._fcDirtyViewsV1118 = state._fcDirtyViewsV1118 || {};
+    state._fcDirtyViewsV1118.leaderboard = true;
+    state._fcDirtyViewsV1118.challenges = true;
+    state._fcDirtyViewsV1118.feed = true;
+    if (state.currentView === 'leaderboard') { renderLeaderboard(); state._fcDirtyViewsV1118.leaderboard = false; }
+    if (state.currentView === 'challenges') { renderChallenges(); state._fcDirtyViewsV1118.challenges = false; }
+    if (state.currentView === 'feed') { renderHeatCheck(); renderFeed(); state._fcDirtyViewsV1118.feed = false; }
     loadLiveChampTallies().then(() => { try { fcAssertAccountV1112(generation, userId); buildTicker(); } catch (_) {} }).catch(() => {});
   })();
   window._fcOptionalStartupPromiseV1112 = optionalTask.catch(error => {
@@ -37789,6 +37826,376 @@ body.fc-settings-open-v1117 #bottomNav{visibility:hidden!important;pointer-event
   if(typeof baseOpenOwn==='function')window.openOwnCompetitiveProfile=function(){const r=baseOpenOwn.apply(this,arguments);Promise.resolve(r).finally(()=>requestAnimationFrame(upgradeOwnActions));return r;};
   window.FC_BUILD_V1117='competitive-you-settings-separation';
   window.__fcBuildV1117={build:'v1117',basedOn:'v1116',competitiveYou:true,settingsSeparated:true,emojiUtilityGridRemoved:true,getAppHiddenWhenInstalled:true,sqlChanges:0,serviceWorkerChanges:0};
+})();
+</script>
+
+<style id="fc-v1118-moderation-speed-css">
+.fc-private-preview-v1118{display:grid!important;grid-template-columns:minmax(0,1fr) auto;gap:10px 14px;align-items:center}
+.fc-private-preview-v1118 strong,.fc-private-preview-v1118 span{min-width:0}
+.fc-private-preview-v1118 .fc-mod-copy-v1118{display:flex;min-width:0;flex-direction:column;gap:3px}
+.fc-private-preview-v1118 .fc-mod-copy-v1118 strong{font:800 12px var(--font-dm);color:var(--text)}
+.fc-private-preview-v1118 .fc-mod-copy-v1118 span{font:500 11.5px/1.4 var(--font-dm);color:var(--text-muted)}
+.fc-private-preview-v1118 .fc-mod-retry-v1118{min-width:82px;min-height:42px;padding:0 14px;border:1px solid rgba(255,101,45,.32);border-radius:999px;background:rgba(255,92,39,.10);color:var(--ember);font:800 12px var(--font-dm);cursor:pointer}
+.fc-private-preview-v1118 .fc-mod-retry-v1118:disabled{opacity:.55;cursor:wait}
+.fc-review-badge-v1049[data-fc-mod-state="failed"]{background:rgba(224,68,68,.10)!important;color:#d94b4b!important;border-color:rgba(224,68,68,.28)!important}
+.fc-review-badge-v1049[data-fc-mod-state="reviewing"]{background:rgba(255,150,50,.10)!important;color:var(--ember)!important}
+@media(max-width:430px){.fc-private-preview-v1118{grid-template-columns:1fr}.fc-private-preview-v1118 .fc-mod-retry-v1118{width:100%}}
+</style>
+<script id="fc-v1118-fast-navigation-moderation-ember-js">
+(function(){
+  'use strict';
+  const JOBS = window.fcModerationJobsV1118 || (window.fcModerationJobsV1118 = new Map());
+  const DETAIL_CACHE = new Map();
+  let moderationTimer = 0;
+  let moderationGeneration = 0;
+
+  const safe = value => typeof escapeHtml === 'function'
+    ? escapeHtml(String(value ?? ''))
+    : String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  function moderationPresentation(entry){
+    const stateValue = String(entry?.moderation_status || 'pending').toLowerCase();
+    const job = JOBS.get(String(entry?.id || '')) || null;
+    if (stateValue === 'escalated') return {state:'manual',label:'Urgent review · Only visible to you',title:'A moderator is reviewing this video',detail:'The automated check found a combination that requires human review. You do not need to resubmit.',retry:false};
+    if (stateValue === 'flagged') return {state:'manual',label:'Needs review · Only visible to you',title:'A moderator is reviewing this video',detail:'The automated check was uncertain. The entry remains private until an administrator decides.',retry:false};
+    if (job?.dispatch_state === 'failed' || job?.dispatch_state === 'stopped' || job?.review_state === 'failed') return {state:'failed',label:'Review could not start',title:'Automatic review did not start',detail:job?.last_error || 'Tap Retry to send the same video for review again.',retry:true};
+    if (job?.dispatch_state === 'reviewing') return {state:'reviewing',label:'Reviewing video · Only visible to you',title:'Reviewing video',detail:'The review job is active. You can leave this screen; the entry will update automatically.',retry:false};
+    if (job?.dispatch_state === 'submitted') return {state:'reviewing',label:'Reviewing video · Only visible to you',title:'Review accepted',detail:'The video was accepted for automated review and will update here when the result arrives.',retry:false};
+    if (job?.dispatch_state === 'dispatching') return {state:'reviewing',label:'Sending for review…',title:'Sending for review',detail:'The app is confirming that the automated review job was accepted.',retry:false};
+    return {state:'reviewing',label:'Sending for review…',title:'Private preview',detail:'This entry is visible only to you and moderators until the review job is accepted.',retry:false};
+  }
+
+  window.fcModerationLabelV1118 = function(entry){ return safe(moderationPresentation(entry).label); };
+  window.fcModerationNoticeInnerV1118 = function(entry){
+    const p = moderationPresentation(entry);
+    return `<div class="fc-mod-copy-v1118"><strong>${safe(p.title)}</strong><span>${safe(p.detail)}</span></div>${p.retry ? `<button class="fc-mod-retry-v1118" type="button" onclick="fcRetryVideoModerationV1118('${safe(entry.id)}',this)">Retry</button>` : ''}`;
+  };
+
+  window.fcPaintModerationStatusV1118 = function(entryId){
+    const entry = (state?.currentEntries || []).find(item => String(item.id) === String(entryId));
+    if (!entry) return;
+    const p = moderationPresentation(entry);
+    const badge = document.getElementById(`fcModBadgeV1118-${entryId}`);
+    const notice = document.getElementById(`fcModNoticeV1118-${entryId}`);
+    if (badge){ badge.textContent = p.label; badge.dataset.fcModState = p.state; }
+    if (notice) notice.innerHTML = window.fcModerationNoticeInnerV1118(entry);
+  };
+
+  async function loadJob(entryId){
+    const result = await fcWithTimeoutV1099(
+      db.rpc('fc_video_moderation_status_v1118', { p_entry_id: entryId }),
+      8000,
+      'Video review status'
+    );
+    if (result?.error) throw result.error;
+    const job = result?.data || {entry_id:entryId,dispatch_state:'not_started',review_state:'pending',retryable:true};
+    JOBS.set(String(entryId), job);
+    window.fcPaintModerationStatusV1118(entryId);
+    return job;
+  }
+
+  window.fcRetryVideoModerationV1118 = async function(entryId, button){
+    if (button){ button.disabled = true; button.textContent = 'Sending…'; }
+    const accepted = await triggerVideoModeration(entryId);
+    if (!accepted && typeof toast === 'function') toast('Review did not start. Try again.');
+    if (accepted && typeof toast === 'function') toast('Video review started.');
+    try { await loadJob(entryId); } catch (_) {}
+    if (button){ button.disabled = false; button.textContent = 'Retry'; }
+    startModerationWatch();
+  };
+
+  async function refreshEntry(entryId){
+    const result = await fcWithTimeoutV1099(
+      db.from('entries')
+        .select('*, poster_url, submitter:profiles!entries_user_id_fkey(id, name, avatar)')
+        .eq('id', entryId)
+        .maybeSingle(),
+      8000,
+      'Reviewed entry refresh'
+    );
+    if (result?.error || !result?.data) return false;
+    const index = (state.currentEntries || []).findIndex(item => String(item.id) === String(entryId));
+    if (index >= 0) state.currentEntries[index] = result.data;
+    else if (String(result.data.challenge_id) === String(state.currentChallenge?.id)) state.currentEntries.push(result.data);
+    if (state.currentChallenge) {
+      renderChallengeDetail();
+      renderChallengeResults();
+    }
+    return true;
+  }
+
+  async function moderationTick(generation){
+    if (generation !== moderationGeneration || !state.currentChallenge) return;
+    const mine = (state.currentEntries || []).filter(entry =>
+      String(entry.user_id) === String(state.profile?.id || '') &&
+      entry.media_type === 'video' &&
+      ['pending','flagged','escalated'].includes(String(entry.moderation_status || '').toLowerCase())
+    );
+    if (!mine.length) return;
+    let keep = false;
+    for (const entry of mine) {
+      try {
+        const previous = JOBS.get(String(entry.id));
+        const job = await loadJob(entry.id);
+        if (job.dispatch_state === 'not_started' && !previous?._autoDispatchAttempted) {
+          JOBS.set(String(entry.id), {...job,_autoDispatchAttempted:true});
+          await triggerVideoModeration(entry.id);
+          keep = true;
+          continue;
+        }
+        if (['submitted','reviewing','dispatching'].includes(job.dispatch_state)) keep = true;
+        if (job.dispatch_state === 'finished' || ['approved','rejected','flagged','escalated'].includes(job.review_state)) {
+          await refreshEntry(entry.id);
+        }
+      } catch (error) {
+        console.warn('[mod-v1118] status poll failed', error);
+        keep = true;
+      }
+    }
+    if (keep && generation === moderationGeneration && state.currentChallenge) {
+      moderationTimer = window.setTimeout(() => moderationTick(generation), 2500);
+    }
+  }
+
+  function stopModerationWatch(){
+    moderationGeneration++;
+    if (moderationTimer) clearTimeout(moderationTimer);
+    moderationTimer = 0;
+  }
+  function startModerationWatch(){
+    stopModerationWatch();
+    const generation = moderationGeneration;
+    moderationTimer = window.setTimeout(() => moderationTick(generation), 150);
+  }
+  window.fcStartOpenModerationWatchV1118 = startModerationWatch;
+
+  function applyDetailSnapshot(snapshot){
+    state.currentEntries = snapshot.entries.slice();
+    state.currentVotes = snapshot.votes.slice();
+    state.myCurrentVote = snapshot.myVote;
+    state.entryLikeCounts = {...state.entryLikeCounts, ...snapshot.likeCounts};
+    state.myEntryLikes = new Set(snapshot.myLikes);
+    state.entryCommentCounts = {...snapshot.commentCounts};
+    state.myChampInvite = snapshot.invite;
+    state.challengeResultsV1101 = state.challengeResultsV1101 || {};
+    state.challengeResultWinnersV1101 = state.challengeResultWinnersV1101 || {};
+    if (snapshot.result) state.challengeResultsV1101[snapshot.challengeId] = snapshot.result;
+    else delete state.challengeResultsV1101[snapshot.challengeId];
+    state.challengeResultWinnersV1101[snapshot.challengeId] = snapshot.winners.slice();
+  }
+
+  window.loadChallengeDetail = async function(challengeId){
+    const timeout = (promise, ms, label) => fcWithTimeoutV1099(promise, ms, label);
+    const ch = state.currentChallenge;
+    const invitePromise = ch?.is_championship && state.profile
+      ? timeout(db.from('challenge_invites').select('id, invite_status').eq('challenge_id', challengeId).eq('invited_user_id', state.profile.id).maybeSingle(), 8000, 'Invite status')
+      : Promise.resolve({data:null,error:null});
+    const [entriesRes, votesRes, resultRes, inviteRes] = await Promise.all([
+      timeout(db.from('entries').select('*, poster_url, submitter:profiles!entries_user_id_fkey(id, name, avatar)').eq('challenge_id', challengeId), 10000, 'Entries'),
+      timeout(db.from('entry_votes').select('id, entry_id, voter_id').eq('challenge_id', challengeId), 10000, 'Votes'),
+      timeout(db.from('challenge_results').select('challenge_id, category, month, resolved_at, final_round, resolution, is_public, is_championship, eligible_competitor_count, final_entry_count, valid_ballots, max_votes, winner_count, score_awarded, snapshot').eq('challenge_id', challengeId).maybeSingle(), 10000, 'Authoritative result'),
+      invitePromise,
+    ]);
+    if (entriesRes.error) throw entriesRes.error;
+    if (votesRes.error) throw votesRes.error;
+    if (resultRes.error) throw resultRes.error;
+
+    const myId = state.profile?.id;
+    const admin = typeof isAdmin === 'function' && isAdmin();
+    const entries = (entriesRes.data || []).filter(entry => {
+      const status = String(entry.moderation_status || '').toLowerCase();
+      if (!status || status === 'clear' || status === 'approved') return true;
+      if (status === 'rejected') return String(entry.user_id) === String(myId) || admin;
+      return String(entry.user_id) === String(myId) || admin;
+    });
+    const votes = votesRes.data || [];
+    let myVote = state.profile ? (votes.find(vote => String(vote.voter_id) === String(state.profile.id))?.entry_id || null) : null;
+    const validIds = new Set(entries.filter(entry => entry.moderation_status !== 'rejected').map(entry => entry.id));
+    if (myVote && !validIds.has(myVote)) myVote = null;
+    const entryIds = entries.map(entry => entry.id);
+
+    const [likesRes, commentsRes, winnersRes] = await Promise.all([
+      entryIds.length ? timeout(db.from('entry_likes').select('entry_id, user_id').in('entry_id', entryIds), 8000, 'Entry likes').catch(error => ({data:[],error})) : Promise.resolve({data:[],error:null}),
+      entryIds.length ? timeout(db.from('comments').select('target_id').eq('target_type','entry').in('target_id', entryIds), 8000, 'Entry comments').catch(error => ({data:[],error})) : Promise.resolve({data:[],error:null}),
+      resultRes.data ? timeout(db.from('challenge_result_winners').select('challenge_id, user_id, entry_id, vote_count, is_co_winner, visible_level, opponent_pts, turnout_pts, championship_score, detail').eq('challenge_id', challengeId), 8000, 'Authoritative winners') : Promise.resolve({data:[],error:null}),
+    ]);
+    if (winnersRes.error) throw winnersRes.error;
+
+    const likeCounts = {};
+    const myLikes = [];
+    (likesRes.data || []).forEach(like => {
+      likeCounts[like.entry_id] = (likeCounts[like.entry_id] || 0) + 1;
+      if (state.profile && String(like.user_id) === String(state.profile.id)) myLikes.push(like.entry_id);
+    });
+    const commentCounts = {};
+    (commentsRes.data || []).forEach(comment => { commentCounts[comment.target_id] = (commentCounts[comment.target_id] || 0) + 1; });
+
+    const snapshot = {
+      challengeId,
+      entries,
+      votes,
+      myVote,
+      likeCounts,
+      myLikes,
+      commentCounts,
+      result: resultRes.data || null,
+      winners: winnersRes.data || [],
+      invite: inviteRes?.error ? null : (inviteRes?.data || null),
+      timestamp: Date.now(),
+    };
+    DETAIL_CACHE.set(String(challengeId), snapshot);
+    applyDetailSnapshot(snapshot);
+    return snapshot;
+  };
+
+  window.openChallenge = async function(challenge){
+    const ch = typeof challenge === 'string'
+      ? (state.challenges || []).find(item => String(item.id) === String(challenge))
+      : challenge;
+    if (!ch) return;
+    state.currentChallenge = ch;
+    try { fcTrackChallengeOpenV1048(ch); } catch (_) {}
+    const title = document.getElementById('cdHeaderTitle'); if (title) title.textContent = ch.title;
+    const grid = document.getElementById('cdEntriesGrid');
+    document.getElementById('challengeDetailSheet')?.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    const cached = DETAIL_CACHE.get(String(ch.id));
+    const fresh = cached && Date.now() - cached.timestamp < 30000;
+    if (fresh) {
+      applyDetailSnapshot(cached);
+      renderChallengeDetail();
+      renderChallengeResults();
+      startModerationWatch();
+      window.loadChallengeDetail(ch.id).then(() => {
+        if (String(state.currentChallenge?.id) !== String(ch.id)) return;
+        renderChallengeDetail();
+        renderChallengeResults();
+        startModerationWatch();
+      }).catch(error => console.warn('background challenge refresh failed', error));
+      return;
+    }
+    if (grid) grid.innerHTML = '<div class="cd-entries-pager-empty">Loading…</div>';
+    try {
+      await window.loadChallengeDetail(ch.id);
+      if (String(state.currentChallenge?.id) !== String(ch.id)) return;
+      renderChallengeDetail();
+      renderChallengeResults();
+      startModerationWatch();
+    } catch (error) {
+      console.error('challenge detail load error', error);
+      if (grid) grid.innerHTML = `<div class="cd-entries-pager-empty" style="color:#ff6b7a">Couldn't load: ${safe(error?.message || error)}</div>`;
+    }
+  };
+
+  const priorClose = window.closeChallengeDetail;
+  window.closeChallengeDetail = function(){
+    stopModerationWatch();
+    return typeof priorClose === 'function' ? priorClose.apply(this, arguments) : undefined;
+  };
+
+  // Mark only views whose underlying data changed. Switching tabs reuses their
+  // already-rendered DOM and avoids the old rebuild/repaint cycle.
+  const dirty = key => {
+    state._fcDirtyViewsV1118 = state._fcDirtyViewsV1118 || {};
+    state._fcDirtyViewsV1118[key] = true;
+  };
+  [['loadChallenges',['challenges','feed']],['loadFeedActivity',['feed','challenges']],['loadLeaderboard',['leaderboard']]].forEach(([name, keys]) => {
+    const fn = window[name];
+    if (typeof fn !== 'function') return;
+    window[name] = async function(){
+      const result = await fn.apply(this, arguments);
+      keys.forEach(dirty);
+      return result;
+    };
+  });
+  [['renderFeed','feed'],['renderChallenges','challenges'],['renderLeaderboard','leaderboard']].forEach(([name,key]) => {
+    const fn = window[name];
+    if (typeof fn !== 'function') return;
+    window[name] = function(){
+      const result = fn.apply(this, arguments);
+      state._fcRenderedViewsV1118 = state._fcRenderedViewsV1118 || {};
+      state._fcDirtyViewsV1118 = state._fcDirtyViewsV1118 || {};
+      state._fcRenderedViewsV1118[key] = true;
+      state._fcDirtyViewsV1118[key] = false;
+      return result;
+    };
+  });
+
+  function myOpenEntry(){
+    return (state.currentEntries || []).find(entry => String(entry.user_id) === String(state.profile?.id || '')) || null;
+  }
+  function challengeLocalAnswer(question){
+    const ch = state.currentChallenge;
+    if (!ch) return null;
+    const q = String(question || '').toLowerCase().trim();
+    const status = computeChallengeStatus(ch);
+    const mine = myOpenEntry();
+    const pending = mine && ['pending','flagged','escalated'].includes(String(mine.moderation_status || '').toLowerCase());
+    const submissionsClose = ch.submission_deadline ? new Date(ch.submission_deadline).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : null;
+    const votingEnds = ch.voting_end ? new Date(ch.voting_end).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : null;
+    if (/why.*(review|pending)|under review|video review|moderation/.test(q)) {
+      if (!mine) return 'I do not see an entry from your account in this challenge.';
+      if (!pending) return `Your entry is currently ${mine.moderation_status || 'clear'}.`;
+      const p = moderationPresentation(mine);
+      return `${p.title}. ${p.detail} You can leave this screen; the status will update automatically.`;
+    }
+    if (/what happens next|what should happen next|what can i do now|next step/.test(q)) {
+      if (pending) {
+        const p = moderationPresentation(mine);
+        return `${p.title}. ${p.detail} ${submissionsClose ? `You may edit or withdraw before ${submissionsClose}. ` : ''}The challenge needs at least two eligible competitors for a scored result.`;
+      }
+      if (status === 'submitting') return `Entries remain open${submissionsClose ? ` until ${submissionsClose}` : ''}. After that, approved entries move into voting. A scored contest needs at least two eligible competitors.`;
+      if (status === 'voting' || status === 'sudden_death') return `Voting is open${votingEnds ? ` until ${votingEnds}` : ''}. The final valid ballot totals determine the result.`;
+      if (status === 'closed') return 'Voting is closed. The durable result determines the winner, record, Championship Score, and any next qualification step.';
+    }
+    if (/when.*vot|voting start|voting open/.test(q)) return status === 'submitting'
+      ? `Voting starts when entries close${submissionsClose ? ` at ${submissionsClose}` : ''}. Only approved entries appear on the ballot.`
+      : (status === 'voting' ? `Voting is open now${votingEnds ? ` and ends ${votingEnds}` : ''}.` : `This challenge is currently ${status}.`);
+    if (/edit|withdraw|remove my entry/.test(q) && mine) return status === 'submitting'
+      ? `You can edit or withdraw your entry until submissions close${submissionsClose ? ` at ${submissionsClose}` : ''}. Once voting begins, self-service changes close.`
+      : 'The submission window is closed, so self-service editing and withdrawal are no longer available.';
+    if (/score|earn points|championship/.test(q)) {
+      const eligible = typeof fcEmberChallengeEligibilityV1046 === 'function' ? fcEmberChallengeEligibilityV1046(ch)?.text : null;
+      if (eligible) return eligible;
+    }
+    if (/how many.*compet|need.*compet|enough entries/.test(q)) return 'A scored contest requires at least two eligible competitors when the result is settled. Pending, rejected, removed, or disqualified entries do not count.';
+    return null;
+  }
+
+  const previousLocal = window.fcEmberLocalAnswerV1046;
+  window.fcEmberLocalAnswerV1046 = function(question){
+    return challengeLocalAnswer(question) || (typeof previousLocal === 'function' ? previousLocal(question) : null);
+  };
+  try { fcEmberLocalAnswerV1046 = window.fcEmberLocalAnswerV1046; } catch (_) {}
+
+  const previousContext = window.buildEmberContext;
+  window.buildEmberContext = function(){
+    const base = typeof previousContext === 'function' ? previousContext() : {};
+    const mine = myOpenEntry();
+    return {
+      ...base,
+      challenge: base.challenge ? {
+        ...base.challenge,
+        moderation: mine ? {
+          entryId: mine.id,
+          status: mine.moderation_status || null,
+          reason: mine.moderation_reason || null,
+          job: JOBS.get(String(mine.id)) || null,
+          isMine: true,
+        } : null,
+        submissionDeadline: state.currentChallenge?.submission_deadline || base.challenge.submissionDeadline || null,
+        votingEnd: state.currentChallenge?.voting_end || base.challenge.votingEnd || null,
+      } : base.challenge,
+    };
+  };
+
+  window.FC_BUILD_V1118 = 'fast-navigation-verified-video-review';
+  window.__fcBuildV1118 = {
+    build:'v1118', basedOn:'v1117', verifiedModerationDispatch:true,
+    signedCallback:true, liveModerationStatus:true, challengeDetailParallel:true,
+    challengeDetailCacheMs:30000, renderedTabReuse:true, challengeAwareEmber:true,
+    bodyWideEmberObserverRemoved:true, sqlChanges:1, edgeFunctionChanges:2,
+  };
 })();
 </script>
 
