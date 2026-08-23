@@ -13,7 +13,7 @@
 <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="pragma" content="no-cache" />
 <meta http-equiv="expires" content="0" />
-<title>FlamesChallenge v1106 — Dark Product Showcase</title>
+<title>FlamesChallenge v1107 — Controlled, Factual Ember Integration</title>
 <meta name="description" content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." />
 
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta name="fc-build" content="v1106 · dark-product-showcase" />
-<!-- v1106: replaces mixed-theme screenshots with a focused dark-mode competition showcase. -->
-<meta name="fc-whatsnew" content="The public product showcase now uses only dark-mode competition screens for Create, Vote, Win, and Advance." />
+<meta name="fc-build" content="v1107 · controlled-factual-ember" />
+<!-- v1107: consolidates proactive Ember guidance behind one factual, account-safe controller. -->
+<meta name="fc-whatsnew" content="Ember guidance now follows Full, Important only, and Off consistently, uses authoritative Championship Score, and limits itself to one proactive intervention per screen." />
 
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -16081,7 +16081,7 @@ function renderLeaderboard() {
         ${lbAvatar}
         <div style="min-width:0">
           <div class="lb-name">${hofNameHTML(u.id, escapeHtml(u.name))}${isYou ? ' (you)' : ''}${isChamp ? ' <span class="lb-champ-tag">👑 Champ</span>' : reigningChampChipHTML(u.id)}${isLeader && !isChamp ? ' <span class="lb-leader-tag">🔥 Leader</span>' : ''}</div>
-          <div class="lb-boostline" data-boost-uid="${u.id}" title="How this was earned"><b>${u.catBoost}</b> Score<span class="lb-boost-info">ⓘ</span> <span class="lb-sub">· ${u.catWins}–${u.catLosses} this month${(_qualCut >= 0 && i > _qualCut) ? ` · <span class="lb-back">${(fullRanked[_qualCut].catBoost - u.catBoost)} Boost back</span>` : ''}</span></div>
+          <div class="lb-boostline" data-boost-uid="${u.id}" title="How this was earned"><b>${u.catBoost}</b> Score<span class="lb-boost-info">ⓘ</span> <span class="lb-sub">· ${u.catWins}–${u.catLosses} this month${(_qualCut >= 0 && i > _qualCut) ? ` · <span class="lb-back">${(fullRanked[_qualCut].catBoost - u.catBoost)} Score back</span>` : ''}</span></div>
           ${renderLadderChip(u.id, { showSpark: true, size: 15 })}
         </div>
       </div>
@@ -16767,12 +16767,12 @@ function buildTicker() {
       const dLbl = race.daysLeft <= 1 ? 'today' : `in ${race.daysLeft} days`;
       Object.entries(race.cats).forEach(([cat, r]) => {
         if (!selectedCats.has(cat)) return;
-        const holders = r.ranked.slice(0, 3).map(u => u.name).join(' · ');
-        items.push({ icon: '', name: '', badge: 'champ', category: `🏆 ${cat.toUpperCase()} QUALIFYING`, text: `Closes ${dLbl} — ${holders} hold the spots`, grouped: true });
-        if (r.bubble && r.thirdWins !== null) {
-          const gap = r.thirdWins - r.wins(r.bubble);
-          if (gap <= 1) {
-            items.push({ icon: '', name: '', badge: 'champ', category: `⚡ BUBBLE`, text: `${r.bubble.name} is ${gap <= 0 ? 'tied for' : '1 win from stealing'} #3 in ${cat}`, grouped: true });
+        const holders = (r.qualifiers || []).map(u => u.name).join(' · ');
+        items.push({ icon: '', name: '', badge: 'champ', category: `🏆 ${cat.toUpperCase()} QUALIFYING`, text: `Closes ${dLbl} — ${holders || 'No Score level is set yet'} currently qualify`, grouped: true });
+        if (r.bubble && r.cutoff !== null) {
+          const gap = Math.max(0, r.cutoff - r.score(r.bubble));
+          if (gap <= 5) {
+            items.push({ icon: '', name: '', badge: 'champ', category: `⚡ BUBBLE`, text: `${r.bubble.name} is ${gap === 0 ? 'tied at' : gap + ' Score from'} the ${cat} cutoff`, grouped: true });
           }
         }
       });
@@ -17282,7 +17282,7 @@ function emberTapeLine(ch, fighters) {
   const pool = [
     `${names.join(', ')} — three names, one crown. Somebody's month ends here.`,
     `${vet} has been on this stage before. ${rook !== vet ? rook + " hasn't — and that makes them dangerous." : 'Experience means nothing if you blink.'}`,
-    `Every ballot is sealed. Nobody knows who's ahead — not even me. Okay, I know. I'm not telling.`,
+    `Live totals show the race as it stands. The final recorded result is what counts.`,
     `${names[0] || 'The favorite'} earned the top seed. Crowns don't care about seeds.`,
   ];
   let seed = 0; const s = String(ch.id || '');
@@ -17348,7 +17348,7 @@ function maybeShowCoronation() {
     const newest = mine.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
     const ageDays = (Date.now() - new Date(newest.createdAt).getTime()) / 86400000;
     if (ageDays > 14) return; // stale — don't celebrate ancient wins
-    const key = `fc_coronation_${newest.challengeId || (newest.category + '_' + newest.month)}`;
+    const key = `fc_coronation_${me}_${newest.challengeId || (newest.category + '_' + newest.month)}`;
     if (localStorage.getItem(key)) return;
     const total = mine.length;
     const ls = typeof getLadderStatus === 'function' ? getLadderStatus(me) : null;
@@ -19307,7 +19307,7 @@ async function openBoostSheet(userId, cat) {
       <div class="bd-av">${avatarInner(u?.avatar)}</div>
       <div><div class="bd-name">${escapeHtml(name)}</div><div class="bd-month">${cat ? escapeHtml(cat) + ' · ' : ''}${monthLabel}</div></div>
     </div>
-    <div class="bd-total"><div class="bd-total-num">${total}</div><div class="bd-total-lbl">MONTHLY BOOST · ${wins} WIN${wins === 1 ? '' : 'S'}</div></div><div class="bd-standing"><b>This number sets the monthly ${cat ? escapeHtml(cat) + ' ' : ''}standing.</b><br>Each row below shows exactly what that win added.</div>
+    <div class="bd-total"><div class="bd-total-num">${total}</div><div class="bd-total-lbl">CHAMPIONSHIP SCORE · ${wins} WIN${wins === 1 ? '' : 'S'}</div></div><div class="bd-standing"><b>This number sets the monthly ${cat ? escapeHtml(cat) + ' ' : ''}standing.</b><br>Each row below shows exactly what that win added.</div>
     <div class="bd-ember">${emberFace(24, pose)}<span>${line}</span></div>
     ${wins ? `<div class="bd-sec">HOW IT ADDS UP</div>${winRows}` : ''}
     <div class="bd-rule">${emberFace(24, 'point')}<span><b>Championship Score is the monthly standing—not a lifetime rank.</b> Eligible public wins add Opponent Points and Turnout Points. Championship wins award titles instead of Score.</span></div>`;
@@ -31462,7 +31462,7 @@ window.fcPublicFeedDiagnostics = function(){
     if(!me){
       main=`Not ranked · ${myBoost} Score`;
       meta=d.cutoff==null?'The qualification cutoff has not been established yet.':`Current cutoff: <b>${d.cutoff} Score</b>`;
-      next=d.cutoff==null?`Win a ${esc(d.cat)} challenge to take the lead.`:`You need ${Math.max(0,d.cutoff-myBoost)} Boost to qualify.`;
+      next=d.cutoff==null?`Win a ${esc(d.cat)} challenge to take the lead.`:`You need ${Math.max(0,d.cutoff-myBoost)} Score to qualify.`;
     }else if(qualified){
       pill='Qualifying';
       main=`${ordinal(myPlace)} place · ${myBoost} Score`;
@@ -36955,6 +36955,356 @@ window.FC_PUBLIC_UGC_MODE = 'authenticated-only';
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot,{once:true}); else boot();
   const priorShowAuth=window.showAuth; window.showAuth=function(){ const result=priorShowAuth?.apply(this,arguments); setTimeout(install,0); return result; };
   window.FC_BUILD_V1106='dark-product-showcase'; window.FC_PUBLIC_UGC_MODE='authenticated-only'; window.__fcBuildV1106={build:'v1106',basedOn:'v1105',focus:'dark-mode create-vote-win product showcase',livePublicUgc:false,simulatedVideo:false,onboardingSqlChanged:false,challengeVideoPreviewChanged:false};
+})();
+</script>
+
+
+<style id="fc-v1107-ember-controller-css">
+/* v1107 — one authoritative proactive Ember controller. Ask Ember controls are
+   intentionally outside these rules and remain available in every mode. */
+#fcPurposeCard,.fight-tape{display:none!important}
+body[data-fc-ember-guidance="important"] #emberHomeCard,
+body[data-fc-ember-guidance="important"] #emberCompeteCard,
+body[data-fc-ember-guidance="important"] .fc-v1036-ember,
+body[data-fc-ember-guidance="important"] .fc-score-ember-v1032,
+body[data-fc-ember-guidance="important"] .fc-score-sheet-ember-v1032,
+body[data-fc-ember-guidance="important"] .bd-ember,
+body[data-fc-ember-guidance="important"] .fight-tape,
+body[data-fc-ember-guidance="important"] .champ-arena-tape,
+body[data-fc-ember-guidance="off"] #emberHomeCard,
+body[data-fc-ember-guidance="off"] #emberCompeteCard,
+body[data-fc-ember-guidance="off"] .fc-v1036-ember,
+body[data-fc-ember-guidance="off"] .fc-score-ember-v1032,
+body[data-fc-ember-guidance="off"] .fc-score-sheet-ember-v1032,
+body[data-fc-ember-guidance="off"] .bd-ember,
+body[data-fc-ember-guidance="off"] .fight-tape,
+body[data-fc-ember-guidance="off"] .champ-arena-tape,
+body[data-fc-ember-guidance="off"] .celeb-bow,
+body[data-fc-ember-guidance="off"] .coro-ember{
+  display:none!important;
+}
+body[data-fc-ember-guidance="full"] #emberHomeCard:not(:empty),
+body[data-fc-ember-guidance="full"] #emberCompeteCard:not(:empty),
+body[data-fc-ember-guidance="full"] #leaderboardViewSection .fc-score-ember-v1032{display:flex!important}
+body[data-fc-ember-important-surface="home"] #emberHomeCard,
+body[data-fc-ember-important-surface="compete"] #emberCompeteCard,
+body[data-fc-ember-important-surface="profile"] .fc-v1036-ember,
+body[data-fc-ember-important-surface="titles"] .fc-score-ember-v1032,
+body[data-fc-ember-important-surface="challenge"] .fight-tape,
+body[data-fc-ember-important-surface="challenge"] .champ-arena-tape{display:none!important}
+.fc-ember-v1107-unavailable{padding:12px 14px;border:1px solid var(--border);border-radius:14px;background:var(--surface-2);color:var(--text-dim);font-size:13px;line-height:1.45}
+</style>
+
+
+<script id="fc-v1107-ember-controller-js">
+(function(){
+  'use strict';
+  const VERSION='v1107';
+  const MODES=new Set(['full','important','off']);
+  const META_KEY='fc_ember_guidance';
+  const LEGACY_KEY='fc_ember_guidance_mode';
+  const labels={full:'Full',important:'Important only',off:'Off'};
+  let mode='full';
+  let hydratedUser='';
+  let requestSeq=0;
+  let suggestSeq=0;
+  let activeAskController=null;
+  let activeSuggestController=null;
+  let visitSurface='';
+  let visitNumber=0;
+  const interventionOwners=new Map();
+
+  const safeMode=v=>MODES.has(String(v||'').toLowerCase())?String(v).toLowerCase():null;
+  const uid=()=>String((typeof state!=='undefined'?state:null)?.profile?.id||'');
+  const scopedKey=(name,user=uid())=>user?`${name}:${user}`:`${name}:anonymous`;
+  const currentSurface=()=>{
+    try{return typeof window.fcEmberSurface==='function'?window.fcEmberSurface():'home'}catch(e){return 'home'}
+  };
+  function syncVisit(){
+    const next=currentSurface();
+    if(next!==visitSurface){visitSurface=next;visitNumber+=1;document.body.removeAttribute('data-fc-ember-important-surface');}
+    return `${next}:${visitNumber}`;
+  }
+  function updateUi(){
+    document.body.dataset.fcEmberGuidance=mode;
+    const st=document.getElementById('fcEmberGuidanceState');if(st)st.textContent=labels[mode];
+    document.querySelectorAll('[data-fc-eg-mode]').forEach(btn=>{
+      const on=btn.dataset.fcEgMode===mode;
+      btn.classList.toggle('on',on);btn.setAttribute('aria-pressed',on?'true':'false');
+      const c=btn.querySelector('.fc-eg-check');if(c)c.textContent=on?'Selected':'';
+    });
+  }
+  function readScoped(user=uid()){
+    try{return safeMode(localStorage.getItem(scopedKey(LEGACY_KEY,user)))}catch(e){return null}
+  }
+  function storeScoped(v,user=uid()){
+    if(!user)return;
+    try{localStorage.setItem(scopedKey(LEGACY_KEY,user),v);localStorage.removeItem(LEGACY_KEY)}catch(e){}
+  }
+  function apply(v){mode=safeMode(v)||'full';updateUi();return mode}
+  function should(kind='routine'){
+    if(mode==='off')return false;
+    if(mode==='important')return kind==='important';
+    return true;
+  }
+  function claim(kind='routine',key='ember',surface=currentSurface()){
+    if(!should(kind))return false;
+    const visit=syncVisit();
+    const owner=interventionOwners.get(visit);
+    if(owner&&owner!==key)return false;
+    interventionOwners.set(visit,key);
+    if(kind==='important')document.body.dataset.fcEmberImportantSurface=surface;
+    return true;
+  }
+  window.fcGetEmberGuidanceMode=()=>mode;
+  window.fcShouldShowEmber=should;
+  window.fcClaimEmberInterventionV1107=claim;
+
+  async function withTimeout(promise,label,ms=12000){
+    let timer;
+    try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error(`${label} timed out`)),ms)})])}
+    finally{clearTimeout(timer)}
+  }
+  async function remoteMode(){
+    if(typeof db==='undefined'||!db?.auth?.getUser)return null;
+    const result=await withTimeout(db.auth.getUser(),'Ember preference',8000);
+    if(result?.error)throw result.error;
+    return safeMode(result?.data?.user?.user_metadata?.[META_KEY]);
+  }
+  async function hydrate(force=false){
+    const user=uid();
+    if(!user){hydratedUser='';apply('full');return}
+    if(!force&&hydratedUser===user)return;
+    hydratedUser=user;
+    let remote=null;
+    try{remote=await remoteMode()}catch(e){console.warn('ember preference read',e)}
+    const local=readScoped(user);
+    apply(remote||local||'full');
+    if(remote)storeScoped(remote,user);
+  }
+  async function persist(v){
+    const next=safeMode(v);if(!next)return mode;
+    const previous=mode;apply(next);
+    try{
+      if(uid()&&typeof db!=='undefined'&&db?.auth?.updateUser){
+        const result=await withTimeout(db.auth.updateUser({data:{[META_KEY]:next}}),'Ember preference save',10000);
+        if(result?.error)throw result.error;
+      }
+      storeScoped(next);
+      return next;
+    }catch(e){
+      apply(previous);
+      if(typeof toast==='function')toast('Ember guidance was not saved. Try again.');
+      console.warn('ember preference save',e);
+      throw e;
+    }
+  }
+  window.fcSetEmberGuidanceMode=persist;
+  const priorOpenGuidance=window.fcOpenEmberGuidance;
+  window.fcOpenEmberGuidance=function(){
+    const result=typeof priorOpenGuidance==='function'?priorOpenGuidance.apply(this,arguments):undefined;
+    queueMicrotask(updateUi);
+    return result;
+  };
+
+  document.addEventListener('click',event=>{
+    const btn=event.target.closest?.('[data-fc-eg-mode]');
+    if(!btn)return;
+    event.preventDefault();event.stopImmediatePropagation();
+    persist(btn.dataset.fcEgMode).catch(()=>{});
+  },true);
+
+  // Account changes rehydrate from account metadata first, then the account-scoped cache.
+  setInterval(()=>{const user=uid();if(user!==hydratedUser)hydrate(true);syncVisit()},900);
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>hydrate(true),{once:true});else hydrate(true);
+
+  // Championship race = authoritative Championship Score, shared Score levels,
+  // and every competitor tied at the third level.
+  window.champRaceInfo=function(){
+    const data=state?.leaderboardData;if(!data)return null;
+    const now=new Date();
+    const month=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    const lastDay=new Date(now.getFullYear(),now.getMonth()+1,0);
+    const daysLeft=Math.max(0,Math.ceil((lastDay-now)/86400000));
+    const out={month,daysLeft,cats:{}};
+    (typeof CATEGORIES!=='undefined'?CATEGORIES:[]).forEach(cat=>{
+      const launched=(state.champLaunches||[]).some(l=>l.month===month&&l.category===cat&&!l.is_sponsored);
+      if(launched)return;
+      const score=u=>Number(u?.boostMonthByCat?.[cat]||0);
+      const ranked=(data.users||[]).filter(u=>score(u)>0).sort((a,b)=>score(b)-score(a)||String(a.name||'').localeCompare(String(b.name||'')));
+      if(!ranked.length)return;
+      const levels=[...new Set(ranked.map(score))];
+      const qualifyingLevels=levels.slice(0,3);
+      const cutoff=qualifyingLevels.length?qualifyingLevels[qualifyingLevels.length-1]:null;
+      const qualifiers=ranked.filter(u=>qualifyingLevels.includes(score(u)));
+      const bubble=ranked.find(u=>!qualifyingLevels.includes(score(u)))||null;
+      const placeByScore=new Map(levels.map((value,index)=>[value,index+1]));
+      out.cats[cat]={ranked,score,levels,qualifyingLevels,cutoff,qualifiers,bubble,placeByScore,wins:score,thirdWins:cutoff};
+    });
+    return out;
+  };
+
+  window.emberTickerItems=()=>[];
+  window.emberTapeLine=function(ch,fighters){
+    const names=(fighters||[]).map(f=>f.name).filter(Boolean);
+    if(!names.length)return 'The eligible field is set. The recorded final result will decide the title.';
+    const champs=(fighters||[]).map(f=>(state.hofData||[]).filter(r=>r.userId===f.id).length);
+    const max=Math.max(...champs,0),min=Math.min(...champs,0);
+    const veteran=names[champs.indexOf(max)]||names[0];
+    const newcomer=names[champs.indexOf(min)]||names[names.length-1];
+    const lines=[
+      `${names.join(', ')} — the eligible field is set and the final recorded vote decides the crown.`,
+      `${veteran} has the most recorded title experience${newcomer!==veteran?`; ${newcomer} enters with less Championship history.`:'.'}`,
+      `Live totals show the race as it stands. The final recorded result is what counts.`,
+      `${names[0]} entered from the strongest qualifying Score level. Qualification does not decide the final.`
+    ];
+    let seed=0;for(const char of String(ch?.id||''))seed=(seed*31+char.charCodeAt(0))>>>0;
+    return lines[seed%lines.length];
+  };
+
+  window.maybeChampRaceToast=function(){
+    try{
+      if(!state?.profile?.id||!should('important'))return;
+      const info=window.champRaceInfo();if(!info||info.daysLeft>7)return;
+      const me=state.profile.id,dLbl=info.daysLeft<=1?'Last day':`${info.daysLeft} days left`;
+      for(const [cat,r] of Object.entries(info.cats)){
+        const row=r.ranked.find(u=>u.id===me);if(!row)continue;
+        const myScore=r.score(row),place=r.placeByScore.get(myScore)||null;
+        const qualifies=r.qualifyingLevels.includes(myScore);
+        let msg='';
+        if(qualifies)msg=`🔥 Ember: You are in the ${cat} qualifying Score levels with ${myScore} Score${myScore===r.cutoff?' at the current cutoff':''}. ${dLbl}.`;
+        else if(r.cutoff!==null){const gap=Math.max(0,r.cutoff-myScore);if(gap<=5)msg=`🔥 Ember: Your ${cat} Score is ${myScore}. The current cutoff is ${r.cutoff}, a gap of ${gap}. ${dLbl}.`;}
+        if(!msg)continue;
+        const key=scopedKey(`fc_race_toast_${cat}_${info.month}_w${Math.floor(new Date().getDate()/7)}`);
+        try{if(localStorage.getItem(key))continue}catch(e){}
+        if(!claim('important',`race:${cat}`,'home'))return;
+        try{localStorage.setItem(key,'1')}catch(e){}
+        toast(msg);return;
+      }
+    }catch(e){console.warn('race toast v1107',e)}
+  };
+
+  if(typeof window.maybeShowCoronation==='function'){
+    const priorCoronation=window.maybeShowCoronation;
+    window.maybeShowCoronation=function(){
+      if(!should('important')||!claim('important','coronation','home'))return;
+      return priorCoronation.apply(this,arguments);
+    };
+  }
+
+  function currentRaceSnapshot(){
+    const info=window.champRaceInfo();if(!info)return null;
+    const cats={};
+    for(const [cat,r] of Object.entries(info.cats))cats[cat]={cutoff:r.cutoff,qualifyingLevels:r.qualifyingLevels,qualifiers:r.qualifiers.map(u=>({id:u.id,name:u.name,score:r.score(u),place:r.placeByScore.get(r.score(u))}))};
+    return {month:info.month,daysLeft:info.daysLeft,categories:cats};
+  }
+  function value(id){return String(document.getElementById(id)?.value||'').trim()}
+  const priorContext=window.buildEmberContext;
+  window.buildEmberContext=function(){
+    const base=typeof priorContext==='function'?priorContext():{};
+    const ch=state?.currentChallenge||null;
+    const result=ch?state?.challengeResultsV1101?.[ch.id]||null:null;
+    const winners=ch?state?.challengeResultWinnersV1101?.[ch.id]||[]:[];
+    const profileOpen=document.getElementById('profileSheet')?.classList.contains('open');
+    const viewed=profileOpen&&typeof psState!=='undefined'&&psState?.profile?{
+      id:psState.profile.id,name:psState.profile.name,
+      competitive:psState.competitive||null
+    }:null;
+    const draftChallenge=document.getElementById('createChallengeSheet')?.classList.contains('open')?{
+      title:value('ccTitle'),rules:value('ccRules'),caption:value('ccCaption'),textEntry:value('ccTextEntry'),category:(typeof ccState!=='undefined'?ccState?.category:null)||null,mediaType:(typeof ccState!=='undefined'?ccState?.mediaType:null)||null
+    }:null;
+    const draftEntry=document.getElementById('submitEntrySheet')?.classList.contains('open')?{
+      caption:value('seCaption'),textEntry:value('seTextEntry'),challengeTitle:ch?.title||null,challengeRules:ch?.rules||null
+    }:null;
+    return {...base,
+      viewedProfile:viewed,
+      draft:{challenge:draftChallenge,entry:draftEntry},
+      authoritativeResult:result?{...result,winners}:null,
+      championshipRace:currentRaceSnapshot(),
+      responsePolicy:{
+        factsOnlyFromContext:true,
+        neverInvent:['scores','results','winners','deadlines','participants','qualification positions','rules'],
+        creativeHelpMayEditOnlyTextProvidedInDraft:true
+      }
+    };
+  };
+
+  const priorLocal=window.fcEmberLocalAnswerV1046;
+  window.fcEmberLocalAnswerV1046=function(question){
+    const q=String(question||'').toLowerCase().replace(/[’']/g,"'");
+    if(/co[- ]?winner|shared win|tied winner/.test(q)){
+      const ch=state?.currentChallenge;
+      const result=ch?state?.challengeResultsV1101?.[ch.id]:null;
+      if(result?.resolution==='co_winners_tied_runoff'&&Number(result.valid_ballots||0)>0)return 'Competitive co-winners count as winners. Each receives Turnout Points from the valid final-round ballots plus Opponent Points only for competitors they clearly finished ahead of. Co-winners do not receive Opponent Points for each other.';
+      if(result&&['co_winners_no_submission','co_winners_no_ballots'].includes(result.resolution))return 'These co-winners count as winners, but no Championship Score is awarded because there was no measurable final-round ballot result.';
+      return 'Competitive co-winners with valid ballots receive Turnout Points plus Opponent Points for competitors they clearly finished ahead of; they do not receive Opponent Points for each other. No-submission and no-ballot co-winners receive no Championship Score.';
+    }
+    return typeof priorLocal==='function'?priorLocal(question):null;
+  };
+  const factualIntent=q=>/(score|point|winner|winning|result|deadline|when does|close|ends?|ending|phase|status|qualif|rank|place|vote|ballot|opponent|turnout|tie|sudden death|co[- ]?winner|rule|eligible|participant|how many entr|entry count|who entered|who is in|who is ahead|leader|leading)/i.test(q);
+  const unsafeAnswer=text=>{
+    const t=String(text||'');
+    if(typeof window.fcEmberServerAnswerUnsafeV1046==='function'&&window.fcEmberServerAnswerUnsafeV1046(t))return true;
+    return /(your|you are|you’re|currently)\s+(score|ranked|#|in first|in second|in third|qualified)|winner is|deadline is|closes (today|tomorrow|on)|will qualify|has won \d+/i.test(t);
+  };
+
+  window.runEmber=async function(input,ans,btn){
+    if(!input||!ans||!btn)return;
+    const q=String(input.value||'').trim();if(!q)return;
+    const local=window.fcEmberLocalAnswerV1046?.(q);
+    if(local){ans.style.display='block';ans.textContent=local;input.value='';return}
+    if(factualIntent(q)){
+      ans.style.display='block';ans.textContent='I can only state recorded competition facts. The data currently loaded on this screen does not support a reliable answer to that question.';input.value='';return;
+    }
+    activeAskController?.abort();
+    const controller=new AbortController();activeAskController=controller;
+    const token=++requestSeq,startSurface=currentSurface();
+    const timer=setTimeout(()=>controller.abort(),15000);
+    ans.style.display='block';ans.innerHTML=`<div class="ember-thinking">${emberFace(28,'think')}<span>Ember is working on it…</span></div>`;btn.disabled=true;
+    try{
+      const resp=await fetch('https://sioalvawzayfphwzqctq.supabase.co/functions/v1/ask-ember',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q,context:window.buildEmberContext()}),signal:controller.signal});
+      const data=await resp.json().catch(()=>({}));
+      if(token!==requestSeq)return;
+      if(startSurface!==currentSurface()){ans.textContent='The screen changed before the answer arrived. Ask again from the current screen.';return;}
+      if(resp.status===429){ans.textContent='Too many questions at once — try again in a minute.';return}
+      if(!resp.ok)throw new Error(data.error||`Request failed [${resp.status}]`);
+      const answer=String(data.answer||'').replace(/\*\*/g,'').trim();
+      if(!answer||unsafeAnswer(answer)){ans.textContent='I will not state a competition fact that is not present in the recorded app data. Ask for creative help with the text on this screen, or ask a narrower rules question.';return}
+      ans.textContent=answer;
+    }catch(e){
+      if(token!==requestSeq)return;
+      if(e?.name==='AbortError')ans.textContent='Creative assistance took too long. Try again.';
+      else ans.textContent='Creative assistance is unavailable right now. Recorded rules, scores, standings, and results still work locally.';
+    }finally{
+      clearTimeout(timer);if(token===requestSeq){btn.disabled=false;input.value='';activeAskController=null}
+    }
+  };
+  window.askEmberModal=function(){return window.runEmber(document.getElementById('emberInput'),document.getElementById('emberAnswer'),document.getElementById('emberBtn'))};
+  window.askEmber=function(){return window.runEmber(document.getElementById('tourAskInput'),document.getElementById('tourAskAnswer'),document.getElementById('tourAskBtn'))};
+
+  window._fcSuggest=async function({kind,category,context,targetId,boxId,btn}){
+    const box=document.getElementById(boxId),target=document.getElementById(targetId);if(!box||!target)return;
+    activeSuggestController?.abort();const controller=new AbortController();activeSuggestController=controller;const token=++suggestSeq;
+    const original=btn.textContent;btn.disabled=true;btn.textContent='✨ …';box.innerHTML='';
+    const timer=setTimeout(()=>controller.abort(),15000);
+    try{
+      const resp=await fetch(window.SUGGEST_ENDPOINT||'https://sioalvawzayfphwzqctq.supabase.co/functions/v1/suggest-content',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind,category:category||'',context:context||''}),signal:controller.signal});
+      const data=await resp.json().catch(()=>({}));if(!resp.ok)throw new Error(data.error||'Suggestion request failed');
+      const ideas=Array.isArray(data.ideas)?data.ideas.filter(Boolean).slice(0,3):[];if(!ideas.length)throw new Error('No suggestions returned');
+      const modes=kind==='challenge'?['Simple','Competitive','Scroll-stopping']:['Clear','Energetic','Scroll-stopping'];
+      ideas.forEach((idea,index)=>{const chip=document.createElement('button');chip.type='button';chip.className='fc-sug-chip';chip.innerHTML=`<span class="fc-sug-kind">${modes[index]||'Option'}</span><span>${escapeHtml(String(idea))}</span>`;chip.onclick=()=>{target.value=String(idea).slice(0,target.maxLength>0?target.maxLength:undefined);target.dispatchEvent(new Event('input',{bubbles:true}));box.innerHTML=''};box.appendChild(chip)});
+      const tip=document.createElement('div');tip.className='fc-sug-note';tip.textContent='Tap one to use it — you can edit after.';box.appendChild(tip);
+    }catch(e){if(token===suggestSeq)box.innerHTML='<div class="fc-sug-note">Creative suggestions are unavailable right now. Try again.</div>'}
+    finally{clearTimeout(timer);if(token===suggestSeq){btn.disabled=false;btn.textContent=original;activeSuggestController=null}}
+  };
+
+  // Existing helper functions call the global binding; rebind them so they use
+  // the bounded v1107 implementation rather than the superseded closure.
+  window.suggestChallengeIdea=function(btn){return window._fcSuggest({kind:'challenge',category:(typeof ccState!=='undefined'?ccState?.category:null),context:[value('ccTitle'),value('ccRules')].filter(Boolean).join(' — '),targetId:'ccTitle',boxId:'ccTitleSugBox',btn})};
+  window.suggestCaption=function(btn,which){const ch=state?.currentChallenge,isCc=which==='cc';return window._fcSuggest({kind:'caption',category:isCc?(typeof ccState!=='undefined'?ccState?.category:null):(ch?.category||''),context:isCc?[value('ccTitle'),value('ccRules'),value('ccCaption')].filter(Boolean).join(' — '):[ch?.title,ch?.rules,value('seCaption'),value('seTextEntry')].filter(Boolean).join(' — '),targetId:isCc?'ccCaption':'seCaption',boxId:isCc?'ccCaptionSugBox':'seCaptionSugBox',btn})};
+
+  window.FC_BUILD_V1107='controlled-factual-ember';
+  window.__fcBuildV1107={build:'v1107',basedOn:'v1106',oneProactiveInterventionPerScreen:true,modes:['full','important','off'],askEmberAlwaysAvailable:true,qualificationMetric:'Championship Score',cutoffTiesIncluded:true,accountScopedPreferences:true,accountScopedDismissals:true,requestTimeoutMs:15000,edgeFunctionChanges:0,sqlChanges:0};
 })();
 </script>
 
