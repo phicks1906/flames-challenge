@@ -14,14 +14,14 @@
 <meta content="no-cache, no-store, must-revalidate" http-equiv="cache-control"/>
 <meta content="no-cache" http-equiv="pragma"/>
 <meta content="0" http-equiv="expires"/>
-<title>FlamesChallenge v1120 — Entry Preparation & Live Moderation Transition</title>
+<title>FlamesChallenge v1121 — Pinned Challenge Context for Ember</title>
 <meta content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." name="description"/>
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
      the first kilobyte, so the update check can read it with a tiny ranged
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1120 · entry-preparation-live-transition" name="fc-build"/>
+<meta content="v1121 · pinned-challenge-aware-ember" name="fc-build"/>
 <!-- v1120: owner-friendly entry preparation state, honest public/preparing counts, and automatic moderation-to-live transition on challenge cards. -->
 <meta content="Pending videos now show a calm preparation state with clear progress, public counts stay accurate, and approved entries move live automatically." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
@@ -38496,6 +38496,256 @@ body.theme-light .fc-preparing-media-v1120,html[data-theme="light"] body .fc-pre
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', schedule, {once:true}); else schedule();
   window.FC_BUILD_V1120 = 'entry-preparation-live-transition';
   window.__fcBuildV1120 = {build:'v1120',basedOn:'v1119',entryPreparationShell:true,publicPreparingCounts:true,globalModerationTransition:true,newEdgeFunctions:0,edgeFunctionChanges:0,sqlChanges:0};
+})();
+</script>
+
+<style id="fc-v1121-challenge-aware-ember-css">
+/* v1121 — the challenge named in Ember's context badge is the challenge used by every answer path. */
+#emberModal .ember-surface-label{max-width:100%;white-space:normal;line-height:1.25;text-align:left}
+</style>
+<script id="fc-v1121-challenge-aware-ember-js">
+(function(){
+  'use strict';
+  if(window.__fcChallengeAwareEmberV1121)return;
+  window.__fcChallengeAwareEmberV1121=true;
+
+  const pinned={challenge:null,entries:[]};
+  const priorOpenChallenge=window.openChallenge;
+  const priorOpenEmber=window.openEmber;
+  const priorCloseEmber=window.closeEmber;
+  const priorRefresh=window.fcRefreshAskEmber;
+  const priorBuildContext=window.buildEmberContext;
+  const priorLocalAnswer=window.fcEmberLocalAnswerV1046;
+  const priorRunEmber=window.runEmber;
+
+  function escText(value){return String(value==null?'':value).trim();}
+  function normalize(value){return escText(value).toLowerCase().replace(/[’']/g,"'").replace(/[^a-z0-9.+ -]/g,' ').replace(/\s+/g,' ').trim();}
+  function isChallengeSheetOpen(){return !!document.getElementById('challengeDetailSheet')?.classList.contains('open');}
+  function dedupeEntries(rows){
+    const map=new Map();
+    (rows||[]).forEach(row=>{if(row?.id)map.set(String(row.id),row);});
+    return [...map.values()];
+  }
+  function entriesFor(challenge){
+    if(!challenge?.id)return [];
+    const id=String(challenge.id);
+    return dedupeEntries([
+      ...(Array.isArray(state?.currentEntries)?state.currentEntries:[]),
+      ...(Array.isArray(state?.challengeEntriesV1060)?state.challengeEntriesV1060:[]),
+      ...(Array.isArray(state?.feedEntries)?state.feedEntries:[]),
+      ...(Array.isArray(pinned.entries)?pinned.entries:[])
+    ]).filter(entry=>String(entry?.challenge_id||id)===id);
+  }
+  function pinChallenge(challenge){
+    if(!challenge?.id)return null;
+    pinned.challenge=challenge;
+    pinned.entries=entriesFor(challenge);
+    window.__fcPinnedEmberChallengeV1121={id:challenge.id,title:challenge.title||'',pinnedAt:Date.now()};
+    return challenge;
+  }
+  function activeChallenge(){
+    if(state?.currentChallenge?.id)return pinChallenge(state.currentChallenge);
+    if(document.getElementById('emberModal')?.classList.contains('open')&&pinned.challenge?.id)return pinned.challenge;
+    return null;
+  }
+  function phase(challenge){
+    try{return typeof computeChallengeStatus==='function'?computeChallengeStatus(challenge):'';}catch(_){return '';}
+  }
+  function dateLabel(value){
+    if(!value)return '';
+    const date=new Date(value);if(Number.isNaN(date.getTime()))return '';
+    return date.toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+  }
+  function approvedEntries(challenge){
+    return entriesFor(challenge).filter(entry=>['approved','clear'].includes(String(entry?.moderation_status||'').toLowerCase()));
+  }
+  function myEntry(challenge){
+    const uid=state?.profile?.id;
+    if(!uid)return null;
+    return entriesFor(challenge).find(entry=>String(entry?.user_id||'')===String(uid))||null;
+  }
+  function scoreRead(challenge){
+    if(challenge?.is_championship)return 'Championship rounds do not add Championship Score.';
+    if(challenge?.is_public===false)return 'This is a private challenge, so it does not add Championship Score.';
+    const count=approvedEntries(challenge).length;
+    if(count<2){
+      const need=2-count;
+      return `It currently has ${count} approved public entr${count===1?'y':'ies'} and needs ${need} more eligible competitor${need===1?'':'s'} before it can become a scored contest.`;
+    }
+    return 'It can add Championship Score if it ends with an eligible decisive public winner. The exact Opponent Points and Turnout Points are frozen only when the final result settles.';
+  }
+  function compactRules(challenge){
+    const rules=escText(challenge?.rules);
+    if(!rules)return '';
+    return rules.length>220?`${rules.slice(0,217)}…`:rules;
+  }
+  function strongEntryAdvice(challenge){
+    const title=escText(challenge?.title)||'this challenge';
+    const category=escText(challenge?.category);
+    const haystack=`${title} ${category} ${compactRules(challenge)}`.toLowerCase();
+    let advice='Answer the challenge directly, show the strongest part immediately, make the work easy to compare, and remove any intro or filler that does not help voters judge it.';
+    if(/sing|singer|song|music|vocal|voice/.test(haystack)) advice='Start with the performance, use clear audio, keep the singer easy to see, and submit the strongest uninterrupted section. Avoid a long spoken introduction.';
+    else if(/dance|performance|talent/.test(haystack)) advice='Show the performance immediately, keep the full action visible, use stable framing, and choose the strongest uninterrupted section.';
+    else if(/photo|photograph|picture|image/.test(haystack)) advice='Use one clear focal subject, strong lighting, clean framing, and an image that communicates the idea at first glance.';
+    else if(/draw|paint|art|design/.test(haystack)) advice='Show the finished work clearly, use even lighting, avoid distracting backgrounds, and make the detail voters should judge easy to see.';
+    else if(/cook|food|recipe|dish|bake/.test(haystack)) advice='Show the finished result clearly, include the texture or detail voters need to judge, use clean lighting, and avoid unnecessary setup footage.';
+    const rules=compactRules(challenge);
+    return `For “${title},” ${advice}${rules?` Follow the recorded rule: “${rules}”`:''}`;
+  }
+  function challengeAnswer(question){
+    const challenge=activeChallenge();
+    if(!challenge)return null;
+    const q=normalize(question);
+    if(!q)return null;
+    const title=escText(challenge.title)||'this challenge';
+    const status=phase(challenge);
+    const entries=approvedEntries(challenge);
+    const mine=myEntry(challenge);
+    const moderation=String(mine?.moderation_status||'').toLowerCase();
+    const submissions=dateLabel(challenge.submission_deadline);
+    const voting=dateLabel(challenge.voting_end);
+
+    if(/which challenge|what challenge|challenge title|current challenge/.test(q))return `I am using “${title}”${challenge.category?` in ${challenge.category}`:''}.`;
+    if(/strong entry|entry stand out|what would make.*entry|make.*entry strong|best entry/.test(q))return strongEntryAdvice(challenge);
+    if(/improve.*promote|improve.*challenge|promote.*challenge|how can i improve|how should i promote/.test(q)){
+      const count=entries.length;
+      return `For “${title},” make the judging standard unmistakable in the title and rules, then promote the direct challenge link while entries are open. Lead with what to submit and the deadline${submissions?` (${submissions})`:''}. It currently has ${count} approved public entr${count===1?'y':'ies'}.`;
+    }
+    if(/rules.*score|score.*rules|championship score eligibility|score eligibility|earn score|does this challenge.*score/.test(q)){
+      const rules=compactRules(challenge);
+      return `${rules?`Recorded rule: “${rules}” `:'No additional host-written rule is recorded. '}${scoreRead(challenge)}`;
+    }
+    if(/why.*(review|pending)|video review|moderation|getting.*ready|preparing/.test(q)){
+      if(!mine)return `I do not see an entry from your account in “${title}.”`;
+      if(['approved','clear'].includes(moderation))return `Your entry in “${title}” is approved and public.`;
+      if(moderation==='rejected')return `Your entry in “${title}” was not approved. Open the entry details for the recorded reason and available action.`;
+      let presentation=null;try{presentation=typeof moderationPresentation==='function'?moderationPresentation(mine):null;}catch(_){}
+      return `${presentation?.title||'Your entry is getting ready'}. ${presentation?.detail||'The automated check is still finishing.'} You can leave this screen; the status updates automatically.`;
+    }
+    if(/what happens next|what should happen next|what matters next|next step|what can i do now/.test(q)){
+      if(mine&&['pending','flagged','escalated'].includes(moderation))return `Your entry in “${title}” is getting ready. You can leave this screen, and you may still edit or withdraw before entries close${submissions?` on ${submissions}`:''}.`;
+      if(status==='submitting')return `“${title}” is open for entries${submissions?` until ${submissions}`:''}. After entries close, approved entries move to voting. ${scoreRead(challenge)}`;
+      if(status==='voting'||status==='sudden_death')return `Voting is open for “${title}”${voting?` until ${voting}`:''}. The final valid ballots determine the result.`;
+      if(status==='closed'||status==='voided')return `“${title}” is finished. The recorded result determines the winner, competitive record, and any Championship Score awarded.`;
+    }
+    if(/when.*vot|voting start|voting open|how does voting work/.test(q)){
+      if(status==='submitting')return `Voting for “${title}” starts when entries close${submissions?` on ${submissions}`:''}. Only approved entries appear on the ballot.`;
+      if(status==='voting'||status==='sudden_death')return `Voting for “${title}” is open now${voting?` and ends ${voting}`:''}.`;
+      return `Voting is not open because “${title}” is currently ${status||'in another phase'}.`;
+    }
+    if(/edit|withdraw|remove my entry/.test(q))return status==='submitting'
+      ? `You can edit or withdraw your entry in “${title}” until entries close${submissions?` on ${submissions}`:''}.`
+      : `The entry window for “${title}” is closed, so self-service editing and withdrawal are no longer available.`;
+    if(/how many.*compet|need.*compet|enough entries|entry count/.test(q))return `${title} has ${entries.length} approved public entr${entries.length===1?'y':'ies'}. A scored contest requires at least two eligible competitors when the result settles.`;
+    return null;
+  }
+
+  window.fcChallengeAnswerV1121=challengeAnswer;
+
+  window.openChallenge=function(challenge){
+    const resolved=typeof challenge==='string'?(state?.challenges||[]).find(item=>String(item.id)===String(challenge)):challenge;
+    if(resolved?.id)pinChallenge(resolved);
+    return typeof priorOpenChallenge==='function'?priorOpenChallenge.apply(this,arguments):undefined;
+  };
+
+  window.buildEmberContext=function(){
+    const base=typeof priorBuildContext==='function'?priorBuildContext():{};
+    const challenge=activeChallenge();
+    if(!challenge)return base;
+    const entries=entriesFor(challenge);
+    const mine=myEntry(challenge);
+    const active={
+      id:challenge.id,
+      title:challenge.title||null,
+      category:challenge.category||null,
+      rules:challenge.rules||null,
+      phase:phase(challenge),
+      isPublic:challenge.is_public!==false,
+      isChampionship:!!challenge.is_championship,
+      submissionDeadline:challenge.submission_deadline||null,
+      votingEnd:challenge.voting_end||null,
+      approvedPublicEntries:approvedEntries(challenge).length,
+      loadedEntries:entries.length,
+      scoreEligibility:scoreRead(challenge),
+      myEntry:mine?{id:mine.id,moderationStatus:mine.moderation_status||null,moderationReason:mine.moderation_reason||null}:null
+    };
+    return {...base,surface:'challenge',activeChallenge:active,challenge:{...(base.challenge||{}),...active}};
+  };
+
+  window.fcEmberLocalAnswerV1046=function(question){
+    return challengeAnswer(question)||(typeof priorLocalAnswer==='function'?priorLocalAnswer(question):null);
+  };
+
+  window.runEmber=async function(input,answer,button){
+    if(!input||!answer||!button)return;
+    const original=escText(input.value);
+    if(!original)return;
+    const local=window.fcEmberLocalAnswerV1046?.(original);
+    if(local){answer.style.display='block';answer.textContent=local;input.value='';return;}
+    const challenge=activeChallenge();
+    if(challenge&&typeof priorRunEmber==='function'){
+      input.value=`For the current challenge “${challenge.title||'Untitled challenge'}”${challenge.category?` in ${challenge.category}`:''}: ${original}`;
+      await priorRunEmber(input,answer,button);
+      const text=escText(answer.textContent);
+      if(/which challenge|share (the )?challenge title|tell me (the )?challenge|do not see which challenge|don't see which challenge/i.test(text)){
+        answer.textContent=`I am using “${challenge.title||'this challenge'}.” ${strongEntryAdvice(challenge)}`;
+      }
+      return;
+    }
+    return typeof priorRunEmber==='function'?priorRunEmber(input,answer,button):undefined;
+  };
+
+  window.askEmberModal=function(){
+    return window.runEmber(document.getElementById('emberInput'),document.getElementById('emberAnswer'),document.getElementById('emberBtn'));
+  };
+  window.askEmberQuick=function(question){
+    const input=document.getElementById('emberInput');if(!input)return;
+    input.value=question;return window.askEmberModal();
+  };
+
+  function refreshPinnedCopy(){
+    if(typeof priorRefresh==='function')priorRefresh();
+    const challenge=activeChallenge();
+    if(!challenge)return;
+    const title=escText(challenge.title)||'This challenge';
+    const heading=document.querySelector('#emberModal .ember-welcome h3');
+    const line=document.getElementById('emberContextLine');
+    const tag=document.querySelector('#emberModal .ember-surface-label');
+    if(heading)heading.textContent=`Read “${title}.”`;
+    if(line)line.textContent='I am using this challenge’s current phase, deadlines, entries, moderation state, rules, and Score eligibility.';
+    if(tag)tag.textContent=`Current context · ${title}`;
+  }
+  window.fcRefreshAskEmber=refreshPinnedCopy;
+
+  window.openEmber=function(){
+    if(isChallengeSheetOpen()&&state?.currentChallenge?.id)pinChallenge(state.currentChallenge);
+    else if(!document.getElementById('submitEntrySheet')?.classList.contains('open')){pinned.challenge=null;pinned.entries=[];}
+    const result=typeof priorOpenEmber==='function'?priorOpenEmber.apply(this,arguments):undefined;
+    requestAnimationFrame(refreshPinnedCopy);
+    return result;
+  };
+  window.fcOpenEmberWithQuestion=function(question){
+    if(isChallengeSheetOpen()&&state?.currentChallenge?.id)pinChallenge(state.currentChallenge);
+    window.openEmber();
+    setTimeout(()=>{const input=document.getElementById('emberInput');if(input&&question)input.value=question;},80);
+  };
+  window.closeEmber=function(){
+    const result=typeof priorCloseEmber==='function'?priorCloseEmber.apply(this,arguments):undefined;
+    if(!isChallengeSheetOpen()){pinned.challenge=null;pinned.entries=[];}
+    return result;
+  };
+
+  // Rebind the legacy global identifiers used by older quick-prompt closures.
+  try{buildEmberContext=window.buildEmberContext;}catch(_){}
+  try{fcEmberLocalAnswerV1046=window.fcEmberLocalAnswerV1046;}catch(_){}
+  try{runEmber=window.runEmber;}catch(_){}
+  try{askEmberModal=window.askEmberModal;}catch(_){}
+  try{askEmberQuick=window.askEmberQuick;}catch(_){}
+  try{openEmber=window.openEmber;}catch(_){}
+  try{closeEmber=window.closeEmber;}catch(_){}
+
+  window.FC_BUILD_V1121='pinned-challenge-aware-ember';
+  window.__fcBuildV1121={build:'v1121',basedOn:'v1120',singleEmberAnswerPath:true,pinnedChallengeContext:true,challengeTitleInContextBadge:true,challengeQuickPromptsLocal:true,serverContextGuard:true,newEdgeFunctions:0,edgeFunctionChanges:0,sqlChanges:0};
 })();
 </script>
 
