@@ -14,16 +14,16 @@
 <meta content="no-cache, no-store, must-revalidate" http-equiv="cache-control"/>
 <meta content="no-cache" http-equiv="pragma"/>
 <meta content="0" http-equiv="expires"/>
-<title>FlamesChallenge v1119 — No-Contest Result Integrity</title>
+<title>FlamesChallenge v1120 — Entry Preparation & Live Moderation Transition</title>
 <meta content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." name="description"/>
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
      the first kilobyte, so the update check can read it with a tiny ranged
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1119 · no-contest-result-integrity" name="fc-build"/>
-<!-- v1119: no-contest result integrity hotfix; challenges with fewer than two eligible competitors never render a winner or standings. -->
-<meta content="No-contest challenges now stay no-contest after the deadline and never display a false winner, vote result, or final standings." name="fc-whatsnew"/>
+<meta content="v1120 · entry-preparation-live-transition" name="fc-build"/>
+<!-- v1120: owner-friendly entry preparation state, honest public/preparing counts, and automatic moderation-to-live transition on challenge cards. -->
+<meta content="Pending videos now show a calm preparation state with clear progress, public counts stay accurate, and approved entries move live automatically." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -21437,7 +21437,7 @@ function renderChallengeDetail() {
           // v1077: the challenge header is the only Promote source. Keep the
           // existing moderation rule here so every screen state uses one
           // authoritative availability decision.
-          if (challengePromotionBlocked()) return `<button class="cd-share-btn" disabled title="Can't promote while content is under review" style="opacity:0.45;cursor:not-allowed;">📣 Promote</button>`;
+          if (challengePromotionBlocked()) return `<button class="cd-share-btn" disabled title="Can't promote while an entry is being prepared" style="opacity:0.45;cursor:not-allowed;">📣 Promote</button>`;
           return `<button class="cd-share-btn" id="cdShareBtn">📣 Promote</button>`;
         })()}
         ${(ch.creator_id === state.profile?.id || ch.creator?.id === state.profile?.id) ? `<button class="cd-share-btn" type="button" onclick="event.stopPropagation();openCreatorInsightsV1048('${ch.id}')">↗ Insights</button>` : ''}
@@ -21607,7 +21607,7 @@ function renderChallengeDetail() {
     const _emptyMsg = ch.sd_phase === 'submitting'
       ? '🔒 Sudden Death in progress — entries are hidden until voting opens.'
       : _hasPrivatePendingEntry
-      ? 'No approved entries are public yet.'
+      ? 'Your entry is getting ready. Public entries will appear here.'
       : 'No entries yet. Be the first!';
     grid.innerHTML = `<div class="cd-entries-pager-empty">${_emptyMsg}</div>`;
     if (navEl) navEl.style.display = 'none';
@@ -21659,7 +21659,7 @@ function renderChallengeDetail() {
         modBadge = `<div class="cd-medal fc-review-badge-v1049" id="fcModBadgeV1118-${entry.id}">${fcModerationLabelV1118(entry)}</div>`;
         moderationPreviewNotice = `<div class="fc-private-preview-v1049 fc-private-preview-v1118" id="fcModNoticeV1118-${entry.id}">${fcModerationNoticeInnerV1118(entry)}</div>`;
       } else if (isAdminPreview) {
-        modBadge = '<div class="cd-medal fc-review-badge-v1049">Under review · Admin preview</div>';
+        modBadge = '<div class="cd-medal fc-review-badge-v1049">Private safety check · Admin preview</div>';
         moderationPreviewNotice = '<div class="fc-private-preview-v1049 fc-admin-preview-v1049"><strong>Moderation preview</strong><span>This entry is not visible to other members.</span></div>';
       } else if (isMyEntry && entry.moderation_status === 'rejected') {
         modBadge = '<div class="cd-medal" style="background:rgba(255,45,31,0.15);color:#ff2d1f;border:1px solid rgba(255,45,31,0.3)">🚫 Not approved</div>';
@@ -24273,9 +24273,16 @@ function fcCardSplitTitle(ch) {
 function fcCardMyEntry(ch) {
   const uid = state.profile?.id;
   if (!uid || !ch) return null;
-  return (state.feedEntries || []).find(e => e.challenge_id === ch.id && e.user_id === uid)
-    || (state.currentEntries || []).find(e => e.challenge_id === ch.id && e.user_id === uid)
-    || null;
+  const rows = [
+    ...(state.challengeEntriesV1060 || []),
+    ...(state.feedEntries || []),
+    ...(state.currentEntries || [])
+  ];
+  return rows.find(e =>
+    String(e?.challenge_id || '') === String(ch.id) &&
+    String(e?.user_id || '') === String(uid) &&
+    String(e?.moderation_status || '').toLowerCase() !== 'rejected'
+  ) || null;
 }
 function fcCardHasEntered(ch) {
   if (fcCardMyEntry(ch)) return true;
@@ -24473,9 +24480,102 @@ function fcCompeteScoreContextV1059(ch,status,entryCount){
   if(entryCount===1)return 'Needs one more eligible competitor to earn Championship Score.';
   return 'Eligible for Championship Score. Final value is set after voting.';
 }
+function fcPreparingElapsedV1120(value) {
+  if (!value) return '';
+  const ms = Date.now() - new Date(value).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return '';
+  const seconds = Math.floor(ms / 1000);
+  if (seconds < 5) return 'Started just now';
+  if (seconds < 60) return `Started ${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  return `Started ${minutes}m ago`;
+}
+function fcPreparingStateV1120(entry) {
+  const status = String(entry?.moderation_status || 'pending').toLowerCase();
+  const jobs = window.fcModerationJobsV1118;
+  const job = jobs instanceof Map ? jobs.get(String(entry?.id || '')) : null;
+  const dispatch = String(job?.dispatch_state || 'dispatching').toLowerCase();
+  const review = String(job?.review_state || 'pending').toLowerCase();
+  if (status === 'flagged' || status === 'escalated') {
+    return {kind:'manual',badge:'EXTRA SAFETY CHECK',title:'We’re taking a closer look',detail:'The automated check could not make a clear decision. Your entry stays private while an administrator finishes the check.',uploaded:true,accepted:true,finishing:true,time:fcPreparingElapsedV1120(job?.started_at || entry?.moderation_checked_at || entry?.created_at)};
+  }
+  if (dispatch === 'failed' || dispatch === 'stopped' || review === 'failed') {
+    return {kind:'failed',badge:'SETUP PAUSED',title:'We couldn’t finish the safety check',detail:'Open the challenge and tap Retry. You do not need to upload the video again.',uploaded:true,accepted:false,finishing:false,time:fcPreparingElapsedV1120(job?.started_at || entry?.moderation_checked_at || entry?.created_at)};
+  }
+  const accepted = ['submitted','reviewing','finished'].includes(dispatch);
+  const finishing = ['submitted','reviewing'].includes(dispatch);
+  return {
+    kind:'preparing',
+    badge:'PREPARING',
+    title:'Getting your entry ready',
+    detail:'Your video is uploaded. We’re finishing a quick safety check and will publish it automatically as soon as it’s ready.',
+    uploaded:true,
+    accepted,
+    finishing,
+    time:fcPreparingElapsedV1120(job?.started_at || entry?.moderation_checked_at || entry?.created_at)
+  };
+}
+function fcPreparingEntryCardV1120(ch, entry) {
+  const p = fcPreparingStateV1120(entry);
+  const poster = entry?.poster_url ? `<img class="fc-preparing-poster-v1120" src="${escapeHtml(entry.poster_url)}" alt="" loading="lazy" onerror="this.remove()">` : '';
+  const step = (label, done, active) => `<span class="${done ? 'done' : active ? 'active' : ''}"><i>${done ? '✓' : ''}</i>${label}</span>`;
+  const acceptedActive = !p.accepted && p.kind !== 'failed';
+  const finishingActive = p.finishing || p.kind === 'manual';
+  return `<div class="fc-preparing-entry-v1120" data-fc-preparing-entry="${escapeHtml(entry.id)}">
+    <div class="fc-preparing-media-v1120">
+      <div class="fc-preparing-placeholder-v1120"><span>▶</span></div>
+      ${poster}
+      <div class="fc-preparing-veil-v1120"></div>
+      <div class="fc-preparing-content-v1120">
+        <div class="fc-preparing-badge-v1120 ${p.kind}">${escapeHtml(p.badge)}</div>
+        <h4>${escapeHtml(p.title)}</h4>
+        <p>${escapeHtml(p.detail)}</p>
+        <div class="fc-preparing-steps-v1120">
+          ${step('Uploaded',p.uploaded,false)}
+          ${step('Check accepted',p.accepted,acceptedActive)}
+          ${step('Finishing',false,finishingActive)}
+        </div>
+        ${p.time ? `<small>${escapeHtml(p.time)}</small>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+function fcPreparingStatusLineV1120(ch, status, publicCount, voteTotal) {
+  const parts = [];
+  if (status === 'submitting') parts.push('Open');
+  else if (status === 'sd_submitting') parts.push('Sudden-death entries');
+  else if (isVotingPhase(status)) parts.push(ch.is_championship ? 'Title vote' : 'Voting');
+  else if (status === 'voided') parts.push('No contest');
+  else parts.push('Final');
+  parts.push(`${publicCount} public ${publicCount === 1 ? 'entry' : 'entries'}`);
+  parts.push('1 preparing');
+  if (voteTotal > 0) parts.push(`${_compactCount(voteTotal)} ${voteTotal === 1 ? 'vote' : 'votes'}`);
+  let end = '';
+  if (status === 'submitting' && ch.submission_deadline) end = `${formatCountdown(ch.submission_deadline)} left`;
+  else if (status === 'sd_submitting' && ch.sd_submit_end) end = `${formatCountdown(ch.sd_submit_end)} left`;
+  else if (isVotingPhase(status) && ch.voting_end) end = `${formatCountdown(ch.voting_end)} left`;
+  if (end) parts.push(end);
+  return parts;
+}
+function fcRebuildEntryCountsV1120() {
+  const rows = Array.isArray(state.challengeEntriesV1060) ? state.challengeEntriesV1060 : [];
+  const counts = {};
+  const creatorEntries = {};
+  rows.forEach(entry => {
+    if (!fcEntryCompetesV1060(entry)) return;
+    counts[entry.challenge_id] = (counts[entry.challenge_id] || 0) + 1;
+    const ch = (state.challenges || []).find(item => String(item.id) === String(entry.challenge_id));
+    if (ch && String(entry.user_id) === String(ch.creator_id)) creatorEntries[entry.challenge_id] = entry;
+  });
+  state.entryCounts = counts;
+  state.creatorEntries = creatorEntries;
+  return counts;
+}
+
 function buildChallengeCardShell(ch, surface = 'compete') {
   const creator = ch.creator || { name: 'Unknown' };
-  const entryCount = state.entryCounts[ch.id] || 0;
+  const cardEntries = _cardEntriesFor(ch);
+  const entryCount = cardEntries.length;
   const entryWord = entryCount === 1 ? 'entry' : 'entries';
   const isChampionship = !!(ch.is_championship || (ch.title && ch.title.startsWith('⚡')));
   const status = ch.computedStatus || computeChallengeStatus(ch);
@@ -24487,9 +24587,13 @@ function buildChallengeCardShell(ch, surface = 'compete') {
     ? `<img src="${escapeHtml(creator.avatar)}" alt="" loading="lazy">`
     : `<span>${escapeHtml((creator.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`;
 
-  const cardEntries = _cardEntriesFor(ch);
+  const myEntry = fcCardMyEntry(ch);
+  const myModeration = String(myEntry?.moderation_status || '').toLowerCase();
+  const myPreparing = !!myEntry && ['pending','flagged','escalated'].includes(myModeration);
   const voteTotal = _cardVotes(ch, cardEntries);
-  const mediaHtml = _cardMediaHTML(ch, status, cardEntries, isChampionship, entryCount);
+  const mediaHtml = myPreparing
+    ? fcPreparingEntryCardV1120(ch, myEntry)
+    : _cardMediaHTML(ch, status, cardEntries, isChampionship, entryCount);
 
   const action = fcCardAction(ch, status);
   const ctaCls = action.ghost ? ' chc-ghost' : '';
@@ -24507,11 +24611,13 @@ function buildChallengeCardShell(ch, surface = 'compete') {
     ${mediaHtml}`;
 
   if(surface==='compete'){
-    const statusParts=fcCompeteStatusLineV1059(ch,status,Number(entryCount)||0,voteTotal);
+    const statusParts = myPreparing
+      ? fcPreparingStatusLineV1120(ch,status,Number(entryCount)||0,voteTotal)
+      : fcCompeteStatusLineV1059(ch,status,Number(entryCount)||0,voteTotal);
     const scoreContext=fcCompeteScoreContextV1059(ch,status,Number(entryCount)||0);
     return `${commonTop}
-      <div class="fc-compete-card-foot-v1059">
-        <div class="fc-compete-card-status-v1059">${statusParts.map(x=>`<span>${escapeHtml(x)}</span>`).join('<i aria-hidden="true">·</i>')}<button type="button" class="fc-compete-card-score-v1059 fc-score-info-v1088" data-fc-compete-score-v1059="${ch.id}" aria-label="${escapeHtml(scoreContext)}" title="${escapeHtml(scoreContext)}"><span aria-hidden="true">ⓘ</span></button></div>
+      <div class="fc-compete-card-foot-v1059${myPreparing ? ' fc-preparing-foot-v1120' : ''}">
+        <div class="fc-compete-card-status-v1059${myPreparing ? ' fc-preparing-status-v1120' : ''}">${statusParts.map(x=>`<span>${escapeHtml(x)}</span>`).join('<i aria-hidden="true">·</i>')}<button type="button" class="fc-compete-card-score-v1059 fc-score-info-v1088" data-fc-compete-score-v1059="${ch.id}" aria-label="${escapeHtml(scoreContext)}" title="${escapeHtml(scoreContext)}"><span aria-hidden="true">ⓘ</span></button></div>
         ${action.hidden ? '' : `<button class="chc-cta fc-compete-card-action-v1059${ctaCls}" data-chc-act="${ch.id}" data-chc-mode="${action.mode}">${action.label}</button>`}
       </div>`;
   }
@@ -33556,7 +33662,7 @@ body.theme-light .fc-score-metric-v1032,body.theme-light .fc-score-cutoff-v1032,
   function statusCopy(ch,status){
     const shared=window.fcGetChallengeDetailStateV1078?.(ch);const entries=shared?.approvedEntries||(state.currentEntries||[]).filter(e=>fcEntryCompetesV1060(e));const me=state.profile?.id;const mine=shared?.myEntry||null;const mod=shared?.myModeration||String(mine?.moderation_status||'').toLowerCase();const pending=shared?.hasPrivatePendingEntry??['pending','flagged','escalated'].includes(mod);
     if(status==='submitting'){
-      if(pending)return {k:'Entry under review',t:left(ch.submission_deadline),h:'Only visible to you',p:'Review normally finishes quickly. You can still edit or withdraw before entries close.',primary:'edit',mine};
+      if(pending)return {k:'Getting your entry ready',t:left(ch.submission_deadline),h:'Private for a moment',p:'Your upload is complete. We’re finishing a quick safety check and will publish it automatically when ready. You can still edit or withdraw before entries close.',primary:'edit',mine};
       if(mine)return {k:'Entries open',t:left(ch.submission_deadline),h:'Your entry is live',p:'You can edit or withdraw it until entries close.',primary:'edit',mine};
       return {k:'Entries open',t:left(ch.submission_deadline),h:'Submit before the deadline',p:`${entries.length} approved entr${entries.length===1?'y':'ies'} so far. Voting begins after entries close.`,primary:'enter'};
     }
@@ -33571,7 +33677,7 @@ body.theme-light .fc-score-metric-v1032,body.theme-light .fc-score-cutoff-v1032,
     const status=computeChallengeStatus(ch),d=statusCopy(ch,status),box=document.createElement('section');box.id='fcChallengeBriefV1054';box.className='fc-challenge-brief-v1054';
     if(status==='submitting'&&ch.is_public!==false&&!ch.is_championship){const approved=(state.currentEntries||[]).filter(e=>!e.moderation_status||e.moderation_status==='clear'||e.moderation_status==='approved');const mine=approved.some(e=>e.user_id===state.profile?.id);const ids=[...new Set(approved.map(e=>e.user_id).filter(id=>id&&(!mine||id!==state.profile?.id)))];const value=ids.reduce((n,id)=>n+Number(getLadderStatus(id)?.points||0),0);d.p+=` Current field value: ${value} Opponent Point${value===1?'':'s'} before turnout.`;}
     let primary='';if(d.primary==='edit')primary='<button class="primary" data-v1054-action="edit">Edit entry</button>';else if(d.primary==='enter')primary='<button class="primary" data-v1054-action="enter">Enter challenge</button>';else if(d.primary==='results')primary='<button class="primary" data-v1054-action="results">View results</button>';
-    const pendingReview=d.k==='Entry under review';
+    const pendingReview=d.k==='Getting your entry ready';
     const insights=(!pendingReview&&(ch.creator_id===state.profile?.id||ch.creator?.id===state.profile?.id))?'<button data-v1054-action="insights">Insights</button>':'';
     box.innerHTML=`<div class="fc-challenge-brief-top-v1054"><div><div class="fc-challenge-brief-state-v1054">${esc(d.k)}</div><strong>${esc(d.h)}</strong></div><div class="fc-challenge-brief-time-v1054">${esc(d.t)}</div></div><p>${esc(d.p)}</p><div class="fc-challenge-actions-v1054">${primary}${insights}<button class="help" data-v1054-action="ember">Ask Ember</button></div>`;
     hero.insertAdjacentElement('afterend',box);
@@ -37894,13 +38000,13 @@ body.fc-settings-open-v1117 #bottomNav{visibility:hidden!important;pointer-event
   function moderationPresentation(entry){
     const stateValue = String(entry?.moderation_status || 'pending').toLowerCase();
     const job = JOBS.get(String(entry?.id || '')) || null;
-    if (stateValue === 'escalated') return {state:'manual',label:'Urgent review · Only visible to you',title:'A moderator is reviewing this video',detail:'The automated check found a combination that requires human review. You do not need to resubmit.',retry:false};
-    if (stateValue === 'flagged') return {state:'manual',label:'Needs review · Only visible to you',title:'A moderator is reviewing this video',detail:'The automated check was uncertain. The entry remains private until an administrator decides.',retry:false};
-    if (job?.dispatch_state === 'failed' || job?.dispatch_state === 'stopped' || job?.review_state === 'failed') return {state:'failed',label:'Review could not start',title:'Automatic review did not start',detail:job?.last_error || 'Tap Retry to send the same video for review again.',retry:true};
-    if (job?.dispatch_state === 'reviewing') return {state:'reviewing',label:'Reviewing video · Only visible to you',title:'Reviewing video',detail:'The review job is active. You can leave this screen; the entry will update automatically.',retry:false};
-    if (job?.dispatch_state === 'submitted') return {state:'reviewing',label:'Reviewing video · Only visible to you',title:'Review accepted',detail:'The video was accepted for automated review and will update here when the result arrives.',retry:false};
-    if (job?.dispatch_state === 'dispatching') return {state:'reviewing',label:'Sending for review…',title:'Sending for review',detail:'The app is confirming that the automated review job was accepted.',retry:false};
-    return {state:'reviewing',label:'Sending for review…',title:'Private preview',detail:'This entry is visible only to you and moderators until the review job is accepted.',retry:false};
+    if (stateValue === 'escalated') return {state:'manual',label:'Extra safety check · Only visible to you',title:'We’re taking a closer look',detail:'The automated check could not make a clear decision. Your entry stays private while an administrator finishes the check. You do not need to resubmit.',retry:false};
+    if (stateValue === 'flagged') return {state:'manual',label:'Extra safety check · Only visible to you',title:'We’re taking a closer look',detail:'The automated check was uncertain. Your entry stays private while an administrator finishes the check.',retry:false};
+    if (job?.dispatch_state === 'failed' || job?.dispatch_state === 'stopped' || job?.review_state === 'failed') return {state:'failed',label:'Setup paused',title:'We couldn’t finish the safety check',detail:job?.last_error || 'Tap Retry to send the same video through the safety check again.',retry:true};
+    if (job?.dispatch_state === 'reviewing') return {state:'reviewing',label:'Preparing · Only visible to you',title:'Finishing the safety check',detail:'Your video is uploaded. You can leave this screen; the entry will publish automatically when ready.',retry:false};
+    if (job?.dispatch_state === 'submitted') return {state:'reviewing',label:'Preparing · Only visible to you',title:'Check accepted',detail:'Your video was accepted for the quick safety check and will publish automatically when it finishes.',retry:false};
+    if (job?.dispatch_state === 'dispatching') return {state:'reviewing',label:'Getting ready…',title:'Starting the safety check',detail:'Your upload is complete. The app is confirming that the quick safety check started.',retry:false};
+    return {state:'reviewing',label:'Getting ready…',title:'Getting your entry ready',detail:'Your upload is complete. It stays private for a moment while the quick safety check starts.',retry:false};
   }
 
   window.fcModerationLabelV1118 = function(entry){ return safe(moderationPresentation(entry).label); };
@@ -37923,7 +38029,7 @@ body.fc-settings-open-v1117 #bottomNav{visibility:hidden!important;pointer-event
     const result = await fcWithTimeoutV1099(
       db.rpc('fc_video_moderation_status_v1118', { p_entry_id: entryId }),
       8000,
-      'Video review status'
+      'Video safety-check status'
     );
     if (result?.error) throw result.error;
     const job = result?.data || {entry_id:entryId,dispatch_state:'not_started',review_state:'pending',retryable:true};
@@ -37935,8 +38041,8 @@ body.fc-settings-open-v1117 #bottomNav{visibility:hidden!important;pointer-event
   window.fcRetryVideoModerationV1118 = async function(entryId, button){
     if (button){ button.disabled = true; button.textContent = 'Sending…'; }
     const accepted = await triggerVideoModeration(entryId);
-    if (!accepted && typeof toast === 'function') toast('Review did not start. Try again.');
-    if (accepted && typeof toast === 'function') toast('Video review started.');
+    if (!accepted && typeof toast === 'function') toast('Safety check did not start. Try again.');
+    if (accepted && typeof toast === 'function') toast('Safety check started.');
     try { await loadJob(entryId); } catch (_) {}
     if (button){ button.disabled = false; button.textContent = 'Retry'; }
     startModerationWatch();
@@ -37952,13 +38058,23 @@ body.fc-settings-open-v1117 #bottomNav{visibility:hidden!important;pointer-event
       'Reviewed entry refresh'
     );
     if (result?.error || !result?.data) return false;
-    const index = (state.currentEntries || []).findIndex(item => String(item.id) === String(entryId));
-    if (index >= 0) state.currentEntries[index] = result.data;
-    else if (String(result.data.challenge_id) === String(state.currentChallenge?.id)) state.currentEntries.push(result.data);
+    const upsert = key => {
+      const rows = Array.isArray(state[key]) ? state[key] : [];
+      const index = rows.findIndex(item => String(item.id) === String(entryId));
+      if (index >= 0) rows[index] = result.data;
+      else rows.push(result.data);
+      state[key] = rows;
+    };
+    upsert('currentEntries');
+    upsert('challengeEntriesV1060');
+    upsert('feedEntries');
+    fcRebuildEntryCountsV1120();
     if (state.currentChallenge) {
       renderChallengeDetail();
       renderChallengeResults();
     }
+    if (typeof renderChallenges === 'function') renderChallenges();
+    if (typeof renderFeed === 'function') renderFeed();
     return true;
   }
 
@@ -38234,6 +38350,152 @@ body.fc-settings-open-v1117 #bottomNav{visibility:hidden!important;pointer-event
     challengeDetailCacheMs:30000, renderedTabReuse:true, challengeAwareEmber:true,
     bodyWideEmberObserverRemoved:true, sqlChanges:1, edgeFunctionChanges:2,
   };
+})();
+</script>
+
+<style id="fc-v1120-entry-preparation-css">
+/* v1120 — pending uploads look intentional, calm, and time-bounded instead of broken or punitive. */
+.fc-preparing-entry-v1120{padding:0 14px 2px}
+.fc-preparing-media-v1120{position:relative;min-height:330px;border:1px solid rgba(255,116,55,.24);border-radius:17px;overflow:hidden;background:radial-gradient(circle at 50% 25%,rgba(40,72,118,.34),transparent 48%),linear-gradient(160deg,#111827,#090a0d 70%)}
+.fc-preparing-placeholder-v1120{position:absolute;inset:0;display:grid;place-items:center;color:rgba(255,255,255,.28)}
+.fc-preparing-placeholder-v1120 span{display:grid;place-items:center;width:58px;height:58px;border-radius:50%;border:1px solid rgba(255,255,255,.16);background:rgba(0,0,0,.28);font-size:23px;padding-left:3px}
+.fc-preparing-poster-v1120{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:blur(1px) saturate(.82);opacity:.52}
+.fc-preparing-veil-v1120{position:absolute;inset:0;background:linear-gradient(180deg,rgba(4,6,10,.25),rgba(6,7,10,.82) 62%,rgba(6,7,10,.96))}
+.fc-preparing-content-v1120{position:absolute;left:0;right:0;bottom:0;padding:24px 20px 20px;color:#fff}
+.fc-preparing-badge-v1120{display:inline-flex;align-items:center;min-height:28px;padding:0 10px;border:1px solid rgba(255,143,77,.38);border-radius:999px;background:rgba(255,105,45,.14);color:#ff9a61;font-size:9.5px;font-weight:900;letter-spacing:.13em}
+.fc-preparing-badge-v1120.manual{border-color:rgba(255,196,86,.38);background:rgba(255,196,86,.12);color:#ffd171}
+.fc-preparing-badge-v1120.failed{border-color:rgba(229,86,86,.38);background:rgba(229,86,86,.12);color:#ff8585}
+.fc-preparing-content-v1120 h4{margin:12px 0 6px;font:800 24px/1.08 var(--font-bricolage);letter-spacing:-.02em}
+.fc-preparing-content-v1120 p{max-width:520px;margin:0;color:rgba(255,255,255,.74);font:500 13px/1.48 var(--font-body)}
+.fc-preparing-steps-v1120{display:flex;flex-wrap:wrap;gap:7px;margin-top:17px}
+.fc-preparing-steps-v1120 span{display:inline-flex;align-items:center;gap:6px;min-height:30px;padding:0 9px;border:1px solid rgba(255,255,255,.12);border-radius:999px;color:rgba(255,255,255,.46);font-size:10px;font-weight:800}
+.fc-preparing-steps-v1120 span i{display:grid;place-items:center;width:15px;height:15px;border-radius:50%;border:1px solid rgba(255,255,255,.22);font-style:normal;font-size:9px}
+.fc-preparing-steps-v1120 span.done{color:#8ef0b4;border-color:rgba(80,218,132,.30);background:rgba(80,218,132,.08)}
+.fc-preparing-steps-v1120 span.done i{border-color:rgba(80,218,132,.42);background:rgba(80,218,132,.18)}
+.fc-preparing-steps-v1120 span.active{color:#ffb07a;border-color:rgba(255,126,58,.36);background:rgba(255,103,39,.10)}
+.fc-preparing-steps-v1120 span.active i{border-color:#ff8a4d;box-shadow:0 0 0 3px rgba(255,106,44,.10)}
+.fc-preparing-content-v1120 small{display:block;margin-top:11px;color:rgba(255,255,255,.48);font-size:10.5px;font-weight:700}
+.fc-compete-card-status-v1059 span{white-space:nowrap}
+#challengesGrid .fc-preparing-status-v1120{position:relative!important;flex-wrap:wrap!important;white-space:normal!important;row-gap:4px!important;padding-right:30px!important}
+#challengesGrid .fc-preparing-status-v1120 .fc-compete-card-score-v1059{position:absolute!important;right:0!important;top:0!important;margin:0!important}
+body.theme-light .fc-preparing-media-v1120,html[data-theme="light"] body .fc-preparing-media-v1120{background:radial-gradient(circle at 50% 25%,rgba(110,150,202,.20),transparent 50%),linear-gradient(160deg,#e9eef5,#dfe6ee 70%)}
+@media(max-width:430px){.fc-preparing-media-v1120{min-height:310px}.fc-preparing-content-v1120{padding:21px 17px 18px}.fc-preparing-content-v1120 h4{font-size:22px}.fc-preparing-steps-v1120{gap:6px}.fc-preparing-steps-v1120 span{font-size:9.5px;padding:0 8px}}
+</style>
+<script id="fc-v1120-entry-preparation-js">
+(function(){
+  'use strict';
+  if (window.__fcEntryPreparationV1120) return;
+  window.__fcEntryPreparationV1120 = true;
+  const pendingStates = new Set(['pending','flagged','escalated']);
+  let timer = 0;
+  let running = false;
+  let lastSignature = '';
+
+  function allKnownEntries(){
+    const rows = [
+      ...(state.challengeEntriesV1060 || []),
+      ...(state.feedEntries || []),
+      ...(state.currentEntries || [])
+    ];
+    const byId = new Map();
+    rows.forEach(row => { if (row?.id) byId.set(String(row.id), row); });
+    return [...byId.values()];
+  }
+  function pendingMine(){
+    const uid = state.profile?.id;
+    if (!uid) return [];
+    return allKnownEntries().filter(entry =>
+      String(entry.user_id || '') === String(uid) &&
+      entry.media_type === 'video' &&
+      pendingStates.has(String(entry.moderation_status || '').toLowerCase())
+    );
+  }
+  function upsertEverywhere(entry){
+    ['challengeEntriesV1060','feedEntries','currentEntries'].forEach(key => {
+      const rows = Array.isArray(state[key]) ? state[key] : [];
+      const index = rows.findIndex(item => String(item?.id || '') === String(entry.id));
+      if (index >= 0) rows[index] = entry;
+      else if (key !== 'currentEntries' || String(state.currentChallenge?.id || '') === String(entry.challenge_id || '')) rows.push(entry);
+      state[key] = rows;
+    });
+    fcRebuildEntryCountsV1120();
+  }
+  function repaint(){
+    if (typeof renderChallenges === 'function') renderChallenges();
+    if (state.currentChallenge && typeof renderChallengeDetail === 'function') renderChallengeDetail();
+  }
+  async function refreshEntry(entryId){
+    const query = db.from('entries')
+      .select('*, poster_url, submitter:profiles!entries_user_id_fkey(id, name, avatar)')
+      .eq('id', entryId)
+      .maybeSingle();
+    const result = typeof fcWithTimeoutV1099 === 'function'
+      ? await fcWithTimeoutV1099(query, 8000, 'Prepared entry refresh')
+      : await query;
+    if (result?.error || !result?.data) return false;
+    upsertEverywhere(result.data);
+    return true;
+  }
+  async function tick(){
+    if (running) return;
+    const rows = pendingMine();
+    if (!rows.length) { lastSignature = ''; return; }
+    running = true;
+    let changed = false;
+    try {
+      const jobs = window.fcModerationJobsV1118 instanceof Map ? window.fcModerationJobsV1118 : new Map();
+      window.fcModerationJobsV1118 = jobs;
+      for (const entry of rows) {
+        try {
+          const query = db.rpc('fc_video_moderation_status_v1118', { p_entry_id: entry.id });
+          const result = typeof fcWithTimeoutV1099 === 'function'
+            ? await fcWithTimeoutV1099(query, 8000, 'Entry preparation status')
+            : await query;
+          if (result?.error) throw result.error;
+          const job = result?.data || {entry_id:entry.id,dispatch_state:'not_started',review_state:'pending'};
+          const prior = jobs.get(String(entry.id));
+          jobs.set(String(entry.id), job);
+          const signature = `${entry.id}:${job.dispatch_state}:${job.review_state}:${job.updated_at || ''}`;
+          if (!prior || signature !== `${entry.id}:${prior.dispatch_state}:${prior.review_state}:${prior.updated_at || ''}`) changed = true;
+          if (job.dispatch_state === 'finished' || ['approved','rejected','flagged','escalated'].includes(String(job.review_state || '').toLowerCase())) {
+            if (await refreshEntry(entry.id)) changed = true;
+          }
+        } catch (error) {
+          console.warn('[v1120] entry preparation poll failed', error);
+        }
+      }
+      const signature = pendingMine().map(entry => `${entry.id}:${entry.moderation_status}`).sort().join('|');
+      if (changed || signature !== lastSignature) repaint();
+      lastSignature = signature;
+    } finally {
+      running = false;
+      if (pendingMine().length) timer = window.setTimeout(tick, 2500);
+    }
+  }
+  function schedule(){
+    if (timer) clearTimeout(timer);
+    timer = window.setTimeout(tick, 180);
+  }
+  const baseRenderChallenges = window.renderChallenges;
+  if (typeof baseRenderChallenges === 'function') {
+    window.renderChallenges = function(){
+      const result = baseRenderChallenges.apply(this, arguments);
+      schedule();
+      return result;
+    };
+  }
+  const baseRenderFeed = window.renderFeed;
+  if (typeof baseRenderFeed === 'function') {
+    window.renderFeed = function(){
+      const result = baseRenderFeed.apply(this, arguments);
+      schedule();
+      return result;
+    };
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) schedule(); });
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', schedule, {once:true}); else schedule();
+  window.FC_BUILD_V1120 = 'entry-preparation-live-transition';
+  window.__fcBuildV1120 = {build:'v1120',basedOn:'v1119',entryPreparationShell:true,publicPreparingCounts:true,globalModerationTransition:true,newEdgeFunctions:0,edgeFunctionChanges:0,sqlChanges:0};
 })();
 </script>
 
