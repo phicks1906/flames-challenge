@@ -14,16 +14,16 @@
 <meta content="no-cache, no-store, must-revalidate" http-equiv="cache-control"/>
 <meta content="no-cache" http-equiv="pragma"/>
 <meta content="0" http-equiv="expires"/>
-<title>FlamesChallenge v1121 — Pinned Challenge Context for Ember</title>
+<title>FlamesChallenge v1122 — Authorized Private Challenges in Compete</title>
 <meta content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." name="description"/>
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
      the first kilobyte, so the update check can read it with a tiny ranged
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1121 · pinned-challenge-aware-ember" name="fc-build"/>
-<!-- v1120: owner-friendly entry preparation state, honest public/preparing counts, and automatic moderation-to-live transition on challenge cards. -->
-<meta content="Pending videos now show a calm preparation state with clear progress, public counts stay accurate, and approved entries move live automatically." name="fc-whatsnew"/>
+<meta content="v1122 · authorized-private-challenges-in-compete" name="fc-build"/>
+<!-- v1122: authorized private challenges now appear in Compete for creators, invitees, and active participants. -->
+<meta content="Private challenges now appear in Compete for invited members and participants while remaining hidden from everyone else." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -20772,6 +20772,62 @@ async function loadChallenges(opts = {}) {
   const { data: entries, error: entryErr } = await entryQ;
   if (entryErr) { console.error('challenge entries load error', entryErr); if (opts.throwOnError) throw entryErr; }
 
+  // v1122 — authorized private challenges belong in Compete. The old renderer
+  // discarded every private challenge unless the current user created it, even
+  // when RLS had correctly returned it for an invitee or participant. Build an
+  // explicit authorization set from current invitations and the user's own
+  // entries, then fetch any authorized challenge that was not in the normal
+  // challenge window (for example, an invitation to an older challenge).
+  const meV1122 = state.profile?.id || null;
+  const invitedPrivateIdsV1122 = new Set();
+  if (meV1122) {
+    try {
+      const { data: inviteRowsV1122, error: inviteErrV1122 } = await db.from('challenge_invites')
+        .select('challenge_id, invite_status')
+        .eq('invited_user_id', meV1122);
+      if (inviteErrV1122) throw inviteErrV1122;
+      (inviteRowsV1122 || [])
+        .filter(row => !['declined', 'no_show'].includes(String(row.invite_status || '').toLowerCase()))
+        .forEach(row => { if (row.challenge_id) invitedPrivateIdsV1122.add(row.challenge_id); });
+    } catch (err) {
+      console.warn('private challenge invites load error', err);
+    }
+  }
+
+  const authorizationEntriesV1122 = new Map(
+    (state.challengeEntriesV1060 || []).map(entry => [entry.id, entry])
+  );
+  (entries || []).forEach(entry => authorizationEntriesV1122.set(entry.id, entry));
+  const participatingChallengeIdsV1122 = new Set(
+    [...authorizationEntriesV1122.values()]
+      .filter(entry => meV1122 && entry.user_id === meV1122)
+      .map(entry => entry.challenge_id)
+      .filter(Boolean)
+  );
+  const authorizedPrivateIdsV1122 = new Set([
+    ...invitedPrivateIdsV1122,
+    ...participatingChallengeIdsV1122,
+  ]);
+
+  const missingAuthorizedIdsV1122 = [...authorizedPrivateIdsV1122]
+    .filter(id => !(state.challenges || []).some(challenge => challenge.id === id));
+  if (missingAuthorizedIdsV1122.length) {
+    try {
+      const { data: privateChallengesV1122, error: privateErrV1122 } = await db.from('challenges')
+        .select('*, creator:profiles!challenges_creator_id_fkey(id, name, avatar)')
+        .in('id', missingAuthorizedIdsV1122);
+      if (privateErrV1122) throw privateErrV1122;
+      const challengeMapV1122 = new Map((state.challenges || []).map(challenge => [challenge.id, challenge]));
+      (privateChallengesV1122 || []).forEach(challenge => challengeMapV1122.set(challenge.id, challenge));
+      state.challenges = [...challengeMapV1122.values()]
+        .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+    } catch (err) {
+      console.warn('authorized private challenges load error', err);
+    }
+  }
+  state._authorizedPrivateChallengeIdsV1122 = authorizedPrivateIdsV1122;
+  state._participatingChallengeIdsV1122 = participatingChallengeIdsV1122;
+
   // v1060 — one complete, deduplicated source for card media and card counts.
   // The previous count query and media query were different windows with different
   // moderation filters, which allowed “2 entries” beside one visible tile.
@@ -20862,8 +20918,15 @@ function renderChallenges() {
   }
 
   let list = state.challenges.map(c => ({ ...c, computedStatus: computeChallengeStatus(c) }));
-  // Filter out private challenges from users that aren't the creator
-  list = list.filter(c => c.is_public || c.creator_id === state.profile?.id);
+  // v1122 — private challenges are visible only when this user is the creator,
+  // an active invitee, or already participating. Database RLS remains the
+  // security boundary; this client gate keeps the Compete list aligned with it.
+  const authorizedPrivateIdsV1122 = state._authorizedPrivateChallengeIdsV1122 || new Set();
+  list = list.filter(c =>
+    c.is_public !== false ||
+    c.creator_id === state.profile?.id ||
+    authorizedPrivateIdsV1122.has(c.id)
+  );
 
   const q = (state.cSearch || '').trim().toLowerCase();
   if (q) {
@@ -20884,7 +20947,10 @@ function renderChallenges() {
     if (state.cFilter === 'active') list = list.filter(c => c.computedStatus === 'submitting');
     else if (state.cFilter === 'voting') list = list.filter(c => c.computedStatus === 'voting');
     else if (state.cFilter === 'closed') list = list.filter(c => c.computedStatus === 'closed' || c.computedStatus === 'voided');
-    else if (state.cFilter === 'mine') list = list.filter(c => c.creator_id === state.profile?.id);
+    else if (state.cFilter === 'mine') {
+      const participatingIdsV1122 = state._participatingChallengeIdsV1122 || new Set();
+      list = list.filter(c => c.creator_id === state.profile?.id || participatingIdsV1122.has(c.id));
+    }
   }
 
   grid.innerHTML = '';
@@ -20896,7 +20962,7 @@ function renderChallenges() {
           'active': 'Nothing open to enter right now. Start one!',
           'voting': 'Nothing being voted on yet.',
           'closed': 'No decided challenges yet.',
-          'mine': "You haven't created any challenges yet.",
+          'mine': "You haven't created or entered any challenges yet.",
         }[state.cFilter];
     grid.innerHTML = `
       <div class="ch-empty" style="grid-column:1/-1">
