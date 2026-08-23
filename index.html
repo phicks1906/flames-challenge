@@ -14,15 +14,15 @@
 <meta content="no-cache, no-store, must-revalidate" http-equiv="cache-control"/>
 <meta content="no-cache" http-equiv="pragma"/>
 <meta content="0" http-equiv="expires"/>
-<title>FlamesChallenge v1112 — Release Integrity &amp; Account Boundary</title>
+<title>FlamesChallenge v1113 — Titles &amp; Championship Race Clarity</title>
 <meta content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." name="description"/>
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
      the first kilobyte, so the update check can read it with a tiny ranged
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1112 · release-integrity-account-boundary" name="fc-build"/>
-<!-- v1112: account-boundary, startup, mutation, avatar, and worker release integrity. -->
+<meta content="v1113 · titles-championship-race-clarity" name="fc-build"/>
+<!-- v1113: compact Titles hierarchy and distinct Score-level clarity. -->
 <meta content="Account switching, startup recovery, voting, profile media, and installed-app updates are now release-hardened." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -7919,8 +7919,8 @@ body.fc-boot-ready-v1095 #fcBootGateV1095{
 <div class="section">
 <div class="section-head">
 <div>
-<h2 class="section-title">Titles &amp; Championships</h2>
-<p class="section-sub">Championship Score measures the strength of eligible wins. Score = Opponent Points + Turnout Points. · <a class="lb-how-link" onclick="toggleLbHow()">How scoring works</a></p>
+<h2 class="section-title">Titles</h2>
+<p class="section-sub">Track your Championship Score, qualification, and category titles. · <a class="lb-how-link" onclick="toggleLbHow()">How Score works</a></p>
 </div>
 </div>
 <div class="lb-how-card" id="lbHowCard" style="display:none">
@@ -16009,7 +16009,7 @@ function renderLeaderboard() {
   const pastWrap = document.getElementById('lbPastWrap');
   if (pastWrap) {
     const adminLaunch = (typeof isAdmin === 'function' && isAdmin() && _monthWinners >= 2 && _raceOn && !liveCh)
-      ? `<button class="lb-champ-launch-btn" style="margin:12px 0 0;width:100%" data-launch-cat="${escapeHtml(cat)}">⚡ Launch ${escapeHtml(cat)} Championship</button>` : '';
+      ? `<div class="fc-title-admin-v1113"><span>Admin action</span><button class="lb-champ-launch-btn" data-launch-cat="${escapeHtml(cat)}">Launch ${escapeHtml(cat)} Championship</button></div>` : '';
     // v795.1 — the temporary "Flyer test" button lived here. It existed only to
     // verify the championship flyer artwork before a live launch existed; that
     // is done. The 🖼 Flyer button in the championship arena topbar remains as
@@ -31585,30 +31585,40 @@ window.fcPublicFeedDiagnostics = function(){
     try{tabs.scrollTo({left,behavior:smooth?'smooth':'auto'})}catch(e){tabs.scrollLeft=left}
   }
   function realRow(u,place,qual,isYou){
-    return `<div class="fc-score-row-v1032${isYou?' is-you':''}">
-      <div class="fc-score-rank-v1032">${ord(place)}</div>
-      <div class="fc-score-person-v1032" data-fc-score-profile-v1033="${esc(u.id)}">${avatar(u)}<div style="min-width:0"><div class="fc-score-name-v1032">${esc(u.name)}${isYou?' <span style="color:var(--ember)">(you)</span>':''}</div><div class="fc-score-status-v1032">${u.ballots} total ballot${u.ballots===1?'':'s'}${qual?'<span class="fc-score-qual-v1032">Qualifying</span>':''}</div></div></div>
-      <button class="fc-score-metric-v1032 total" data-fc-score-metric-v1033="total" data-user="${esc(u.id)}" aria-label="Open ${esc(u.name)} Championship Score"><b>${u.score}</b><span>Score</span></button>
-      <button class="fc-score-metric-v1032" data-fc-score-metric-v1033="wins" data-user="${esc(u.id)}" aria-label="Open ${esc(u.name)} wins"><b>${u.wins}</b><span>Wins</span></button>
-      <button class="fc-score-metric-v1032" data-fc-score-metric-v1033="opponent" data-user="${esc(u.id)}" aria-label="Open ${esc(u.name)} Opponent Points"><b>${u.opponent}</b><span>Opponent pts</span></button>
-      <button class="fc-score-metric-v1032" data-fc-score-metric-v1033="turnout" data-user="${esc(u.id)}" aria-label="Open ${esc(u.name)} Turnout Points"><b>${u.turnout}</b><span>Turnout pts</span></button>
+    return `<div class="fc-title-standing-v1113${isYou?' is-you':''}">
+      <div class="fc-title-rank-v1113">${ord(place)}</div>
+      <button class="fc-title-person-v1113" data-fc-score-profile-v1033="${esc(u.id)}" aria-label="Open ${esc(u.name)} profile">
+        ${avatar(u)}
+        <span class="fc-title-person-copy-v1113">
+          <span class="fc-title-name-v1113">${esc(u.name)}${isYou?' <em>YOU</em>':''}${qual?'<i>QUALIFYING</i>':''}</span>
+          <span class="fc-title-breakdown-v1113">${u.wins} win${u.wins===1?'':'s'} · ${u.opponent} Opponent · ${u.turnout} Turnout · ${u.ballots} ballot${u.ballots===1?'':'s'}</span>
+        </span>
+      </button>
+      <button class="fc-title-score-v1113" data-fc-score-metric-v1033="total" data-user="${esc(u.id)}" aria-label="Open ${esc(u.name)} Championship Score breakdown"><b>${u.score}</b><span>Score</span></button>
     </div>`;
   }
-  function openRow(place){
-    return `<div class="fc-score-row-v1032 fc-score-open-row-v1033">
-      <div class="fc-score-rank-v1032">${ord(place)}</div>
-      <div class="fc-score-person-v1032"><div class="fc-score-open-avatar-v1033">+</div><div style="min-width:0"><div class="fc-score-open-name-v1033">Open qualification position</div><div class="fc-score-open-sub-v1033">No score posted at this level yet</div></div></div>
-      <button class="fc-score-metric-v1032 total fc-score-metric-v1033-empty" tabindex="-1" aria-disabled="true"><b>—</b><span>Score</span></button>
-      <button class="fc-score-metric-v1032 fc-score-metric-v1033-empty" tabindex="-1" aria-disabled="true"><b>—</b><span>Wins</span></button>
-      <button class="fc-score-metric-v1032 fc-score-metric-v1033-empty" tabindex="-1" aria-disabled="true"><b>—</b><span>Opponent pts</span></button>
-      <button class="fc-score-metric-v1032 fc-score-metric-v1033-empty" tabindex="-1" aria-disabled="true"><b>—</b><span>Turnout pts</span></button>
-    </div>`;
+  function openLevelsRow(openLevels,occupiedLevels){
+    if(openLevels<1)return '';
+    const start=occupiedLevels+1;
+    const labels=Array.from({length:openLevels},(_,i)=>ord(start+i));
+    const label=labels.length===1?labels[0]:`${labels.slice(0,-1).join(', ')} and ${labels.at(-1)}`;
+    return `<div class="fc-title-open-v1113"><div><b>Open qualifying Score levels</b><span>${label} level${openLevels===1?' is':'s are'} still available this month.</span></div><strong>${openLevels}</strong></div>`;
   }
   function leaderRead(rows,cat,openLevels){
-    if(!rows.length)return `All three qualifying score levels are open. The first eligible ${esc(cat)} win takes the lead and shows its full calculation here.`;
-    const top=rows[0];
-    if(openLevels>0)return `<b>${esc(top.name)}</b> leads with ${top.opponent} Opponent Points + ${top.turnout} Turnout Points. ${openLevels} qualifying score level${openLevels===1?' is':'s are'} still open.`;
-    return `<b>${esc(top.name)}</b> leads with ${top.opponent} Opponent Points + ${top.turnout} Turnout Points. Tap any number to inspect the challenges behind it.`;
+    if(!rows.length)return '';
+    const topScore=rows[0].score;
+    const tied=rows.filter(r=>r.score===topScore);
+    if(tied.length>1){
+      const names=tied.slice(0,2).map(r=>`<b>${esc(r.name)}</b>`).join(' and ');
+      const more=tied.length>2?` and ${tied.length-2} more`:'';
+      return `${names}${more} share the first Score level.${openLevels>0?` ${openLevels} more distinct Score level${openLevels===1?' can':'s can'} still qualify.`:''}`;
+    }
+    const levels=[...new Set(rows.map(r=>r.score))];
+    const cutoff=levels.length>=3?levels[2]:null;
+    if(cutoff!==null&&rows.some(r=>r.score===cutoff)&&rows.filter(r=>r.score===cutoff).length>1){
+      return `Multiple competitors are tied at the current cutoff. Everyone at that Score level qualifies.`;
+    }
+    return '';
   }
   function renderScoreRaceV1033(){
     const tabs=document.getElementById('lbCategoryTabs'),rankTab=document.getElementById('lbTabRankings');
@@ -31617,25 +31627,41 @@ window.fcPublicFeedDiagnostics = function(){
     const rows=categoryRows(cat),levels=[...new Set(rows.map(u=>u.score))],rankMap=new Map(levels.map((v,i)=>[v,i+1]));
     const cutoff=levels.length>=3?levels[2]:null,openLevels=Math.max(0,3-levels.length),remaining=daysLeft();
     let host=document.getElementById('fcScoreRaceV1033');
-    if(!host){host=document.createElement('section');host.id='fcScoreRaceV1033';host.className='fc-score-race-v1032 fc-score-race-v1033';tabs.insertAdjacentElement('afterend',host)}
-    let table='<div class="fc-score-table-v1032"><div class="fc-score-columns-v1032"><span>Rank</span><span>Competitor</span><span>Score</span><span>Wins</span><span>Opponent pts</span><span>Turnout pts</span></div>';
-    rows.slice(0,20).forEach(u=>{const place=rankMap.get(u.score)||1;table+=realRow(u,place,place<=3,state.profile?.id===u.id)});
-    for(let i=0;i<openLevels;i++)table+=openRow(levels.length+i+1);
-    if(openLevels>0)table+=`<div class="fc-score-open-summary-v1033"><b>${openLevels} of 3 qualifying score level${openLevels===1?' is':'s are'} still open.</b> A new distinct Championship Score can fill an open level before month-end.</div>`;
-    table+='</div>';
-    const me=rows.find(u=>u.id===state.profile?.id)||null,myScore=me?.score||0,myPlace=me?(rankMap.get(me.score)||null):null;
-    let myMain='Not ranked · 0 Score',mySub=`Win an eligible public ${cat} challenge to enter this category’s standings.`;
-    if(me&&myPlace<=3){myMain=`${ord(myPlace)} place · ${myScore} Score`;mySub=cutoff!=null&&myScore===cutoff?'You are tied at the current cutoff and qualify.':'You currently hold a qualifying score.'}
-    else if(me){myMain=`${ord(myPlace)} place · ${myScore} Score`;mySub=cutoff!=null?`${Math.max(0,cutoff-myScore)} more Championship Score reaches the current cutoff.`:'A qualifying score level is still open.'}
-    else if(cutoff!=null)mySub=`The current cutoff is ${cutoff} Score. Your first eligible win puts you on the board.`;
-    const cutoffText=cutoff==null?(levels.length?`${openLevels} qualifying level${openLevels===1?'':'s'} open`:'All 3 levels open'):`${cutoff} Score`;
-    host.innerHTML=`<div class="fc-score-head-v1032"><div class="fc-score-kicker-v1032">${esc(cat)} · Championship race</div><div class="fc-score-titleline-v1032"><div class="fc-score-title-v1032">Championship standings</div><div class="fc-score-time-v1032">${remaining===0?'Final day':`${remaining} day${remaining===1?'':'s'} remaining`}</div></div><div class="fc-score-formula-v1032"><b>Championship Score = Opponent Points + Turnout Points.</b> The top three distinct score totals qualify; ties at the cutoff advance.</div><div class="fc-score-cutoff-v1032"><span>Current qualification cutoff</span><b>${esc(cutoffText)}</b></div></div>${table}<div class="fc-score-ember-v1032">${emberFace(25,rows.length?'thinking':'directing')}<span>${leaderRead(rows,cat,openLevels)}</span></div><div class="fc-score-you-v1032"><div class="fc-score-you-copy-v1032"><div class="fc-score-you-label-v1032">Your position in ${esc(cat)}</div><div class="fc-score-you-main-v1032">${esc(myMain)}</div><div class="fc-score-you-sub-v1032">${esc(mySub)}</div></div><div class="fc-score-you-actions-v1032"><button data-fc-score-action-v1033="history">Score history</button><button class="primary" data-fc-score-action-v1033="find">Find ${esc(cat)} challenges</button></div></div>`;
+    if(!host){host=document.createElement('section');host.id='fcScoreRaceV1033';host.className='fc-score-race-v1032 fc-score-race-v1033 fc-title-race-v1113';tabs.insertAdjacentElement('afterend',host)}
+    host.classList.add('fc-title-race-v1113');
+
+    let standings='<div class="fc-title-standings-v1113">';
+    if(rows.length){
+      rows.slice(0,20).forEach(u=>{const place=rankMap.get(u.score)||1;standings+=realRow(u,place,place<=3,state.profile?.id===u.id)});
+    }else{
+      standings+=`<div class="fc-title-empty-v1113"><strong>No ${esc(cat)} Score yet</strong><span>The first eligible public ${esc(cat)} win establishes the first qualifying Score level.</span></div>`;
+    }
+    standings+=openLevelsRow(openLevels,levels.length);
+    standings+='</div>';
+
+    const occupied=levels.length;
+    const summaryMain=occupied?`${Math.min(occupied,3)} of 3 Score levels occupied`:'All 3 Score levels open';
+    const summarySub=openLevels?`${openLevels} still open · ties at the cutoff advance`:'Qualification levels are currently filled · cutoff ties still advance';
+    const insight=leaderRead(rows,cat,openLevels);
+    const me=rows.find(u=>u.id===state.profile?.id)||null;
+    const actionHistory=me?'<button data-fc-score-action-v1033="history">Score history</button>':'';
+
+    host.innerHTML=`
+      <div class="fc-title-summary-v1113">
+        <div class="fc-title-summary-top-v1113"><div><div class="fc-title-kicker-v1113">${esc(cat)} Championship</div><h3>Championship race</h3></div><span>${remaining===0?'Final day':`${remaining} day${remaining===1?'':'s'} remaining`}</span></div>
+        <div class="fc-title-levels-v1113"><b>${esc(summaryMain)}</b><span>${esc(summarySub)}</span></div>
+      </div>
+      ${standings}
+      ${insight?`<div class="fc-title-ember-v1113">${emberFace(25,'thinking')}<span>${insight}</span></div>`:''}
+      <div class="fc-title-actions-v1113">${actionHistory}<button data-fc-score-action-v1033="rules">How Score works</button><button class="primary" data-fc-score-action-v1033="find">Find ${esc(cat)} challenges</button></div>`;
+
     host.querySelectorAll('[data-fc-score-profile-v1033]').forEach(el=>el.addEventListener('click',()=>openUserProfile(el.dataset.fcScoreProfileV1033)));
     host.querySelectorAll('[data-fc-score-metric-v1033]').forEach(btn=>btn.addEventListener('click',()=>openChampionshipScoreSheet(btn.dataset.user,cat,btn.dataset.fcScoreMetricV1033)));
     host.querySelector('[data-fc-score-action-v1033="history"]')?.addEventListener('click',()=>openChampionshipScoreSheet(state.profile?.id,cat,'total'));
+    host.querySelector('[data-fc-score-action-v1033="rules"]')?.addEventListener('click',()=>toggleLbHow());
     host.querySelector('[data-fc-score-action-v1033="find"]')?.addEventListener('click',()=>openCategory(cat));
     const sub=document.querySelector('#leaderboardViewSection .section-sub');
-    if(sub)sub.innerHTML='Championship Score measures the strength of eligible wins. <b>Score = Opponent Points + Turnout Points.</b> · <button class="link-btn" onclick="toggleLbHow()">How scoring works</button>';
+    if(sub)sub.innerHTML='Track your Championship Score, qualification, and category titles. · <button class="link-btn" onclick="toggleLbHow()">How Score works</button>';
     requestAnimationFrame(()=>centerSelectedCategory(false));
   }
 
@@ -37332,6 +37358,74 @@ window.FC_V1112_VALIDATION = {
   avatarMaxMb: 10, avatarMaxDimension: 1024,
   removedDisabledLegacyPayloads: 2, serviceWorkerRequired: true, sqlRequired: false
 };
+</script>
+
+
+<style id="fc-v1113-titles-clarity-css">
+/* v1113 — compact Championship race hierarchy; qualification logic unchanged. */
+#leaderboardViewSection .section{padding-top:22px!important}
+#leaderboardViewSection .section-title{font-family:var(--font-heading)!important;font-size:clamp(34px,9vw,48px)!important;letter-spacing:-.035em!important}
+#leaderboardViewSection .section-sub{font-size:15px!important;line-height:1.42!important;max-width:34rem!important}
+#leaderboardViewSection #lbCategoryTabs{
+  overflow-x:auto!important;overscroll-behavior-inline:contain!important;scroll-padding-inline:18px!important;
+  padding:2px 22px 5px 1px!important;margin-right:-14px!important;
+}
+#leaderboardViewSection #lbCategoryTabs::after{content:"";flex:0 0 8px}
+#leaderboardViewSection .fc-title-race-v1113{
+  overflow:hidden!important;margin:10px 0 14px!important;border:1px solid var(--border-bright)!important;
+  border-radius:22px!important;background:var(--surface)!important;box-shadow:var(--shadow-elevated)!important;color-scheme:normal!important;
+  --text:var(--text);--text-dim:var(--text-dim);--text-muted:var(--text-muted);--ember:var(--ember);--gold:var(--gold);
+}
+.fc-title-summary-v1113{padding:16px 17px 14px;border-bottom:1px solid var(--border);background:linear-gradient(145deg,var(--surface),var(--surface-2))}
+.fc-title-summary-top-v1113{display:flex;justify-content:space-between;align-items:flex-start;gap:14px}
+.fc-title-kicker-v1113{font-size:11px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;color:var(--ember)}
+.fc-title-summary-top-v1113 h3{margin:4px 0 0;font-family:var(--font-heading);font-size:25px;line-height:1.05;letter-spacing:-.025em;color:var(--text)}
+.fc-title-summary-top-v1113>span{padding:6px 9px;border:1px solid var(--border);border-radius:999px;font-size:11px;font-weight:800;color:var(--text-dim);white-space:nowrap}
+.fc-title-levels-v1113{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-top:13px;padding-top:12px;border-top:1px solid var(--border)}
+.fc-title-levels-v1113 b{font-size:14px;color:var(--text)}
+.fc-title-levels-v1113 span{font-size:12px;line-height:1.35;color:var(--text-muted);text-align:right}
+.fc-title-standings-v1113{padding:5px 15px 7px}
+.fc-title-standing-v1113{display:grid;grid-template-columns:43px minmax(0,1fr) 68px;align-items:center;gap:8px;padding:12px 0;border-bottom:1px solid var(--border)}
+.fc-title-standing-v1113:last-of-type{border-bottom:0}
+.fc-title-standing-v1113.is-you{margin:0 -8px;padding:12px 8px;border-radius:14px;background:rgba(255,106,44,.065);border-bottom-color:transparent}
+.fc-title-rank-v1113{font-family:var(--font-display);font-size:25px;line-height:1;color:var(--text)}
+.fc-title-person-v1113{appearance:none;border:0;background:none;padding:0;display:flex;align-items:center;gap:10px;min-width:0;text-align:left;color:inherit}
+.fc-title-person-v1113 .lb-avatar{width:42px;height:42px;flex:0 0 42px}
+.fc-title-person-copy-v1113{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fc-title-name-v1113{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:15px;font-weight:800;color:var(--text)}
+.fc-title-name-v1113 em,.fc-title-name-v1113 i{font-style:normal;font-size:9px;font-weight:800;letter-spacing:.08em;border-radius:999px;padding:3px 6px}
+.fc-title-name-v1113 em{color:var(--ember);background:rgba(255,106,44,.1)}
+.fc-title-name-v1113 i{color:#7c5b00;background:#fff0a6}
+.fc-title-breakdown-v1113{font-size:11.5px;line-height:1.35;color:var(--text-muted);white-space:normal}
+.fc-title-score-v1113{appearance:none;min-width:66px;min-height:58px;padding:7px;border:1px solid var(--border);border-radius:13px;background:var(--surface-2);color:var(--text)}
+.fc-title-score-v1113 b{display:block;font-family:var(--font-display);font-size:25px;line-height:1}
+.fc-title-score-v1113 span{display:block;margin-top:5px;font-size:9px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--text-muted)}
+.fc-title-open-v1113{display:flex;justify-content:space-between;align-items:center;gap:14px;margin:8px 0 3px;padding:12px 13px;border:1px dashed var(--border-bright);border-radius:14px;background:var(--surface-2)}
+.fc-title-open-v1113 div{display:flex;flex-direction:column;gap:3px}.fc-title-open-v1113 b{font-size:13px;color:var(--text)}.fc-title-open-v1113 span{font-size:11.5px;line-height:1.35;color:var(--text-muted)}
+.fc-title-open-v1113 strong{font-family:var(--font-display);font-size:29px;color:var(--ember)}
+.fc-title-empty-v1113{padding:24px 12px;text-align:center}.fc-title-empty-v1113 strong{display:block;font-size:16px;color:var(--text)}.fc-title-empty-v1113 span{display:block;margin-top:6px;font-size:13px;line-height:1.45;color:var(--text-muted)}
+.fc-title-ember-v1113{display:flex;align-items:center;gap:10px;margin:2px 15px 8px;padding:10px 12px;border-top:1px solid var(--border);font-size:12px;line-height:1.4;color:var(--text-dim)}
+.fc-title-ember-v1113 img{width:34px!important;height:34px!important;flex:0 0 34px!important}
+.fc-title-actions-v1113{display:flex;gap:8px;flex-wrap:wrap;padding:10px 15px 15px}
+.fc-title-actions-v1113 button{appearance:none;min-height:42px;padding:9px 13px;border:1px solid var(--border-bright);border-radius:12px;background:var(--surface-2);color:var(--text);font:700 12px var(--font-dm)}
+.fc-title-actions-v1113 button.primary{margin-left:auto;border-color:transparent;background:linear-gradient(135deg,var(--ember),var(--flame));color:white}
+.fc-title-admin-v1113{margin:15px 0 8px;padding:12px 13px;border:1px dashed var(--border-bright);border-radius:14px;background:var(--surface-2)}
+.fc-title-admin-v1113>span{display:block;margin-bottom:8px;font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted)}
+#leaderboardViewSection .fc-title-admin-v1113 .lb-champ-launch-btn{width:auto!important;min-height:40px!important;margin:0!important;padding:9px 13px!important;border-radius:11px!important;background:transparent!important;color:var(--gold)!important;border:1px solid rgba(181,126,20,.42)!important;box-shadow:none!important}
+#leaderboardViewSection #lbPastWrap .lb-arch-card{padding:12px 14px!important;margin-bottom:8px!important}
+#leaderboardViewSection #lbPastWrap .lb-champ-current-empty{padding:12px!important;margin-bottom:0!important}
+body.theme-light #leaderboardViewSection .fc-title-race-v1113,html[data-theme="light"] #leaderboardViewSection .fc-title-race-v1113{background:#fffdfa!important}
+body.theme-light .fc-title-name-v1113 i,html[data-theme="light"] .fc-title-name-v1113 i{color:#6d4e00;background:#fff0a6}
+@media(max-width:430px){
+  .fc-title-summary-top-v1113 h3{font-size:23px}.fc-title-levels-v1113{align-items:flex-start;flex-direction:column;gap:4px}.fc-title-levels-v1113 span{text-align:left}
+  .fc-title-standing-v1113{grid-template-columns:39px minmax(0,1fr) 62px}.fc-title-rank-v1113{font-size:23px}.fc-title-person-v1113 .lb-avatar{width:38px;height:38px;flex-basis:38px}
+  .fc-title-breakdown-v1113{font-size:10.8px}.fc-title-score-v1113{min-width:60px;min-height:54px}.fc-title-score-v1113 b{font-size:23px}
+  .fc-title-actions-v1113{display:grid;grid-template-columns:1fr 1fr}.fc-title-actions-v1113 button.primary{grid-column:1/-1;margin-left:0;width:100%}
+}
+</style>
+<script id="fc-v1113-validation-js">
+window.FC_BUILD_V1113='titles-championship-race-clarity';
+window.FC_V1113_VALIDATION={build:'v1113',basedOn:'v1112',sqlRequired:false,scoreLogicChanged:false,compactDistinctLevels:true,adminActionSecondary:true};
 </script>
 
 </body>
