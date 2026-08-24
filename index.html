@@ -14,16 +14,16 @@
 <meta content="no-cache, no-store, must-revalidate" http-equiv="cache-control"/>
 <meta content="no-cache" http-equiv="pragma"/>
 <meta content="0" http-equiv="expires"/>
-<title>FlamesChallenge v1124 — Restored Scene Audio</title>
+<title>FlamesChallenge v1125 — Tactile Entry Swiping</title>
 <meta content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." name="description"/>
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
      the first kilobyte, so the update check can read it with a tiny ranged
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1124 · restored-scene-audio" name="fc-build"/>
-<!-- v1124: restores the approved full-width Scene artwork without black overlays or portrait stretching while preserving unified playback controls. -->
-<meta content="Audio entries now use the selected visual style and FlamesChallenge playback controls everywhere instead of the generic browser player." name="fc-whatsnew"/>
+<meta content="v1125 · tactile-entry-swiping" name="fc-build"/>
+<!-- v1125: entry carousels now follow the finger, resist at the ends, and settle smoothly while preserving vertical page scrolling. -->
+<meta content="Entry carousels now move with your finger and snap naturally into place instead of appearing to change only after release." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -22032,10 +22032,10 @@ function renderChallengeDetail() {
     if (e.key === 'ArrowLeft') { e.preventDefault(); goToEntry(activeEntryIndex - 1); }
     if (e.key === 'ArrowRight') { e.preventDefault(); goToEntry(activeEntryIndex + 1); }
   });
-  // Native horizontal overflow handles swiping. Arrows and dots remain explicit controls.
-  // v1049 removes the obsolete pointerup shim, which referenced an undefined
-  // gestureStart and could throw after a swipe on the entry viewer.
+  // v1125 — Challenge Detail uses the same tactile, finger-following swipe as
+  // Home and Compete while keeping arrows and dots as explicit controls.
   syncEntryControls(0);
+  _wireTactileEntrySwipeV1125(grid, '.cd-entry', syncEntryControls);
 
   // Attach vote handlers
   grid.querySelectorAll('[data-vote-entry]').forEach(btn => {
@@ -28920,6 +28920,157 @@ const FEATURE_FLAGS = [
 // of them excluded rejected, so a rejected entry showed "✓ You're in!" and an
 // Edit button over a video nobody can see, while blocking a fresh submission.
 // Pass the entry list for the surface you're on; they all hold the same shape.
+// v1125 — tactile one-card swipe shared by Compete/Home entry rails and
+// Challenge Detail. The rail follows the finger during a horizontal drag,
+// gives resistance at the ends, and settles to one card on release. Vertical
+// page scrolling remains native because horizontal ownership is claimed only
+// after direction lock.
+function _wireTactileEntrySwipeV1125(sc, cardSelector, onSettled) {
+  if (!sc || sc.dataset.tactileSwipeV1125 === '1') return;
+  sc.dataset.tactileSwipeV1125 = '1';
+
+  let gesture = null;
+  let settleRaf = 0;
+
+  const cards = () => Array.from(sc.querySelectorAll(cardSelector));
+  const step = () => {
+    const list = cards();
+    if (list.length > 1) return list[1].offsetLeft - list[0].offsetLeft;
+    return list.length ? list[0].getBoundingClientRect().width : 0;
+  };
+  const currentIndex = () => {
+    const list = cards();
+    const st = step();
+    return !list.length || !st ? 0 : Math.max(0, Math.min(list.length - 1, Math.round(sc.scrollLeft / st)));
+  };
+  const leftFor = index => {
+    const list = cards();
+    if (!list.length) return 0;
+    const i = Math.max(0, Math.min(list.length - 1, index));
+    return list[i].offsetLeft - list[0].offsetLeft;
+  };
+  const stopSettle = () => {
+    if (settleRaf) cancelAnimationFrame(settleRaf);
+    settleRaf = 0;
+  };
+  const restoreRail = g => {
+    sc.classList.remove('fc-swipe-dragging-v1125');
+    sc.style.scrollSnapType = g?.previousSnap || '';
+    sc.style.scrollBehavior = g?.previousBehavior || '';
+  };
+  const animateTo = (targetLeft, targetIndex, g) => {
+    stopSettle();
+    const from = sc.scrollLeft;
+    const distance = targetLeft - from;
+    const done = () => {
+      sc.scrollLeft = targetLeft;
+      restoreRail(g);
+      if (typeof onSettled === 'function') onSettled(targetIndex);
+    };
+    if (Math.abs(distance) < 0.5 || fcPrefersReducedMotionV1100()) {
+      done();
+      return;
+    }
+    const duration = Math.max(150, Math.min(240, 155 + Math.abs(distance) * 0.12));
+    const started = performance.now();
+    const tick = now => {
+      const p = Math.min(1, (now - started) / duration);
+      const eased = 1 - Math.pow(1 - p, 3);
+      sc.scrollLeft = from + distance * eased;
+      if (p < 1) settleRaf = requestAnimationFrame(tick);
+      else { settleRaf = 0; done(); }
+    };
+    settleRaf = requestAnimationFrame(tick);
+  };
+
+  sc.addEventListener('touchstart', e => {
+    if (!e.touches || e.touches.length !== 1) { gesture = null; return; }
+    const list = cards();
+    const st = step();
+    if (list.length < 2 || !st) { gesture = null; return; }
+    if (e.target.closest('input[type="range"], textarea, select, [contenteditable="true"]')) {
+      gesture = null;
+      return;
+    }
+    stopSettle();
+    const t = e.touches[0];
+    gesture = {
+      x: t.clientX, y: t.clientY, lastX: t.clientX, lastTime: performance.now(),
+      velocityX: 0, mode: null, index: currentIndex(), scrollLeft: sc.scrollLeft,
+      previousSnap: sc.style.scrollSnapType, previousBehavior: sc.style.scrollBehavior
+    };
+  }, { passive: true });
+
+  sc.addEventListener('touchmove', e => {
+    const g = gesture;
+    if (!g || !e.touches || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    const dx = t.clientX - g.x;
+    const dy = t.clientY - g.y;
+    const ax = Math.abs(dx);
+    const ay = Math.abs(dy);
+
+    if (!g.mode && Math.max(ax, ay) >= 6) {
+      g.mode = ax > ay * 1.08 ? 'x' : 'y';
+      if (g.mode === 'x') {
+        sc.classList.add('fc-swipe-dragging-v1125');
+        sc.style.scrollSnapType = 'none';
+        sc.style.scrollBehavior = 'auto';
+      }
+    }
+    if (g.mode !== 'x') return;
+
+    e.preventDefault();
+    const now = performance.now();
+    const dt = Math.max(1, now - g.lastTime);
+    g.velocityX = (t.clientX - g.lastX) / dt;
+    g.lastX = t.clientX;
+    g.lastTime = now;
+
+    const max = Math.max(0, sc.scrollWidth - sc.clientWidth);
+    let next = g.scrollLeft - dx;
+    if (next < 0) next *= 0.28;
+    else if (next > max) next = max + (next - max) * 0.28;
+    sc.scrollLeft = next;
+  }, { passive: false });
+
+  const finish = e => {
+    const g = gesture;
+    gesture = null;
+    if (!g) return;
+    const t = e.changedTouches && e.changedTouches[0];
+    const dx = t ? t.clientX - g.x : 0;
+    const dy = t ? t.clientY - g.y : 0;
+    const inferredHorizontal = Math.abs(dx) >= 18 && Math.abs(dx) > Math.abs(dy) * 1.08;
+    if (g.mode !== 'x' && !inferredHorizontal) {
+      restoreRail(g);
+      return;
+    }
+
+    sc.classList.add('fc-swipe-dragging-v1125');
+    sc.style.scrollSnapType = 'none';
+    sc.style.scrollBehavior = 'auto';
+    const st = step();
+    const list = cards();
+    if (!st || list.length < 2) { restoreRail(g); return; }
+
+    const forwardDistance = -dx;
+    const fast = Math.abs(g.velocityX) >= 0.28;
+    const far = Math.abs(forwardDistance) >= Math.min(72, st * 0.16);
+    const direction = forwardDistance > 0 || (fast && g.velocityX < 0) ? 1 : -1;
+    const target = Math.max(0, Math.min(list.length - 1, g.index + ((far || fast) ? direction : 0)));
+    animateTo(leftFor(target), target, g);
+  };
+
+  sc.addEventListener('touchend', finish, { passive: true });
+  sc.addEventListener('touchcancel', () => {
+    const g = gesture;
+    gesture = null;
+    if (!g) return;
+    animateTo(leftFor(g.index), g.index, g);
+  }, { passive: true });
+}
+
 // v747 — dot pager for the entry row. Rendered only for 2+ entries: a single
 // dot communicates nothing and just adds furniture under a card.
 function _entryDotsHtml(n) {
@@ -28958,61 +29109,8 @@ function _wireEntryDots(root) {
       sc._dotRaf = requestAnimationFrame(() => { sc._dotRaf = null; update(); });
     }, { passive: true });
 
-    // v1071 — iOS accepts large flings but often snaps ordinary 20–45px swipes
-    // back to the same card. Keep the gesture native (no preventDefault), then
-    // settle one full card on touchend only when the gesture is clearly
-    // horizontal. Vertical page scrolling and taps remain untouched.
-    let swipeStart = null;
-    sc.addEventListener('touchstart', e => {
-      if (!e.touches || e.touches.length !== 1) { swipeStart = null; return; }
-      const st = step();
-      const cards = sc.querySelectorAll('.fcc-entry-card');
-      if (!st || cards.length < 2) { swipeStart = null; return; }
-      const t = e.touches[0];
-      swipeStart = {
-        x: t.clientX,
-        y: t.clientY,
-        index: Math.max(0, Math.min(cards.length - 1, Math.round(sc.scrollLeft / st)))
-      };
-    }, { passive: true });
-    sc.addEventListener('touchend', e => {
-      const start = swipeStart;
-      swipeStart = null;
-      if (!start || !e.changedTouches || !e.changedTouches.length) return;
-      const t = e.changedTouches[0];
-      const dx = t.clientX - start.x;
-      const dy = t.clientY - start.y;
-      const ax = Math.abs(dx);
-      const ay = Math.abs(dy);
-      if (ax < 20 || ax <= ay * 1.1) return;
-
-      const cards = sc.querySelectorAll('.fcc-entry-card');
-      const st = step();
-      if (!st || cards.length < 2) return;
-      const target = Math.max(0, Math.min(cards.length - 1, start.index + (dx < 0 ? 1 : -1)));
-      if (target === start.index) { update(); return; }
-
-      // Temporarily release mandatory snap so WebKit cannot pull the rail back
-      // to the starting card while this explicit one-card settle is running.
-      const previousSnap = sc.style.scrollSnapType;
-      const previousBehavior = sc.style.scrollBehavior;
-      sc.style.scrollSnapType = 'none';
-      sc.style.scrollBehavior = 'auto';
-      sc.scrollLeft = sc.scrollLeft; // stop any remaining native momentum
-      requestAnimationFrame(() => {
-        // v1083 — settle immediately after the native swipe. The previous
-        // browser-controlled smooth scroll took roughly 420ms and made a valid
-        // one-card swipe feel sluggish. This keeps the proven touch gesture,
-        // never prevents default scrolling, and restores snap on the next frame.
-        sc.scrollTo({ left: target * st, behavior: 'auto' });
-        requestAnimationFrame(() => {
-          sc.style.scrollSnapType = previousSnap;
-          sc.style.scrollBehavior = previousBehavior;
-          update();
-        });
-      });
-    }, { passive: true });
-    sc.addEventListener('touchcancel', () => { swipeStart = null; }, { passive: true });
+    // v1125 — the rail now follows the finger and settles with resistance.
+    _wireTactileEntrySwipeV1125(sc, '.fcc-entry-card', update);
 
     dots.addEventListener('click', e => {
       const d = e.target.closest('.fcc-dot');
@@ -38949,6 +39047,29 @@ window.FC_V1123_VALIDATION={build:'v1123',basedOn:'v1122',settingLabel:'Audio st
 
 <script id="fc-v1124-validation">
 window.FC_V1124_VALIDATION={build:'v1124',basedOn:'v1123',sceneArtworkRestored:true,sceneLandscape:true,noScenePlotOverlay:true,controlsOutsideArtwork:true};
+</script>
+
+<style id="fc-v1125-tactile-swipe-css">
+/* v1125 — JS owns horizontal dragging so cards visibly track the finger.
+   Vertical page scrolling and pinch zoom remain native. */
+.fcc-entries-scroll,
+.cd-entries-grid{
+  touch-action:pan-y pinch-zoom!important;
+  overscroll-behavior-x:contain!important;
+}
+.fc-swipe-dragging-v1125{
+  scroll-snap-type:none!important;
+  scroll-behavior:auto!important;
+  cursor:grabbing;
+}
+.fc-swipe-dragging-v1125 .fcc-entry-card,
+.fc-swipe-dragging-v1125 .cd-entry{
+  -webkit-user-select:none;
+  user-select:none;
+}
+</style>
+<script id="fc-v1125-validation">
+window.FC_V1125_VALIDATION={build:'v1125',basedOn:'v1124',fingerFollowingSwipe:true,endResistance:true,smoothSettle:true,verticalScrollPreserved:true,homeCompeteRails:true,challengeDetailRail:true,sqlRequired:false,edgeFunctionChanges:0,serviceWorkerRequired:false};
 </script>
 </body>
 </html>
