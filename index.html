@@ -14,16 +14,16 @@
 <meta content="no-cache, no-store, must-revalidate" http-equiv="cache-control"/>
 <meta content="no-cache" http-equiv="pragma"/>
 <meta content="0" http-equiv="expires"/>
-<title>FlamesChallenge v1125 — Tactile Entry Swiping</title>
+<title>FlamesChallenge v1126 — Ticker Removed</title>
 <meta content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." name="description"/>
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
      the first kilobyte, so the update check can read it with a tiny ranged
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1125 · tactile-entry-swiping" name="fc-build"/>
-<!-- v1125: entry carousels now follow the finger, resist at the ends, and settle smoothly while preserving vertical page scrolling. -->
-<meta content="Entry carousels now move with your finger and snap naturally into place instead of appearing to change only after release." name="fc-whatsnew"/>
+<meta content="v1126 · ticker-removed" name="fc-build"/>
+<!-- v1126: the Home ticker and its settings control are removed while the rest of the v1125 experience remains unchanged. -->
+<meta content="The ticker has been removed from Home and Settings for a cleaner bottom edge above navigation." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -7754,25 +7754,7 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
 </div>
 </header>
 <!-- BOTTOM NAV BAR -->
-<!-- CHAMPION TICKER -->
-<div class="champ-ticker" id="champTicker" style="display:none">
-<button aria-label="Customize ticker" class="ticker-gear" onclick="openTickerSettings()">⚙️</button>
-<div class="ticker-track" id="tickerTrack">
-<div class="ticker-inner" id="tickerInner"></div>
-</div>
-<button aria-label="Close ticker" class="ticker-close" onclick="dismissTicker()">×</button>
-<div class="ticker-nudge" id="tickerNudge" style="display:none">✨ Tap ⚙️ to customize</div>
-</div>
-<!-- TICKER SETTINGS SHEET -->
-<div class="modal-backdrop" id="tickerSettingsSheet" onclick="if(event.target===this)closeTickerSettings()">
-<div class="modal" style="max-width:360px">
-<button class="modal-close-x" onclick="closeTickerSettings()">×</button>
-<h2 style="margin-bottom:6px">Ticker</h2>
-<p style="color:var(--text-muted);font-size:14px;margin-bottom:20px">Choose which categories appear in your ticker. Defaults to your interests.</p>
-<div id="tickerCatList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px"></div>
-<button class="btn btn-primary" onclick="saveTickerSettings()" style="width:100%">Save</button>
-</div>
-</div>
+<!-- v1126 — Home ticker removed. -->
 <!-- INTERESTS SHEET (v752) — standalone. The signup-flow #interestPicker lives
      inside #authView, which is hidden once signed in, so openInterestEditor()
      could never show anything post-login (dead from the avatar menu too). -->
@@ -9219,10 +9201,7 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
           <div class="theme-toggle-label"><span class="fc-settings-icon-v1117" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></span><span>Theme</span></div>
           <div class="theme-toggle-state" id="themeState">Dark</div>
         </div>
-        <div class="theme-toggle-row" id="tickerToggleBtn" onclick="toggleTickerSetting()" role="button" tabindex="0">
-          <div class="theme-toggle-label"><span class="fc-settings-icon-v1117" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 21h8M12 19v2M7 9h10M7 13h6"/></svg></span><span>Ticker</span></div>
-          <div class="theme-toggle-state" id="tickerState">On</div>
-        </div>
+        
         <div class="theme-toggle-row" id="eqStyleRow" onclick="cycleEqStyle()" role="button" tabindex="0">
           <div class="theme-toggle-label"><span class="fc-settings-icon-v1117" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 21V14M4 10V3M12 21V12M12 8V3M20 21V16M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/></svg></span><span>Audio style</span></div>
           <div class="theme-toggle-state" id="eqStyleState">Scene</div>
@@ -16840,164 +16819,12 @@ function emberTickerItems(selectedCats) {
 }
 
 function buildTicker() {
-  if (tickerDismissed()) return;
-  const data = state.leaderboardData;
-  if (!data) return;
-
-  const items = [];
-  const now = new Date();
-  const curMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-  const champTitlesT = getChampTitles();
-  const hofLog = getHofLog();
-  const titlesMap = computeHofTitles(hofLog);
-
-  const selectedCats = getTickerCats();
-
-  // 0. Active championship challenges — highest priority, shown first
-  (state.challenges || [])
-    .filter(ch => ch.is_championship && ['submitting', 'voting'].includes(computeChallengeStatus(ch)))
-    .forEach(ch => {
-      if (!selectedCats.has(ch.category)) return;
-      const action = computeChallengeStatus(ch) === 'voting' ? 'VOTE NOW' : 'ENTER NOW';
-      const mLabel = champMonthLabel(ch.id);
-      items.push({ icon: '', name: '', badge: 'champ', category: `⚡ ${ch.category.toUpperCase()} CHAMPIONSHIP${mLabel ? ' · ' + mLabel.toUpperCase() : ''}`, text: action, grouped: true });
-    });
-
-  // 0.2. Ember ringside commentary (v771) — right behind the CTAs, ahead of stats
-  try { emberTickerItems(selectedCats).forEach(it => items.push(it)); } catch(e) {}
-
-  // 0.5. Championship qualifying race (v614) — countdown + bubble drama, last 10 days
-  try {
-    const race = champRaceInfo();
-    if (race && race.daysLeft <= 10) {
-      const dLbl = race.daysLeft <= 1 ? 'today' : `in ${race.daysLeft} days`;
-      Object.entries(race.cats).forEach(([cat, r]) => {
-        if (!selectedCats.has(cat)) return;
-        const holders = (r.qualifiers || []).map(u => u.name).join(' · ');
-        items.push({ icon: '', name: '', badge: 'champ', category: `🏆 ${cat.toUpperCase()} QUALIFYING`, text: `Closes ${dLbl} — ${holders || 'No Score level is set yet'} currently qualify`, grouped: true });
-        if (r.bubble && r.cutoff !== null) {
-          const gap = Math.max(0, r.cutoff - r.score(r.bubble));
-          if (gap <= 5) {
-            items.push({ icon: '', name: '', badge: 'champ', category: `⚡ BUBBLE`, text: `${r.bubble.name} is ${gap === 0 ? 'tied at' : gap + ' Score from'} the ${cat} cutoff`, grouped: true });
-          }
-        }
-      });
-    }
-  } catch (e) { console.warn('ticker race', e); }
-
-  // 1. Current Champions (from Championship Challenges) — announced with excitement
-  Object.values(champTitlesT)
-    .filter(t => t.month === curMonth && t.processed)
-    .forEach(t => {
-      if (selectedCats.has(t.category)) items.push({ icon: '👑', name: t.name, badge: 'champ', category: t.category, text: 'is the new Champion!' });
-    });
-
-  // 2. Top 3 per category — grouped as one ticker item
-  Object.entries(data.leaders || {})
-    .filter(([cat]) => cat !== 'All')
-    .forEach(([cat]) => {
-      if (!selectedCats.has(cat)) return;
-      const catUsers = (data.users || [])
-        .filter(u => (u.monthlyByCategory?.[cat] || 0) >= 1)
-        .sort((a, b) => (b.monthlyByCategory?.[cat] || 0) - (a.monthlyByCategory?.[cat] || 0))
-        .slice(0, 3);
-      if (!catUsers.length) return;
-      const medals = ['🥇', '🥈', '🥉'];
-      // Competition ranking: tied users (same win count) share a medal. Compact single line.
-      const podiumText = catUsers.map((u, i) => {
-        let rank = 1;
-        for (let j = 1; j <= i; j++) {
-          const w = catUsers[j].monthlyByCategory?.[cat] || 0;
-          const pw = catUsers[j-1].monthlyByCategory?.[cat] || 0;
-          if (w !== pw) rank = j + 1;
-        }
-        return `${medals[rank - 1]} ${u.name}`;
-      }).join('  ');
-      items.push({ icon: '', name: '', badge: 'leader', category: `${cat} TOP 3`, text: podiumText, grouped: true });
-    });
-
-  // 3. Streak holders (2+ consecutive months as champion)
-  const streakMap = {}; // userId → { name, avatar, cats: [] }
-  Object.values(champTitlesT).filter(t => t.processed).forEach(t => {
-    if (!streakMap[t.userId]) streakMap[t.userId] = { name: t.name, months: {} };
-    if (!streakMap[t.userId].months[t.category]) streakMap[t.userId].months[t.category] = [];
-    streakMap[t.userId].months[t.category].push(t.month);
-  });
-  Object.entries(streakMap).forEach(([uid, d]) => {
-    Object.entries(d.months).forEach(([cat, months]) => {
-      if (months.length >= 2 && selectedCats.has(cat)) {
-        items.push({ icon: '⚡', name: d.name, badge: 'streak', category: cat, text: `${months.length}-month streak` });
-      }
-    });
-  });
-
-  // 4. Recent Hall of Fame inductees
-  const recentHof = hofLog
-    .filter(r => r.month === curMonth && r.category !== 'All')
-    .slice(0, 3);
-  recentHof.forEach(r => {
-    const titleCount = titlesMap[r.userId]?.catCounts?.[r.category] || 1;
-    if (titleCount >= 2) {
-      items.push({ icon: '🌟', name: r.name, badge: 'champ', text: `${titleCount}x ${r.category} Champion` });
-    }
-  });
-
-  // ── Fallback content: if no current-month activity, don't vanish — show
-  // all-time leaders so an enabled ticker always has something. ─────────────
-  if (!items.length) {
-    const selCats = getTickerCats();
-    // All-time top players per selected category (by lifetime wins)
-    Object.entries(data.leaders || {})
-      .filter(([cat]) => cat !== 'All')
-      .forEach(([cat]) => {
-        if (!selCats.has(cat)) return;
-        const catUsers = (data.users || [])
-          .filter(u => (u.byCategory?.[cat] || 0) >= 1)
-          .sort((a, b) => (b.byCategory?.[cat] || 0) - (a.byCategory?.[cat] || 0))
-          .slice(0, 3);
-        if (!catUsers.length) return;
-        const medals = ['🥇', '🥈', '🥉'];
-        const podium = catUsers.map((u, i) => `${medals[i]} ${u.name}`).join('  ');
-        items.push({ icon: '', name: '', badge: 'leader', category: `${cat} ALL-TIME`, text: podium, grouped: true });
-      });
-
-    // Still nothing? (brand-new platform, no wins anywhere) — show an
-    // encouraging placeholder rather than disappearing.
-    if (!items.length) {
-      items.push({ icon: '🔥', name: '', badge: 'default', category: 'FLAMESCHALLENGE', text: 'No champions yet — enter a challenge and be the first 🔥', grouped: true });
-    }
-  }
-
-  // Build ticker HTML — duplicate items for seamless loop
-  const itemHtml = items.map(item => item.grouped
-    ? `<span class="ticker-item">
-        <span class="ticker-cat-label ${item.badge}">${(item.category || '').toUpperCase()}</span>
-        <span class="ticker-text">${item.text}</span>
-      </span>`
-    : `<span class="ticker-item">
-        <span class="ticker-cat-label ${item.badge}">${(item.category || item.badge || 'UPDATE').toUpperCase()}</span>
-        <span class="ticker-icon">${item.icon}</span>
-        <span class="ticker-name">${escapeHtml(item.name)}</span>
-        <span class="ticker-dot">·</span>
-        <span class="ticker-text">${item.text}</span>
-      </span>`
-  ).join('');
-
-  const inner = document.getElementById('tickerInner');
-  if (!inner) return;
-  // Duplicate for seamless scroll
-  inner.innerHTML = itemHtml + '<span class="ticker-sep" style="padding:0 32px"></span>' + itemHtml;
-
-  // Adjust animation speed based on content length
-  const totalItems = items.length;
-  const duration = Math.max(20, totalItems * 8);
-  inner.style.animationDuration = duration + 's';
-
+  // v1126 — intentionally removed from the product surface.
   const ticker = document.getElementById('champTicker');
-  if (ticker) ticker.style.display = 'flex';
-  document.body.classList.add('ticker-visible');
-  // Show first-time nudge
-  setTimeout(showTickerNudge, 1500);
+  if (ticker) ticker.remove();
+  const sheet = document.getElementById('tickerSettingsSheet');
+  if (sheet) sheet.remove();
+  document.body?.classList.remove('ticker-visible');
 }
 
 // Ticker settings — category filter
