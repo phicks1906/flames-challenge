@@ -14,16 +14,16 @@
 <meta content="no-cache, no-store, must-revalidate" http-equiv="cache-control"/>
 <meta content="no-cache" http-equiv="pragma"/>
 <meta content="0" http-equiv="expires"/>
-<title>FlamesChallenge v1130 — Championship Score Components Guide</title>
+<title>FlamesChallenge v1131 — Composer Access & Global Ask Ember</title>
 <meta content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." name="description"/>
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
      the first kilobyte, so the update check can read it with a tiny ranged
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1130 · explain-score-components" name="fc-build"/>
-<!-- v1130: the optional product guide now explains how Opponent Points and Turnout Points build Championship Score. -->
-<meta content="The optional product guide now explains Opponent Points, Turnout Points, and how they combine into monthly Championship Score." name="fc-whatsnew"/>
+<meta content="v1131 · composer-access-global-ember" name="fc-build"/>
+<!-- v1131: light-mode timing contrast, visible comment and message composers, and restored global Ask Ember access. -->
+<meta content="Light-mode timing text is readable, comment and message composers stay visible, and Ask Ember is available from every main app screen." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -38975,6 +38975,178 @@ window.FC_V1125_VALIDATION={build:'v1125',basedOn:'v1124',fingerFollowingSwipe:t
 <script id="fc-v1128-validation-js">
 window.FC_BUILD_V1128='create-sheet-frame-clearance';
 window.FC_V1128_VALIDATION={build:'v1128',basedOn:'v1127',sharedCreateSheetFix:true,fixedHeaderClearance:true,bottomNavigationClearance:true,entrySheetCovered:true,challengeSheetCovered:true,pollSheetCovered:true,postSheetCovered:true,sqlRequired:false,edgeFunctionChanges:0,serviceWorkerRequired:false};
+</script>
+
+
+<style id="fc-v1131-composer-contrast-ember-css">
+/* v1131 — Production hardening for light-mode timing controls, bottom
+   composers, and the always-available Ask Ember launcher. */
+body.theme-light #createChallengeSheet .cc-time-grid .cc-pill.selected,
+html[data-theme="light"] body #createChallengeSheet .cc-time-grid .cc-pill.selected{
+  background:linear-gradient(135deg,#ff7d31,#ff3827)!important;
+  border-color:transparent!important;
+  color:#fff!important;
+  box-shadow:0 7px 18px rgba(205,65,24,.20)!important;
+}
+body.theme-light #createChallengeSheet .cc-time-grid .cc-pill.selected b,
+body.theme-light #createChallengeSheet .cc-time-grid .cc-pill.selected span,
+html[data-theme="light"] body #createChallengeSheet .cc-time-grid .cc-pill.selected b,
+html[data-theme="light"] body #createChallengeSheet .cc-time-grid .cc-pill.selected span{
+  color:#fff!important;
+}
+body.theme-light #createChallengeSheet .cc-schedule-summary strong,
+html[data-theme="light"] body #createChallengeSheet .cc-schedule-summary strong{
+  color:#4e3e35!important;
+}
+
+/* Comment and direct-message work surfaces must sit above the body-level
+   bottom navigation. Their text fields are actions, not content that may be
+   obscured behind another viewport layer. */
+#commentSheet,
+#dmListSheet,
+#dmThreadSheet,
+#dmComposeSheet,
+#dmSettingsSheet{
+  z-index:1200!important;
+}
+#commentSheet.open{
+  overflow:hidden!important;
+}
+#commentSheet .cd-sheet-inner{
+  min-height:0!important;
+  padding-top:var(--fc-sheet-header-h)!important;
+  padding-bottom:0!important;
+}
+#commentSheet .comment-compose{
+  z-index:3!important;
+  flex:0 0 auto!important;
+  padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))!important;
+}
+
+#dmThreadSheet.open{
+  display:flex!important;
+  flex-direction:column!important;
+  overflow:hidden!important;
+}
+#dmThreadSheet > .cd-sheet-header{
+  z-index:4!important;
+}
+#dmMessages{
+  flex:1 1 auto!important;
+  width:100%!important;
+  min-height:0!important;
+  height:auto!important;
+  overflow-y:auto!important;
+  -webkit-overflow-scrolling:touch;
+  padding:var(--fc-sheet-header-h) 12px 16px!important;
+}
+#dmThreadSheet .dm-send-bar{
+  position:relative!important;
+  left:auto!important;
+  right:auto!important;
+  bottom:auto!important;
+  z-index:5!important;
+  flex:0 0 auto!important;
+  width:100%!important;
+  padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px))!important;
+}
+body.theme-light #commentSheet .comment-compose,
+body.theme-light #dmThreadSheet .dm-send-bar,
+html[data-theme="light"] body #commentSheet .comment-compose,
+html[data-theme="light"] body #dmThreadSheet .dm-send-bar{
+  background:var(--surface)!important;
+  border-color:var(--border)!important;
+}
+
+/* Restores the standalone Ask Ember control without changing the approved
+   five-item primary navigation. It occupies the reserved space above the nav. */
+#fcGlobalAskEmberV1131{
+  position:fixed;
+  right:12px;
+  bottom:calc(var(--fc-bottom-nav-bar-h) + 12px);
+  z-index:950;
+  display:none;
+  align-items:center;
+  gap:8px;
+  min-height:44px;
+  padding:6px 13px 6px 7px;
+  border:1px solid rgba(255,106,44,.48);
+  border-radius:999px;
+  background:linear-gradient(145deg,rgba(31,18,12,.97),rgba(15,9,7,.98));
+  color:#fff;
+  box-shadow:0 12px 30px -13px rgba(255,78,25,.68);
+  font-family:var(--font-body);
+  font-size:12px;
+  font-weight:800;
+  letter-spacing:.01em;
+  cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+}
+body.fc-authenticated #fcGlobalAskEmberV1131{display:inline-flex}
+#fcGlobalAskEmberV1131:active{transform:scale(.96)}
+.fc-global-ember-art-v1131{
+  width:32px;height:32px;min-width:32px;
+  display:grid;place-items:center;overflow:hidden;border-radius:10px;
+}
+.fc-global-ember-art-v1131 .ember-prod{
+  width:32px!important;height:32px!important;min-width:32px!important;
+}
+body.theme-light #fcGlobalAskEmberV1131,
+html[data-theme="light"] body #fcGlobalAskEmberV1131{
+  background:rgba(255,251,247,.98);
+  color:#3e2e26;
+  border-color:rgba(201,67,18,.42);
+  box-shadow:0 12px 28px -16px rgba(122,48,18,.42);
+}
+/* Avoid competing with modal/sheet actions. Those surfaces retain their own
+   contextual Ember controls; the global launcher returns on the main screen. */
+body:has(.modal-backdrop.open) #fcGlobalAskEmberV1131,
+body:has(.cc-sheet.open) #fcGlobalAskEmberV1131,
+body:has(.cd-sheet.open) #fcGlobalAskEmberV1131,
+body:has(.entrants-backdrop.open) #fcGlobalAskEmberV1131{
+  display:none!important;
+}
+</style>
+<script id="fc-v1131-composer-ember-js">
+(function initComposerAndGlobalEmberV1131(){
+  function mountGlobalEmber(){
+    if(document.getElementById('fcGlobalAskEmberV1131')) return;
+    const button=document.createElement('button');
+    button.id='fcGlobalAskEmberV1131';
+    button.type='button';
+    button.setAttribute('aria-label','Ask Ember');
+    let art='';
+    try{ if(typeof emberFace==='function') art=emberFace(32,'attentive'); }catch(_){ }
+    button.innerHTML=`<span class="fc-global-ember-art-v1131" aria-hidden="true">${art}</span><span>Ask Ember</span>`;
+    button.addEventListener('click',()=>{
+      if(typeof openEmber==='function') openEmber();
+    });
+    document.body.appendChild(button);
+  }
+
+  /* The thread is now a fixed-height flex surface; scroll the message region,
+     not the outer sheet, after loading or sending a message. */
+  window.dmScrollBottom=function dmScrollBottomV1131(){
+    const box=document.getElementById('dmMessages');
+    if(!box) return;
+    requestAnimationFrame(()=>{ box.scrollTop=box.scrollHeight; });
+  };
+  try{ dmScrollBottom=window.dmScrollBottom; }catch(_){ }
+
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',mountGlobalEmber,{once:true});
+  }else{
+    mountGlobalEmber();
+  }
+  window.FC_BUILD_V1131='composer-access-global-ember';
+  window.FC_V1131_VALIDATION={
+    build:'v1131',basedOn:'v1130',lightTimingContrast:true,
+    commentComposerVisible:true,directMessageComposerVisible:true,
+    directMessageHeaderClearance:true,globalAskEmber:true,
+    primaryNavigationChanged:false,sqlRequired:false,
+    edgeFunctionChanges:0,serviceWorkerRequired:false
+  };
+})();
 </script>
 
 </body>
