@@ -14,16 +14,16 @@
 <meta content="no-cache, no-store, must-revalidate" http-equiv="cache-control"/>
 <meta content="no-cache" http-equiv="pragma"/>
 <meta content="0" http-equiv="expires"/>
-<title>FlamesChallenge v1134 — Human Championship Qualification Copy</title>
+<title>FlamesChallenge v1135 — Cancellable Entry Uploads & Stable Preview Playback</title>
 <meta content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." name="description"/>
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
      the first kilobyte, so the update check can read it with a tiny ranged
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1134 · human-championship-qualification-copy" name="fc-build"/>
-<!-- v1134: more human and competitive public Championship qualification language. -->
-<meta content="Championship qualification language now sounds more human, competitive, and earned." name="fc-whatsnew"/>
+<meta content="v1135 · cancellable-entry-uploads-stable-preview" name="fc-build"/>
+<!-- v1135: entry uploads can be cancelled safely, and local video previews pause before other sheet interactions to avoid iPhone decoder glitches. -->
+<meta content="Entry uploads can now be cancelled, and preview playback stays stable while using the entry form." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -4764,6 +4764,37 @@ body.theme-light .ch-status.voided .dot { background: #c92a2a; box-shadow: none;
   font-size: 12px;
   font-weight: 600;
 }
+/* v1135 — cancellable entry upload with a stable local-video preview. */
+.fc-entry-upload-control-v1135 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 13px;
+  margin-bottom: 10px;
+  border: 1px solid rgba(255,106,44,.34);
+  border-radius: 13px;
+  background: rgba(255,106,44,.08);
+}
+.fc-entry-upload-control-v1135[hidden] { display: none !important; }
+.fc-entry-upload-copy-v1135 { min-width: 0; }
+.fc-entry-upload-copy-v1135 strong { display:block; color:var(--text); font-size:13px; }
+.fc-entry-upload-copy-v1135 span { display:block; color:var(--text-muted); font-size:11px; margin-top:2px; }
+.fc-entry-upload-cancel-v1135 {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,106,44,.55);
+  background: var(--surface);
+  color: var(--ember);
+  font: 700 12px/1 var(--font-body);
+  cursor: pointer;
+}
+.fc-entry-upload-cancel-v1135:disabled { opacity:.6; cursor:default; }
+#submitEntrySheet.fc-entry-uploading-v1135 #seUploadZone,
+#submitEntrySheet.fc-entry-uploading-v1135 #sePreview { pointer-events:none; opacity:.72; }
+#submitEntrySheet.fc-entry-uploading-v1135 .cc-preview-remove { pointer-events:none; }
 .cc-dates-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -9119,7 +9150,7 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
 <div id="seTip" style="display:none;background:var(--surface-2);border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:12px;color:var(--text-muted);line-height:1.5;">
           💡 <strong>Tip:</strong> Trim your video to under 2 minutes in your Photos app before uploading for the fastest experience.
         </div>
-<div aria-label="Choose entry media from your library" class="cc-upload" data-fc-upload-control="1" id="seUploadZone" onclick="document.getElementById('seFile').click()" role="button" tabindex="0">
+<div aria-label="Choose entry media from your library" class="cc-upload" data-fc-upload-control="1" id="seUploadZone" onclick="fcChooseEntryFileV1135()" role="button" tabindex="0">
 <div class="icon">📤</div>
 <div class="text">Tap to upload</div>
 <div class="upload-hint" id="seUploadHint">Max 500MB · Keep videos under 2 min for best results</div>
@@ -9139,6 +9170,13 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
 </div>
 <div class="fc-entry-rules-v1047" id="fcEntryRulesV1047"></div>
 <div class="auth-error" id="seError"></div>
+<div class="fc-entry-upload-control-v1135" id="fcEntryUploadControlV1135" hidden>
+  <div class="fc-entry-upload-copy-v1135">
+    <strong id="fcEntryUploadLabelV1135">Uploading your entry…</strong>
+    <span>Your selected file stays here if you cancel.</span>
+  </div>
+  <button class="fc-entry-upload-cancel-v1135" id="fcEntryUploadCancelV1135" type="button" onclick="cancelEntryUploadV1135()">Cancel upload</button>
+</div>
 <div id="seSlowTip" style="display:none;background:var(--surface-2);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--gold);line-height:1.5;">⏳ Taking a while? Try stronger Wi‑Fi, or set <strong>Camera → Formats → Most Compatible</strong> for faster uploads. Keep this screen open.</div>
 <div class="cc-submit-area">
 <button class="btn btn-primary" style="width:100%" type="submit">🔥 Submit entry</button>
@@ -18868,16 +18906,20 @@ async function triggerVideoModeration(entryId) {
 // 1080 covers the card outright and is within 10% of the viewer. Cost is ~150KB ->
 // ~350KB per entry, against a 250 GB egress allowance sitting near zero.
 // DO NOT lower this to save space without measuring the device pixels first.
-async function _captureVideoPoster(file, maxW = 1080) {
+async function _captureVideoPoster(file, maxW = 1080, signal = null) {
   return new Promise((resolve) => {
     let url = null, done = false, timer = null, poll = null;
+    const onAbort = () => finish(null, 'aborted');
     const finish = (blob, why) => {
       if (done) return; done = true;
       clearTimeout(timer); clearInterval(poll);
+      signal?.removeEventListener?.('abort', onAbort);
       try { if (url) URL.revokeObjectURL(url); } catch (_) {}
       if (!blob) dlog('poster', 'capture-fail', { why });
       resolve(blob || null);
     };
+    if (signal?.aborted) return finish(null, 'aborted');
+    signal?.addEventListener?.('abort', onAbort, { once: true });
     try {
       const v = document.createElement('video');
       v.muted = true; v.playsInline = true; v.preload = 'auto';
@@ -18920,22 +18962,31 @@ async function _captureVideoPoster(file, maxW = 1080) {
   });
 }
 
-async function uploadToBunnyStream(file, titleHint, onProgress) {
+async function uploadToBunnyStream(file, titleHint, onProgress, options = {}) {
+  const signal = options?.signal || null;
+  if (signal?.aborted) throw fcEntryUploadAbortErrorV1135();
+  let videoId = null;
+  let selfHostedPosterPath = null;
+  try {
   // 1. Create a video slot in the library
   onProgress && onProgress(5);
   const createRes = await fetch(`https://video.bunnycdn.com/library/${BUNNY_LIBRARY_ID}/videos`, {
     method: 'POST',
     headers: { 'AccessKey': BUNNY_API_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify({ title: titleHint || file.name || 'video' }),
+    signal,
   });
   if (!createRes.ok) throw new Error(`Bunny create failed (${createRes.status})`);
-  const { guid: videoId } = await createRes.json();
+  ({ guid: videoId } = await createRes.json());
+  if (!videoId) throw new Error('Bunny create returned no video id');
+  if (signal?.aborted) throw fcEntryUploadAbortErrorV1135();
 
   // v681: grab the poster from the ORIGINAL file now, while we still have it
   // locally. Doing it here (not after the PUT) means the bytes are ready to
   // hand over the moment the upload lands. Adds ~1-2s; never throws.
   onProgress && onProgress(8);
-  const _posterBlob = await _captureVideoPoster(file);
+  const _posterBlob = await _captureVideoPoster(file, 1080, signal);
+  if (signal?.aborted) throw fcEntryUploadAbortErrorV1135();
 
   // 2. Upload the file — use XMLHttpRequest for progress reporting
   await new Promise((resolve, reject) => {
@@ -18946,10 +18997,16 @@ async function uploadToBunnyStream(file, titleHint, onProgress) {
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && onProgress) onProgress(Math.round(5 + (e.loaded / e.total) * 90));
     };
-    xhr.onload = () => xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Bunny upload failed (${xhr.status})`));
-    xhr.onerror = () => reject(new Error('Bunny upload network error'));
+    const abort = () => { try { xhr.abort(); } catch (_) {} };
+    const cleanup = () => signal?.removeEventListener?.('abort', abort);
+    if (signal?.aborted) return reject(fcEntryUploadAbortErrorV1135());
+    signal?.addEventListener?.('abort', abort, { once: true });
+    xhr.onload = () => { cleanup(); xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Bunny upload failed (${xhr.status})`)); };
+    xhr.onerror = () => { cleanup(); reject(new Error('Bunny upload network error')); };
+    xhr.onabort = () => { cleanup(); reject(fcEntryUploadAbortErrorV1135()); };
     xhr.send(file);
   });
+  if (signal?.aborted) throw fcEntryUploadAbortErrorV1135();
 
   // v686 — SELF-HOSTED POSTER. Bunny is out of the poster path entirely.
   // WHY: v681 POSTed this same captured frame to Bunny's /thumbnail endpoint and
@@ -18971,6 +19028,7 @@ async function uploadToBunnyStream(file, titleHint, onProgress) {
       const { error: pErr } = await db.storage.from('challenge-media')
         .upload(pPath, _posterBlob, { cacheControl: '31536000', upsert: true, contentType: 'image/jpeg' });
       if (pErr) throw pErr;
+      selfHostedPosterPath = pPath;
       const { data: pPub } = db.storage.from('challenge-media').getPublicUrl(pPath);
       if (pPub && pPub.publicUrl) posterUrl = pPub.publicUrl;
       dlog('poster', 'self-hosted', { kb: Math.round(_posterBlob.size / 1024) });
@@ -18978,6 +19036,7 @@ async function uploadToBunnyStream(file, titleHint, onProgress) {
       dlog('poster', 'self-host-fail', { e: String((e && e.message) || e).slice(0, 60) });
     }
   }
+  if (signal?.aborted) throw fcEntryUploadAbortErrorV1135();
 
   onProgress && onProgress(100);
   return {
@@ -18985,6 +19044,22 @@ async function uploadToBunnyStream(file, titleHint, onProgress) {
     posterUrl,
     videoId,
   };
+  } catch (error) {
+    if (error?.name === 'AbortError' || signal?.aborted) {
+      if (videoId) {
+        try {
+          await fetch(`https://video.bunnycdn.com/library/${BUNNY_LIBRARY_ID}/videos/${videoId}`, {
+            method: 'DELETE', headers: { AccessKey: BUNNY_API_KEY }
+          });
+        } catch (_) {}
+      }
+      if (selfHostedPosterPath) {
+        try { await db.storage.from('challenge-media').remove([selfHostedPosterPath]); } catch (_) {}
+      }
+    }
+    if (error?.name === 'AbortError' || signal?.aborted) throw fcEntryUploadAbortErrorV1135();
+    throw error;
+  }
 }
 
 // Scans a rendered entry list for video hosts that are FRESH (created in the last
@@ -21117,7 +21192,54 @@ let seState = {
   file: null,
   fileUrl: null,
   editingEntry: null, // set when editing an existing entry
+  uploadInProgress: false,
+  uploadAbortController: null,
+  uploadCancelRequested: false,
+  closeAfterCancel: false,
 };
+
+function fcEntryUploadAbortErrorV1135() {
+  const error = new Error('Upload cancelled');
+  error.name = 'AbortError';
+  return error;
+}
+function fcThrowIfEntryUploadCancelledV1135(signal) {
+  if (signal?.aborted || seState.uploadCancelRequested) throw fcEntryUploadAbortErrorV1135();
+}
+function fcPauseEntryPreviewV1135() {
+  const video = document.querySelector('#sePreview video');
+  if (!video) return;
+  try { if (!video.paused) video.pause(); } catch (_) {}
+}
+function fcChooseEntryFileV1135() {
+  if (seState.uploadInProgress) { toast('Cancel the upload before choosing another file.'); return; }
+  fcPauseEntryPreviewV1135();
+  document.getElementById('seFile')?.click();
+}
+function fcSetEntryUploadBusyV1135(active, label) {
+  seState.uploadInProgress = !!active;
+  const sheet = document.getElementById('submitEntrySheet');
+  const control = document.getElementById('fcEntryUploadControlV1135');
+  const cancel = document.getElementById('fcEntryUploadCancelV1135');
+  const labelEl = document.getElementById('fcEntryUploadLabelV1135');
+  sheet?.classList.toggle('fc-entry-uploading-v1135', !!active);
+  if (control) control.hidden = !active;
+  if (labelEl && label) labelEl.textContent = label;
+  if (cancel) { cancel.disabled = false; cancel.textContent = 'Cancel upload'; }
+}
+function fcUpdateEntryUploadStatusV1135(label) {
+  const el = document.getElementById('fcEntryUploadLabelV1135');
+  if (el) el.textContent = label || 'Uploading your entry…';
+}
+function cancelEntryUploadV1135(closeAfter = false) {
+  if (!seState.uploadInProgress) return;
+  seState.uploadCancelRequested = true;
+  seState.closeAfterCancel = !!closeAfter;
+  const cancel = document.getElementById('fcEntryUploadCancelV1135');
+  if (cancel) { cancel.disabled = true; cancel.textContent = 'Cancelling…'; }
+  fcUpdateEntryUploadStatusV1135('Stopping upload…');
+  try { seState.uploadAbortController?.abort(); } catch (_) {}
+}
 
 async function openChallenge(ch) {
   state.currentChallenge = ch;
@@ -22291,6 +22413,7 @@ function openSubmitEntry(entryToEdit = null) {
 // (`!seState.file && !seState.editingEntry?.media_url`) correctly requires a
 // fresh upload instead of silently keeping the old file after "removal."
 function removeCurrentEntryMedia() {
+  if (seState.uploadInProgress) { toast('Cancel the upload before removing this file.'); return; }
   seState.file = null;
   if (seState.editingEntry) {
     seState.editingEntry.media_url = null;
@@ -22308,6 +22431,10 @@ function removeCurrentEntryMedia() {
 }
 
 function closeSubmitEntry() {
+  if (seState.uploadInProgress) {
+    cancelEntryUploadV1135(true);
+    return;
+  }
   const seSheet = document.getElementById('submitEntrySheet');
   seSheet.querySelectorAll('video, audio').forEach(m => { try { m.pause(); } catch(_) {} });
   seSheet.classList.remove('open');
@@ -22316,6 +22443,7 @@ function closeSubmitEntry() {
 }
 
 function clearSubmitEntryPreview() {
+  if (seState.uploadInProgress) { toast('Cancel the upload before removing this file.'); return; }
   if (seState.fileUrl) URL.revokeObjectURL(seState.fileUrl);
   seState.file = null;
   seState.fileUrl = null;
@@ -22328,6 +22456,8 @@ function clearSubmitEntryPreview() {
 
 document.getElementById('seFile').addEventListener('change', seFileChangeHandler);
 function seFileChangeHandler(e) {
+  if (seState.uploadInProgress) { e.target.value = ''; toast('Cancel the upload before choosing another file.'); return; }
+  fcPauseEntryPreviewV1135();
   const file = e.target.files[0];
   if (!file) return;
   if (file.size > 500 * 1024 * 1024) {
@@ -22416,6 +22546,19 @@ function seFileChangeHandler(e) {
   }
 }
 
+// v1135 — local iPhone video previews become unstable when the sheet scrolls,
+// focuses a field, or begins decoding the same file for poster capture. Pause the
+// preview before any non-player interaction instead of letting playback stutter.
+{
+  const seSheetV1135 = document.getElementById('submitEntrySheet');
+  const seInnerV1135 = seSheetV1135?.querySelector('.cc-sheet-inner');
+  seSheetV1135?.addEventListener('pointerdown', (event) => {
+    if (event.target.closest('#sePreview video')) return;
+    fcPauseEntryPreviewV1135();
+  }, true);
+  seInnerV1135?.addEventListener('scroll', fcPauseEntryPreviewV1135, { passive: true });
+}
+
 document.getElementById('submitEntryForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const ch = state.currentChallenge;
@@ -22449,6 +22592,11 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
 
   const btn = e.target.querySelector('button[type="submit"]');
   btn.disabled = true; const orig = btn.textContent;
+  fcPauseEntryPreviewV1135();
+  seState.uploadAbortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  seState.uploadCancelRequested = false;
+  seState.closeAfterCancel = false;
+  const seUploadSignalV1135 = seState.uploadAbortController?.signal || null;
   seState._mediaHash = null; // recomputed below only when a file is present
   let _slowTipTimer = null;
   let uploadedEntryAssetV1101 = null;
@@ -22497,6 +22645,7 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
     try {
       btn.textContent = 'Checking…';
       seState._mediaHash = await fileSha256(seState.file);
+      fcThrowIfEntryUploadCancelledV1135(seUploadSignalV1135);
       let dupQ = db.from('entries').select('id')
         .eq('challenge_id', ch.id).eq('media_hash', seState._mediaHash);
       if (seState.editingEntry) dupQ = dupQ.neq('id', seState.editingEntry.id);
@@ -22518,6 +22667,7 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
       if (_slowTipTimer) clearTimeout(_slowTipTimer);
       return;
     }
+    fcThrowIfEntryUploadCancelledV1135(seUploadSignalV1135);
     let mediaUrl = null;
     let posterUrl = null;
     if (ch.media_type !== 'text' && seState.file) {
@@ -22536,6 +22686,8 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
         } catch(e) { seFileToUpload = seState.file; }
       }
       btn.textContent = 'Uploading... 0%';
+      fcSetEntryUploadBusyV1135(true, ch.media_type === 'video' ? 'Uploading video · 0%' : `Uploading ${ch.media_type} · 0%`);
+      fcThrowIfEntryUploadCancelledV1135(seUploadSignalV1135);
       // Slow-upload guidance (video only): reveal the tip only if the upload is
       // still running after 15s (slow Wi-Fi / HEVC). Fast uploads never show it.
       if (ch.media_type === 'video') {
@@ -22547,7 +22699,8 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
       if (ch.media_type === 'video') {
         const bunny = await uploadToBunnyStream(seFileToUpload, ch.title, pct => {
           btn.textContent = `Uploading... ${pct}%`;
-        });
+          fcUpdateEntryUploadStatusV1135(`Uploading video · ${pct}%`);
+        }, { signal: seUploadSignalV1135 });
         mediaUrl  = bunny.mediaUrl;
         posterUrl = bunny.posterUrl;
         uploadedEntryAssetV1101 = {
@@ -22565,8 +22718,10 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
         try {
           seMediaResult = await uploadChunked('challenge-media', filename, seFileToUpload, pct => {
             btn.textContent = `Uploading... ${pct}%`;
-          });
+            fcUpdateEntryUploadStatusV1135(`Uploading ${ch.media_type} · ${pct}%`);
+          }, { signal: seUploadSignalV1135 });
         } catch(e) {
+          if (e?.name === 'AbortError' || seUploadSignalV1135?.aborted) throw fcEntryUploadAbortErrorV1135();
           const { error: uploadError } = await db.storage
             .from('challenge-media')
             .upload(filename, seFileToUpload, { cacheControl: '3600', upsert: false });
@@ -22591,6 +22746,8 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
       }
     }
     // Upload done — stop and hide the slow-upload tip before DB writes/refreshes.
+    fcSetEntryUploadBusyV1135(false);
+    fcThrowIfEntryUploadCancelledV1135(seUploadSignalV1135);
     if (_slowTipTimer) { clearTimeout(_slowTipTimer); _slowTipTimer = null; }
     { const st = document.getElementById('seSlowTip'); if (st) st.style.display = 'none'; }
     btn.textContent = seState.editingEntry ? 'Saving...' : 'Submitting...';
@@ -22699,17 +22856,35 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
     await loadFeedActivity();
     if (state.currentView === 'feed') renderFeed();
   } catch (err) {
-    console.error(err);
+    const cancelledV1135 = err?.name === 'AbortError' || seState.uploadCancelRequested || /upload cancelled/i.test(err?.message || '');
+    if (!cancelledV1135) console.error(err);
     if (uploadedEntryAssetV1101 && !entryWriteCommittedV1101) {
       await fcCleanupUploadedAssetV1101(uploadedEntryAssetV1101);
       uploadedEntryAssetV1101 = null;
     }
-    errBox.textContent = err.message;
-    errBox.classList.add('show');
+    if (cancelledV1135) {
+      errBox.classList.remove('show');
+      toast('Upload cancelled. Your selected file is still ready.');
+    } else {
+      errBox.textContent = err.message;
+      errBox.classList.add('show');
+    }
   } finally {
+    const closeAfterCancelV1135 = seState.closeAfterCancel;
     btn.disabled = false; btn.textContent = orig;
     if (_slowTipTimer) clearTimeout(_slowTipTimer);
     const st = document.getElementById('seSlowTip'); if (st) st.style.display = 'none';
+    fcSetEntryUploadBusyV1135(false);
+    seState.uploadAbortController = null;
+    seState.uploadCancelRequested = false;
+    seState.closeAfterCancel = false;
+    if (closeAfterCancelV1135) {
+      const seSheet = document.getElementById('submitEntrySheet');
+      seSheet?.querySelectorAll('video, audio').forEach(m => { try { m.pause(); } catch(_) {} });
+      seSheet?.classList.remove('open');
+      clearSubmitEntryPreview();
+      seState.editingEntry = null;
+    }
   }
 });
 
@@ -24783,7 +24958,7 @@ function renderFeedWinnerCard({ challenge, entry }) {
 // ── UPLOAD WITH PROGRESS ─────────────────────────────────────────────────────
 // Uploads a file to Supabase storage with real-time progress updates.
 // onProgress(pct) called with 0-100. Returns { publicUrl } or throws.
-async function uploadWithProgress(bucket, filename, file, onProgress) {
+async function uploadWithProgress(bucket, filename, file, onProgress, options = {}) {
   const supabaseUrl = 'https://sioalvawzayfphwzqctq.supabase.co';
   const { data: { session } } = await db.auth.getSession();
   const token = session?.access_token;
@@ -24792,6 +24967,8 @@ async function uploadWithProgress(bucket, filename, file, onProgress) {
   // Determine content type
   const contentType = file.type || (filename.endsWith('.png') ? 'image/png' : filename.endsWith('.jpg') || filename.endsWith('.jpeg') ? 'image/jpeg' : 'application/octet-stream');
 
+  const signal = options?.signal || null;
+  if (signal?.aborted) throw fcEntryUploadAbortErrorV1135();
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     const url  = `${supabaseUrl}/storage/v1/object/${bucket}/${filename}`;
@@ -24805,7 +24982,12 @@ async function uploadWithProgress(bucket, filename, file, onProgress) {
       if (e.lengthComputable) onProgress(Math.round(e.loaded / e.total * 100));
     });
 
+    const abort = () => { try { xhr.abort(); } catch (_) {} };
+    const cleanup = () => signal?.removeEventListener?.('abort', abort);
+    signal?.addEventListener?.('abort', abort, { once: true });
+
     xhr.addEventListener('load', () => {
+      cleanup();
       if (xhr.status >= 200 && xhr.status < 300) {
         const { data } = db.storage.from(bucket).getPublicUrl(filename);
         resolve({ publicUrl: data.publicUrl });
@@ -24814,10 +24996,11 @@ async function uploadWithProgress(bucket, filename, file, onProgress) {
       }
     });
 
-    xhr.addEventListener('error', () => reject(new Error('Upload network error')));
-    xhr.addEventListener('abort', () => reject(new Error('Upload cancelled')));
+    xhr.addEventListener('error', () => { cleanup(); reject(new Error('Upload network error')); });
+    xhr.addEventListener('abort', () => { cleanup(); reject(fcEntryUploadAbortErrorV1135()); });
 
     // Send raw binary — NOT FormData (Supabase rejects multipart)
+    if (signal?.aborted) return reject(fcEntryUploadAbortErrorV1135());
     xhr.send(file);
   });
 }
@@ -25206,8 +25389,8 @@ async function compressVideo(file, onProgress) {
 
 // Upload with progress — single XHR, works for all file sizes
 // (TUS chunking removed — unreliable without server config)
-async function uploadChunked(bucket, filename, file, onProgress) {
-  return uploadWithProgress(bucket, filename, file, onProgress);
+async function uploadChunked(bucket, filename, file, onProgress, options = {}) {
+  return uploadWithProgress(bucket, filename, file, onProgress, options);
 }
 
 // ── PRODUCT TOUR ─────────────────────────────────────────────────────────────
