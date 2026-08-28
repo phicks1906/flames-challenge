@@ -14,16 +14,16 @@
 <meta content="no-cache, no-store, must-revalidate" http-equiv="cache-control"/>
 <meta content="no-cache" http-equiv="pragma"/>
 <meta content="0" http-equiv="expires"/>
-<title>FlamesChallenge v1138 — Entrant Audio Covers & Stronger Carousel Cues</title>
+<title>FlamesChallenge v1139 — Premium Audio Waveform Player</title>
 <meta content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." name="description"/>
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
      the first kilobyte, so the update check can read it with a tiny ranged
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1138 · entrant-audio-covers-stronger-carousel-cues" name="fc-build"/>
-<!-- v1138: paused audio entries identify the entrant directly, reveal the real visualizer only during playback, and expose more of the neighboring card while preserving the existing Ask Ember launcher. -->
-<meta content="Audio entries now show entrant-specific paused covers, reveal the live visualizer during playback, and make neighboring swipe cards easier to see." name="fc-whatsnew"/>
+<meta content="v1139 · premium-audio-waveform-player" name="fc-build"/>
+<!-- v1139: audio competition entries use the approved premium waveform-stage design with real playback data, clear card identity, and preserved tactile swiping. -->
+<meta content="Audio entries now use the approved premium waveform player with clear swipe cards, real playback progress, and refined FlamesChallenge styling." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -7792,9 +7792,110 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
 <script id="fc-v1137-validation">
 window.FC_V1137_VALIDATION={build:'v1137',basedOn:'v1136',brandFlamePaletteRestored:true,sharedHonestIdleArtwork:true,realAnalyserOnly:true,compactPlaybackProgress:true,controlsFadeAndReveal:true,audioPeekCards:true,wholeCardFingerTracking:true,pauseAtSwipeOwnership:true,sqlRequired:false,edgeFunctionChanges:0,serviceWorkerRequired:false};
 </script>
-<script id="fc-v1138-validation">
-window.FC_V1138_VALIDATION={build:'v1138',basedOn:'v1137',entrantSpecificPausedCover:true,visualizerRevealsOnPlayback:true,largerNeighborPreview:true,wholeCardFingerTrackingPreserved:true,askEmberUnchanged:true,sqlRequired:false,edgeFunctionChanges:0,serviceWorkerRequired:false};
+
+<style id="fc-v1139-premium-audio-waveform-css">
+/* v1139 — approved premium waveform-stage audio entry. The competition rail,
+   snapping, playback source, moderation, and Ask Ember remain unchanged. */
+.fcc-fire-eq.fc-audio-waveform-v1139{
+  position:relative!important;
+  min-height:0!important;
+  height:auto!important;
+  aspect-ratio:4/5!important;
+  padding:0 0 48px!important;
+  overflow:hidden!important;
+  border-radius:16px!important;
+  background:
+    radial-gradient(ellipse 78% 46% at 50% 56%,rgba(255,92,31,.08),transparent 68%),
+    linear-gradient(180deg,#0a0908 0%,#050403 100%)!important;
+  border:1px solid rgba(255,119,52,.28)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.025),0 14px 34px rgba(0,0,0,.28)!important;
+}
+.fc-audio-stage-v1139{
+  position:absolute;inset:0 0 48px;overflow:hidden;
+  display:grid;grid-template-rows:34px minmax(0,1fr) 96px;
+  background:
+    repeating-linear-gradient(90deg,rgba(255,255,255,.025) 0 1px,transparent 1px 54px),
+    repeating-linear-gradient(0deg,rgba(255,255,255,.025) 0 1px,transparent 1px 42px),
+    radial-gradient(ellipse 60% 40% at 50% 48%,rgba(255,97,30,.09),transparent 72%);
+}
+.fc-audio-guides-v1139{
+  position:relative;z-index:3;display:grid;grid-template-columns:repeat(5,1fr);align-items:end;
+  padding:12px 14px 0;color:rgba(229,216,207,.68);font:600 9px/1 var(--font-body);font-variant-numeric:tabular-nums;
+}
+.fc-audio-guides-v1139 span{text-align:center}.fc-audio-guides-v1139 span:first-child{text-align:left}.fc-audio-guides-v1139 span:last-child{text-align:right}
+.fc-audio-wave-v1139{
+  position:relative;z-index:2;display:flex;align-items:center;justify-content:center;gap:2px;
+  padding:8px 14px 2px;min-height:0;
+}
+.fc-audio-wave-v1139::after{
+  content:"";position:absolute;left:14px;right:14px;top:50%;height:1px;background:rgba(255,159,86,.18);transform:translateY(-50%);
+}
+.fc-audio-wave-bar-v1139{
+  position:relative;z-index:1;flex:1;max-width:5px;height:var(--fc-wave-idle-v1139,36%);min-height:3px;border-radius:999px;
+  background:linear-gradient(180deg,#ffe6a0 0%,#ffc857 20%,#ff792f 52%,#ff2d1f 100%);
+  box-shadow:0 0 8px rgba(255,92,31,.28);transform-origin:center;transition:height .14s ease;
+}
+.fc-audio-waveform-v1139.playing .fc-audio-wave-bar-v1139{transition:height .07s linear}
+.fc-audio-meta-v1139{
+  position:relative;z-index:4;display:grid;grid-template-columns:52px minmax(0,1fr) 54px;align-items:center;gap:10px;
+  margin:0 12px 12px;padding:12px;border:1px solid rgba(255,126,58,.18);border-radius:14px;
+  background:linear-gradient(180deg,rgba(20,14,11,.90),rgba(9,7,6,.94));
+  box-shadow:0 10px 28px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.025);
+}
+.fc-audio-meta-avatar-v1139{
+  width:52px;height:52px;border-radius:50%;overflow:hidden;display:grid;place-items:center;flex-shrink:0;
+  background:linear-gradient(135deg,var(--ember),var(--flame));border:2px solid var(--ember);
+  box-shadow:0 0 0 4px rgba(255,106,44,.10);color:#fff;font:800 20px/1 var(--font-bricolage);
+}
+.fc-audio-meta-avatar-v1139 .avatar-img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.fc-audio-meta-copy-v1139{min-width:0;display:flex;flex-direction:column;align-items:flex-start}
+.fc-audio-meta-copy-v1139>span{color:var(--ember-bright);font:800 9px/1 var(--font-body);letter-spacing:.16em;text-transform:uppercase}
+.fc-audio-meta-copy-v1139>strong{width:100%;margin-top:5px;color:#fff;font:800 14px/1.15 var(--font-bricolage);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fc-audio-meta-copy-v1139>small{margin-top:5px;color:rgba(229,216,207,.68);font:600 10px/1.1 var(--font-body)}
+.fc-audio-waveform-v1139 .fcc-audio-btn{
+  position:static!important;transform:none!important;width:54px!important;height:54px!important;border:1px solid rgba(255,153,82,.72)!important;
+  background:radial-gradient(circle at 40% 35%,rgba(255,255,255,.10),transparent 36%),linear-gradient(145deg,rgba(255,95,32,.30),rgba(9,6,5,.96))!important;
+  box-shadow:0 0 0 4px rgba(255,84,31,.08),0 0 22px rgba(255,79,24,.30),inset 0 1px 0 rgba(255,255,255,.08)!important;
+  color:#fff!important;font-size:20px!important;opacity:1;pointer-events:auto;
+}
+.fc-audio-waveform-v1139.playing .fcc-audio-btn{opacity:0!important;pointer-events:none!important}
+.fc-audio-waveform-v1139.playing.fc-audio-controls-visible-v1136 .fcc-audio-btn{opacity:.94!important;pointer-events:auto!important}
+.fc-audio-wave-progress-v1139{
+  position:absolute;z-index:8;left:12px;right:12px;bottom:12px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;
+  color:rgba(255,244,236,.82);font:700 10px/1 var(--font-body);font-variant-numeric:tabular-nums;
+}
+.fc-audio-wave-seek-v1139{
+  --fc-audio-wave-progress-v1139:0%;width:100%;height:22px;margin:0;appearance:none;-webkit-appearance:none;background:transparent;cursor:pointer;
+}
+.fc-audio-wave-seek-v1139::-webkit-slider-runnable-track{height:4px;border-radius:99px;background:linear-gradient(90deg,var(--ember-bright) 0 var(--fc-audio-wave-progress-v1139),rgba(255,255,255,.16) var(--fc-audio-wave-progress-v1139) 100%)}
+.fc-audio-wave-seek-v1139::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;margin-top:-5px;border-radius:50%;border:1px solid #ffd9b5;background:var(--ember);box-shadow:0 0 10px rgba(255,96,32,.48)}
+.fc-audio-wave-seek-v1139::-moz-range-track{height:4px;border-radius:99px;background:rgba(255,255,255,.16)}
+.fc-audio-wave-seek-v1139::-moz-range-progress{height:4px;border-radius:99px;background:var(--ember-bright)}
+.fc-audio-wave-seek-v1139::-moz-range-thumb{width:13px;height:13px;border-radius:50%;border:1px solid #ffd9b5;background:var(--ember)}
+
+/* The approved mock uses a dominant center card with restrained side peeks. */
+.fc-entry-rail-v1079.fc-audio-entry-rail-v1137 .fcc-entries-scroll{gap:14px!important;padding:0 18px 10px!important;scroll-padding-inline:18px!important}
+.fc-entry-rail-v1079.fc-audio-entry-rail-v1137 .fcc-entries-scroll>.fcc-entry-card{
+  flex:0 0 calc(100% - 48px)!important;min-width:calc(100% - 48px)!important;width:calc(100% - 48px)!important;
+  border-color:rgba(255,112,45,.24)!important;box-shadow:0 14px 38px rgba(0,0,0,.34)!important;
+}
+.cd-entries-grid.fc-audio-entry-grid-v1137{gap:14px!important;padding:0 18px 8px!important;scroll-padding-inline:18px!important}
+.cd-entries-grid.fc-audio-entry-grid-v1137>.cd-entry{
+  flex:0 0 calc(100% - 48px)!important;min-width:calc(100% - 48px)!important;width:calc(100% - 48px)!important;
+}
+@media(max-width:390px){
+  .fc-entry-rail-v1079.fc-audio-entry-rail-v1137 .fcc-entries-scroll>.fcc-entry-card,
+  .cd-entries-grid.fc-audio-entry-grid-v1137>.cd-entry{flex-basis:calc(100% - 42px)!important;min-width:calc(100% - 42px)!important;width:calc(100% - 42px)!important}
+  .fc-audio-meta-v1139{grid-template-columns:46px minmax(0,1fr) 50px;gap:8px;margin-inline:10px;padding:10px}
+  .fc-audio-meta-avatar-v1139{width:46px;height:46px}.fc-audio-waveform-v1139 .fcc-audio-btn{width:50px!important;height:50px!important}
+  .fc-audio-wave-v1139{gap:1px;padding-inline:10px}.fc-audio-guides-v1139{padding-inline:10px}
+}
+@media(prefers-reduced-motion:reduce){.fc-audio-wave-bar-v1139{transition:none!important}}
+</style>
+<script id="fc-v1139-validation">
+window.FC_V1139_VALIDATION={build:'v1139',basedOn:'v1138',approvedWaveformStage:true,realAnalyserPlayback:true,interactiveProgress:true,entrantIdentity:true,dominantCenterCard:true,neighborPeeks:true,wholeCardFingerTrackingPreserved:true,askEmberUnchanged:true,sqlRequired:false,edgeFunctionChanges:0,serviceWorkerRequired:false};
 </script>
+
 </head>
 <body>
 <!-- v1095 — stable session/data boot gate. Removed only after the signed-in
@@ -16504,22 +16605,36 @@ function _audioTileHtml(e, options = {}) {
   const mediaUrl = e?.media_url || e?.audio_url || '';
   if (!mediaUrl) return `<div class="fcc-entry-media fcc-entry-placeholder fc-entry-audio-v1079" aria-label="Audio entry"><span aria-hidden="true">♪</span></div>`;
 
-  const NB = 13;
+  const NB = 41;
   const style = getEqStyle();
   const mode = String(options.mode || 'card').replace(/[^a-z0-9_-]/gi, '') || 'card';
   const controls = options.controls === true;
-  const identityCoverV1138 = options.identityCover === true;
+  const waveformStageV1139 = options.identityCover === true;
   const preload = controls || mode === 'card' || mode === 'winner' ? 'metadata' : 'none';
   const IMG_URL = 'https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/Assets/fire.jpeg';
   const visualProfileV1136 = fcAudioVisualProfileV1136(e);
-  const entrantNameV1138 = String(e?.submitter?.name || 'Competitor');
-  const entrantAvatarV1138 = avatarInner(e?.submitter?.avatar);
-  const identityHtmlV1138 = identityCoverV1138 ? `<div class="fc-audio-identity-cover-v1138" aria-hidden="true">
-      <div class="fc-audio-identity-avatar-v1138">${entrantAvatarV1138}</div>
-      <div class="fc-audio-identity-copy-v1138"><span class="fc-audio-identity-kicker-v1138">Audio entry</span><strong>${escapeHtml(entrantNameV1138)}</strong><small>Tap to listen</small></div>
-      <div class="fc-audio-identity-mark-v1138"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
-    </div>` : '';
-  const rootClasses = `fcc-entry-media fcc-fire-eq eq-${style} fc-audio-mode-${mode}-v1123${controls ? ' fc-audio-has-controls-v1123' : ''}${identityCoverV1138 ? ' fc-audio-identity-v1138' : ''}`;
+  const entrantNameV1139 = String(e?.submitter?.name || 'Competitor');
+  const entrantAvatarV1139 = avatarInner(e?.submitter?.avatar);
+  const captionV1139 = String(e?.caption || '').trim();
+  const trackTitleV1139 = captionV1139 || `${entrantNameV1139}'s audio entry`;
+
+  // v1139 — the approved audio style uses a premium waveform stage instead of
+  // the prior album-cover/equalizer shell. Idle heights are decorative only;
+  // real analyser data replaces them while playback is active.
+  let seedV1139 = 2166136261;
+  const seedTextV1139 = String(e?.id || mediaUrl || entrantNameV1139);
+  for (let i = 0; i < seedTextV1139.length; i++) {
+    seedV1139 ^= seedTextV1139.charCodeAt(i);
+    seedV1139 = Math.imul(seedV1139, 16777619) >>> 0;
+  }
+  const waveBarsV1139 = Array.from({length: NB}, (_, i) => {
+    seedV1139 = (Math.imul(seedV1139 ^ (seedV1139 >>> 15), 2246822519) + i * 3266489917) >>> 0;
+    const center = 1 - Math.min(1, Math.abs((i - (NB - 1) / 2) / ((NB - 1) / 2)));
+    const noise = 18 + (seedV1139 % 47);
+    const height = Math.max(12, Math.min(88, Math.round(noise * .62 + center * 34)));
+    return `<span class="fc-audio-wave-bar-v1139" style="--fc-wave-idle-v1139:${height}%"></span>`;
+  }).join('');
+
   const audio = `<audio src="${escapeHtml(mediaUrl)}" preload="${preload}" crossorigin="anonymous"
     onloadedmetadata="syncFccAudioControlsV1123(this.closest('.fcc-fire-eq'),this)"
     ondurationchange="syncFccAudioControlsV1123(this.closest('.fcc-fire-eq'),this)"
@@ -16529,6 +16644,39 @@ function _audioTileHtml(e, options = {}) {
     onpause="fcAudioPauseStateV1123(this.closest('.fcc-fire-eq'),this)"
     onended="fcAudioPauseStateV1123(this.closest('.fcc-fire-eq'),this)"></audio>`;
   const mainButton = `<button type="button" class="fcc-audio-btn" aria-label="Play audio">▶</button>`;
+
+  if (waveformStageV1139) {
+    const rootClassesV1139 = `fcc-entry-media fcc-fire-eq fc-audio-waveform-v1139 fc-audio-mode-${mode}-v1123${controls ? ' fc-audio-has-controls-v1123' : ''}`;
+    return `<div class="${rootClassesV1139}" data-audio-style="waveform" data-audio-visual-v1139="approved-waveform-stage" onclick="toggleFccAudio(this,event)" role="group" aria-label="Audio entry by ${escapeHtml(entrantNameV1139)}">
+      ${audio}
+      <div class="fc-audio-stage-v1139">
+        <div class="fc-audio-guides-v1139" aria-hidden="true">
+          <span class="fc-audio-guide-v1139" data-fraction="0">0:00</span>
+          <span class="fc-audio-guide-v1139" data-fraction="0.25">--:--</span>
+          <span class="fc-audio-guide-v1139" data-fraction="0.5">--:--</span>
+          <span class="fc-audio-guide-v1139" data-fraction="0.75">--:--</span>
+          <span class="fc-audio-guide-v1139" data-fraction="1">--:--</span>
+        </div>
+        <div class="fc-audio-wave-v1139" aria-hidden="true">${waveBarsV1139}</div>
+        <div class="fc-audio-meta-v1139">
+          <div class="fc-audio-meta-avatar-v1139">${entrantAvatarV1139}</div>
+          <div class="fc-audio-meta-copy-v1139">
+            <span>Audio entry</span>
+            <strong>${escapeHtml(trackTitleV1139)}</strong>
+            <small>Tap to listen</small>
+          </div>
+          ${mainButton}
+        </div>
+      </div>
+      <div class="fc-audio-wave-progress-v1139" onclick="event.stopPropagation()">
+        <span class="fc-audio-wave-current-v1139">0:00</span>
+        <input class="fc-audio-wave-seek-v1139" type="range" min="0" max="0" step="0.1" value="0" aria-label="Seek through audio" oninput="seekFccAudioV1123(this,event)">
+        <span class="fc-audio-wave-duration-v1139">--:--</span>
+      </div>
+    </div>`;
+  }
+
+  const rootClasses = `fcc-entry-media fcc-fire-eq eq-${style} fc-audio-mode-${mode}-v1123${controls ? ' fc-audio-has-controls-v1123' : ''}`;
   const controlsHtml = controls ? `<div class="fc-audio-controls-v1123" onclick="event.stopPropagation()">
       <button type="button" class="fc-audio-play-v1123" aria-label="Play audio" onclick="toggleFccAudioFromControlV1123(this,event)">▶</button>
       <span class="fc-audio-current-v1123">0:00</span>
@@ -16546,26 +16694,22 @@ function _audioTileHtml(e, options = {}) {
   let mainButtonOutside = mainButton;
   if (style === 'curve') {
     const idle = visualProfileV1136.heights.map(h => Math.max(18, Math.min(68, Math.round(78 - h * .72))));
-    const xs = Array.from({length: NB}, (_, i) => 6 + i * (88 / (NB - 1)));
+    const xs = Array.from({length: 13}, (_, i) => 6 + i * (88 / 12));
     const d = idle.map((y, i) => `${i ? 'L' : 'M'}${xs[i].toFixed(1)},${y}`).join(' ');
     const nodes = idle.map((y, i) => `<circle class="feq-node" cx="${xs[i].toFixed(1)}" cy="${y}" r="1.8"/>`).join('');
     visual = `<svg class="feq-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path class="feq-path" d="${d}" data-idle="${d}"/>${nodes}</svg>`;
   } else if (style === 'gradient') {
-    const bars = Array.from({length: NB}, (_, i) => `<div class="feqb feqb-${i}"></div>`).join('');
+    const bars = Array.from({length: 13}, (_, i) => `<div class="feqb feqb-${i}"></div>`).join('');
     visual = `<div class="feq-bars">${bars}</div><div class="feq-segs" aria-hidden="true"></div>`;
   } else if (style === 'flame') {
-    const cols = Array.from({length: NB}, (_, i) => `<div class="feqcol"><div class="feqb feqb-${i}"></div></div>`).join('');
+    const cols = Array.from({length: 13}, (_, i) => `<div class="feqcol"><div class="feqb feqb-${i}"></div></div>`).join('');
     visual = `<img class="feq-fireimg" alt="" aria-hidden="true" loading="lazy" onerror="this.style.display='none'" src="${IMG_URL}"><div class="feq-bars">${cols}</div><div class="feq-segs" aria-hidden="true"></div>`;
   } else {
-    // v1124 — Scene is the approved complete landscape artwork. The prior
-    // implementation put a black analyser box over the center and stretched
-    // the composition into 4:5. Keep the artwork whole and place playback UI
-    // outside it instead.
-    visual = `<div class="fc-audio-scene-art-v1124">${identityCoverV1138 ? '' : mainButton}</div>`;
-    mainButtonOutside = identityCoverV1138 ? mainButton : '';
+    visual = `<div class="fc-audio-scene-art-v1124">${mainButton}</div>`;
+    mainButtonOutside = '';
   }
 
-  return `<div class="${rootClasses}" data-audio-style="${style}" data-audio-visual-v1136="${visualProfileV1136.seed}" onclick="toggleFccAudio(this,event)" role="group" aria-label="Audio entry by ${escapeHtml(entrantNameV1138)} · ${escapeHtml(EQ_LABELS[style])} style">${audio}${visual}${identityHtmlV1138}${mainButtonOutside}${compactProgressHtml}${controlsHtml}</div>`;
+  return `<div class="${rootClasses}" data-audio-style="${style}" data-audio-visual-v1136="${visualProfileV1136.seed}" onclick="toggleFccAudio(this,event)" role="group" aria-label="Audio entry by ${escapeHtml(entrantNameV1139)} · ${escapeHtml(EQ_LABELS[style])} style">${audio}${visual}${mainButtonOutside}${compactProgressHtml}${controlsHtml}</div>`;
 }
 
 function formatFccAudioTimeV1123(value) {
@@ -16609,6 +16753,22 @@ function syncFccAudioControlsV1123(tile, audio) {
     const pctV1137 = finiteDurationV1137 ? ((audio.currentTime || 0) / finiteDurationV1137) * 100 : 0;
     cardFill.style.width = `${Math.max(0, Math.min(100, pctV1137))}%`;
   }
+
+  const waveCurrentV1139 = tile.querySelector('.fc-audio-wave-current-v1139');
+  const waveDurationV1139 = tile.querySelector('.fc-audio-wave-duration-v1139');
+  const waveSeekV1139 = tile.querySelector('.fc-audio-wave-seek-v1139');
+  if (waveCurrentV1139) waveCurrentV1139.textContent = formatFccAudioTimeV1123(audio.currentTime || 0).replace('--:--','0:00');
+  if (waveDurationV1139) waveDurationV1139.textContent = finiteDurationV1137 ? formatFccAudioTimeV1123(finiteDurationV1137) : '--:--';
+  if (waveSeekV1139) {
+    waveSeekV1139.max = String(finiteDurationV1137);
+    if (!waveSeekV1139.matches(':active')) waveSeekV1139.value = String(Math.min(audio.currentTime || 0, finiteDurationV1137 || 0));
+    const pctV1139 = finiteDurationV1137 ? ((audio.currentTime || 0) / finiteDurationV1137) * 100 : 0;
+    waveSeekV1139.style.setProperty('--fc-audio-wave-progress-v1139', `${Math.max(0, Math.min(100, pctV1139))}%`);
+  }
+  tile.querySelectorAll('.fc-audio-guide-v1139').forEach(guide => {
+    const fraction = Number(guide.dataset.fraction || 0);
+    guide.textContent = finiteDurationV1137 ? formatFccAudioTimeV1123(finiteDurationV1137 * fraction) : (fraction === 0 ? '0:00' : '--:--');
+  });
 }
 
 function fcAudioPlayStateV1123(tile, audio) {
@@ -16710,7 +16870,7 @@ function _feqStart(tile, a) {
       const d = hi[i] - lo[i];
       return d > 0.03 ? Math.pow((v - lo[i]) / d, 0.85) : v;
     };
-    const bars = tile.querySelectorAll('.feqb');
+    const bars = tile.querySelectorAll('.feqb,.fc-audio-wave-bar-v1139');
     const NB = bars.length;
     // v733 — Flame's .feqb are black TOP COVERS (fire shows below them), so their
     // height is the INVERSE of loudness: loud -> SHORT cover -> tall fire column.
@@ -16720,6 +16880,7 @@ function _feqStart(tile, a) {
     // in Paul's screenshot: full fire + only the segment lines, no bars). Clamp
     // the cover so it never fully uncovers, and never fully covers.
     const isFlame = tile.classList.contains('eq-flame');
+    const isWaveformV1139 = tile.classList.contains('fc-audio-waveform-v1139');
     // v737 — Curve style has no .feqb bars; it has an SVG path + 13 nodes.
     const svgPath = tile.querySelector('.feq-path');
     const svgNodes = tile.querySelectorAll('.feq-node');
@@ -16748,7 +16909,9 @@ function _feqStart(tile, a) {
         const v = norm(i, data[bin] / 255); sum += data[bin] / 255;
         bars[i].style.height = isFlame
           ? (85 - v * 70) + '%'   // cover: quiet -> 85% covered, loud -> 15% covered
-          : (10 + v * 82) + '%';  // bar: quiet -> 10% tall, loud -> 92% tall
+          : isWaveformV1139
+            ? (8 + v * 84) + '%'  // centered waveform: quiet -> 8%, loud -> 92%
+            : (10 + v * 82) + '%';  // bar: quiet -> 10% tall, loud -> 92% tall
       }
       if (sum === 0 && ++zeroFrames > 60) {
         dlog('feq', 'analyser-unavailable-static-cover', { curve: isCurve });
@@ -16769,7 +16932,7 @@ function _feqStop(tile) {
   if (tile._feqRaf) { cancelAnimationFrame(tile._feqRaf); tile._feqRaf = null; }
   if (tile._feqFakeRaf) { cancelAnimationFrame(tile._feqFakeRaf); tile._feqFakeRaf = null; } // v738
   tile.classList.remove('feq-fallback');
-  tile.querySelectorAll('.feqb').forEach(b => { b.style.height = ''; });
+  tile.querySelectorAll('.feqb,.fc-audio-wave-bar-v1139').forEach(b => { b.style.height = ''; });
   const p = tile.querySelector('.feq-path'); // v737 — curve back to its idle shape
   if (p && p.dataset.idle) {
     p.setAttribute('d', p.dataset.idle);
