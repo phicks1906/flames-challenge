@@ -14,16 +14,16 @@
 <meta content="no-cache, no-store, must-revalidate" http-equiv="cache-control"/>
 <meta content="no-cache" http-equiv="pragma"/>
 <meta content="0" http-equiv="expires"/>
-<title>FlamesChallenge v1136 — Refined Audio Playback & Distinct Entry Swiping</title>
+<title>FlamesChallenge v1137 — Branded Audio Player & Visible Entry Swiping</title>
 <meta content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." name="description"/>
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
      the first kilobyte, so the update check can read it with a tiny ranged
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1136 · refined-audio-playback-distinct-entry-swiping" name="fc-build"/>
-<!-- v1136: audio playback controls fade after activation, the Bars treatment uses a quieter crown-gold palette, and each audio entry has a distinct idle waveform so carousel movement is visible. -->
-<meta content="Audio controls now fade during playback, and audio entries are visually distinct while swiping." name="fc-whatsnew"/>
+<meta content="v1137 · branded-audio-player-visible-entry-swiping" name="fc-build"/>
+<!-- v1137: audio entries use the FlamesChallenge flame palette, honest shared idle artwork, compact playback progress, and visibly moving peek-card carousels. -->
+<meta content="Audio entries now visibly swipe as full cards and use a cleaner FlamesChallenge player with fading controls and playback progress." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -7645,6 +7645,71 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
 .eq-gradient .feqb-11{height:var(--fc-audio-h11-v1136,48%)}
 .eq-gradient .feqb-12{height:var(--fc-audio-h12-v1136,36%)}
 </style>
+
+<style id="fc-v1137-audio-carousel-css">
+/* v1137 — honest, branded audio cards and unmistakable full-card swiping. */
+.eq-gradient{
+  background:
+    radial-gradient(ellipse 92% 44% at 50% 108%,rgba(255,77,31,.20),transparent 66%),
+    linear-gradient(180deg,#0b0908 0%,#030303 100%)!important;
+}
+.eq-gradient .feqb{
+  background:linear-gradient(to top,#ff2d1f 0%,#ff6a2c 50%,#ffc857 86%,#ffe8ad 100%)!important;
+  box-shadow:0 0 12px rgba(255,91,33,.42),inset 0 1px 0 rgba(255,255,255,.20)!important;
+  border-radius:4px 4px 1px 1px!important;
+  -webkit-box-reflect:none!important;
+}
+.eq-gradient .feq-segs{opacity:.42!important;background-image:repeating-linear-gradient(0deg,#050403 0 2px,transparent 2px 22px)!important}
+.eq-gradient .feq-bars{padding:48px 16px 68px!important;gap:7px!important}
+.eq-gradient:not(.playing) .feqb-0,.eq-gradient.fc-audio-analyser-unavailable-v1137 .feqb-0{height:34%!important}.eq-gradient:not(.playing) .feqb-1,.eq-gradient.fc-audio-analyser-unavailable-v1137 .feqb-1{height:58%!important}.eq-gradient:not(.playing) .feqb-2,.eq-gradient.fc-audio-analyser-unavailable-v1137 .feqb-2{height:42%!important}.eq-gradient:not(.playing) .feqb-3,.eq-gradient.fc-audio-analyser-unavailable-v1137 .feqb-3{height:72%!important}
+.eq-gradient:not(.playing) .feqb-4,.eq-gradient.fc-audio-analyser-unavailable-v1137 .feqb-4{height:50%!important}.eq-gradient:not(.playing) .feqb-5,.eq-gradient.fc-audio-analyser-unavailable-v1137 .feqb-5{height:64%!important}.eq-gradient:not(.playing) .feqb-6,.eq-gradient.fc-audio-analyser-unavailable-v1137 .feqb-6{height:38%!important}.eq-gradient:not(.playing) .feqb-7,.eq-gradient.fc-audio-analyser-unavailable-v1137 .feqb-7{height:68%!important}
+.eq-gradient:not(.playing) .feqb-8,.eq-gradient.fc-audio-analyser-unavailable-v1137 .feqb-8{height:46%!important}.eq-gradient:not(.playing) .feqb-9,.eq-gradient.fc-audio-analyser-unavailable-v1137 .feqb-9{height:60%!important}.eq-gradient:not(.playing) .feqb-10,.eq-gradient.fc-audio-analyser-unavailable-v1137 .feqb-10{height:36%!important}.eq-gradient:not(.playing) .feqb-11,.eq-gradient.fc-audio-analyser-unavailable-v1137 .feqb-11{height:54%!important}.eq-gradient:not(.playing) .feqb-12,.eq-gradient.fc-audio-analyser-unavailable-v1137 .feqb-12{height:44%!important}
+.eq-gradient.playing .feqb{transition:height .08s linear!important}
+.eq-gradient:not(.playing) .feqb{transition:height .18s ease!important}
+.fcc-fire-eq.fc-audio-analyser-unavailable-v1137 .feqb{animation:none!important}
+
+.fc-audio-card-progress-v1137{
+  position:absolute;z-index:5;left:14px;right:14px;bottom:13px;
+  display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;
+  color:rgba(255,244,236,.78);font:700 10px/1 var(--font-body);font-variant-numeric:tabular-nums;
+  pointer-events:none;text-shadow:0 1px 6px rgba(0,0,0,.8);
+}
+.fc-audio-card-track-v1137{height:3px;border-radius:999px;background:rgba(255,255,255,.18);overflow:hidden}
+.fc-audio-card-fill-v1137{display:block;width:0;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--flame),var(--ember),var(--gold));transition:width .12s linear}
+.fcc-fire-eq.playing .fc-audio-card-progress-v1137{color:#fff}
+
+.fc-audio-entry-rail-v1137 .fcc-entries-scroll{
+  gap:12px!important;padding:0 14px 9px!important;scroll-padding-inline:14px!important;
+}
+.fc-audio-entry-rail-v1137 .fcc-entry-card{
+  flex:0 0 calc(100% - 34px)!important;min-width:calc(100% - 34px)!important;width:calc(100% - 34px)!important;
+  scroll-snap-align:center!important;transition:transform .18s ease,box-shadow .18s ease,opacity .18s ease!important;
+  box-shadow:0 12px 28px rgba(0,0,0,.28);
+}
+.fc-audio-entry-rail-v1137 .fcc-entries-scroll.fc-audio-swipe-active-v1137 .fcc-entry-card{transform:scale(.985);opacity:.94}
+.fc-audio-entry-rail-v1137 .fcc-dots{padding-top:5px}
+
+.cd-entries-grid.fc-audio-entry-grid-v1137{
+  gap:12px!important;padding:0 14px 6px!important;scroll-padding-inline:14px!important;
+}
+.cd-entries-grid.fc-audio-entry-grid-v1137>.cd-entry{
+  flex:0 0 calc(100% - 34px)!important;min-width:calc(100% - 34px)!important;width:calc(100% - 34px)!important;
+  scroll-snap-align:center!important;transition:transform .18s ease,opacity .18s ease!important;
+}
+.cd-entries-grid.fc-audio-entry-grid-v1137.fc-audio-swipe-active-v1137>.cd-entry{transform:scale(.985);opacity:.94}
+@media(max-width:390px){
+  .fc-audio-entry-rail-v1137 .fcc-entry-card,
+  .cd-entries-grid.fc-audio-entry-grid-v1137>.cd-entry{flex-basis:calc(100% - 28px)!important;min-width:calc(100% - 28px)!important;width:calc(100% - 28px)!important}
+}
+@media(prefers-reduced-motion:reduce){
+  .fc-audio-entry-rail-v1137 .fcc-entry-card,
+  .cd-entries-grid.fc-audio-entry-grid-v1137>.cd-entry{transition:none!important}
+  .fc-audio-card-fill-v1137{transition:none!important}
+}
+</style>
+<script id="fc-v1137-validation">
+window.FC_V1137_VALIDATION={build:'v1137',basedOn:'v1136',brandFlamePaletteRestored:true,sharedHonestIdleArtwork:true,realAnalyserOnly:true,compactPlaybackProgress:true,controlsFadeAndReveal:true,audioPeekCards:true,wholeCardFingerTracking:true,pauseAtSwipeOwnership:true,sqlRequired:false,edgeFunctionChanges:0,serviceWorkerRequired:false};
+</script>
 </head>
 <body>
 <!-- v1095 — stable session/data boot gate. Removed only after the signed-in
@@ -16329,34 +16394,12 @@ let _userAudioActive = false; // set synchronously on user tap; blocks lazy prev
 // Used by BOTH entry-card renderers (feed drawer + challenges page) — one
 // definition so they can never drift apart again.
 
-// v1136 — deterministic audio identity. Every audio entry keeps the selected
-// visual style, but its resting waveform is unique so a horizontal swipe reads
-// as a real card change instead of a name/index swap over identical artwork.
+// v1137 — honest shared idle artwork. The paused bars are a consistent cover,
+// not a fabricated waveform for the specific recording. Real audio data drives
+// the bars only while playback is active.
 function fcAudioVisualProfileV1136(entry) {
-  const raw = [entry?.id, entry?.user_id, entry?.submitter?.name, entry?.media_url, entry?.audio_url]
-    .filter(Boolean).join('|') || 'flames-audio';
-  let hash = 2166136261 >>> 0;
-  for (let i = 0; i < raw.length; i++) {
-    hash ^= raw.charCodeAt(i);
-    hash = Math.imul(hash, 16777619) >>> 0;
-  }
-  let x = hash || 0x9e3779b9;
-  const heights = Array.from({ length: 13 }, (_, i) => {
-    x ^= x << 13; x ^= x >>> 17; x ^= x << 5; x >>>= 0;
-    return 24 + ((x + i * 19) % 55);
-  });
-  const palettes = [
-    ['#5a3522','#c18a42','#f7d993'],
-    ['#49352a','#ad8350','#efd7aa'],
-    ['#603824','#c77d3e','#f3c982'],
-    ['#4f2d24','#b96f42','#efc896']
-  ];
-  const palette = palettes[hash % palettes.length];
-  const vars = heights.map((h, i) => `--fc-audio-h${i}-v1136:${h}%`);
-  vars.push(`--fc-audio-low-v1136:${palette[0]}`);
-  vars.push(`--fc-audio-mid-v1136:${palette[1]}`);
-  vars.push(`--fc-audio-high-v1136:${palette[2]}`);
-  return { heights, seed: hash.toString(36), style: vars.join(';') };
+  const heights = [34,58,42,72,50,64,38,68,46,60,36,54,44];
+  return { heights, seed: 'shared-idle', style: '' };
 }
 
 function fcAudioScheduleControlFadeV1136(tile) {
@@ -16380,7 +16423,7 @@ function _audioTileHtml(e, options = {}) {
   const style = getEqStyle();
   const mode = String(options.mode || 'card').replace(/[^a-z0-9_-]/gi, '') || 'card';
   const controls = options.controls === true;
-  const preload = controls ? 'metadata' : 'none';
+  const preload = controls || mode === 'card' || mode === 'winner' ? 'metadata' : 'none';
   const IMG_URL = 'https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/Assets/fire.jpeg';
   const visualProfileV1136 = fcAudioVisualProfileV1136(e);
   const rootClasses = `fcc-entry-media fcc-fire-eq eq-${style} fc-audio-mode-${mode}-v1123${controls ? ' fc-audio-has-controls-v1123' : ''}`;
@@ -16400,6 +16443,11 @@ function _audioTileHtml(e, options = {}) {
       <span class="fc-audio-duration-v1123">--:--</span>
       <button type="button" class="fc-audio-volume-v1123" aria-label="Mute audio" onclick="toggleFccAudioMuteV1123(this,event)">🔊</button>
     </div>` : '';
+  const compactProgressHtml = controls ? '' : `<div class="fc-audio-card-progress-v1137" aria-hidden="true">
+      <span class="fc-audio-card-current-v1137">0:00</span>
+      <span class="fc-audio-card-track-v1137"><span class="fc-audio-card-fill-v1137"></span></span>
+      <span class="fc-audio-card-duration-v1137">--:--</span>
+    </div>`;
 
   let visual = '';
   let mainButtonOutside = mainButton;
@@ -16424,7 +16472,7 @@ function _audioTileHtml(e, options = {}) {
     mainButtonOutside = '';
   }
 
-  return `<div class="${rootClasses}" data-audio-style="${style}" data-audio-visual-v1136="${visualProfileV1136.seed}" style="${visualProfileV1136.style}" onclick="toggleFccAudio(this,event)" role="group" aria-label="Audio entry · ${escapeHtml(EQ_LABELS[style])} style">${audio}${visual}${mainButtonOutside}${controlsHtml}</div>`;
+  return `<div class="${rootClasses}" data-audio-style="${style}" data-audio-visual-v1136="${visualProfileV1136.seed}" onclick="toggleFccAudio(this,event)" role="group" aria-label="Audio entry · ${escapeHtml(EQ_LABELS[style])} style">${audio}${visual}${mainButtonOutside}${compactProgressHtml}${controlsHtml}</div>`;
 }
 
 function formatFccAudioTimeV1123(value) {
@@ -16458,6 +16506,16 @@ function syncFccAudioControlsV1123(tile, audio) {
     volume.textContent = audio.muted || audio.volume === 0 ? '🔇' : '🔊';
     volume.setAttribute('aria-label', audio.muted || audio.volume === 0 ? 'Unmute audio' : 'Mute audio');
   }
+  const cardCurrent = tile.querySelector('.fc-audio-card-current-v1137');
+  const cardDuration = tile.querySelector('.fc-audio-card-duration-v1137');
+  const cardFill = tile.querySelector('.fc-audio-card-fill-v1137');
+  const finiteDurationV1137 = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0;
+  if (cardCurrent) cardCurrent.textContent = formatFccAudioTimeV1123(audio.currentTime || 0).replace('--:--','0:00');
+  if (cardDuration) cardDuration.textContent = finiteDurationV1137 ? formatFccAudioTimeV1123(finiteDurationV1137) : '--:--';
+  if (cardFill) {
+    const pctV1137 = finiteDurationV1137 ? ((audio.currentTime || 0) / finiteDurationV1137) * 100 : 0;
+    cardFill.style.width = `${Math.max(0, Math.min(100, pctV1137))}%`;
+  }
 }
 
 function fcAudioPlayStateV1123(tile, audio) {
@@ -16482,6 +16540,13 @@ function toggleFccAudio(tile, ev) {
   if (ev) { ev.preventDefault(); ev.stopPropagation(); }
   const audio = tile?.querySelector('audio');
   if (!audio) return;
+  const explicitPlaybackControlV1137 = !!ev?.target?.closest?.('.fcc-audio-btn,.fc-audio-play-v1123');
+  if (!audio.paused && !explicitPlaybackControlV1137) {
+    // Once the center control has faded, a tap on the artwork reveals it instead
+    // of unexpectedly stopping playback. Pause remains an explicit button action.
+    fcAudioScheduleControlFadeV1136(tile);
+    return;
+  }
   if (audio.paused) {
     _userAudioActive = true;
     document.querySelectorAll('audio,video').forEach(media => { if (media !== audio) { try { media.pause(); } catch (_) {} } });
@@ -16522,12 +16587,12 @@ function toggleFccAudioMuteV1123(button, ev) {
 // One shared AudioContext (iOS allows creation inside a tap handler, which
 // toggleFccAudio is). One MediaElementSource per <audio> — creating a second
 // for the same element THROWS, hence the a._feqSrc guard. The rAF loop maps 13
-// log-spaced frequency bins onto the 13 bars. FALLBACK: if the analyser reads
-// all zeros for ~1s (CORS blocked, or a quirk), switch to the CSS keyframe
-// dance so the bars are never simply frozen.
+// log-spaced frequency bins onto the 13 bars. If analyser access is unavailable,
+// v1137 leaves the honest shared cover in place rather than inventing motion.
 let _feqCtx = null;
 function _feqStart(tile, a) {
   try {
+    tile.classList.remove('fc-audio-analyser-unavailable-v1137');
     if (!_feqCtx) _feqCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (_feqCtx.state === 'suspended') _feqCtx.resume();
     if (!a._feqSrc) {
@@ -16593,31 +16658,9 @@ function _feqStart(tile, a) {
           : (10 + v * 82) + '%';  // bar: quiet -> 10% tall, loud -> 92% tall
       }
       if (sum === 0 && ++zeroFrames > 60) {
-        dlog('feq', 'analyser-silent-fallback', { curve: isCurve });
-        if (isCurve) {
-          // v738 — animate the curve with a travelling sine so a mute analyser
-          // never leaves it a dead flat line (the bug in Paul's screenshot).
-          tile._feqFakeRaf && cancelAnimationFrame(tile._feqFakeRaf);
-          const N = svgNodes.length || 13;
-          const fake = () => {
-            if (!tile.classList.contains('playing')) return;
-            const t = performance.now() / 1000;
-            let dstr = '';
-            for (let i = 0; i < N; i++) {
-              const x = 6 + i * (88 / (N - 1));
-              const v = 0.5 + 0.42 * Math.sin(i * 0.7 + t * 3) * Math.sin(t * 1.6 + i);
-              const y = 70 - v * 58;
-              dstr += (i ? ' L' : 'M') + x.toFixed(1) + ',' + y.toFixed(1);
-              if (svgNodes[i]) { svgNodes[i].setAttribute('cx', x.toFixed(1)); svgNodes[i].setAttribute('cy', y.toFixed(1)); }
-            }
-            svgPath.setAttribute('d', dstr);
-            tile._feqFakeRaf = requestAnimationFrame(fake);
-          };
-          tile._feqFakeRaf = requestAnimationFrame(fake);
-          return;
-        }
-        bars.forEach(b => { b.style.height = ''; });
-        tile.classList.add('feq-fallback');
+        dlog('feq', 'analyser-unavailable-static-cover', { curve: isCurve });
+        tile.classList.add('fc-audio-analyser-unavailable-v1137');
+        _feqStop(tile);
         return;
       }
       tile._feqRaf = requestAnimationFrame(loop);
@@ -16625,7 +16668,8 @@ function _feqStart(tile, a) {
     tile._feqRaf = requestAnimationFrame(loop);
   } catch (err) {
     dlog('feq', 'webaudio-fail', { e: String(err && err.message || err).slice(0, 60) });
-    tile.classList.add('feq-fallback');
+    tile.classList.add('fc-audio-analyser-unavailable-v1137');
+    _feqStop(tile);
   }
 }
 function _feqStop(tile) {
@@ -21846,6 +21890,7 @@ function renderChallengeDetail() {
   });
 
   const grid = document.getElementById('cdEntriesGrid');
+  if (grid) grid.classList.toggle('fc-audio-entry-grid-v1137', sortedEntries.length > 1 && sortedEntries.every(e => String(e.media_type || ch?.media_type || '').toLowerCase() === 'audio'));
   const counterEl = document.getElementById('cdEntriesCounter');
   const dotsEl = document.getElementById('cdEntriesDots');
   const navEl = document.getElementById('cdEntryNav');
@@ -24516,7 +24561,8 @@ function fcEntryRailV1060(ch, entries) {
   const statusV1085 = ch.computedStatus || computeChallengeStatus(ch);
   const votingV1085 = isVotingPhase(statusV1085);
   const voteTotalV1085 = entries.reduce((sum, e) => sum + Number(state.feedVoteCounts?.[e.id] || 0), 0);
-  return `<div class="fcc-entries-wrap fc-entry-rail-v1060 fc-entry-rail-v1079"><div class="fcc-entries-scroll">${entries.map((e,i) => {
+  const isAudioRailV1137 = entries.length > 1 && entries.every(e => String(e.media_type || ch?.media_type || '').toLowerCase() === 'audio');
+  return `<div class="fcc-entries-wrap fc-entry-rail-v1060 fc-entry-rail-v1079${isAudioRailV1137 ? ' fc-audio-entry-rail-v1137' : ''}"><div class="fcc-entries-scroll">${entries.map((e,i) => {
     const sub = e.submitter || {};
     const av = sub.avatar && /^https?:/.test(sub.avatar) ? `<img src="${escapeHtml(sub.avatar)}" alt="">` : escapeHtml((sub.name || '?').charAt(0).toUpperCase());
     const selectedV1085 = selectedVoteIdV1083 && String(selectedVoteIdV1083) === String(e.id);
@@ -29059,7 +29105,7 @@ function _wireTactileEntrySwipeV1125(sc, cardSelector, onSettled) {
     settleRaf = 0;
   };
   const restoreRail = g => {
-    sc.classList.remove('fc-swipe-dragging-v1125');
+    sc.classList.remove('fc-swipe-dragging-v1125','fc-audio-swipe-active-v1137');
     sc.style.scrollSnapType = g?.previousSnap || '';
     sc.style.scrollBehavior = g?.previousBehavior || '';
   };
@@ -29118,9 +29164,12 @@ function _wireTactileEntrySwipeV1125(sc, cardSelector, onSettled) {
     if (!g.mode && Math.max(ax, ay) >= 6) {
       g.mode = ax > ay * 1.08 ? 'x' : 'y';
       if (g.mode === 'x') {
-        sc.classList.add('fc-swipe-dragging-v1125');
+        sc.classList.add('fc-swipe-dragging-v1125','fc-audio-swipe-active-v1137');
         sc.style.scrollSnapType = 'none';
         sc.style.scrollBehavior = 'auto';
+        // Pause as soon as the rail owns the horizontal gesture, before the next
+        // entrant moves on screen.
+        sc.querySelectorAll('audio').forEach(a => { if (!a.paused) { try { a.pause(); } catch (_) {} } });
       }
     }
     if (g.mode !== 'x') return;
