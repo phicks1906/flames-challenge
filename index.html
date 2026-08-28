@@ -14,16 +14,16 @@
 <meta content="no-cache, no-store, must-revalidate" http-equiv="cache-control"/>
 <meta content="no-cache" http-equiv="pragma"/>
 <meta content="0" http-equiv="expires"/>
-<title>FlamesChallenge v1135 — Cancellable Entry Uploads & Stable Preview Playback</title>
+<title>FlamesChallenge v1136 — Refined Audio Playback & Distinct Entry Swiping</title>
 <meta content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." name="description"/>
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
      the first kilobyte, so the update check can read it with a tiny ranged
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1135 · cancellable-entry-uploads-stable-preview" name="fc-build"/>
-<!-- v1135: entry uploads can be cancelled safely, and local video previews pause before other sheet interactions to avoid iPhone decoder glitches. -->
-<meta content="Entry uploads can now be cancelled, and preview playback stays stable while using the entry form." name="fc-whatsnew"/>
+<meta content="v1136 · refined-audio-playback-distinct-entry-swiping" name="fc-build"/>
+<!-- v1136: audio playback controls fade after activation, the Bars treatment uses a quieter crown-gold palette, and each audio entry has a distinct idle waveform so carousel movement is visible. -->
+<meta content="Audio controls now fade during playback, and audio entries are visually distinct while swiping." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -7597,6 +7597,54 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
 </style>
 
 
+
+<style id="fc-v1136-audio-feedback-css">
+/* v1136 — audio playback should recede once it starts, and audio entries in a
+   horizontal competition rail must not look like the same card with only the
+   name swapped. The Bars style now uses a quieter crown-gold/bronze palette;
+   each entry receives a deterministic idle skyline from its own entry data. */
+.fcc-fire-eq .fcc-audio-btn{
+  opacity:1;
+  transition:opacity .24s ease,transform .15s ease,background .15s ease!important;
+}
+.fcc-fire-eq.playing .fcc-audio-btn{opacity:0!important;pointer-events:none!important}
+.fcc-fire-eq.playing:focus-within .fcc-audio-btn{opacity:0!important;pointer-events:none!important}
+.fcc-fire-eq.playing.fc-audio-controls-visible-v1136 .fcc-audio-btn{opacity:.92!important;pointer-events:auto!important}
+@media(hover:hover) and (pointer:fine){
+  .fcc-fire-eq.playing:hover .fcc-audio-btn{opacity:.9!important;pointer-events:auto!important}
+}
+
+.eq-gradient{
+  background:
+    radial-gradient(ellipse 88% 42% at 50% 104%,rgba(211,157,72,.20),transparent 64%),
+    linear-gradient(180deg,#0b0a08 0%,#030303 100%)!important;
+}
+.eq-gradient .feqb{
+  background:linear-gradient(to top,
+    var(--fc-audio-low-v1136,#5a3522) 0%,
+    var(--fc-audio-mid-v1136,#c18a42) 56%,
+    var(--fc-audio-high-v1136,#f7d993) 100%)!important;
+  box-shadow:0 0 10px rgba(210,160,82,.34),inset 0 1px 0 rgba(255,255,255,.18)!important;
+  border-radius:3px 3px 1px 1px!important;
+}
+.eq-gradient .feq-segs{
+  opacity:.55!important;
+  background-image:repeating-linear-gradient(0deg,rgba(2,2,2,.88) 0 2px,transparent 2px 17px)!important;
+}
+.eq-gradient .feqb-0{height:var(--fc-audio-h0-v1136,26%)}
+.eq-gradient .feqb-1{height:var(--fc-audio-h1-v1136,52%)}
+.eq-gradient .feqb-2{height:var(--fc-audio-h2-v1136,34%)}
+.eq-gradient .feqb-3{height:var(--fc-audio-h3-v1136,68%)}
+.eq-gradient .feqb-4{height:var(--fc-audio-h4-v1136,44%)}
+.eq-gradient .feqb-5{height:var(--fc-audio-h5-v1136,58%)}
+.eq-gradient .feqb-6{height:var(--fc-audio-h6-v1136,30%)}
+.eq-gradient .feqb-7{height:var(--fc-audio-h7-v1136,62%)}
+.eq-gradient .feqb-8{height:var(--fc-audio-h8-v1136,40%)}
+.eq-gradient .feqb-9{height:var(--fc-audio-h9-v1136,54%)}
+.eq-gradient .feqb-10{height:var(--fc-audio-h10-v1136,28%)}
+.eq-gradient .feqb-11{height:var(--fc-audio-h11-v1136,48%)}
+.eq-gradient .feqb-12{height:var(--fc-audio-h12-v1136,36%)}
+</style>
 </head>
 <body>
 <!-- v1095 — stable session/data boot gate. Removed only after the signed-in
@@ -16280,6 +16328,50 @@ let _userAudioActive = false; // set synchronously on user tap; blocks lazy prev
 // big play control. The native bar also cannot fit a 48vw card; one button can.
 // Used by BOTH entry-card renderers (feed drawer + challenges page) — one
 // definition so they can never drift apart again.
+
+// v1136 — deterministic audio identity. Every audio entry keeps the selected
+// visual style, but its resting waveform is unique so a horizontal swipe reads
+// as a real card change instead of a name/index swap over identical artwork.
+function fcAudioVisualProfileV1136(entry) {
+  const raw = [entry?.id, entry?.user_id, entry?.submitter?.name, entry?.media_url, entry?.audio_url]
+    .filter(Boolean).join('|') || 'flames-audio';
+  let hash = 2166136261 >>> 0;
+  for (let i = 0; i < raw.length; i++) {
+    hash ^= raw.charCodeAt(i);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  let x = hash || 0x9e3779b9;
+  const heights = Array.from({ length: 13 }, (_, i) => {
+    x ^= x << 13; x ^= x >>> 17; x ^= x << 5; x >>>= 0;
+    return 24 + ((x + i * 19) % 55);
+  });
+  const palettes = [
+    ['#5a3522','#c18a42','#f7d993'],
+    ['#49352a','#ad8350','#efd7aa'],
+    ['#603824','#c77d3e','#f3c982'],
+    ['#4f2d24','#b96f42','#efc896']
+  ];
+  const palette = palettes[hash % palettes.length];
+  const vars = heights.map((h, i) => `--fc-audio-h${i}-v1136:${h}%`);
+  vars.push(`--fc-audio-low-v1136:${palette[0]}`);
+  vars.push(`--fc-audio-mid-v1136:${palette[1]}`);
+  vars.push(`--fc-audio-high-v1136:${palette[2]}`);
+  return { heights, seed: hash.toString(36), style: vars.join(';') };
+}
+
+function fcAudioScheduleControlFadeV1136(tile) {
+  if (!tile) return;
+  if (tile._fcAudioControlTimerV1136) clearTimeout(tile._fcAudioControlTimerV1136);
+  tile.classList.add('fc-audio-controls-visible-v1136');
+  tile._fcAudioControlTimerV1136 = setTimeout(() => {
+    tile._fcAudioControlTimerV1136 = null;
+    if (!tile.classList.contains('playing')) return;
+    tile.classList.remove('fc-audio-controls-visible-v1136');
+    const active = document.activeElement;
+    if (active && tile.contains(active) && typeof active.blur === 'function') active.blur();
+  }, 1350);
+}
+
 function _audioTileHtml(e, options = {}) {
   const mediaUrl = e?.media_url || e?.audio_url || '';
   if (!mediaUrl) return `<div class="fcc-entry-media fcc-entry-placeholder fc-entry-audio-v1079" aria-label="Audio entry"><span aria-hidden="true">♪</span></div>`;
@@ -16290,6 +16382,7 @@ function _audioTileHtml(e, options = {}) {
   const controls = options.controls === true;
   const preload = controls ? 'metadata' : 'none';
   const IMG_URL = 'https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/Assets/fire.jpeg';
+  const visualProfileV1136 = fcAudioVisualProfileV1136(e);
   const rootClasses = `fcc-entry-media fcc-fire-eq eq-${style} fc-audio-mode-${mode}-v1123${controls ? ' fc-audio-has-controls-v1123' : ''}`;
   const audio = `<audio src="${escapeHtml(mediaUrl)}" preload="${preload}" crossorigin="anonymous"
     onloadedmetadata="syncFccAudioControlsV1123(this.closest('.fcc-fire-eq'),this)"
@@ -16311,7 +16404,7 @@ function _audioTileHtml(e, options = {}) {
   let visual = '';
   let mainButtonOutside = mainButton;
   if (style === 'curve') {
-    const idle = [55,32,42,52,47,58,50,45,30,48,52,62,57];
+    const idle = visualProfileV1136.heights.map(h => Math.max(18, Math.min(68, Math.round(78 - h * .72))));
     const xs = Array.from({length: NB}, (_, i) => 6 + i * (88 / (NB - 1)));
     const d = idle.map((y, i) => `${i ? 'L' : 'M'}${xs[i].toFixed(1)},${y}`).join(' ');
     const nodes = idle.map((y, i) => `<circle class="feq-node" cx="${xs[i].toFixed(1)}" cy="${y}" r="1.8"/>`).join('');
@@ -16331,7 +16424,7 @@ function _audioTileHtml(e, options = {}) {
     mainButtonOutside = '';
   }
 
-  return `<div class="${rootClasses}" data-audio-style="${style}" onclick="toggleFccAudio(this,event)" role="group" aria-label="Audio entry · ${escapeHtml(EQ_LABELS[style])} style">${audio}${visual}${mainButtonOutside}${controlsHtml}</div>`;
+  return `<div class="${rootClasses}" data-audio-style="${style}" data-audio-visual-v1136="${visualProfileV1136.seed}" style="${visualProfileV1136.style}" onclick="toggleFccAudio(this,event)" role="group" aria-label="Audio entry · ${escapeHtml(EQ_LABELS[style])} style">${audio}${visual}${mainButtonOutside}${controlsHtml}</div>`;
 }
 
 function formatFccAudioTimeV1123(value) {
@@ -16372,12 +16465,14 @@ function fcAudioPlayStateV1123(tile, audio) {
   tile.classList.add('playing');
   tile.querySelectorAll('.fcc-audio-btn,.fc-audio-play-v1123').forEach(btn => { btn.textContent = '⏸'; btn.setAttribute('aria-label','Pause audio'); });
   syncFccAudioControlsV1123(tile, audio);
+  fcAudioScheduleControlFadeV1136(tile);
   _feqStart(tile, audio);
 }
 
 function fcAudioPauseStateV1123(tile, audio) {
   if (!tile || !audio) return;
-  tile.classList.remove('playing');
+  if (tile._fcAudioControlTimerV1136) { clearTimeout(tile._fcAudioControlTimerV1136); tile._fcAudioControlTimerV1136 = null; }
+  tile.classList.remove('playing','fc-audio-controls-visible-v1136');
   tile.querySelectorAll('.fcc-audio-btn,.fc-audio-play-v1123').forEach(btn => { btn.textContent = '▶'; btn.setAttribute('aria-label','Play audio'); });
   syncFccAudioControlsV1123(tile, audio);
   _feqStop(tile);
@@ -29114,7 +29209,15 @@ function _wireEntryDots(root) {
       const i = Math.max(0, Math.min(list.length - 1, Math.round(sc.scrollLeft / st)));
       list.forEach((d, n) => d.classList.toggle('active', n === i));
     };
+    let lastAudioScrollV1136 = sc.scrollLeft;
     sc.addEventListener('scroll', () => {
+      // v1136 — once the rail actually moves, stop the old entry's audio.
+      // Otherwise the next name/card can arrive while the previous track keeps
+      // playing, which makes an already-similar audio carousel feel broken.
+      if (Math.abs(sc.scrollLeft - lastAudioScrollV1136) > 4) {
+        sc.querySelectorAll('audio').forEach(a => { if (!a.paused) { try { a.pause(); } catch (_) {} } });
+        lastAudioScrollV1136 = sc.scrollLeft;
+      }
       if (sc._dotRaf) return;
       sc._dotRaf = requestAnimationFrame(() => { sc._dotRaf = null; update(); });
     }, { passive: true });
