@@ -14,15 +14,15 @@
 <meta content="no-cache, no-store, must-revalidate" http-equiv="cache-control"/>
 <meta content="no-cache" http-equiv="pragma"/>
 <meta content="0" http-equiv="expires"/>
-<title>FlamesChallenge v1140 — Approved Audio Waveform Player & Expandable Entries</title>
+<title>FlamesChallenge v1141 — Approved Audio Carousel Composition</title>
 <meta content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." name="description"/>
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
      the first kilobyte, so the update check can read it with a tiny ranged
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1140 · approved-audio-waveform-expandable-entries" name="fc-build"/>
-<!-- v1138: paused audio entries identify the entrant directly, reveal the real visualizer only during playback, and expose more of the neighboring card while preserving the existing Ask Ember launcher. -->
+<meta content="v1141 · approved-audio-carousel-composition" name="fc-build"/>
+<!-- v1141: the competition audio card now follows the approved waveform-carousel composition in both the feed and expanded viewer. -->
 <meta content="Audio entries now use the approved large waveform player and expand into the focused viewer when the tile is tapped." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
@@ -7940,6 +7940,77 @@ window.FC_V1138_VALIDATION={build:'v1138',basedOn:'v1137',entrantSpecificPausedC
 window.FC_V1140_VALIDATION={build:'v1140',basedOn:'v1138',rejectedBuildSkipped:'v1139',approvedWaveformLayout:true,tileTapExpands:true,playButtonDoesNotExpand:true,largeWaveformStage:true,singleMetadataRow:true,singleScrubber:true,neighborPeeks:true,sceneUploadPreviewPreserved:true,askEmberChanged:false,sqlRequired:false,edgeFunctionChanges:0,serviceWorkerRequired:false};
 </script>
 
+
+<style id="fc-v1141-approved-audio-carousel-css">
+/* v1141 — literal implementation of the approved audio-carousel composition.
+   The feed tile and expanded viewer share one structure; only scale changes. */
+.fc-audio-player-v1141{
+  position:relative!important;display:flex!important;flex-direction:column!important;
+  width:100%!important;height:auto!important;min-height:0!important;aspect-ratio:auto!important;
+  padding:14px 14px 12px!important;overflow:hidden!important;color:#fff!important;
+  background:radial-gradient(circle at 50% 57%,rgba(255,91,31,.10),transparent 48%),linear-gradient(180deg,#0b0908,#050403)!important;
+  border:0!important;border-radius:0!important;isolation:isolate;
+}
+.fc-audio-player-v1141 audio{position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important}
+.fc-audio-stage-v1141{
+  position:relative;height:218px;min-height:218px;border:1px solid rgba(255,121,51,.22);border-radius:18px 18px 12px 12px;overflow:hidden;
+  background:repeating-linear-gradient(0deg,rgba(255,126,54,.05) 0 1px,transparent 1px 39px),repeating-linear-gradient(90deg,rgba(255,126,54,.04) 0 1px,transparent 1px 58px),radial-gradient(circle at 50% 58%,rgba(255,100,34,.08),transparent 45%),#070605;
+}
+.fc-audio-time-marks-v1141{position:absolute;z-index:4;top:13px;left:14px;right:14px;display:flex;justify-content:space-between;color:rgba(238,220,207,.65);font:650 10px/1 var(--font-body);font-variant-numeric:tabular-nums}
+.fc-audio-wave-svg-v1141{position:absolute;z-index:3;left:14px;right:14px;top:38px;width:calc(100% - 28px);height:calc(100% - 52px);overflow:visible}
+.fc-audio-wave-path-v1141,.fc-audio-wave-glow-v1141{fill:none;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.fc-audio-wave-glow-v1141{stroke-width:8;opacity:.23;filter:blur(5px)}
+.fc-audio-wave-path-v1141{stroke-width:3.2;filter:drop-shadow(0 0 6px rgba(255,91,30,.62));transition:d .08s linear}
+.fc-audio-ember-v1141{position:absolute;z-index:2;width:3px;height:3px;border-radius:50%;background:#ff7a2f;box-shadow:0 0 8px #ff5a20;opacity:.7}
+.fc-audio-ember-v1141.e1{left:24%;top:62%}.fc-audio-ember-v1141.e2{left:68%;top:37%}.fc-audio-ember-v1141.e3{left:83%;top:69%}
+.fc-audio-track-row-v1141{display:grid;grid-template-columns:58px minmax(0,1fr) 62px;align-items:center;gap:12px;margin:-1px 7px 0;padding:12px;border:1px solid rgba(255,126,54,.18);border-radius:0 0 16px 16px;background:linear-gradient(180deg,rgba(18,12,9,.97),rgba(8,6,5,.99));position:relative;z-index:7}
+.fc-audio-cover-v1141{width:58px;height:58px;border-radius:50%;overflow:hidden;display:grid;place-items:center;background:linear-gradient(135deg,var(--ember),var(--flame));border:2px solid var(--ember);box-shadow:0 0 0 5px rgba(255,106,44,.08),0 9px 20px rgba(0,0,0,.34);font-size:24px}
+.fc-audio-cover-v1141 .avatar-img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.fc-audio-track-copy-v1141{min-width:0;display:flex;flex-direction:column;align-items:flex-start}
+.fc-audio-track-copy-v1141>span{color:var(--ember-bright);font:800 9px/1 var(--font-body);letter-spacing:.16em;text-transform:uppercase}
+.fc-audio-track-copy-v1141>strong{width:100%;margin-top:5px;color:#fff;font:800 15px/1.18 var(--font-bricolage);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fc-audio-track-copy-v1141>small{width:100%;margin-top:4px;color:rgba(232,216,204,.66);font:600 10.5px/1.2 var(--font-body);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fc-audio-main-play-v1141{position:relative!important;inset:auto!important;transform:none!important;width:62px!important;height:62px!important;border-radius:50%!important;display:grid!important;place-items:center!important;border:1px solid rgba(255,155,82,.72)!important;background:linear-gradient(145deg,rgba(255,87,31,.38),rgba(22,12,8,.94))!important;color:#fff!important;font:800 20px/1 var(--font-body)!important;box-shadow:0 0 0 5px rgba(255,81,29,.07),0 0 24px rgba(255,76,28,.28)!important;cursor:pointer;transition:opacity .22s ease,transform .15s ease!important}
+.fc-audio-main-play-v1141:active{transform:scale(.94)!important}
+.fc-audio-player-v1141.playing .fc-audio-main-play-v1141{opacity:0!important;pointer-events:none!important}
+.fc-audio-player-v1141.playing.fc-audio-controls-visible-v1136 .fc-audio-main-play-v1141{opacity:.92!important;pointer-events:auto!important}
+.fc-audio-scrub-v1141{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;padding:13px 4px 0;color:rgba(242,228,218,.88);font:750 11px/1 var(--font-body);font-variant-numeric:tabular-nums;position:relative;z-index:7}
+.fc-audio-seek-v1141{--fc-audio-progress-v1141:0%;height:26px!important;min-width:0!important}
+.fc-audio-seek-v1141::-webkit-slider-runnable-track{height:4px!important;border-radius:999px!important;background:linear-gradient(90deg,var(--ember) 0 var(--fc-audio-progress-v1141),rgba(255,255,255,.18) var(--fc-audio-progress-v1141) 100%)!important}
+.fc-audio-seek-v1141::-webkit-slider-thumb{-webkit-appearance:none!important;width:17px!important;height:17px!important;margin-top:-6.5px!important;border:2px solid #ffb260!important;border-radius:50%!important;background:#ff5b2e!important;box-shadow:0 0 13px rgba(255,77,31,.55)!important}
+.fc-audio-seek-v1141::-moz-range-track{height:4px!important;border-radius:999px!important;background:rgba(255,255,255,.18)!important}.fc-audio-seek-v1141::-moz-range-progress{height:4px!important;border-radius:999px!important;background:var(--ember)!important}.fc-audio-seek-v1141::-moz-range-thumb{width:15px!important;height:15px!important;border:2px solid #ffb260!important;border-radius:50%!important;background:#ff5b2e!important}
+
+/* Approved centered carousel: dominant card plus small, intentional side peeks. */
+.fc-entry-rail-v1079.fc-audio-entry-rail-v1137 .fcc-entries-scroll{gap:12px!important;padding:0 28px 10px!important;scroll-padding-inline:28px!important}
+.fc-entry-rail-v1079.fc-audio-entry-rail-v1137 .fcc-entries-scroll>.fcc-entry-card{flex:0 0 calc(100% - 56px)!important;min-width:calc(100% - 56px)!important;width:calc(100% - 56px)!important;scroll-snap-align:center!important;border-radius:22px!important;border:1px solid rgba(255,118,48,.32)!important;background:#0c0907!important;box-shadow:0 18px 42px rgba(0,0,0,.38)!important}
+.fc-audio-entry-rail-v1137 .fcc-entry-head-v1079{min-height:58px!important;padding:12px 14px!important;background:linear-gradient(180deg,#130d0a,#0d0907)!important;border-bottom:1px solid rgba(255,123,55,.24)!important}
+.fc-audio-entry-rail-v1137 .fcc-entry-head-v1079 .fcc-entry-avatar{width:38px!important;height:38px!important}.fc-audio-entry-rail-v1137 .fcc-entry-name-v1079{font-size:14px!important}.fc-audio-entry-rail-v1137 .fcc-entry-position-v1079{font-size:12px!important}
+.fc-audio-entry-rail-v1137 .fc-audio-player-v1141{border-radius:0 0 21px 21px!important}
+#feedContainer .fc-audio-entry-rail-v1137 .fcc-entry-card,#challengesGrid .fc-audio-entry-rail-v1137 .fcc-entry-card{border:1px solid rgba(255,118,48,.32)!important;border-radius:22px!important}
+div.fc-entry-rail-v1079.fc-audio-entry-rail-v1137>.fcc-dots{display:flex!important;justify-content:center!important;gap:7px!important;padding:7px 0 2px!important}
+div.fc-entry-rail-v1079.fc-audio-entry-rail-v1137>.fcc-dots .fcc-dot{width:7px!important;height:7px!important}
+
+.cd-entries-grid.fc-audio-entry-grid-v1137{gap:12px!important;padding:0 28px 8px!important;scroll-padding-inline:28px!important}
+.cd-entries-grid.fc-audio-entry-grid-v1137>.cd-entry{flex:0 0 calc(100% - 56px)!important;min-width:calc(100% - 56px)!important;width:calc(100% - 56px)!important;scroll-snap-align:center!important;border-color:rgba(255,118,48,.28)!important;border-radius:22px!important;overflow:hidden!important}
+.fc-audio-expand-hit-v1140 .fc-audio-player-v1141{border-radius:20px!important}
+
+/* Expanded viewer: the same approved composition, only larger. */
+.fc-entry-viewer-v1079 .fc-ev-audio-v1123{padding:clamp(14px,3vw,24px)!important;background:radial-gradient(circle at 50% 45%,rgba(255,91,32,.08),transparent 48%),#070504!important;align-items:center!important;justify-content:center!important}
+.fc-entry-viewer-v1079 .fc-ev-audio-v1123>.fc-audio-mode-viewer-v1141{width:min(92vw,620px)!important;max-width:620px!important;height:auto!important;aspect-ratio:auto!important;border-radius:24px!important;border:1px solid rgba(255,126,54,.35)!important;box-shadow:0 30px 90px rgba(0,0,0,.55),0 0 40px rgba(255,76,29,.08)!important;padding:18px 18px 16px!important}
+.fc-audio-mode-viewer-v1141 .fc-audio-stage-v1141{height:min(46vh,430px);min-height:300px}.fc-audio-mode-viewer-v1141 .fc-audio-wave-path-v1141{stroke-width:4}.fc-audio-mode-viewer-v1141 .fc-audio-wave-glow-v1141{stroke-width:11}.fc-audio-mode-viewer-v1141 .fc-audio-track-row-v1141{grid-template-columns:68px minmax(0,1fr) 72px;padding:14px}.fc-audio-mode-viewer-v1141 .fc-audio-cover-v1141{width:68px;height:68px}.fc-audio-mode-viewer-v1141 .fc-audio-main-play-v1141{width:72px!important;height:72px!important;font-size:24px!important}.fc-audio-mode-viewer-v1141 .fc-audio-track-copy-v1141>strong{font-size:18px}.fc-audio-mode-viewer-v1141 .fc-audio-track-copy-v1141>small{font-size:12px}.fc-audio-mode-viewer-v1141 .fc-audio-scrub-v1141{font-size:13px;padding-top:16px}
+.fc-audio-mode-feed-viewer-v1141{width:min(100%,620px)!important;border-radius:22px!important;border:1px solid rgba(255,126,54,.30)!important}
+.fc-winner-audio-v1123 .fc-audio-player-v1141{border-radius:0!important}
+
+@media(max-width:390px){
+  .fc-entry-rail-v1079.fc-audio-entry-rail-v1137 .fcc-entries-scroll,.cd-entries-grid.fc-audio-entry-grid-v1137{padding-left:22px!important;padding-right:22px!important;scroll-padding-inline:22px!important}
+  .fc-entry-rail-v1079.fc-audio-entry-rail-v1137 .fcc-entries-scroll>.fcc-entry-card,.cd-entries-grid.fc-audio-entry-grid-v1137>.cd-entry{flex-basis:calc(100% - 44px)!important;min-width:calc(100% - 44px)!important;width:calc(100% - 44px)!important}
+  .fc-audio-player-v1141{padding:12px 11px 10px!important}.fc-audio-stage-v1141{height:205px;min-height:205px}.fc-audio-track-row-v1141{grid-template-columns:48px minmax(0,1fr) 52px;gap:8px;margin-left:5px;margin-right:5px;padding:9px}.fc-audio-cover-v1141{width:48px;height:48px}.fc-audio-main-play-v1141{width:52px!important;height:52px!important}.fc-audio-track-copy-v1141>strong{font-size:13px}.fc-audio-track-copy-v1141>small{font-size:9.5px}
+}
+@media(prefers-reduced-motion:reduce){.fc-audio-wave-path-v1141,.fc-audio-main-play-v1141{transition:none!important}}
+</style>
+<script id="fc-v1141-validation">
+window.FC_V1141_VALIDATION={build:'v1141',basedOn:'v1140',approvedCompositionLiteral:true,sameFeedAndViewerStructure:true,naturalWaveformStage:true,dominantCenteredCard:true,intentionalNeighborPeeks:true,tileTapExpands:true,playButtonDoesNotExpand:true,askEmberChanged:false,sqlRequired:false,edgeFunctionChanges:0,serviceWorkerRequired:false};
+</script>
 </head>
 <body>
 <!-- v1095 — stable session/data boot gate. Removed only after the signed-in
@@ -16718,60 +16789,77 @@ function _audioTileHtmlLegacyV1138(e, options = {}) {
 // large waveform stage, one metadata row, one play control, and one scrubber.
 // Upload previews continue to use the v1138 renderer so the approved Scene
 // artwork and Audio style selector remain intact.
-function fcAudioPremiumIdleHeightsV1140(count = 52) {
-  const values = [];
-  for (let i = 0; i < count; i++) {
-    const center = 1 - Math.abs((i / Math.max(1, count - 1)) * 2 - 1);
-    const wave = (Math.sin(i * 0.83) + Math.sin(i * 0.31 + 1.2) + 2) / 4;
-    values.push(Math.round(13 + center * 30 + wave * 27));
+function fcAudioHashV1141(value) {
+  let h = 2166136261;
+  const s = String(value || 'audio-entry');
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
   }
-  return values;
+  return h >>> 0;
 }
 
-function fcAudioPremiumTitleV1140(entry, options = {}) {
+function fcAudioWavePathV1141(seedValue, count = 74) {
+  let seed = fcAudioHashV1141(seedValue) || 1;
+  const rnd = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+  const pts = [];
+  let smooth = .35;
+  for (let i = 0; i < count; i++) {
+    const x = 2 + (96 * i / Math.max(1, count - 1));
+    const envelope = .35 + .65 * Math.sin(Math.PI * i / Math.max(1, count - 1));
+    const pulse = .28 + .72 * Math.abs(Math.sin(i * .54 + rnd() * .8));
+    smooth = smooth * .52 + (rnd() * .72 + .14) * .48;
+    const amp = Math.min(.96, (.22 + pulse * .48 + smooth * .25) * envelope);
+    const sign = i % 2 ? 1 : -1;
+    const y = 50 + sign * (6 + amp * 34);
+    pts.push([x, y]);
+  }
+  return pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(2)},${p[1].toFixed(2)}`).join(' ');
+}
+
+function fcAudioTitleV1141(entry, options = {}) {
   const explicit = String(options.trackTitle || '').trim();
   if (explicit) return explicit;
   const caption = String(entry?.caption || '').trim();
   if (caption) return caption;
   const challengeTitle = String(options.challengeTitle || '').trim();
   if (challengeTitle) return challengeTitle;
-  const entrant = String(entry?.submitter?.name || '').trim();
-  return entrant ? `${entrant}'s audio entry` : 'Audio entry';
+  return 'Audio entry';
 }
 
-function fcAudioPremiumSubtitleV1140(options = {}) {
+function fcAudioSubtitleV1141(options = {}) {
   const explicit = String(options.subtitle || '').trim();
   if (explicit) return explicit;
   const category = String(options.category || '').trim();
   return category ? `${category} · Audio entry` : 'Audio entry';
 }
 
-function fcAudioSyncPremiumV1140(tile, audio) {
+function fcAudioSyncV1141(tile, audio) {
   if (!tile || !audio) return;
   const duration = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0;
   const current = Math.max(0, Number(audio.currentTime) || 0);
-  const currentEl = tile.querySelector('.fc-audio-current-v1140');
-  const durationEl = tile.querySelector('.fc-audio-duration-v1140');
+  const currentEl = tile.querySelector('.fc-audio-current-v1141');
+  const durationEl = tile.querySelector('.fc-audio-duration-v1141');
   if (currentEl) currentEl.textContent = formatFccAudioTimeV1123(current).replace('--:--', '0:00');
   if (durationEl) durationEl.textContent = duration ? formatFccAudioTimeV1123(duration) : '0:00';
-
-  const seek = tile.querySelector('.fc-audio-seek-v1123');
+  const seek = tile.querySelector('.fc-audio-seek-v1141');
   if (seek) {
     seek.max = String(duration || 0);
     if (!seek.matches(':active')) seek.value = String(Math.min(current, duration || 0));
     const pct = duration ? (current / duration) * 100 : 0;
-    seek.style.setProperty('--fc-premium-progress-v1140', `${Math.max(0, Math.min(100, pct))}%`);
+    seek.style.setProperty('--fc-audio-progress-v1141', `${Math.max(0, Math.min(100, pct))}%`);
   }
-
-  tile.querySelectorAll('[data-fc-audio-marker-v1140]').forEach(marker => {
-    const ratio = Number(marker.dataset.fcAudioMarkerV1140 || 0);
-    const value = duration ? duration * ratio : 0;
-    marker.textContent = formatFccAudioTimeV1123(value).replace('--:--', '0:00');
+  tile.querySelectorAll('[data-fc-audio-marker-v1141]').forEach(marker => {
+    const ratio = Number(marker.dataset.fcAudioMarkerV1141 || 0);
+    marker.textContent = duration ? formatFccAudioTimeV1123(duration * ratio) : '0:00';
   });
-  tile.classList.toggle('fc-audio-ready-v1140', duration > 0);
+  tile.classList.toggle('fc-audio-ready-v1141', duration > 0);
 }
 
-function fcAudioRevealControlsV1140(tile, ev) {
+function fcAudioRevealControlsV1141(tile, ev) {
   if (!tile || ev?.target?.closest?.('button,input')) return;
   if (!tile.classList.contains('playing')) return;
   if (ev) { ev.preventDefault(); ev.stopPropagation(); }
@@ -16780,7 +16868,6 @@ function fcAudioRevealControlsV1140(tile, ev) {
 
 function _audioTileHtml(e, options = {}) {
   const mode = String(options.mode || 'card').replace(/[^a-z0-9_-]/gi, '') || 'card';
-  // Entry-upload previews keep the selectable legacy visual styles and restored Scene art.
   if (mode === 'preview') return _audioTileHtmlLegacyV1138(e, options);
 
   const mediaUrl = e?.media_url || e?.audio_url || '';
@@ -16788,56 +16875,59 @@ function _audioTileHtml(e, options = {}) {
 
   const entrantName = String(e?.submitter?.name || options.entrantName || 'Competitor');
   const entrantAvatar = avatarInner(e?.submitter?.avatar || options.entrantAvatar || '🔥');
-  const trackTitle = fcAudioPremiumTitleV1140(e, options);
-  const subtitle = fcAudioPremiumSubtitleV1140(options);
-  const preload = mode === 'card' || mode === 'winner' ? 'metadata' : 'auto';
-  const heights = fcAudioPremiumIdleHeightsV1140(52);
-  const bars = heights.map((height, index) =>
-    `<span class="feqb fc-audio-wavebar-v1140" style="height:${height}%" data-wave-index-v1140="${index}"></span>`
-  ).join('');
-  const entryId = escapeHtml(String(e?.id || options.entryId || ''));
+  const trackTitle = fcAudioTitleV1141(e, options);
+  const subtitle = fcAudioSubtitleV1141(options);
+  const preload = mode === 'card' || mode === 'detail' || mode === 'winner' ? 'metadata' : 'auto';
+  const entryIdRaw = String(e?.id || options.entryId || 'audio-entry');
+  const entryId = escapeHtml(entryIdRaw);
   const challengeId = escapeHtml(String(e?.challenge_id || options.challengeId || ''));
+  const gradientId = `fcAudioGradientV1141-${entryIdRaw.replace(/[^a-z0-9]/gi,'').slice(0,24) || fcAudioHashV1141(trackTitle)}`;
+  const idlePath = fcAudioWavePathV1141(`${entryIdRaw}|${trackTitle}`);
   const revealClick = (mode === 'viewer' || mode === 'feed-viewer')
-    ? ' onclick="fcAudioRevealControlsV1140(this,event)"'
+    ? ' onclick="fcAudioRevealControlsV1141(this,event)"'
     : '';
 
   const audio = `<audio src="${escapeHtml(mediaUrl)}" preload="${preload}" crossorigin="anonymous"
-    onloadedmetadata="syncFccAudioControlsV1123(this.closest('.fcc-fire-eq'),this);fcAudioSyncPremiumV1140(this.closest('.fcc-fire-eq'),this)"
-    ondurationchange="syncFccAudioControlsV1123(this.closest('.fcc-fire-eq'),this);fcAudioSyncPremiumV1140(this.closest('.fcc-fire-eq'),this)"
-    ontimeupdate="syncFccAudioControlsV1123(this.closest('.fcc-fire-eq'),this);fcAudioSyncPremiumV1140(this.closest('.fcc-fire-eq'),this)"
+    onloadedmetadata="syncFccAudioControlsV1123(this.closest('.fcc-fire-eq'),this);fcAudioSyncV1141(this.closest('.fcc-fire-eq'),this)"
+    ondurationchange="syncFccAudioControlsV1123(this.closest('.fcc-fire-eq'),this);fcAudioSyncV1141(this.closest('.fcc-fire-eq'),this)"
+    ontimeupdate="syncFccAudioControlsV1123(this.closest('.fcc-fire-eq'),this);fcAudioSyncV1141(this.closest('.fcc-fire-eq'),this)"
     onvolumechange="syncFccAudioControlsV1123(this.closest('.fcc-fire-eq'),this)"
-    onplay="fcAudioPlayStateV1123(this.closest('.fcc-fire-eq'),this);fcAudioSyncPremiumV1140(this.closest('.fcc-fire-eq'),this)"
-    onpause="fcAudioPauseStateV1123(this.closest('.fcc-fire-eq'),this);fcAudioSyncPremiumV1140(this.closest('.fcc-fire-eq'),this)"
-    onended="fcAudioPauseStateV1123(this.closest('.fcc-fire-eq'),this);fcAudioSyncPremiumV1140(this.closest('.fcc-fire-eq'),this)"></audio>`;
+    onplay="fcAudioPlayStateV1123(this.closest('.fcc-fire-eq'),this);fcAudioSyncV1141(this.closest('.fcc-fire-eq'),this)"
+    onpause="fcAudioPauseStateV1123(this.closest('.fcc-fire-eq'),this);fcAudioSyncV1141(this.closest('.fcc-fire-eq'),this)"
+    onended="fcAudioPauseStateV1123(this.closest('.fcc-fire-eq'),this);fcAudioSyncV1141(this.closest('.fcc-fire-eq'),this)"></audio>`;
 
-  return `<div class="fcc-entry-media fcc-fire-eq fc-audio-premium-v1140 fc-audio-mode-${mode}-v1140"
-      data-entry-id-v1140="${entryId}" data-challenge-id-v1140="${challengeId}"${revealClick}
+  return `<div class="fcc-entry-media fcc-fire-eq fc-audio-player-v1141 fc-audio-mode-${mode}-v1141"
+      data-entry-id-v1141="${entryId}" data-challenge-id-v1141="${challengeId}"${revealClick}
       role="group" aria-label="Audio entry by ${escapeHtml(entrantName)}">
     ${audio}
-    <div class="fc-audio-stage-v1140" aria-hidden="true">
-      <div class="fc-audio-time-marks-v1140">
-        <span data-fc-audio-marker-v1140="0">0:00</span>
-        <span data-fc-audio-marker-v1140="0.25">0:00</span>
-        <span data-fc-audio-marker-v1140="0.5">0:00</span>
-        <span data-fc-audio-marker-v1140="0.75">0:00</span>
-        <span data-fc-audio-marker-v1140="1">0:00</span>
+    <div class="fc-audio-stage-v1141" aria-hidden="true">
+      <div class="fc-audio-time-marks-v1141">
+        <span data-fc-audio-marker-v1141="0">0:00</span>
+        <span data-fc-audio-marker-v1141="0.25">0:00</span>
+        <span data-fc-audio-marker-v1141="0.5">0:00</span>
+        <span data-fc-audio-marker-v1141="0.75">0:00</span>
+        <span data-fc-audio-marker-v1141="1">0:00</span>
       </div>
-      <div class="fc-audio-wave-v1140">${bars}</div>
-      <div class="fc-audio-ember-field-v1140"></div>
+      <svg class="fc-audio-wave-svg-v1141" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
+        <defs><linearGradient id="${gradientId}" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#ff3525"/><stop offset=".28" stop-color="#ff6a2c"/><stop offset=".52" stop-color="#ffd36d"/><stop offset=".73" stop-color="#ff6a2c"/><stop offset="1" stop-color="#ff3525"/></linearGradient></defs>
+        <path class="fc-audio-wave-glow-v1141" d="${idlePath}" data-idle="${idlePath}" stroke="url(#${gradientId})"/>
+        <path class="fc-audio-wave-path-v1141" d="${idlePath}" data-idle="${idlePath}" stroke="url(#${gradientId})"/>
+      </svg>
+      <span class="fc-audio-ember-v1141 e1"></span><span class="fc-audio-ember-v1141 e2"></span><span class="fc-audio-ember-v1141 e3"></span>
     </div>
-    <div class="fc-audio-track-row-v1140">
-      <div class="fc-audio-cover-v1140">${entrantAvatar}</div>
-      <div class="fc-audio-track-copy-v1140">
+    <div class="fc-audio-track-row-v1141">
+      <div class="fc-audio-cover-v1141">${entrantAvatar}</div>
+      <div class="fc-audio-track-copy-v1141">
         <span>Audio entry</span>
         <strong>${escapeHtml(trackTitle)}</strong>
         <small>${escapeHtml(subtitle)}</small>
       </div>
-      <button type="button" class="fcc-audio-btn fc-audio-main-play-v1140" aria-label="Play audio" onclick="toggleFccAudioFromControlV1123(this,event)">▶</button>
+      <button type="button" class="fcc-audio-btn fc-audio-main-play-v1141" aria-label="Play audio" onclick="toggleFccAudioFromControlV1123(this,event)">▶</button>
     </div>
-    <div class="fc-audio-scrub-v1140" onclick="event.stopPropagation()">
-      <span class="fc-audio-current-v1140">0:00</span>
-      <input class="fc-audio-seek-v1123 fc-audio-seek-v1140" type="range" min="0" max="0" step="0.1" value="0" aria-label="Seek through audio" oninput="seekFccAudioV1123(this,event);fcAudioSyncPremiumV1140(this.closest('.fcc-fire-eq'),this.closest('.fcc-fire-eq').querySelector('audio'))">
-      <span class="fc-audio-duration-v1140">0:00</span>
+    <div class="fc-audio-scrub-v1141" onclick="event.stopPropagation()">
+      <span class="fc-audio-current-v1141">0:00</span>
+      <input class="fc-audio-seek-v1123 fc-audio-seek-v1141" type="range" min="0" max="0" step="0.1" value="0" aria-label="Seek through audio" oninput="seekFccAudioV1123(this,event);fcAudioSyncV1141(this.closest('.fcc-fire-eq'),this.closest('.fcc-fire-eq').querySelector('audio'))">
+      <span class="fc-audio-duration-v1141">0:00</span>
     </div>
   </div>`;
 }
@@ -16986,6 +17076,9 @@ function _feqStart(tile, a) {
     };
     const bars = tile.querySelectorAll('.feqb');
     const NB = bars.length;
+    const approvedWavePathV1141 = tile.querySelector('.fc-audio-wave-path-v1141');
+    const approvedWaveGlowV1141 = tile.querySelector('.fc-audio-wave-glow-v1141');
+    const approvedTimeDataV1141 = approvedWavePathV1141 ? new Uint8Array(an.fftSize) : null;
     // v733 — Flame's .feqb are black TOP COVERS (fire shows below them), so their
     // height is the INVERSE of loudness: loud -> SHORT cover -> tall fire column.
     // Fire/Gradient bars grow up from the bottom: loud -> TALL bar. One formula
@@ -17002,9 +17095,25 @@ function _feqStart(tile, a) {
     if (tile._feqRaf) cancelAnimationFrame(tile._feqRaf);
     const loop = () => {
       if (!tile.classList.contains('playing')) return;
-      an.getByteFrequencyData(data);
       let sum = 0;
-      if (isCurve) {
+      if (approvedWavePathV1141) {
+        an.getByteTimeDomainData(approvedTimeDataV1141);
+        const N = 74;
+        let dstr = '';
+        for (let i = 0; i < N; i++) {
+          const sourceIndex = Math.min(approvedTimeDataV1141.length - 1, Math.floor(i * approvedTimeDataV1141.length / N));
+          const normalized = (approvedTimeDataV1141[sourceIndex] - 128) / 128;
+          sum += Math.abs(normalized);
+          const x = 2 + i * (96 / Math.max(1, N - 1));
+          const y = 50 + normalized * 42;
+          dstr += `${i ? ' L' : 'M'}${x.toFixed(2)},${y.toFixed(2)}`;
+        }
+        approvedWavePathV1141.setAttribute('d', dstr);
+        if (approvedWaveGlowV1141) approvedWaveGlowV1141.setAttribute('d', dstr);
+      } else {
+        an.getByteFrequencyData(data);
+      }
+      if (!approvedWavePathV1141 && isCurve) {
         // v737 — 13 nodes across viewBox x=6..94; y: quiet -> 70 (low), loud -> 12 (high)
         const N = svgNodes.length || 13;
         let dstr = '';
@@ -17017,7 +17126,7 @@ function _feqStart(tile, a) {
           if (svgNodes[i]) { svgNodes[i].setAttribute('cx', x.toFixed(1)); svgNodes[i].setAttribute('cy', y.toFixed(1)); }
         }
         svgPath.setAttribute('d', dstr);
-      } else for (let i = 0; i < NB; i++) {
+      } else if (!approvedWavePathV1141) for (let i = 0; i < NB; i++) {
         const bin = Math.min(data.length - 1, Math.floor(Math.pow(i / NB, 1.6) * data.length * 0.8) + 1);
         const v = norm(i, data[bin] / 255); sum += data[bin] / 255;
         bars[i].style.height = isFlame
@@ -17044,6 +17153,9 @@ function _feqStop(tile) {
   if (tile._feqFakeRaf) { cancelAnimationFrame(tile._feqFakeRaf); tile._feqFakeRaf = null; } // v738
   tile.classList.remove('feq-fallback');
   tile.querySelectorAll('.feqb').forEach(b => { b.style.height = ''; });
+  tile.querySelectorAll('.fc-audio-wave-path-v1141,.fc-audio-wave-glow-v1141').forEach(p1141 => {
+    if (p1141.dataset.idle) p1141.setAttribute('d', p1141.dataset.idle);
+  });
   const p = tile.querySelector('.feq-path'); // v737 — curve back to its idle shape
   if (p && p.dataset.idle) {
     p.setAttribute('d', p.dataset.idle);
