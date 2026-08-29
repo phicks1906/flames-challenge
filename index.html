@@ -14,16 +14,16 @@
 <meta content="no-cache, no-store, must-revalidate" http-equiv="cache-control"/>
 <meta content="no-cache" http-equiv="pragma"/>
 <meta content="0" http-equiv="expires"/>
-<title>FlamesChallenge v1143 — Approved Audio Player Fidelity</title>
+<title>FlamesChallenge v1144 — Audio Waveform Fidelity & Update Recovery</title>
 <meta content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." name="description"/>
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
      the first kilobyte, so the update check can read it with a tiny ranged
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1143 · approved-audio-player-fidelity" name="fc-build"/>
-<!-- v1143: audio feed and expanded players now match the approved thin-waveform carousel composition and no longer inherit square-card clipping. -->
-<meta content="Audio entries now use the approved thin waveform, complete metadata row, visible scrubber, and matching feed and expanded proportions." name="fc-whatsnew"/>
+<meta content="v1144 · audio-waveform-fidelity-update-recovery" name="fc-build"/>
+<!-- v1144: audio entries use the approved thin continuous waveform composition, and automatic update detection reads build metadata regardless of attribute order. -->
+<meta content="Audio entries now use a thinner continuous waveform and automatic update detection is restored." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -10560,10 +10560,23 @@ function _clearDismissedUpdate(build){
     if(!item || !id || item.version===id) localStorage.removeItem(UPDATE_DISMISS_KEY);
   }catch(e){}
 }
+function _metaContentV1144(text, wantedName) {
+  const wanted = String(wantedName || '').toLowerCase();
+  const tags = String(text || '').match(/<meta\b[^>]*>/gi) || [];
+  for (const tag of tags) {
+    const attrs = Object.create(null);
+    tag.replace(/([^\s=/>]+)\s*=\s*(["'])(.*?)\2/g, (_m, key, _q, value) => {
+      attrs[String(key).toLowerCase()] = value;
+      return _m;
+    });
+    if (String(attrs.name || '').toLowerCase() === wanted) return String(attrs.content || '').trim();
+  }
+  return '';
+}
 function _parseBuildTags(text) {
-  const build = text.match(/<meta\s+name=["']fc-build["']\s+content=["']([^"']*)["']/i);
-  const news  = text.match(/<meta\s+name=["']fc-whatsnew["']\s+content=["']([^"']*)["']/i);
-  return build ? { build: build[1].trim(), news: news ? news[1].trim() : '' } : null;
+  const build = _metaContentV1144(text, 'fc-build');
+  if (!build) return null;
+  return { build, news: _metaContentV1144(text, 'fc-whatsnew') };
 }
 async function _readBuildHead(res) {
   if (!res.ok) throw new Error('update request failed (HTTP ' + res.status + ')');
@@ -10599,11 +10612,18 @@ async function _fetchVersionManifest(){
 async function _fetchBuildTag() {
   const url = new URL('/index.html', location.origin);
   url.searchParams.set('_fc_update', Date.now());
-  const res = await fetch(url.toString(), {
-    cache: 'reload', credentials: 'same-origin',
-    headers: { 'Range': 'bytes=0-49151', 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+  const request = (useRange) => fetch(url.toString(), {
+    cache: 'no-store', credentials: 'same-origin', redirect: 'follow',
+    headers: useRange
+      ? { 'Range': 'bytes=0-49151', 'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache', 'Accept': 'text/html' }
+      : { 'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache', 'Accept': 'text/html' }
   });
-  return _readBuildHead(res);
+  try {
+    return await _readBuildHead(await request(true));
+  } catch (firstError) {
+    console.warn('partial update check retrying full index', firstError);
+    return _readBuildHead(await request(false));
+  }
 }
 async function _probeServiceWorkerUpdate(){
   if(!('serviceWorker' in navigator)) return {waiting:false};
@@ -16861,24 +16881,27 @@ function fcAudioHashV1142(value) {
   for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
   return h >>> 0;
 }
-function fcAudioWavePathV1142(seedValue, count = 96) {
+function fcAudioWavePathV1142(seedValue, count = 112) {
   let seed = fcAudioHashV1142(seedValue) || 1;
   const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
   const phaseA = rnd() * Math.PI * 2;
   const phaseB = rnd() * Math.PI * 2;
-  const phaseC = rnd() * Math.PI * 2;
   let d = '';
+  let previous = 0;
   for (let i = 0; i < count; i++) {
     const t = i / Math.max(1, count - 1);
     const x = 2 + t * 96;
-    const edge = Math.pow(Math.sin(Math.PI * t), .42);
-    const clusters = .28
-      + .42 * Math.abs(Math.sin(t * Math.PI * 3.1 + phaseA))
-      + .22 * Math.abs(Math.sin(t * Math.PI * 7.7 + phaseB))
-      + .08 * Math.abs(Math.sin(t * Math.PI * 17.3 + phaseC));
-    const texture = .72 + rnd() * .42;
-    const amp = Math.max(1.4, Math.min(25, (2.2 + 20 * edge * clusters) * texture));
-    d += `M${x.toFixed(2)},${(50-amp).toFixed(2)}L${x.toFixed(2)},${(50+amp).toFixed(2)}`;
+    const edge = Math.pow(Math.sin(Math.PI * t), .52);
+    const phrase = .24
+      + .50 * Math.abs(Math.sin(t * Math.PI * 3.35 + phaseA))
+      + .20 * Math.abs(Math.sin(t * Math.PI * 8.4 + phaseB));
+    const texture = .62 + rnd() * .72;
+    const target = Math.max(1.1, Math.min(20, (1.8 + 15.8 * edge * phrase) * texture));
+    const amp = previous ? previous * .28 + target * .72 : target;
+    previous = amp;
+    const direction = i % 2 === 0 ? -1 : 1;
+    const y = 50 + direction * amp;
+    d += `${i ? ' L' : 'M'}${x.toFixed(2)},${y.toFixed(2)}`;
   }
   return d;
 }
@@ -17139,16 +17162,18 @@ function _feqStart(tile, a) {
       if (approvedWavePathV1141) {
         an.getByteTimeDomainData(approvedTimeDataV1141);
         const isApprovedV1142 = approvedWavePathV1141.classList.contains('fc-audio-wave-path-v1142');
-        const N = isApprovedV1142 ? 96 : 74;
+        const N = isApprovedV1142 ? 112 : 74;
         let dstr = '';
+        let smoothed = 0;
         for (let i = 0; i < N; i++) {
           const sourceIndex = Math.min(approvedTimeDataV1141.length - 1, Math.floor(i * approvedTimeDataV1141.length / N));
           const normalized = (approvedTimeDataV1141[sourceIndex] - 128) / 128;
           sum += Math.abs(normalized);
           const x = 2 + i * (96 / Math.max(1, N - 1));
           if (isApprovedV1142) {
-            const amp = 2 + Math.min(25, Math.abs(normalized) * 58);
-            dstr += `M${x.toFixed(2)},${(50-amp).toFixed(2)}L${x.toFixed(2)},${(50+amp).toFixed(2)}`;
+            smoothed = smoothed * .18 + normalized * .82;
+            const y = 50 + Math.max(-23, Math.min(23, smoothed * 48));
+            dstr += `${i ? ' L' : 'M'}${x.toFixed(2)},${y.toFixed(2)}`;
           } else {
             const y = 50 + normalized * 42;
             dstr += `${i ? ' L' : 'M'}${x.toFixed(2)},${y.toFixed(2)}`;
@@ -25087,7 +25112,7 @@ function fcEntryRailV1060(ch, entries) {
   const statusV1085 = ch.computedStatus || computeChallengeStatus(ch);
   const votingV1085 = isVotingPhase(statusV1085);
   const voteTotalV1085 = entries.reduce((sum, e) => sum + Number(state.feedVoteCounts?.[e.id] || 0), 0);
-  const isAudioRailV1137 = entries.length > 1 && entries.every(e => String(e.media_type || ch?.media_type || '').toLowerCase() === 'audio');
+  const isAudioRailV1137 = entries.length > 0 && entries.every(e => String(e.media_type || ch?.media_type || '').toLowerCase() === 'audio');
   return `<div class="fcc-entries-wrap fc-entry-rail-v1060 fc-entry-rail-v1079${isAudioRailV1137 ? ' fc-audio-entry-rail-v1137' : ''}"><div class="fcc-entries-scroll">${entries.map((e,i) => {
     const sub = e.submitter || {};
     const av = sub.avatar && /^https?:/.test(sub.avatar) ? `<img src="${escapeHtml(sub.avatar)}" alt="">` : escapeHtml((sub.name || '?').charAt(0).toUpperCase());
@@ -40075,21 +40100,18 @@ body:has(.entrants-backdrop.open) #fcGlobalAskEmberV1131{
 })();
 </script>
 
-<style id="fc-v1143-approved-audio-fidelity-css">
-/* v1143 — final cascade owner for the approved audio design. These rules are
-   deliberately at the end of the document so older square-preview and carousel
-   patches cannot clip or reshape the audio component. */
+<style id="fc-v1144-audio-fidelity-css">
+/* v1144 — final audio cascade owner. Match the approved wide-waveform card:
+   dominant center entry, restrained side peeks, thin continuous waveform,
+   one metadata row, and one scrubber. */
 .fc-entry-rail-v1079.fc-audio-entry-rail-v1137 .fcc-entries-scroll,
 .cd-entries-grid.fc-audio-entry-grid-v1137{
-  gap:14px!important;
-  padding:0 11% 10px!important;
-  scroll-padding-inline:11%!important;
-  align-items:flex-start!important;
-  height:auto!important;
+  gap:12px!important;padding:0 8% 10px!important;scroll-padding-inline:8%!important;
+  align-items:flex-start!important;height:auto!important;
 }
 .fc-entry-rail-v1079.fc-audio-entry-rail-v1137 .fcc-entries-scroll>.fcc-entry-card,
 .cd-entries-grid.fc-audio-entry-grid-v1137>.cd-entry{
-  flex:0 0 78%!important;min-width:78%!important;width:78%!important;
+  flex:0 0 84%!important;min-width:84%!important;width:84%!important;
   height:auto!important;min-height:0!important;max-height:none!important;aspect-ratio:auto!important;
   align-self:flex-start!important;display:flex!important;flex-direction:column!important;
   overflow:hidden!important;scroll-snap-align:center!important;scroll-snap-stop:always!important;
@@ -40104,87 +40126,90 @@ body:has(.entrants-backdrop.open) #fcGlobalAskEmberV1131{
   aspect-ratio:auto!important;overflow:visible!important;flex:0 0 auto!important;
 }
 .fc-audio-entry-rail-v1137 .fcc-entry-head-v1079{
-  min-height:58px!important;padding:10px 13px!important;
-  background:linear-gradient(180deg,#130d0a 0%,#0d0907 100%)!important;
+  min-height:58px!important;padding:10px 13px!important;background:linear-gradient(180deg,#130d0a,#0d0907)!important;
   border-bottom:1px solid rgba(255,116,44,.23)!important;
 }
 .fc-audio-entry-rail-v1137 .fcc-entry-head-v1079 .fcc-entry-avatar{width:38px!important;height:38px!important}
-.fc-audio-entry-rail-v1137 .fcc-entry-name-v1079{font-size:14px!important;max-width:none!important}
+.fc-audio-entry-rail-v1137 .fcc-entry-name-v1079{font-size:14px!important;max-width:none!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
 .fc-audio-entry-rail-v1137 .fcc-entry-position-v1079{font-size:12px!important}
 
 .fc-audio-player-v1142{padding:9px 10px 10px!important;overflow:visible!important;background:#090706!important}
 .fc-audio-stage-v1142{border-radius:15px!important;overflow:hidden!important;border-color:rgba(255,110,39,.31)!important}
 .fc-audio-wave-region-v1142{
-  height:132px!important;min-height:132px!important;
-  background-size:100% 33px,25% 100%,100% 100%,100% 100%!important;
+  height:154px!important;min-height:154px!important;
+  background:
+    linear-gradient(rgba(255,106,44,.055) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,106,44,.045) 1px,transparent 1px),
+    radial-gradient(ellipse 76% 64% at 50% 54%,rgba(255,88,27,.055),transparent 74%),
+    #080706!important;
+  background-size:100% 38px,25% 100%,100% 100%,100% 100%!important;
 }
 .fc-audio-wave-region-v1142::after{
   content:"";position:absolute;z-index:1;left:12px;right:12px;top:50%;height:1px;
-  background:linear-gradient(90deg,transparent,rgba(255,128,54,.18) 12%,rgba(255,194,99,.24) 50%,rgba(255,128,54,.18) 88%,transparent);
+  background:linear-gradient(90deg,transparent,rgba(255,128,54,.14) 12%,rgba(255,194,99,.20) 50%,rgba(255,128,54,.14) 88%,transparent);
 }
-.fc-audio-time-marks-v1142{top:10px!important;left:10px!important;right:10px!important;font-size:8px!important;color:rgba(234,220,210,.62)!important}
-.fc-audio-wave-svg-v1142{left:11px!important;right:11px!important;top:28px!important;width:calc(100% - 22px)!important;height:calc(100% - 37px)!important}
-.fc-audio-wave-path-v1142{stroke-width:1.35!important;filter:drop-shadow(0 0 3px rgba(255,91,27,.8))!important;transition:d .06s linear!important}
-.fc-audio-wave-glow-v1142{stroke-width:4.6!important;opacity:.22!important;filter:blur(4px)!important}
-.fc-audio-ember-v1142{opacity:.46!important}
+.fc-audio-time-marks-v1142{top:11px!important;left:11px!important;right:11px!important;font-size:8px!important;color:rgba(234,220,210,.62)!important}
+.fc-audio-wave-svg-v1142{left:12px!important;right:12px!important;top:33px!important;width:calc(100% - 24px)!important;height:calc(100% - 47px)!important}
+.fc-audio-wave-path-v1142{stroke-width:1.45!important;filter:drop-shadow(0 0 3px rgba(255,91,27,.82))!important;transition:d .055s linear!important}
+.fc-audio-wave-glow-v1142{stroke-width:5.2!important;opacity:.22!important;filter:blur(4px)!important}
+.fc-audio-ember-v1142{opacity:.34!important}
 .fc-audio-track-row-v1142{
-  grid-template-columns:48px minmax(0,1fr) 52px!important;gap:9px!important;
-  min-height:70px!important;padding:9px 10px!important;
+  grid-template-columns:50px minmax(0,1fr) 54px!important;gap:10px!important;
+  min-height:76px!important;padding:10px 11px!important;
   background:linear-gradient(180deg,rgba(18,11,8,.99),rgba(8,6,5,.99))!important;
 }
-.fc-audio-cover-v1142{width:48px!important;height:48px!important}
+.fc-audio-cover-v1142{width:50px!important;height:50px!important}
 .fc-audio-track-copy-v1142>span{font-size:8px!important;letter-spacing:.16em!important}
 .fc-audio-track-copy-v1142>strong{
-  margin-top:4px!important;font-size:13px!important;line-height:1.14!important;
-  white-space:normal!important;overflow:visible!important;text-overflow:clip!important;
-  display:-webkit-box!important;-webkit-line-clamp:2!important;-webkit-box-orient:vertical!important;
+  display:block!important;margin-top:4px!important;font-size:13.5px!important;line-height:1.12!important;
+  white-space:normal!important;overflow:hidden!important;text-overflow:clip!important;word-break:normal!important;
+  max-height:2.24em!important;
 }
-.fc-audio-track-copy-v1142>small{font-size:9px!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
-.fc-audio-main-play-v1142{width:52px!important;height:52px!important;font-size:18px!important}
-.fc-audio-scrub-v1142{padding:10px 2px 0!important;gap:8px!important;font-size:10px!important}
+.fc-audio-track-copy-v1142>small{font-size:9.5px!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+.fc-audio-main-play-v1142{width:54px!important;height:54px!important;font-size:19px!important}
+.fc-audio-scrub-v1142{padding:11px 3px 0!important;gap:9px!important;font-size:10.5px!important}
 .fc-audio-seek-v1142{height:24px!important}
-
 div.fc-entry-rail-v1079.fc-audio-entry-rail-v1137>.fcc-dots{padding:8px 0 2px!important;gap:8px!important}
 div.fc-entry-rail-v1079.fc-audio-entry-rail-v1137>.fcc-dots .fcc-dot{width:7px!important;height:7px!important}
 
-/* Expanded view: same component, scaled — not a separate music-player layout. */
+/* Expanded view keeps the same composition and waveform character. */
 .fc-entry-viewer-v1079 .fc-ev-audio-v1123{padding:18px 12px calc(102px + env(safe-area-inset-bottom,0px))!important}
 .fc-entry-viewer-v1079 .fc-ev-audio-v1123>.fc-audio-mode-viewer-v1142{
-  width:min(88vw,520px)!important;max-width:520px!important;height:auto!important;max-height:none!important;aspect-ratio:auto!important;
-  padding:14px!important;border-radius:22px!important;overflow:visible!important;
+  width:min(90vw,560px)!important;max-width:560px!important;height:auto!important;max-height:none!important;aspect-ratio:auto!important;
+  padding:15px!important;border-radius:22px!important;overflow:visible!important;
 }
-.fc-audio-mode-viewer-v1142 .fc-audio-wave-region-v1142{height:238px!important;min-height:238px!important}
-.fc-audio-mode-viewer-v1142 .fc-audio-wave-svg-v1142{top:34px!important;height:calc(100% - 48px)!important}
-.fc-audio-mode-viewer-v1142 .fc-audio-wave-path-v1142{stroke-width:1.7!important}
-.fc-audio-mode-viewer-v1142 .fc-audio-wave-glow-v1142{stroke-width:5.8!important}
-.fc-audio-mode-viewer-v1142 .fc-audio-time-marks-v1142{top:12px!important;font-size:10px!important}
-.fc-audio-mode-viewer-v1142 .fc-audio-track-row-v1142{grid-template-columns:64px minmax(0,1fr) 68px!important;min-height:88px!important;padding:12px 13px!important;gap:13px!important}
-.fc-audio-mode-viewer-v1142 .fc-audio-cover-v1142{width:64px!important;height:64px!important}
-.fc-audio-mode-viewer-v1142 .fc-audio-main-play-v1142{width:68px!important;height:68px!important;font-size:23px!important}
+.fc-audio-mode-viewer-v1142 .fc-audio-wave-region-v1142{height:250px!important;min-height:250px!important}
+.fc-audio-mode-viewer-v1142 .fc-audio-wave-svg-v1142{top:39px!important;height:calc(100% - 56px)!important}
+.fc-audio-mode-viewer-v1142 .fc-audio-wave-path-v1142{stroke-width:1.8!important}
+.fc-audio-mode-viewer-v1142 .fc-audio-wave-glow-v1142{stroke-width:6.2!important}
+.fc-audio-mode-viewer-v1142 .fc-audio-time-marks-v1142{top:14px!important;font-size:10px!important}
+.fc-audio-mode-viewer-v1142 .fc-audio-track-row-v1142{grid-template-columns:66px minmax(0,1fr) 70px!important;min-height:92px!important;padding:13px 14px!important;gap:14px!important}
+.fc-audio-mode-viewer-v1142 .fc-audio-cover-v1142{width:66px!important;height:66px!important}
+.fc-audio-mode-viewer-v1142 .fc-audio-main-play-v1142{width:70px!important;height:70px!important;font-size:24px!important}
 .fc-audio-mode-viewer-v1142 .fc-audio-track-copy-v1142>span{font-size:9px!important}
-.fc-audio-mode-viewer-v1142 .fc-audio-track-copy-v1142>strong{font-size:18px!important;line-height:1.16!important}
+.fc-audio-mode-viewer-v1142 .fc-audio-track-copy-v1142>strong{font-size:18px!important;line-height:1.14!important;max-height:2.28em!important}
 .fc-audio-mode-viewer-v1142 .fc-audio-track-copy-v1142>small{font-size:12px!important}
 .fc-audio-mode-viewer-v1142 .fc-audio-scrub-v1142{font-size:13px!important;padding-top:14px!important}
 
 @media(max-width:380px){
-  .fc-entry-rail-v1079.fc-audio-entry-rail-v1137 .fcc-entries-scroll,.cd-entries-grid.fc-audio-entry-grid-v1137{padding-left:10%!important;padding-right:10%!important;scroll-padding-inline:10%!important;gap:12px!important}
-  .fc-entry-rail-v1079.fc-audio-entry-rail-v1137 .fcc-entries-scroll>.fcc-entry-card,.cd-entries-grid.fc-audio-entry-grid-v1137>.cd-entry{flex-basis:80%!important;min-width:80%!important;width:80%!important}
-  .fc-audio-wave-region-v1142{height:126px!important;min-height:126px!important}
-  .fc-audio-track-row-v1142{grid-template-columns:44px minmax(0,1fr) 48px!important;min-height:66px!important;padding:8px!important}
-  .fc-audio-cover-v1142{width:44px!important;height:44px!important}.fc-audio-main-play-v1142{width:48px!important;height:48px!important}
-  .fc-audio-track-copy-v1142>strong{font-size:12px!important}
+  .fc-entry-rail-v1079.fc-audio-entry-rail-v1137 .fcc-entries-scroll,.cd-entries-grid.fc-audio-entry-grid-v1137{padding-left:7%!important;padding-right:7%!important;scroll-padding-inline:7%!important;gap:10px!important}
+  .fc-entry-rail-v1079.fc-audio-entry-rail-v1137 .fcc-entries-scroll>.fcc-entry-card,.cd-entries-grid.fc-audio-entry-grid-v1137>.cd-entry{flex-basis:86%!important;min-width:86%!important;width:86%!important}
+  .fc-audio-wave-region-v1142{height:146px!important;min-height:146px!important}
+  .fc-audio-track-row-v1142{grid-template-columns:46px minmax(0,1fr) 50px!important;min-height:72px!important;padding:9px!important;gap:8px!important}
+  .fc-audio-cover-v1142{width:46px!important;height:46px!important}.fc-audio-main-play-v1142{width:50px!important;height:50px!important}
+  .fc-audio-track-copy-v1142>strong{font-size:12.5px!important}
 }
 @media(prefers-reduced-motion:reduce){.fc-audio-wave-path-v1142{transition:none!important}}
 </style>
-<script id="fc-v1143-validation-js">
+<script id="fc-v1144-validation-js">
 (function(){
-  window.FC_BUILD_V1143='approved-audio-player-fidelity';
-  window.FC_V1143_VALIDATION={
-    build:'v1143',basedOn:'v1142',lateCascadeOwner:true,squareAudioClippingRemoved:true,
-    approvedThinWaveform:true,feedMetadataVisible:true,feedScrubberVisible:true,
-    twoLineTrackTitle:true,matchingExpandedComposition:true,tileTapExpands:true,
-    playButtonDoesNotExpand:true,askEmberChanged:false,sqlRequired:false,
-    edgeFunctionChanges:0,serviceWorkerRequired:false
+  window.FC_BUILD_V1144='audio-waveform-fidelity-update-recovery';
+  window.FC_V1144_VALIDATION={
+    build:'v1144',basedOn:'v1143',continuousWaveform:true,realTimeDomainWaveform:true,
+    approvedCardHierarchy:true,dominantCenterCard:true,restrainedNeighborPeeks:true,
+    fullTrackTitle:true,matchingExpandedComposition:true,updateMetaAttributeOrderFixed:true,
+    updateFullFetchFallback:true,manualUpdateUiAdded:false,askEmberChanged:false,
+    sqlRequired:false,edgeFunctionChanges:0,serviceWorkerRequired:false
   };
 })();
 </script>
