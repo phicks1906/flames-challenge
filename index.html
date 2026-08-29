@@ -14,14 +14,14 @@
 <meta content="no-cache, no-store, must-revalidate" http-equiv="cache-control"/>
 <meta content="no-cache" http-equiv="pragma"/>
 <meta content="0" http-equiv="expires"/>
-<title>FlamesChallenge v1150 — Dedicated Audio Carousel</title>
+<title>FlamesChallenge v1151 — Dedicated Audio Carousel Hardening</title>
 <meta content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." name="description"/>
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
      the first kilobyte, so the update check can read it with a tiny ranged
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1150 · dedicated-audio-carousel" name="fc-build"/>
+<meta content="v1151 · dedicated-audio-carousel-hardening" name="fc-build"/>
 <!-- v1148: audio entries rebuilt from scratch as one compact shared feed and expanded component. -->
 <meta content="Audio competition cards were rebuilt as one shared feed and expanded component." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
@@ -24639,7 +24639,7 @@ function fcEntryCardMediaV1060(e, ch) {
   }
   return `<div class="fcc-entry-media fc-entry-stage-v1060"><img class="fc-entry-blur-v1060" src="${escapeHtml(url)}" alt="" aria-hidden="true" loading="lazy"><img class="fc-entry-contain-v1060" src="${escapeHtml(url)}" alt="${escapeHtml(label)}'s entry" loading="lazy" onload="fcFitEntryCardMediaV1079(this)"></div>`;
 }
-function fcAudioCarouselV1150(ch, entries) {
+function fcAudioCarouselV1151(ch, entries) {
   if (!entries.length) return `<div class="chc-empty"><div class="chc-empty-ov"><div class="chc-plus">+</div><div class="chc-empty-msg">No entries yet — be the first</div></div></div>`;
   const selectedVoteId = state.entryVoteSelectionsV1083 instanceof Map
     ? state.entryVoteSelectionsV1083.get(String(ch.id))
@@ -24665,13 +24665,13 @@ function fcAudioCarouselV1150(ch, entries) {
     return `<article class="fc-audio-carousel__slide${selected ? ' fc-your-vote-v1083' : ''}" data-entry-open="${ch.id}" data-entry-id="${e.id}" data-audio-slide-index="${i}" aria-label="Audio entry ${i + 1} of ${entries.length}">${tile}${voteFooter}</article>`;
   }).join('');
   const dots = entries.length > 1 ? `<div class="fc-audio-carousel__dots" role="tablist" aria-label="Audio entries">${entries.map((_,i)=>`<button type="button" class="fc-audio-carousel__dot${i===0?' active':''}" data-audio-dot-index="${i}" aria-label="Show entry ${i+1}" aria-selected="${i===0?'true':'false'}"></button>`).join('')}</div>` : '';
-  return `<section class="fc-audio-carousel-v1150" data-audio-carousel-v1150 data-challenge-id="${ch.id}"><div class="fc-audio-carousel__track" data-audio-track-v1150>${slides}</div>${dots}</section>`;
+  return `<section class="fc-audio-carousel-v1151" data-audio-carousel-v1151 data-challenge-id="${ch.id}"><div class="fc-audio-carousel__track" data-audio-track-v1151>${slides}</div>${dots}</section>`;
 }
 
 function fcEntryRailV1060(ch, entries) {
   if (!entries.length) return `<div class="chc-empty"><div class="chc-empty-ov"><div class="chc-plus">+</div><div class="chc-empty-msg">No entries yet — be the first</div></div></div>`;
   const isAudio = entries.every(e => String(e.media_type || ch?.media_type || '').toLowerCase() === 'audio');
-  if (isAudio) return fcAudioCarouselV1150(ch, entries);
+  if (isAudio) return fcAudioCarouselV1151(ch, entries);
   const selectedVoteIdV1083 = state.entryVoteSelectionsV1083 instanceof Map
     ? state.entryVoteSelectionsV1083.get(String(ch.id))
     : null;
@@ -39819,66 +39819,73 @@ body:has(.fc-entry-viewer-v1079 .fc-ev-audio-v1123) .bottom-nav{display:none!imp
 })();
 </script>
 
-<style id="fc-v1150-dedicated-audio-carousel-css">
-/* v1150 — audio entries no longer use fcc-entries-scroll/fcc-entry-card or the generic swipe renderer. */
-.fc-audio-carousel-v1150{width:calc(100% + 32px);margin-inline:-16px;overflow:hidden;min-width:0}
-.fc-audio-carousel__track{display:flex;align-items:stretch;gap:10px;width:100%;overflow-x:auto;overflow-y:hidden;padding:0 7% 2px;scroll-padding-inline:7%;scroll-snap-type:x mandatory;overscroll-behavior-x:contain;scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-y pinch-zoom}
+<style id="fc-v1151-dedicated-audio-carousel-css">
+/* v1151 — dedicated audio rail hardening. Audio cards are direct snap items; no generic entry-card or carousel geometry participates. */
+.fc-audio-carousel-v1151{--fc-audio-slide:88%;width:100%;min-width:0;overflow:hidden;contain:layout paint}
+.fc-audio-carousel__track{display:flex;align-items:stretch;gap:10px;width:100%;max-width:100%;overflow-x:auto;overflow-y:hidden;padding:0 calc((100% - var(--fc-audio-slide))/2) 2px;scroll-padding-inline:calc((100% - var(--fc-audio-slide))/2);scroll-snap-type:x mandatory;overscroll-behavior-x:contain;scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-y;cursor:grab}
+.fc-audio-carousel__track:active{cursor:grabbing}
 .fc-audio-carousel__track::-webkit-scrollbar{display:none}
-.fc-audio-carousel__slide{flex:0 0 86%;width:86%;min-width:86%;max-width:86%;scroll-snap-align:center;scroll-snap-stop:always;position:relative;min-height:0;background:transparent;border:0;border-radius:20px;overflow:visible}
-.fc-audio-carousel__slide>.fc-audio-entry{height:100%}
+.fc-audio-carousel__slide{flex:0 0 var(--fc-audio-slide);width:var(--fc-audio-slide);min-width:var(--fc-audio-slide);max-width:var(--fc-audio-slide);scroll-snap-align:center;scroll-snap-stop:always;position:relative;min-height:0;background:transparent;border:0;border-radius:20px;overflow:visible;transform:translateZ(0)}
+.fc-audio-carousel__slide>.fc-audio-entry{width:100%;height:100%;min-width:0;overflow:hidden}
 .fc-audio-carousel__dots{display:flex;justify-content:center;align-items:center;gap:8px;padding:10px 0 0}
 .fc-audio-carousel__dot{width:8px;height:8px;padding:0;border:0;border-radius:50%;background:#4b4744;cursor:pointer;transition:transform .16s ease,background .16s ease}
 .fc-audio-carousel__dot.active{background:#ff7a1a;transform:scale(1.12)}
 .fc-audio-carousel__vote{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 4px 0;color:#9b9b9b;font-size:11px}
-.fc-audio-carousel-v1150.is-dragging .fc-audio-carousel__slide{pointer-events:none}
-/* The generic viewer's simple-media flex row caused controls and card to split sideways. */
-.fc-entry-viewer-v1079 .fc-ev-audio-v1123{display:block!important;height:auto!important;min-height:0!important;align-items:initial!important;justify-content:initial!important}
-.fc-entry-viewer-v1079 .fc-ev-audio-v1123>.fc-audio-entry__viewer-controls{width:100%!important;max-width:430px!important;margin:0 auto 8px!important}
-.fc-entry-viewer-v1079 .fc-ev-audio-v1123>.fc-audio-entry--expanded{margin:0 auto!important}
-@media(max-width:390px){.fc-audio-carousel__track{padding-inline:6.5%;scroll-padding-inline:6.5%}.fc-audio-carousel__slide{flex-basis:87%;width:87%;min-width:87%;max-width:87%}}
+.fc-audio-carousel-v1151.is-dragging .fc-audio-carousel__slide{pointer-events:none;user-select:none;-webkit-user-select:none}
+/* Expanded audio is a vertical composition independent of all feed rails. */
+.fc-entry-viewer-v1079 .fc-ev-audio-v1123{display:block!important;width:100%!important;height:auto!important;min-height:0!important;overflow:visible!important}
+.fc-entry-viewer-v1079 .fc-ev-audio-v1123>.fc-audio-entry__viewer-controls{width:min(100%,430px)!important;max-width:430px!important;margin:0 auto 8px!important}
+.fc-entry-viewer-v1079 .fc-ev-audio-v1123>.fc-audio-entry--expanded{width:min(100%,430px)!important;max-width:430px!important;margin:0 auto!important}
+body:has(.fc-entry-viewer-v1079 .fc-ev-audio-v1123) .mobile-bottom-nav{display:none!important}
+@media(max-width:390px){.fc-audio-carousel-v1151{--fc-audio-slide:89%}}
 </style>
-<script id="fc-v1150-dedicated-audio-carousel-js">
+<script id="fc-v1151-dedicated-audio-carousel-js">
 (()=>{
-  const pauseWithin=(root)=>root.querySelectorAll('audio').forEach(a=>{try{a.pause()}catch(_){}});
+  const pauseWithin=root=>root.querySelectorAll('audio').forEach(a=>{try{a.pause()}catch(_){}});
+  const slidesOf=track=>[...track.querySelectorAll('.fc-audio-carousel__slide')];
   function setActive(root,index){
-    const dots=[...root.querySelectorAll('.fc-audio-carousel__dot')];
-    dots.forEach((d,i)=>{const active=i===index;d.classList.toggle('active',active);d.setAttribute('aria-selected',active?'true':'false')});
+    root.dataset.audioActiveIndex=String(index);
+    root.querySelectorAll('.fc-audio-carousel__dot').forEach((d,i)=>{const on=i===index;d.classList.toggle('active',on);d.setAttribute('aria-selected',on?'true':'false')});
   }
   function nearestIndex(track){
-    const slides=[...track.querySelectorAll('.fc-audio-carousel__slide')];
-    if(!slides.length)return 0;
-    const center=track.scrollLeft+track.clientWidth/2;
-    let best=0,dist=Infinity;
-    slides.forEach((s,i)=>{const c=s.offsetLeft+s.offsetWidth/2,d=Math.abs(c-center);if(d<dist){dist=d;best=i}});
-    return best;
+    const slides=slidesOf(track);if(!slides.length)return 0;
+    const center=track.scrollLeft+track.clientWidth/2;let best=0,dist=Infinity;
+    slides.forEach((s,i)=>{const d=Math.abs((s.offsetLeft+s.offsetWidth/2)-center);if(d<dist){dist=d;best=i}});return best;
+  }
+  function centerSlide(track,index,behavior='auto'){
+    const slide=slidesOf(track)[index];if(!slide)return;
+    const left=slide.offsetLeft-(track.clientWidth-slide.offsetWidth)/2;
+    track.scrollTo({left:Math.max(0,left),behavior});
   }
   function mount(root){
-    if(root.dataset.audioMountedV1150==='1')return;
-    root.dataset.audioMountedV1150='1';
-    const track=root.querySelector('[data-audio-track-v1150]');
-    if(!track)return;
-    let timer=0,dragging=false;
-    const begin=()=>{dragging=true;root.classList.add('is-dragging');pauseWithin(root)};
-    const settle=()=>{dragging=false;root.classList.remove('is-dragging');setActive(root,nearestIndex(track))};
+    if(root.dataset.audioMountedV1151==='1')return;
+    root.dataset.audioMountedV1151='1';
+    const track=root.querySelector('[data-audio-track-v1151]');if(!track)return;
+    let settleTimer=0,startX=0,startScroll=0,moved=false,pointerId=null;
+    const begin=e=>{pointerId=e.pointerId??null;startX=e.clientX??e.touches?.[0]?.clientX??0;startScroll=track.scrollLeft;moved=false;root.classList.add('is-dragging');pauseWithin(root)};
+    const move=e=>{const x=e.clientX??e.touches?.[0]?.clientX??startX;if(Math.abs(x-startX)>6||Math.abs(track.scrollLeft-startScroll)>6)moved=true};
+    const settle=()=>{clearTimeout(settleTimer);settleTimer=setTimeout(()=>{root.classList.remove('is-dragging');setActive(root,nearestIndex(track))},80)};
     track.addEventListener('pointerdown',begin,{passive:true});
+    track.addEventListener('pointermove',move,{passive:true});
     track.addEventListener('touchstart',begin,{passive:true});
-    track.addEventListener('scroll',()=>{clearTimeout(timer);timer=setTimeout(settle,90)},{passive:true});
+    track.addEventListener('touchmove',move,{passive:true});
+    track.addEventListener('scroll',settle,{passive:true});
     track.addEventListener('pointerup',settle,{passive:true});
     track.addEventListener('pointercancel',settle,{passive:true});
+    track.addEventListener('click',e=>{if(moved){e.preventDefault();e.stopImmediatePropagation();moved=false}},true);
     root.addEventListener('click',e=>{
-      const dot=e.target.closest('[data-audio-dot-index]');
-      if(!dot)return;
+      const dot=e.target.closest('[data-audio-dot-index]');if(!dot)return;
       e.preventDefault();e.stopPropagation();pauseWithin(root);
-      const index=Number(dot.dataset.audioDotIndex||0),slide=track.querySelector(`[data-audio-slide-index="${index}"]`);
-      if(slide){track.scrollTo({left:slide.offsetLeft-(track.clientWidth-slide.offsetWidth)/2,behavior:typeof fcMotionBehaviorV1100==='function'?fcMotionBehaviorV1100():'smooth'});setActive(root,index)}
+      const index=Number(dot.dataset.audioDotIndex||0);setActive(root,index);centerSlide(track,index,typeof fcMotionBehaviorV1100==='function'?fcMotionBehaviorV1100():'smooth');
     });
-    requestAnimationFrame(()=>setActive(root,nearestIndex(track)));
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{centerSlide(track,0,'auto');setActive(root,0)}));
   }
-  const scan=()=>document.querySelectorAll('[data-audio-carousel-v1150]').forEach(mount);
+  const scan=()=>document.querySelectorAll('[data-audio-carousel-v1151]').forEach(mount);
   let raf=0;new MutationObserver(()=>{cancelAnimationFrame(raf);raf=requestAnimationFrame(scan)}).observe(document.documentElement,{childList:true,subtree:true});
-  addEventListener('resize',scan,{passive:true});requestAnimationFrame(scan);
-  window.FC_BUILD_V1150='dedicated-audio-carousel';
-  window.FC_V1150_VALIDATION={build:'v1150',basedOn:'v1149',genericAudioRailRemoved:true,genericAudioCardWrapperRemoved:true,dedicatedTrack:true,nativeFingerTracking:true,pauseOnSwipeStart:true,centerSnap:true,narrowNeighborPeeks:true,viewerFlexConflictRemoved:true,sqlRequired:false,edgeFunctionChanges:0,serviceWorkerRequired:false};
+  addEventListener('resize',()=>document.querySelectorAll('[data-audio-carousel-v1151]').forEach(root=>{const track=root.querySelector('[data-audio-track-v1151]');if(track)centerSlide(track,Number(root.dataset.audioActiveIndex||0),'auto')}),{passive:true});
+  requestAnimationFrame(scan);
+  window.FC_BUILD_V1151='dedicated-audio-carousel-hardening';
+  window.FC_V1151_VALIDATION={build:'v1151',basedOn:'v1150',genericAudioRailBypassed:true,directAudioSnapItems:true,firstAndLastCentering:true,dragClickSuppression:true,pauseOnSwipeStart:true,resizeRecentering:true,viewerIndependentOfRail:true,sqlRequired:false,edgeFunctionChanges:0,serviceWorkerRequired:false};
 })();
 </script>
 
