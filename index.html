@@ -14,16 +14,16 @@
 <meta content="no-cache, no-store, must-revalidate" http-equiv="cache-control"/>
 <meta content="no-cache" http-equiv="pragma"/>
 <meta content="0" http-equiv="expires"/>
-<title>FlamesChallenge v1152 — Audio Presentation on Proven Carousel</title>
+<title>FlamesChallenge v1135 — Cancellable Entry Uploads & Stable Preview Playback</title>
 <meta content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." name="description"/>
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
      the first kilobyte, so the update check can read it with a tiny ranged
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1152 · audio-presentation-proven-carousel" name="fc-build"/>
-<!-- v1148: audio entries rebuilt from scratch as one compact shared feed and expanded component. -->
-<meta content="Audio competition cards were rebuilt as one shared feed and expanded component." name="fc-whatsnew"/>
+<meta content="v1135 · cancellable-entry-uploads-stable-preview" name="fc-build"/>
+<!-- v1135: entry uploads can be cancelled safely, and local video previews pause before other sheet interactions to avoid iPhone decoder glitches. -->
+<meta content="Entry uploads can now be cancelled, and preview playback stays stable while using the entry form." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -7597,23 +7597,6 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
 </style>
 
 
-
-
-<script id="fc-v1137-validation">
-window.FC_V1137_VALIDATION={build:'v1137',basedOn:'v1136',brandFlamePaletteRestored:true,sharedHonestIdleArtwork:true,realAnalyserOnly:true,compactPlaybackProgress:true,controlsFadeAndReveal:true,audioPeekCards:true,wholeCardFingerTracking:true,pauseAtSwipeOwnership:true,sqlRequired:false,edgeFunctionChanges:0,serviceWorkerRequired:false};
-</script>
-<script id="fc-v1138-validation">
-window.FC_V1138_VALIDATION={build:'v1138',basedOn:'v1137',entrantSpecificPausedCover:true,visualizerRevealsOnPlayback:true,largerNeighborPreview:true,wholeCardFingerTrackingPreserved:true,askEmberUnchanged:true,sqlRequired:false,edgeFunctionChanges:0,serviceWorkerRequired:false};
-</script>
-
-<script id="fc-v1140-validation">
-window.FC_V1140_VALIDATION={build:'v1140',basedOn:'v1138',rejectedBuildSkipped:'v1139',approvedWaveformLayout:true,tileTapExpands:true,playButtonDoesNotExpand:true,largeWaveformStage:true,singleMetadataRow:true,singleScrubber:true,neighborPeeks:true,sceneUploadPreviewPreserved:true,askEmberChanged:false,sqlRequired:false,edgeFunctionChanges:0,serviceWorkerRequired:false};
-</script>
-
-
-<script id="fc-v1142-validation">
-window.FC_V1142_VALIDATION={build:'v1142',basedOn:'v1141',legacyAudioMarkupRemoved:true,canonicalAudioComponent:true,approvedChallengeComposition:true,sameFeedAndViewerStructure:true,irregularWaveform:true,dominantCenteredCard:true,intentionalNeighborPeeks:true,tileTapExpands:true,playButtonDoesNotExpand:true,askEmberChanged:false,sqlRequired:false,edgeFunctionChanges:0,serviceWorkerRequired:false};
-</script>
 </head>
 <body>
 <!-- v1095 — stable session/data boot gate. Removed only after the signed-in
@@ -10095,23 +10078,10 @@ function _clearDismissedUpdate(build){
     if(!item || !id || item.version===id) localStorage.removeItem(UPDATE_DISMISS_KEY);
   }catch(e){}
 }
-function _metaContentV1144(text, wantedName) {
-  const wanted = String(wantedName || '').toLowerCase();
-  const tags = String(text || '').match(/<meta\b[^>]*>/gi) || [];
-  for (const tag of tags) {
-    const attrs = Object.create(null);
-    tag.replace(/([^\s=/>]+)\s*=\s*(["'])(.*?)\2/g, (_m, key, _q, value) => {
-      attrs[String(key).toLowerCase()] = value;
-      return _m;
-    });
-    if (String(attrs.name || '').toLowerCase() === wanted) return String(attrs.content || '').trim();
-  }
-  return '';
-}
 function _parseBuildTags(text) {
-  const build = _metaContentV1144(text, 'fc-build');
-  if (!build) return null;
-  return { build, news: _metaContentV1144(text, 'fc-whatsnew') };
+  const build = text.match(/<meta\s+name=["']fc-build["']\s+content=["']([^"']*)["']/i);
+  const news  = text.match(/<meta\s+name=["']fc-whatsnew["']\s+content=["']([^"']*)["']/i);
+  return build ? { build: build[1].trim(), news: news ? news[1].trim() : '' } : null;
 }
 async function _readBuildHead(res) {
   if (!res.ok) throw new Error('update request failed (HTTP ' + res.status + ')');
@@ -10147,18 +10117,11 @@ async function _fetchVersionManifest(){
 async function _fetchBuildTag() {
   const url = new URL('/index.html', location.origin);
   url.searchParams.set('_fc_update', Date.now());
-  const request = (useRange) => fetch(url.toString(), {
-    cache: 'no-store', credentials: 'same-origin', redirect: 'follow',
-    headers: useRange
-      ? { 'Range': 'bytes=0-49151', 'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache', 'Accept': 'text/html' }
-      : { 'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache', 'Accept': 'text/html' }
+  const res = await fetch(url.toString(), {
+    cache: 'reload', credentials: 'same-origin',
+    headers: { 'Range': 'bytes=0-49151', 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
   });
-  try {
-    return await _readBuildHead(await request(true));
-  } catch (firstError) {
-    console.warn('partial update check retrying full index', firstError);
-    return _readBuildHead(await request(false));
-  }
+  return _readBuildHead(res);
 }
 async function _probeServiceWorkerUpdate(){
   if(!('serviceWorker' in navigator)) return {waiting:false};
@@ -16317,29 +16280,7 @@ let _userAudioActive = false; // set synchronously on user tap; blocks lazy prev
 // big play control. The native bar also cannot fit a 48vw card; one button can.
 // Used by BOTH entry-card renderers (feed drawer + challenges page) — one
 // definition so they can never drift apart again.
-
-// v1137 — honest shared idle artwork. The paused bars are a consistent cover,
-// not a fabricated waveform for the specific recording. Real audio data drives
-// the bars only while playback is active.
-function fcAudioVisualProfileV1136(entry) {
-  const heights = [34,58,42,72,50,64,38,68,46,60,36,54,44];
-  return { heights, seed: 'shared-idle', style: '' };
-}
-
-function fcAudioScheduleControlFadeV1136(tile) {
-  if (!tile) return;
-  if (tile._fcAudioControlTimerV1136) clearTimeout(tile._fcAudioControlTimerV1136);
-  tile.classList.add('fc-audio-controls-visible-v1136');
-  tile._fcAudioControlTimerV1136 = setTimeout(() => {
-    tile._fcAudioControlTimerV1136 = null;
-    if (!tile.classList.contains('playing')) return;
-    tile.classList.remove('fc-audio-controls-visible-v1136');
-    const active = document.activeElement;
-    if (active && tile.contains(active) && typeof active.blur === 'function') active.blur();
-  }, 1350);
-}
-
-function _audioTileHtmlLegacyV1138(e, options = {}) {
+function _audioTileHtml(e, options = {}) {
   const mediaUrl = e?.media_url || e?.audio_url || '';
   if (!mediaUrl) return `<div class="fcc-entry-media fcc-entry-placeholder fc-entry-audio-v1079" aria-label="Audio entry"><span aria-hidden="true">♪</span></div>`;
 
@@ -16347,18 +16288,9 @@ function _audioTileHtmlLegacyV1138(e, options = {}) {
   const style = getEqStyle();
   const mode = String(options.mode || 'card').replace(/[^a-z0-9_-]/gi, '') || 'card';
   const controls = options.controls === true;
-  const identityCoverV1138 = options.identityCover === true;
-  const preload = controls || mode === 'card' || mode === 'winner' ? 'metadata' : 'none';
+  const preload = controls ? 'metadata' : 'none';
   const IMG_URL = 'https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/Assets/fire.jpeg';
-  const visualProfileV1136 = fcAudioVisualProfileV1136(e);
-  const entrantNameV1138 = String(e?.submitter?.name || 'Competitor');
-  const entrantAvatarV1138 = avatarInner(e?.submitter?.avatar);
-  const identityHtmlV1138 = identityCoverV1138 ? `<div class="fc-audio-identity-cover-v1138" aria-hidden="true">
-      <div class="fc-audio-identity-avatar-v1138">${entrantAvatarV1138}</div>
-      <div class="fc-audio-identity-copy-v1138"><span class="fc-audio-identity-kicker-v1138">Audio entry</span><strong>${escapeHtml(entrantNameV1138)}</strong><small>Tap to listen</small></div>
-      <div class="fc-audio-identity-mark-v1138"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
-    </div>` : '';
-  const rootClasses = `fcc-entry-media fcc-fire-eq eq-${style} fc-audio-mode-${mode}-v1123${controls ? ' fc-audio-has-controls-v1123' : ''}${identityCoverV1138 ? ' fc-audio-identity-v1138' : ''}`;
+  const rootClasses = `fcc-entry-media fcc-fire-eq eq-${style} fc-audio-mode-${mode}-v1123${controls ? ' fc-audio-has-controls-v1123' : ''}`;
   const audio = `<audio src="${escapeHtml(mediaUrl)}" preload="${preload}" crossorigin="anonymous"
     onloadedmetadata="syncFccAudioControlsV1123(this.closest('.fcc-fire-eq'),this)"
     ondurationchange="syncFccAudioControlsV1123(this.closest('.fcc-fire-eq'),this)"
@@ -16375,16 +16307,11 @@ function _audioTileHtmlLegacyV1138(e, options = {}) {
       <span class="fc-audio-duration-v1123">--:--</span>
       <button type="button" class="fc-audio-volume-v1123" aria-label="Mute audio" onclick="toggleFccAudioMuteV1123(this,event)">🔊</button>
     </div>` : '';
-  const compactProgressHtml = controls ? '' : `<div class="fc-audio-card-progress-v1137" aria-hidden="true">
-      <span class="fc-audio-card-current-v1137">0:00</span>
-      <span class="fc-audio-card-track-v1137"><span class="fc-audio-card-fill-v1137"></span></span>
-      <span class="fc-audio-card-duration-v1137">--:--</span>
-    </div>`;
 
   let visual = '';
   let mainButtonOutside = mainButton;
   if (style === 'curve') {
-    const idle = visualProfileV1136.heights.map(h => Math.max(18, Math.min(68, Math.round(78 - h * .72))));
+    const idle = [55,32,42,52,47,58,50,45,30,48,52,62,57];
     const xs = Array.from({length: NB}, (_, i) => 6 + i * (88 / (NB - 1)));
     const d = idle.map((y, i) => `${i ? 'L' : 'M'}${xs[i].toFixed(1)},${y}`).join(' ');
     const nodes = idle.map((y, i) => `<circle class="feq-node" cx="${xs[i].toFixed(1)}" cy="${y}" r="1.8"/>`).join('');
@@ -16400,134 +16327,11 @@ function _audioTileHtmlLegacyV1138(e, options = {}) {
     // implementation put a black analyser box over the center and stretched
     // the composition into 4:5. Keep the artwork whole and place playback UI
     // outside it instead.
-    visual = `<div class="fc-audio-scene-art-v1124">${identityCoverV1138 ? '' : mainButton}</div>`;
-    mainButtonOutside = identityCoverV1138 ? mainButton : '';
+    visual = `<div class="fc-audio-scene-art-v1124">${mainButton}</div>`;
+    mainButtonOutside = '';
   }
 
-  return `<div class="${rootClasses}" data-audio-style="${style}" data-audio-visual-v1136="${visualProfileV1136.seed}" onclick="toggleFccAudio(this,event)" role="group" aria-label="Audio entry by ${escapeHtml(entrantNameV1138)} · ${escapeHtml(EQ_LABELS[style])} style">${audio}${visual}${identityHtmlV1138}${mainButtonOutside}${compactProgressHtml}${controlsHtml}</div>`;
-}
-
-
-// v1142 — one canonical audio competition component. Feed and expanded
-// viewer share the same markup; the viewer only scales the component.
-function fcAudioHashV1142(value) {
-  let h = 2166136261;
-  const s = String(value || 'audio-entry');
-  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
-  return h >>> 0;
-}
-function fcAudioWavePathV1142(seedValue, count = 112) {
-  let seed = fcAudioHashV1142(seedValue) || 1;
-  const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
-  const phaseA = rnd() * Math.PI * 2;
-  const phaseB = rnd() * Math.PI * 2;
-  let d = '';
-  let previous = 0;
-  for (let i = 0; i < count; i++) {
-    const t = i / Math.max(1, count - 1);
-    const x = 2 + t * 96;
-    const edge = Math.pow(Math.sin(Math.PI * t), .52);
-    const phrase = .24
-      + .50 * Math.abs(Math.sin(t * Math.PI * 3.35 + phaseA))
-      + .20 * Math.abs(Math.sin(t * Math.PI * 8.4 + phaseB));
-    const texture = .62 + rnd() * .72;
-    const target = Math.max(1.1, Math.min(20, (1.8 + 15.8 * edge * phrase) * texture));
-    const amp = previous ? previous * .28 + target * .72 : target;
-    previous = amp;
-    const direction = i % 2 === 0 ? -1 : 1;
-    const y = 50 + direction * amp;
-    d += `${i ? ' L' : 'M'}${x.toFixed(2)},${y.toFixed(2)}`;
-  }
-  return d;
-}
-function fcAudioTitleV1142(entry, options = {}) {
-  return String(options.trackTitle || entry?.caption || options.challengeTitle || 'Audio entry').trim() || 'Audio entry';
-}
-function fcAudioSubtitleV1142(options = {}) {
-  const explicit = String(options.subtitle || '').trim();
-  if (explicit) return explicit;
-  const category = String(options.category || '').trim();
-  return category ? `${category} · Audio entry` : 'Audio entry';
-}
-function fcAudioSyncV1142(tile, audio) {
-  if (!tile || !audio) return;
-  const duration = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0;
-  const current = Math.max(0, Number(audio.currentTime) || 0);
-  const currentEl = tile.querySelector('.fc-audio-current-v1142');
-  const durationEl = tile.querySelector('.fc-audio-duration-v1142');
-  if (currentEl) currentEl.textContent = formatFccAudioTimeV1123(current).replace('--:--','0:00');
-  if (durationEl) durationEl.textContent = duration ? formatFccAudioTimeV1123(duration) : '0:00';
-  const seek = tile.querySelector('.fc-audio-seek-v1142');
-  if (seek) {
-    seek.max = String(duration || 0);
-    if (!seek.matches(':active')) seek.value = String(Math.min(current, duration || 0));
-    const pct = duration ? current / duration * 100 : 0;
-    seek.style.setProperty('--fc-audio-progress-v1142', `${Math.max(0,Math.min(100,pct))}%`);
-  }
-  tile.querySelectorAll('[data-fc-audio-marker-v1142]').forEach(marker => {
-    const ratio = Number(marker.dataset.fcAudioMarkerV1142 || 0);
-    marker.textContent = duration ? formatFccAudioTimeV1123(duration * ratio) : '0:00';
-  });
-  tile.classList.toggle('fc-audio-ready-v1142', duration > 0);
-}
-function fcAudioRevealControlsV1142(tile, ev) {
-  if (!tile || ev?.target?.closest?.('button,input')) return;
-  if (!tile.classList.contains('playing')) return;
-  if (ev) { ev.preventDefault(); ev.stopPropagation(); }
-  fcAudioScheduleControlFadeV1136(tile);
-}
-function _audioTileHtml(e, options = {}) {
-  const mode = String(options.mode || 'card').replace(/[^a-z0-9_-]/gi,'') || 'card';
-  if (mode === 'preview') return _audioTileHtmlLegacyV1138(e, options);
-  const mediaUrl = e?.media_url || e?.audio_url || '';
-  if (!mediaUrl) return `<div class="fcc-entry-media fcc-entry-placeholder fc-entry-audio-v1079" aria-label="Audio entry"><span aria-hidden="true">♪</span></div>`;
-  const entrantName = String(e?.submitter?.name || options.entrantName || 'Competitor');
-  const entrantAvatar = avatarInner(e?.submitter?.avatar || options.entrantAvatar || '🔥');
-  const trackTitle = fcAudioTitleV1142(e, options);
-  const subtitle = fcAudioSubtitleV1142(options);
-  const preload = ['card','detail','winner'].includes(mode) ? 'metadata' : 'auto';
-  const entryIdRaw = String(e?.id || options.entryId || 'audio-entry');
-  const entryId = escapeHtml(entryIdRaw);
-  const challengeId = escapeHtml(String(e?.challenge_id || options.challengeId || ''));
-  const gradientId = `fcAudioGradientV1142-${entryIdRaw.replace(/[^a-z0-9]/gi,'').slice(0,24) || fcAudioHashV1142(trackTitle)}`;
-  const idlePath = fcAudioWavePathV1142(`${entryIdRaw}|${trackTitle}`);
-  const revealClick = (mode === 'viewer' || mode === 'feed-viewer') ? ' onclick="fcAudioRevealControlsV1142(this,event)"' : '';
-  const audio = `<audio src="${escapeHtml(mediaUrl)}" preload="${preload}" crossorigin="anonymous"
-    onloadedmetadata="syncFccAudioControlsV1123(this.closest('.fcc-fire-eq'),this);fcAudioSyncV1142(this.closest('.fcc-fire-eq'),this)"
-    ondurationchange="syncFccAudioControlsV1123(this.closest('.fcc-fire-eq'),this);fcAudioSyncV1142(this.closest('.fcc-fire-eq'),this)"
-    ontimeupdate="syncFccAudioControlsV1123(this.closest('.fcc-fire-eq'),this);fcAudioSyncV1142(this.closest('.fcc-fire-eq'),this)"
-    onvolumechange="syncFccAudioControlsV1123(this.closest('.fcc-fire-eq'),this)"
-    onplay="fcAudioPlayStateV1123(this.closest('.fcc-fire-eq'),this);fcAudioSyncV1142(this.closest('.fcc-fire-eq'),this)"
-    onpause="fcAudioPauseStateV1123(this.closest('.fcc-fire-eq'),this);fcAudioSyncV1142(this.closest('.fcc-fire-eq'),this)"
-    onended="fcAudioPauseStateV1123(this.closest('.fcc-fire-eq'),this);fcAudioSyncV1142(this.closest('.fcc-fire-eq'),this)"></audio>`;
-  return `<div class="fcc-entry-media fcc-fire-eq fc-audio-player-v1142 fc-audio-mode-${mode}-v1142"
-      data-entry-id-v1142="${entryId}" data-challenge-id-v1142="${challengeId}"${revealClick}
-      role="group" aria-label="Audio entry by ${escapeHtml(entrantName)}">
-    ${audio}
-    <div class="fc-audio-stage-v1142">
-      <div class="fc-audio-wave-region-v1142" aria-hidden="true">
-        <div class="fc-audio-time-marks-v1142">
-          <span data-fc-audio-marker-v1142="0">0:00</span><span data-fc-audio-marker-v1142="0.25">0:00</span><span data-fc-audio-marker-v1142="0.5">0:00</span><span data-fc-audio-marker-v1142="0.75">0:00</span><span data-fc-audio-marker-v1142="1">0:00</span>
-        </div>
-        <svg class="fc-audio-wave-svg-v1142" viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false">
-          <defs><linearGradient id="${gradientId}" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#ff3625"/><stop offset=".27" stop-color="#ff6a2c"/><stop offset=".52" stop-color="#ffd56f"/><stop offset=".74" stop-color="#ff6a2c"/><stop offset="1" stop-color="#ff3625"/></linearGradient></defs>
-          <path class="fc-audio-wave-glow-v1142" d="${idlePath}" data-idle="${idlePath}" stroke="url(#${gradientId})"/>
-          <path class="fc-audio-wave-path-v1142" d="${idlePath}" data-idle="${idlePath}" stroke="url(#${gradientId})"/>
-        </svg>
-        <span class="fc-audio-ember-v1142 e1"></span><span class="fc-audio-ember-v1142 e2"></span><span class="fc-audio-ember-v1142 e3"></span><span class="fc-audio-ember-v1142 e4"></span>
-      </div>
-      <div class="fc-audio-track-row-v1142">
-        <div class="fc-audio-cover-v1142">${entrantAvatar}</div>
-        <div class="fc-audio-track-copy-v1142"><span>Audio entry</span><strong>${escapeHtml(trackTitle)}</strong><small>${escapeHtml(subtitle)}</small></div>
-        <button type="button" class="fcc-audio-btn fc-audio-main-play-v1142" aria-label="Play audio" onclick="toggleFccAudioFromControlV1123(this,event)">▶</button>
-      </div>
-    </div>
-    <div class="fc-audio-scrub-v1142" onclick="event.stopPropagation()">
-      <span class="fc-audio-current-v1142">0:00</span>
-      <input class="fc-audio-seek-v1123 fc-audio-seek-v1142" type="range" min="0" max="0" step="0.1" value="0" aria-label="Seek through audio" oninput="seekFccAudioV1123(this,event);fcAudioSyncV1142(this.closest('.fcc-fire-eq'),this.closest('.fcc-fire-eq').querySelector('audio'))">
-      <span class="fc-audio-duration-v1142">0:00</span>
-    </div>
-  </div>`;
+  return `<div class="${rootClasses}" data-audio-style="${style}" onclick="toggleFccAudio(this,event)" role="group" aria-label="Audio entry · ${escapeHtml(EQ_LABELS[style])} style">${audio}${visual}${mainButtonOutside}${controlsHtml}</div>`;
 }
 
 function formatFccAudioTimeV1123(value) {
@@ -16561,16 +16365,6 @@ function syncFccAudioControlsV1123(tile, audio) {
     volume.textContent = audio.muted || audio.volume === 0 ? '🔇' : '🔊';
     volume.setAttribute('aria-label', audio.muted || audio.volume === 0 ? 'Unmute audio' : 'Mute audio');
   }
-  const cardCurrent = tile.querySelector('.fc-audio-card-current-v1137');
-  const cardDuration = tile.querySelector('.fc-audio-card-duration-v1137');
-  const cardFill = tile.querySelector('.fc-audio-card-fill-v1137');
-  const finiteDurationV1137 = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0;
-  if (cardCurrent) cardCurrent.textContent = formatFccAudioTimeV1123(audio.currentTime || 0).replace('--:--','0:00');
-  if (cardDuration) cardDuration.textContent = finiteDurationV1137 ? formatFccAudioTimeV1123(finiteDurationV1137) : '--:--';
-  if (cardFill) {
-    const pctV1137 = finiteDurationV1137 ? ((audio.currentTime || 0) / finiteDurationV1137) * 100 : 0;
-    cardFill.style.width = `${Math.max(0, Math.min(100, pctV1137))}%`;
-  }
 }
 
 function fcAudioPlayStateV1123(tile, audio) {
@@ -16578,14 +16372,12 @@ function fcAudioPlayStateV1123(tile, audio) {
   tile.classList.add('playing');
   tile.querySelectorAll('.fcc-audio-btn,.fc-audio-play-v1123').forEach(btn => { btn.textContent = '⏸'; btn.setAttribute('aria-label','Pause audio'); });
   syncFccAudioControlsV1123(tile, audio);
-  fcAudioScheduleControlFadeV1136(tile);
   _feqStart(tile, audio);
 }
 
 function fcAudioPauseStateV1123(tile, audio) {
   if (!tile || !audio) return;
-  if (tile._fcAudioControlTimerV1136) { clearTimeout(tile._fcAudioControlTimerV1136); tile._fcAudioControlTimerV1136 = null; }
-  tile.classList.remove('playing','fc-audio-controls-visible-v1136');
+  tile.classList.remove('playing');
   tile.querySelectorAll('.fcc-audio-btn,.fc-audio-play-v1123').forEach(btn => { btn.textContent = '▶'; btn.setAttribute('aria-label','Play audio'); });
   syncFccAudioControlsV1123(tile, audio);
   _feqStop(tile);
@@ -16595,13 +16387,6 @@ function toggleFccAudio(tile, ev) {
   if (ev) { ev.preventDefault(); ev.stopPropagation(); }
   const audio = tile?.querySelector('audio');
   if (!audio) return;
-  const explicitPlaybackControlV1137 = !!ev?.target?.closest?.('.fcc-audio-btn,.fc-audio-play-v1123');
-  if (!audio.paused && !explicitPlaybackControlV1137) {
-    // Once the center control has faded, a tap on the artwork reveals it instead
-    // of unexpectedly stopping playback. Pause remains an explicit button action.
-    fcAudioScheduleControlFadeV1136(tile);
-    return;
-  }
   if (audio.paused) {
     _userAudioActive = true;
     document.querySelectorAll('audio,video').forEach(media => { if (media !== audio) { try { media.pause(); } catch (_) {} } });
@@ -16642,12 +16427,12 @@ function toggleFccAudioMuteV1123(button, ev) {
 // One shared AudioContext (iOS allows creation inside a tap handler, which
 // toggleFccAudio is). One MediaElementSource per <audio> — creating a second
 // for the same element THROWS, hence the a._feqSrc guard. The rAF loop maps 13
-// log-spaced frequency bins onto the 13 bars. If analyser access is unavailable,
-// v1137 leaves the honest shared cover in place rather than inventing motion.
+// log-spaced frequency bins onto the 13 bars. FALLBACK: if the analyser reads
+// all zeros for ~1s (CORS blocked, or a quirk), switch to the CSS keyframe
+// dance so the bars are never simply frozen.
 let _feqCtx = null;
 function _feqStart(tile, a) {
   try {
-    tile.classList.remove('fc-audio-analyser-unavailable-v1137');
     if (!_feqCtx) _feqCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (_feqCtx.state === 'suspended') _feqCtx.resume();
     if (!a._feqSrc) {
@@ -16674,9 +16459,6 @@ function _feqStart(tile, a) {
     };
     const bars = tile.querySelectorAll('.feqb');
     const NB = bars.length;
-    const approvedWavePathV1141 = tile.querySelector('.fc-audio-wave-path-v1142,.fc-audio-wave-path-v1141');
-    const approvedWaveGlowV1141 = tile.querySelector('.fc-audio-wave-glow-v1142,.fc-audio-wave-glow-v1141');
-    const approvedTimeDataV1141 = approvedWavePathV1141 ? new Uint8Array(an.fftSize) : null;
     // v733 — Flame's .feqb are black TOP COVERS (fire shows below them), so their
     // height is the INVERSE of loudness: loud -> SHORT cover -> tall fire column.
     // Fire/Gradient bars grow up from the bottom: loud -> TALL bar. One formula
@@ -16693,33 +16475,9 @@ function _feqStart(tile, a) {
     if (tile._feqRaf) cancelAnimationFrame(tile._feqRaf);
     const loop = () => {
       if (!tile.classList.contains('playing')) return;
+      an.getByteFrequencyData(data);
       let sum = 0;
-      if (approvedWavePathV1141) {
-        an.getByteTimeDomainData(approvedTimeDataV1141);
-        const isApprovedV1142 = approvedWavePathV1141.classList.contains('fc-audio-wave-path-v1142');
-        const N = isApprovedV1142 ? 112 : 74;
-        let dstr = '';
-        let smoothed = 0;
-        for (let i = 0; i < N; i++) {
-          const sourceIndex = Math.min(approvedTimeDataV1141.length - 1, Math.floor(i * approvedTimeDataV1141.length / N));
-          const normalized = (approvedTimeDataV1141[sourceIndex] - 128) / 128;
-          sum += Math.abs(normalized);
-          const x = 2 + i * (96 / Math.max(1, N - 1));
-          if (isApprovedV1142) {
-            smoothed = smoothed * .18 + normalized * .82;
-            const y = 50 + Math.max(-23, Math.min(23, smoothed * 48));
-            dstr += `${i ? ' L' : 'M'}${x.toFixed(2)},${y.toFixed(2)}`;
-          } else {
-            const y = 50 + normalized * 42;
-            dstr += `${i ? ' L' : 'M'}${x.toFixed(2)},${y.toFixed(2)}`;
-          }
-        }
-        approvedWavePathV1141.setAttribute('d', dstr);
-        if (approvedWaveGlowV1141) approvedWaveGlowV1141.setAttribute('d', dstr);
-      } else {
-        an.getByteFrequencyData(data);
-      }
-      if (!approvedWavePathV1141 && isCurve) {
+      if (isCurve) {
         // v737 — 13 nodes across viewBox x=6..94; y: quiet -> 70 (low), loud -> 12 (high)
         const N = svgNodes.length || 13;
         let dstr = '';
@@ -16732,7 +16490,7 @@ function _feqStart(tile, a) {
           if (svgNodes[i]) { svgNodes[i].setAttribute('cx', x.toFixed(1)); svgNodes[i].setAttribute('cy', y.toFixed(1)); }
         }
         svgPath.setAttribute('d', dstr);
-      } else if (!approvedWavePathV1141) for (let i = 0; i < NB; i++) {
+      } else for (let i = 0; i < NB; i++) {
         const bin = Math.min(data.length - 1, Math.floor(Math.pow(i / NB, 1.6) * data.length * 0.8) + 1);
         const v = norm(i, data[bin] / 255); sum += data[bin] / 255;
         bars[i].style.height = isFlame
@@ -16740,9 +16498,31 @@ function _feqStart(tile, a) {
           : (10 + v * 82) + '%';  // bar: quiet -> 10% tall, loud -> 92% tall
       }
       if (sum === 0 && ++zeroFrames > 60) {
-        dlog('feq', 'analyser-unavailable-static-cover', { curve: isCurve });
-        tile.classList.add('fc-audio-analyser-unavailable-v1137');
-        _feqStop(tile);
+        dlog('feq', 'analyser-silent-fallback', { curve: isCurve });
+        if (isCurve) {
+          // v738 — animate the curve with a travelling sine so a mute analyser
+          // never leaves it a dead flat line (the bug in Paul's screenshot).
+          tile._feqFakeRaf && cancelAnimationFrame(tile._feqFakeRaf);
+          const N = svgNodes.length || 13;
+          const fake = () => {
+            if (!tile.classList.contains('playing')) return;
+            const t = performance.now() / 1000;
+            let dstr = '';
+            for (let i = 0; i < N; i++) {
+              const x = 6 + i * (88 / (N - 1));
+              const v = 0.5 + 0.42 * Math.sin(i * 0.7 + t * 3) * Math.sin(t * 1.6 + i);
+              const y = 70 - v * 58;
+              dstr += (i ? ' L' : 'M') + x.toFixed(1) + ',' + y.toFixed(1);
+              if (svgNodes[i]) { svgNodes[i].setAttribute('cx', x.toFixed(1)); svgNodes[i].setAttribute('cy', y.toFixed(1)); }
+            }
+            svgPath.setAttribute('d', dstr);
+            tile._feqFakeRaf = requestAnimationFrame(fake);
+          };
+          tile._feqFakeRaf = requestAnimationFrame(fake);
+          return;
+        }
+        bars.forEach(b => { b.style.height = ''; });
+        tile.classList.add('feq-fallback');
         return;
       }
       tile._feqRaf = requestAnimationFrame(loop);
@@ -16750,8 +16530,7 @@ function _feqStart(tile, a) {
     tile._feqRaf = requestAnimationFrame(loop);
   } catch (err) {
     dlog('feq', 'webaudio-fail', { e: String(err && err.message || err).slice(0, 60) });
-    tile.classList.add('fc-audio-analyser-unavailable-v1137');
-    _feqStop(tile);
+    tile.classList.add('feq-fallback');
   }
 }
 function _feqStop(tile) {
@@ -16759,9 +16538,6 @@ function _feqStop(tile) {
   if (tile._feqFakeRaf) { cancelAnimationFrame(tile._feqFakeRaf); tile._feqFakeRaf = null; } // v738
   tile.classList.remove('feq-fallback');
   tile.querySelectorAll('.feqb').forEach(b => { b.style.height = ''; });
-  tile.querySelectorAll('.fc-audio-wave-path-v1142,.fc-audio-wave-glow-v1142,.fc-audio-wave-path-v1141,.fc-audio-wave-glow-v1141').forEach(p1141 => {
-    if (p1141.dataset.idle) p1141.setAttribute('d', p1141.dataset.idle);
-  });
   const p = tile.querySelector('.feq-path'); // v737 — curve back to its idle shape
   if (p && p.dataset.idle) {
     p.setAttribute('d', p.dataset.idle);
@@ -18358,7 +18134,6 @@ let _evMyVoteEntryId = null;
 let _evHasAnyVoteV1083 = false;
 
 async function openEntryViewer(entryId, chId) {
-  document.querySelectorAll('audio,video').forEach(media => { try { media.pause(); } catch (_) {} });
   const ch = state.challenges.find(c => c.id === chId) || state.currentChallenge;
   if (!ch) return;
 
@@ -18506,7 +18281,7 @@ function _renderEvEntry() {
     _validateVideoPosters(mediaContent);
   } else if (entryMediaType === 'audio' && entry.media_url) {
     mediaContent.classList.add('fc-ev-simple-v1079', 'fc-ev-audio-v1123');
-    mediaContent.innerHTML = _audioTileHtml(entry, { mode: 'viewer', trackTitle: entry.caption || ch.title || 'Audio entry', challengeTitle: ch.title, subtitle: [ch.category, 'Audio entry'].filter(Boolean).join(' · '), category: ch.category, challengeId: ch.id, entryId: entry.id });
+    mediaContent.innerHTML = _audioTileHtml(entry, { mode: 'viewer', controls: true });
   } else if (entry.caption) {
     mediaContent.classList.add('fc-ev-simple-v1079');
     mediaContent.innerHTML = `<div style="padding:24px;font-size:18px;line-height:1.5;color:var(--text)">${escapeHtml(entry.caption)}</div>`;
@@ -21976,7 +21751,6 @@ function renderChallengeDetail() {
   });
 
   const grid = document.getElementById('cdEntriesGrid');
-  if (grid) grid.classList.toggle('fc-audio-entry-grid-v1137', sortedEntries.length > 1 && sortedEntries.every(e => String(e.media_type || ch?.media_type || '').toLowerCase() === 'audio'));
   const counterEl = document.getElementById('cdEntriesCounter');
   const dotsEl = document.getElementById('cdEntriesDots');
   const navEl = document.getElementById('cdEntryNav');
@@ -22079,7 +21853,7 @@ function renderChallengeDetail() {
         </div>`;
       }
     } else if (entry.media_type === 'audio' && entry.media_url) {
-      mediaHtml = `<div class="fc-audio-expand-hit-v1140" data-open-entry="${entry.id}" data-open-ch="${entry.challenge_id}" aria-label="Open audio entry">${_audioTileHtml(entry, { mode: 'detail', trackTitle: entry.caption || ch.title || 'Audio entry', challengeTitle: ch.title, subtitle: [ch.category, 'Audio entry'].filter(Boolean).join(' · '), category: ch.category, challengeId: ch.id, entryId: entry.id })}</div>`;
+      mediaHtml = _audioTileHtml(entry, { mode: 'detail', controls: true });
     } else if (entry.media_type === 'text') {
       mediaHtml = `<div class="cd-text-entry">${formatBody(entry.caption || '')}</div>`;
     }
@@ -24626,7 +24400,7 @@ function fcEntryCardMediaV1060(e, ch) {
     return `<div class="fcc-entry-media fcc-text-entry fc-entry-text-v1079"><span>${escapeHtml(e.caption || 'Text entry')}</span></div>`;
   }
   if (type === 'audio') {
-    return _audioTileHtml(e, { mode: 'card', trackTitle: e.caption || ch?.title || 'Audio entry', challengeTitle: ch?.title, subtitle: [ch?.category, 'Audio entry'].filter(Boolean).join(' · '), category: ch?.category, challengeId: ch?.id, entryId: e?.id });
+    return _audioTileHtml(e, { mode: 'card', controls: false });
   }
   if (!url) {
     return `<div class="fcc-entry-media fcc-entry-placeholder fc-real-processing-v1060"><div><strong>${escapeHtml(label)}</strong><span>${type === 'video' ? 'Video preview processing' : 'Preview processing'}</span></div></div>`;
@@ -24656,8 +24430,7 @@ function fcEntryRailV1060(ch, entries) {
     const pctV1085 = voteTotalV1085 > 0 ? Math.round((votesV1085 / voteTotalV1085) * 100) : 0;
     const voteLabelV1085 = selectedV1085 ? '✓ Your vote' : (selectedVoteIdV1083 ? 'Change vote' : 'Vote here');
     const voteFooterV1085 = votingV1085 ? `<footer class="fcc-direct-vote-foot-v1085"><button type="button" class="fcc-direct-vote-btn-v1085${selectedV1085 ? ' selected' : ''}" data-fcc-direct-vote-v1085 data-challenge-id="${ch.id}" data-entry-id="${e.id}" ${selectedV1085 ? 'disabled aria-current="true"' : ''} onclick="event.stopPropagation();voteFromCompeteCardV1085(this)">${voteLabelV1085}</button><span class="fcc-direct-vote-total-v1085" data-fcc-direct-total-v1085="${e.id}">${votesV1085} vote${votesV1085 === 1 ? '' : 's'} · ${pctV1085}%</span></footer>` : '';
-    const media = fcEntryCardMediaV1060(e,ch);
-    return `<article class="fcc-entry-card fc-entry-square-v1082${voteClassV1083}" data-entry-open="${ch.id}" data-entry-id="${e.id}" aria-label="Entry ${i+1} of ${entries.length}"><header class="fcc-entry-head-v1079"><span class="fcc-entry-avatar">${av}</span><span class="fcc-entry-name-v1079">${escapeHtml(sub.name || `Entry ${i+1}`)}</span><span class="fcc-entry-position-v1079">${i+1} of ${entries.length}</span></header>${media}${voteFooterV1085}</article>`;
+    return `<article class="fcc-entry-card fc-entry-square-v1082${voteClassV1083}" data-entry-open="${ch.id}" data-entry-id="${e.id}" aria-label="Entry ${i+1} of ${entries.length}"><header class="fcc-entry-head-v1079"><span class="fcc-entry-avatar">${av}</span><span class="fcc-entry-name-v1079">${escapeHtml(sub.name || `Entry ${i+1}`)}</span><span class="fcc-entry-position-v1079">${i+1} of ${entries.length}</span></header>${fcEntryCardMediaV1060(e,ch)}${voteFooterV1085}</article>`;
   }).join('')}</div>${_entryDotsHtml(entries.length)}</div>`;
 }
 
@@ -25052,21 +24825,6 @@ function buildChallengeCardShell(ch, surface = 'compete') {
       ? fcPreparingStatusLineV1120(ch,status,Number(entryCount)||0,voteTotal)
       : fcCompeteStatusLineV1059(ch,status,Number(entryCount)||0,voteTotal);
     const scoreContext=fcCompeteScoreContextV1059(ch,status,Number(entryCount)||0);
-    const audioOnlyV1149 = !myPreparing && cardEntries.length > 0 && cardEntries.every(e => String(e?.media_type || ch?.media_type || '').toLowerCase() === 'audio');
-    if (audioOnlyV1149) {
-      return `<div class="fc-audio-challenge-shell">
-        <div class="fc-audio-challenge__header">
-          <div class="fc-audio-challenge__copy">
-            <div class="chc-title">${escapeHtml(display.title)}</div>
-            ${display.prompt ? `<div class="fc-audio-challenge__prompt">${escapeHtml(display.prompt)}</div>` : ''}
-            <div class="fc-audio-challenge__status">${statusParts.map(x=>`<span>${escapeHtml(x)}</span>`).join('<i aria-hidden="true">·</i>')}</div>
-          </div>
-          <button type="button" class="fc-audio-challenge__info fc-score-info-v1088" data-fc-compete-score-v1059="${ch.id}" aria-label="${escapeHtml(scoreContext)}" title="${escapeHtml(scoreContext)}"><span aria-hidden="true">ⓘ</span></button>
-        </div>
-        ${mediaHtml}
-        <div class="fc-compete-card-foot-v1059">${action.hidden ? '' : `<button class="chc-cta fc-compete-card-action-v1059${ctaCls}" data-chc-act="${ch.id}" data-chc-mode="${action.mode}">${action.label}</button>`}</div>
-      </div>`;
-    }
     return `${commonTop}
       <div class="fc-compete-card-foot-v1059${myPreparing ? ' fc-preparing-foot-v1120' : ''}">
         <div class="fc-compete-card-status-v1059${myPreparing ? ' fc-preparing-status-v1120' : ''}">${statusParts.map(x=>`<span>${escapeHtml(x)}</span>`).join('<i aria-hidden="true">·</i>')}<button type="button" class="fc-compete-card-score-v1059 fc-score-info-v1088" data-fc-compete-score-v1059="${ch.id}" aria-label="${escapeHtml(scoreContext)}" title="${escapeHtml(scoreContext)}"><span aria-hidden="true">ⓘ</span></button></div>
@@ -25176,7 +24934,7 @@ function renderFeedWinnerCard({ challenge, entry }) {
   }else if(entry.media_type==='video'&&entry.media_url){
     mediaHtml=`<div class="fc-winner-video-v1058" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><video data-src="${escapeHtml(entry.media_url)}" ${_videoPosterAttr(entry.media_url,entry.poster_url)} muted playsinline preload="none" data-lazy-video></video><span aria-hidden="true">▶</span></div>`;
   }else if(entry.media_type==='audio'&&entry.media_url){
-    mediaHtml=`<div class="fc-winner-audio-v1123" data-entry-open="${challenge.id}" data-entry-id="${entry.id}">${_audioTileHtml(entry,{mode:'winner',trackTitle:entry.caption||challenge.title||'Audio entry',challengeTitle:challenge.title,subtitle:[challenge.category,'Audio entry'].filter(Boolean).join(' · '),category:challenge.category,challengeId:challenge.id,entryId:entry.id})}</div>`;
+    mediaHtml=`<div class="fc-winner-audio-v1123" data-entry-open="${challenge.id}" data-entry-id="${entry.id}">${_audioTileHtml(entry,{mode:'winner',controls:false})}</div>`;
   }else{
     mediaHtml=`<div class="fc-winner-text-v1058" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><span aria-hidden="true">${_fcFeedCategoryIconV1058(challenge.category)}</span>${entry.caption?`<p>${escapeHtml(entry.caption)}</p>`:''}</div>`;
   }
@@ -27192,7 +26950,7 @@ function renderFvEntry(entry, ch, canVote, myVoteEntryId, status) {
   } else if (false) {
     // (removed: old lazy-preview video block — viewer now uses static poster above)
   } else if (mediaType === 'audio' && entry.media_url) {
-    mediaHtml = _audioTileHtml(entry, { mode: 'feed-viewer', trackTitle: entry.caption || ch.title || 'Audio entry', challengeTitle: ch.title, subtitle: [ch.category, 'Audio entry'].filter(Boolean).join(' · '), category: ch.category, challengeId: ch.id, entryId: entry.id });
+    mediaHtml = _audioTileHtml(entry, { mode: 'feed-viewer', controls: true });
   } else if (mediaType === 'text' && entry.caption) {
     mediaHtml = `<div style="padding:32px 16px;font-family:var(--font-bricolage);font-size:20px;line-height:1.6;color:var(--text);background:var(--surface-2);min-height:120px;display:flex;align-items:center;">${escapeHtml(entry.caption)}</div>`;
   }
@@ -29206,7 +28964,7 @@ function _wireTactileEntrySwipeV1125(sc, cardSelector, onSettled) {
     settleRaf = 0;
   };
   const restoreRail = g => {
-    sc.classList.remove('fc-swipe-dragging-v1125','fc-audio-swipe-active-v1137');
+    sc.classList.remove('fc-swipe-dragging-v1125');
     sc.style.scrollSnapType = g?.previousSnap || '';
     sc.style.scrollBehavior = g?.previousBehavior || '';
   };
@@ -29265,12 +29023,9 @@ function _wireTactileEntrySwipeV1125(sc, cardSelector, onSettled) {
     if (!g.mode && Math.max(ax, ay) >= 6) {
       g.mode = ax > ay * 1.08 ? 'x' : 'y';
       if (g.mode === 'x') {
-        sc.classList.add('fc-swipe-dragging-v1125','fc-audio-swipe-active-v1137');
+        sc.classList.add('fc-swipe-dragging-v1125');
         sc.style.scrollSnapType = 'none';
         sc.style.scrollBehavior = 'auto';
-        // Pause as soon as the rail owns the horizontal gesture, before the next
-        // entrant moves on screen.
-        sc.querySelectorAll('audio').forEach(a => { if (!a.paused) { try { a.pause(); } catch (_) {} } });
       }
     }
     if (g.mode !== 'x') return;
@@ -29359,15 +29114,7 @@ function _wireEntryDots(root) {
       const i = Math.max(0, Math.min(list.length - 1, Math.round(sc.scrollLeft / st)));
       list.forEach((d, n) => d.classList.toggle('active', n === i));
     };
-    let lastAudioScrollV1136 = sc.scrollLeft;
     sc.addEventListener('scroll', () => {
-      // v1136 — once the rail actually moves, stop the old entry's audio.
-      // Otherwise the next name/card can arrive while the previous track keeps
-      // playing, which makes an already-similar audio carousel feel broken.
-      if (Math.abs(sc.scrollLeft - lastAudioScrollV1136) > 4) {
-        sc.querySelectorAll('audio').forEach(a => { if (!a.paused) { try { a.pause(); } catch (_) {} } });
-        lastAudioScrollV1136 = sc.scrollLeft;
-      }
       if (sc._dotRaf) return;
       sc._dotRaf = requestAnimationFrame(() => { sc._dotRaf = null; update(); });
     }, { passive: true });
@@ -39634,188 +39381,5 @@ body:has(.entrants-backdrop.open) #fcGlobalAskEmberV1131{
   };
 })();
 </script>
-
-<script id="fc-v1144-validation-js">
-(function(){
-  window.FC_BUILD_V1144='audio-waveform-fidelity-update-recovery';
-  window.FC_V1144_VALIDATION={
-    build:'v1144',basedOn:'v1143',continuousWaveform:true,realTimeDomainWaveform:true,
-    approvedCardHierarchy:true,dominantCenterCard:true,restrainedNeighborPeeks:true,
-    fullTrackTitle:true,matchingExpandedComposition:true,updateMetaAttributeOrderFixed:true,
-    updateFullFetchFallback:true,manualUpdateUiAdded:false,askEmberChanged:false,
-    sqlRequired:false,edgeFunctionChanges:0,serviceWorkerRequired:false
-  };
-})();
-</script>
-
-
-
-
-
-
-
-<style id="fc-v1149-canonical-audio-css">
-/* v1149 — canonical audio competition UI. These semantic selectors are the only audio presentation layer. */
-.fc-audio-challenge-shell{width:100%;min-width:0;padding:18px 16px 16px;background:linear-gradient(180deg,#151515 0%,#0f0e0d 100%);border:1px solid rgba(255,255,255,.10);border-radius:22px;overflow:hidden}
-.fc-audio-challenge__header{display:grid;grid-template-columns:minmax(0,1fr) 44px;gap:12px;align-items:start;margin:0 0 14px}
-.fc-audio-challenge__copy{min-width:0}
-.fc-audio-challenge__copy .chc-title{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;margin:0 0 5px!important;color:#fff!important;font-size:20px!important;font-weight:700!important;line-height:1.15!important;letter-spacing:-.012em!important}
-.fc-audio-challenge__prompt{margin:0 0 5px;color:#b7aea8;font-size:13px;line-height:1.35}
-.fc-audio-challenge__status{display:flex;align-items:center;flex-wrap:wrap;gap:6px;color:#9b9b9b;font-size:14px;font-weight:500;line-height:1.3}
-.fc-audio-challenge__status i{display:inline;font-style:normal;color:#6f6863}
-.fc-audio-challenge__info{position:static!important;inset:auto!important;width:44px!important;height:44px!important;min-width:44px!important;margin:0!important;padding:0!important;display:grid!important;place-items:center!important;border:1px solid rgba(255,122,26,.48)!important;border-radius:50%!important;background:#171717!important;color:#ff7a1a!important;font-size:19px!important;box-shadow:none!important}
-.fc-audio-challenge-shell .fc-compete-card-foot-v1059{padding:14px 0 0!important;border:0!important}
-.fc-audio-challenge-shell .fc-compete-card-action-v1059{width:100%!important;min-height:52px!important;border-radius:16px!important;background:#171717!important;border:1px solid rgba(255,255,255,.12)!important;color:#fff!important;font-size:16px!important;font-weight:700!important}
-
-/* Dedicated carousel geometry. Generic square/aspect-ratio rules are neutralized only inside this rail. */
-.fc-entry-rail-v1079.fc-audio-entry-rail-v1137{width:calc(100% + 32px);margin-inline:-16px;min-width:0;overflow:hidden;padding:0}
-.fc-entry-rail-v1079.fc-audio-entry-rail-v1137 .fcc-entries-scroll{display:flex!important;align-items:stretch!important;gap:10px!important;width:100%!important;overflow-x:auto!important;overflow-y:hidden!important;padding:0 22px 2px!important;scroll-padding-inline:22px!important;scroll-snap-type:x mandatory!important;overscroll-behavior-x:contain!important;scrollbar-width:none!important;-webkit-overflow-scrolling:touch!important;touch-action:pan-y pinch-zoom!important}
-.fc-entry-rail-v1079.fc-audio-entry-rail-v1137 .fcc-entries-scroll::-webkit-scrollbar{display:none}
-.fc-entry-rail-v1079.fc-audio-entry-rail-v1137 .fcc-entry-card{flex:0 0 calc(100% - 44px)!important;width:calc(100% - 44px)!important;min-width:calc(100% - 44px)!important;max-width:calc(100% - 44px)!important;height:auto!important;min-height:0!important;aspect-ratio:auto!important;scroll-snap-align:center!important;scroll-snap-stop:always!important;background:transparent!important;border:0!important;border-radius:20px!important;overflow:visible!important;box-shadow:none!important;transition:transform 220ms cubic-bezier(.22,.8,.22,1)!important}
-.fc-entry-rail-v1079.fc-audio-entry-rail-v1137 .fcc-entry-card>.fcc-entry-head-v1079{display:none!important}
-.fc-entry-rail-v1079.fc-audio-entry-rail-v1137 .fcc-entry-card>.fcc-entry-media{padding:0!important;margin:0!important;overflow:visible!important;background:transparent!important}
-.fc-entry-rail-v1079.fc-audio-entry-rail-v1137 .fcc-dots{display:flex!important;justify-content:center!important;gap:8px!important;padding:10px 0 0!important}
-.fc-entry-rail-v1079.fc-audio-entry-rail-v1137 .fcc-dot{width:8px!important;height:8px!important;border-radius:50%!important;background:#4b4744!important;opacity:1!important}
-.fc-entry-rail-v1079.fc-audio-entry-rail-v1137 .fcc-dot.active{background:#ff7a1a!important;box-shadow:none!important}
-
-/* Canonical component anatomy. */
-.fc-audio-entry{--audio-progress:0%;position:relative;width:100%;min-width:0;padding:0 16px 12px;background:#151515;border:1px solid rgba(255,122,26,.48);border-radius:20px;color:#fff;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.42);cursor:pointer}
-.fc-audio-entry audio{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
-.fc-audio-entry__entrant{height:56px;display:grid;grid-template-columns:42px minmax(0,1fr) auto;gap:10px;align-items:center}
-.fc-audio-entry__avatar,.fc-audio-entry__artwork{overflow:hidden;border-radius:50%;background:#1b1b1b;display:grid;place-items:center}
-.fc-audio-entry__avatar{width:42px;height:42px;border:1px solid rgba(255,255,255,.10)}
-.fc-audio-entry__avatar>*,.fc-audio-entry__artwork>*{width:100%!important;height:100%!important;display:block!important;object-fit:cover!important;border-radius:50%!important}
-.fc-audio-entry__name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:16px;font-weight:700;line-height:1.15}
-.fc-audio-entry__position{color:#b8b2ae;font-size:14px;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}
-.fc-audio-entry__wave-stage{position:relative;height:132px;background:#0b0b0b;border:1px solid rgba(255,255,255,.06);border-radius:16px;overflow:hidden}
-.fc-audio-entry__time-markers{position:absolute;z-index:3;left:14px;right:14px;top:10px;display:flex;justify-content:space-between;color:#9b9b9b;font-size:10px;font-weight:600;font-variant-numeric:tabular-nums;pointer-events:none}
-.fc-audio-entry__guides{position:absolute;left:14px;right:14px;top:36px;bottom:12px;background:repeating-linear-gradient(90deg,transparent 0,transparent calc(25% - .5px),rgba(255,255,255,.035) 25%,transparent calc(25% + .5px));pointer-events:none}
-.fc-audio-entry__waveform{position:absolute;left:14px;right:14px;top:40px;width:calc(100% - 28px);height:78px;display:block}
-.fc-audio-entry__playhead{position:absolute;z-index:4;top:36px;bottom:12px;left:calc(14px + (100% - 28px)*var(--audio-progress));width:1px;background:#ff7a1a;transform:translateX(-.5px);pointer-events:none;opacity:0}
-.fc-audio-entry.has-duration .fc-audio-entry__playhead{opacity:1}
-.fc-audio-entry__playhead:before{content:"";position:absolute;top:-3px;left:50%;width:6px;height:6px;border-radius:50%;background:#ff7a1a;transform:translate(-50%,-50%)}
-.fc-audio-entry__metadata{min-height:86px;display:grid;grid-template-columns:58px minmax(0,1fr) 54px;gap:12px;align-items:center}
-.fc-audio-entry__artwork{width:58px;height:58px;border:2px solid #ff7a1a}
-.fc-audio-entry__copy{min-width:0}
-.fc-audio-entry__label{display:block;margin:0 0 3px;color:#ff7a1a;font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;line-height:1.1}
-.fc-audio-entry__title{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;color:#fff;font-size:17px;font-weight:700;line-height:1.18;overflow-wrap:anywhere}
-.fc-audio-entry__subtitle{display:block;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#9b9b9b;font-size:12px;line-height:1.2}
-.fc-audio-entry__play{position:static!important;inset:auto!important;transform:none!important;width:54px!important;height:54px!important;min-width:54px!important;min-height:54px!important;margin:0!important;padding:0!important;display:grid!important;place-items:center!important;border:1px solid rgba(255,122,26,.70)!important;border-radius:50%!important;background:#17120f!important;color:#fff!important;font-size:21px!important;line-height:1!important;box-shadow:none!important;cursor:pointer!important}
-.fc-audio-entry__play:active{transform:scale(.94)!important;background:#ff8a26!important}
-.fc-audio-entry__seek{height:38px;display:grid;grid-template-columns:minmax(40px,auto) minmax(0,1fr) minmax(40px,auto);gap:10px;align-items:center;color:#d4cfcb;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
-.fc-audio-entry__seek>span:last-child{text-align:right}
-.fc-audio-entry__range{width:100%!important;height:28px!important;margin:0!important;appearance:none!important;-webkit-appearance:none!important;background:transparent!important;cursor:pointer!important}
-.fc-audio-entry__range::-webkit-slider-runnable-track{height:3px;border-radius:99px;background:linear-gradient(90deg,#ff7a1a 0 var(--fc-audio-progress-v1142),rgba(255,255,255,.18) var(--fc-audio-progress-v1142) 100%)}
-.fc-audio-entry__range::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;margin-top:-5.5px;border:2px solid #fff;border-radius:50%;background:#ff7a1a;box-shadow:0 2px 6px rgba(0,0,0,.45)}
-.fc-audio-entry__range::-moz-range-track{height:3px;border-radius:99px;background:rgba(255,255,255,.18)}
-.fc-audio-entry__range::-moz-range-progress{height:3px;border-radius:99px;background:#ff7a1a}
-.fc-audio-entry__range::-moz-range-thumb{width:12px;height:12px;border:2px solid #fff;border-radius:50%;background:#ff7a1a}
-
-/* Detail uses the same component and carousel geometry. */
-.cd-entries-grid.fc-audio-entry-grid-v1137{display:flex!important;gap:10px!important;overflow-x:auto!important;overflow-y:hidden!important;padding:0 22px 8px!important;scroll-padding-inline:22px!important;scroll-snap-type:x mandatory!important;scrollbar-width:none!important}
-.cd-entries-grid.fc-audio-entry-grid-v1137::-webkit-scrollbar{display:none}
-.cd-entries-grid.fc-audio-entry-grid-v1137>.cd-entry{flex:0 0 calc(100% - 44px)!important;width:calc(100% - 44px)!important;min-width:calc(100% - 44px)!important;max-width:calc(100% - 44px)!important;scroll-snap-align:center!important;border:0!important;border-radius:20px!important;overflow:visible!important;background:transparent!important}
-.cd-entries-grid.fc-audio-entry-grid-v1137>.cd-entry>.cd-entry-head,.cd-entries-grid.fc-audio-entry-grid-v1137>.cd-entry>.cd-entry-user{display:none!important}
-.cd-entries-grid.fc-audio-entry-grid-v1137>.cd-entry>.cd-entry-media{padding:0!important;background:transparent!important;overflow:visible!important}
-
-/* Full-screen expanded viewer. External duplicate identity/actions are suppressed for audio. */
-body:has(.fc-entry-viewer-v1079 .fc-ev-audio-v1123){overflow:hidden!important}
-body:has(.fc-entry-viewer-v1079 .fc-ev-audio-v1123) .bottom-nav{display:none!important}
-.fc-entry-viewer-v1079:has(.fc-ev-audio-v1123){position:fixed!important;inset:0!important;width:100%!important;max-width:none!important;height:100dvh!important;max-height:none!important;margin:0!important;border-radius:0!important;background:#050505!important;display:flex!important;flex-direction:column!important;padding:0!important}
-.fc-entry-viewer-v1079:has(.fc-ev-audio-v1123)>.entry-viewer-header,.fc-entry-viewer-v1079:has(.fc-ev-audio-v1123)>.entry-viewer-actions,.fc-entry-viewer-v1079:has(.fc-ev-audio-v1123)>.fc-ev-caption-v1079{display:none!important}
-.fc-entry-viewer-v1079 .entry-viewer-media:has(.fc-ev-audio-v1123){flex:1!important;min-height:0!important;padding:calc(12px + env(safe-area-inset-top,0px)) 16px calc(18px + env(safe-area-inset-bottom,0px))!important;overflow-y:auto!important;display:flex!important;align-items:center!important;justify-content:center!important;background:#050505!important}
-.fc-entry-viewer-v1079 .entry-viewer-media:has(.fc-ev-audio-v1123)>#evPrev,.fc-entry-viewer-v1079 .entry-viewer-media:has(.fc-ev-audio-v1123)>#evNext{display:none!important}
-.fc-entry-viewer-v1079 .fc-ev-audio-v1123{width:100%!important;max-width:430px!important;padding:0!important;background:transparent!important;overflow:visible!important}
-.fc-audio-entry--expanded{width:100%;max-width:430px;padding:0 16px 14px}
-.fc-audio-entry__viewer-controls{height:56px;display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:10px;align-items:center}
-.fc-audio-entry__viewer-close,.fc-audio-entry__viewer-nav{width:44px;height:44px;display:grid;place-items:center;border:1px solid rgba(255,255,255,.12);border-radius:50%;background:#171717;color:#fff;font-size:22px;cursor:pointer}
-.fc-audio-entry__viewer-count{text-align:center;color:#fff;font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
-.fc-audio-entry__viewer-navs{display:flex;gap:8px}
-.fc-audio-entry--expanded .fc-audio-entry__wave-stage{height:190px}
-.fc-audio-entry--expanded .fc-audio-entry__waveform{top:48px;height:124px}
-.fc-audio-entry--expanded .fc-audio-entry__guides{top:42px;bottom:14px}
-.fc-audio-entry--expanded .fc-audio-entry__playhead{top:42px;bottom:14px}
-.fc-audio-entry--expanded .fc-audio-entry__metadata{grid-template-columns:72px minmax(0,1fr) 64px;min-height:100px}
-.fc-audio-entry--expanded .fc-audio-entry__artwork{width:72px;height:72px}
-.fc-audio-entry--expanded .fc-audio-entry__title{font-size:20px}
-.fc-audio-entry--expanded .fc-audio-entry__play{width:64px!important;height:64px!important;min-width:64px!important;min-height:64px!important}
-
-@media(max-width:389px){
-  .fc-audio-challenge-shell{padding-inline:14px}
-  .fc-entry-rail-v1079.fc-audio-entry-rail-v1137{width:calc(100% + 28px);margin-inline:-14px}
-  .fc-audio-entry{padding-inline:14px}
-  .fc-audio-entry__metadata{grid-template-columns:54px minmax(0,1fr) 54px;gap:10px}
-  .fc-audio-entry__artwork{width:54px;height:54px}
-  .fc-audio-entry__title{font-size:16px}
-}
-@media(max-width:359px){
-  .fc-entry-rail-v1079.fc-audio-entry-rail-v1137 .fcc-entries-scroll{padding-inline:18px!important;scroll-padding-inline:18px!important}
-  .fc-entry-rail-v1079.fc-audio-entry-rail-v1137 .fcc-entry-card{flex-basis:calc(100% - 36px)!important;width:calc(100% - 36px)!important;min-width:calc(100% - 36px)!important;max-width:calc(100% - 36px)!important}
-}
-@media(prefers-reduced-motion:reduce){.fc-audio-entry,.fc-audio-entry *{transition:none!important}}
-</style>
-<script id="fc-v1149-canonical-audio-js">
-(()=>{
-  const cache=new Map();
-  const text=(v,f='')=>String(v??f);
-  const fmt=(v)=>typeof formatAudioTimeV1123==='function'?formatAudioTimeV1123(v):'0:00';
-  const initials=(name)=>`<span aria-hidden="true">${escapeHtml((text(name,'?').trim().charAt(0)||'?').toUpperCase())}</span>`;
-  const avatar=(e)=>{const s=e?.submitter||{};const u=s.avatar||e?.poster_url||'';return u&&/^https?:/i.test(u)?`<img src="${escapeHtml(u)}" alt="">`:initials(s.name)};
-  function sizeCanvas(canvas){const r=canvas.getBoundingClientRect(),d=Math.max(1,Math.min(2,window.devicePixelRatio||1)),w=Math.max(1,Math.round(r.width*d)),h=Math.max(1,Math.round(r.height*d));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h}return{ctx:canvas.getContext('2d'),w,h,d}}
-  function baseline(canvas){if(!canvas)return;const{ctx,w,h,d}=sizeCanvas(canvas);ctx.clearRect(0,0,w,h);ctx.strokeStyle='rgba(205,205,205,.52)';ctx.lineWidth=Math.max(1,d);ctx.beginPath();ctx.moveTo(0,h/2);ctx.lineTo(w,h/2);ctx.stroke()}
-  async function waveform(url){if(!url)return[];if(cache.has(url))return cache.get(url);const task=(async()=>{try{const res=await fetch(url,{mode:'cors',cache:'force-cache'});if(!res.ok)throw Error(String(res.status));const C=window.AudioContext||window.webkitAudioContext;if(!C)return[];const ctx=new C();const buf=await ctx.decodeAudioData((await res.arrayBuffer()).slice(0));try{await ctx.close()}catch(_){ }const data=buf.getChannelData(0),bins=260,step=Math.max(1,Math.floor(data.length/bins)),points=[];for(let i=0;i<bins;i++){const start=i*step,end=Math.min(data.length,start+step);let signed=0,best=0;const stride=Math.max(1,Math.floor((end-start)/28));for(let j=start;j<end;j+=stride){const v=data[j]||0;if(Math.abs(v)>best){best=Math.abs(v);signed=v}}points.push(signed)}const max=Math.max(...points.map(Math.abs),.001);return points.map(v=>Math.max(-1,Math.min(1,v/max)));}catch(_){return[]}})();cache.set(url,task);return task}
-  function strokePath(ctx,pts,w,h,color,lineWidth,clipWidth){ctx.save();if(Number.isFinite(clipWidth)){ctx.beginPath();ctx.rect(0,0,Math.max(0,clipWidth),h);ctx.clip()}ctx.strokeStyle=color;ctx.lineWidth=lineWidth;ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();const mid=h/2,amp=Math.min(h*.29,23*(h/78));pts.forEach((v,i)=>{const x=pts.length>1?i/(pts.length-1)*w:0;const y=mid+v*amp;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)});ctx.stroke();ctx.restore()}
-  function draw(canvas,pts,progress){if(!canvas)return;const{ctx,w,h,d}=sizeCanvas(canvas);ctx.clearRect(0,0,w,h);if(!pts?.length){baseline(canvas);return}strokePath(ctx,pts,w,h,'rgba(205,205,205,.72)',Math.max(1,d*.7));if(progress>0)strokePath(ctx,pts,w,h,'#ff7a1a',Math.max(1,d*.7),w*Math.max(0,Math.min(1,progress)))}
-  function updateLabels(tile,a){const dur=Number.isFinite(a.duration)&&a.duration>0?a.duration:0;tile.classList.toggle('has-duration',dur>0);tile.querySelectorAll('[data-audio-marker]').forEach(el=>{el.textContent=fmt(dur*Number(el.dataset.audioMarker||0))});const current=tile.querySelector('.fc-audio-current-v1142'),total=tile.querySelector('.fc-audio-duration-v1142'),range=tile.querySelector('.fc-audio-entry__range');if(current)current.textContent=fmt(a.currentTime||0);if(total)total.textContent=fmt(dur);if(range){range.max=dur||0;range.value=Math.min(a.currentTime||0,dur||0)}const p=dur?Math.max(0,Math.min(1,(a.currentTime||0)/dur)):0;tile.style.setProperty('--audio-progress',`${p*100}%`);tile.style.setProperty('--fc-audio-progress-v1142',`${p*100}%`);return p}
-  window.fcAudioSyncV1149=async function(tile,a){if(!tile||!a)return;const p=updateLabels(tile,a);const b=tile.querySelector('.fc-audio-entry__play');if(b){b.textContent=a.paused?'▶':'Ⅱ';b.setAttribute('aria-label',a.paused?'Play audio':'Pause audio')}const cv=tile.querySelector('.fc-audio-entry__waveform');if(!cv)return;const url=a.currentSrc||a.src||'';if(!tile._fcWave1149&&url)tile._fcWave1149=await waveform(url);draw(cv,tile._fcWave1149||[],p)};
-  function viewerPosition(){try{return Number.isInteger(_evIndex)&&Array.isArray(_evEntries)&&_evEntries.length?`${_evIndex+1} of ${_evEntries.length}`:''}catch(_){return''}}
-  function viewerControls(mode,pos){if(mode!=='viewer'&&mode!=='feed-viewer')return'';const count=pos||viewerPosition();return `<div class="fc-audio-entry__viewer-controls"><button type="button" class="fc-audio-entry__viewer-close" aria-label="Close" onclick="event.stopPropagation();${mode==='viewer'?'closeEntryViewer()':'closeFeedViewer()'}">×</button><div class="fc-audio-entry__viewer-count">${escapeHtml(count)}</div><div class="fc-audio-entry__viewer-navs"><button type="button" class="fc-audio-entry__viewer-nav" aria-label="Previous entry" onclick="event.stopPropagation();${mode==='viewer'?'evNavigate(-1)':'void 0'}">‹</button><button type="button" class="fc-audio-entry__viewer-nav" aria-label="Next entry" onclick="event.stopPropagation();${mode==='viewer'?'evNavigate(1)':'void 0'}">›</button></div></div>`}
-  window._audioTileHtml=function(e,o={}){
-    const mode=text(o.mode,'card').replace(/[^a-z0-9_-]/gi,'')||'card';if(mode==='preview'&&typeof window._audioTileHtmlLegacyV1138==='function')return window._audioTileHtmlLegacyV1138(e,o);
-    const url=e?.media_url||e?.audio_url||'';if(!url)return `<div class="fcc-entry-media fcc-entry-placeholder fc-entry-audio-v1079" aria-label="Audio entry"><span aria-hidden="true">♪</span></div>`;
-    const name=e?.submitter?.name||'Competitor';const title=e?.caption||o.trackTitle||o.challengeTitle||'Audio entry';let sub='';if(e?.caption&&o.challengeTitle&&text(e.caption).trim()!==text(o.challengeTitle).trim())sub=text(o.challengeTitle);else if(o.category&&text(o.category).trim()!==text(title).trim())sub=text(o.category);const pos=o.positionLabel||viewerPosition();const art=avatar(e);const expanded=mode==='viewer'||mode==='feed-viewer';
-    return `${viewerControls(mode,pos)}<article class="fcc-entry-media fcc-fire-eq fc-audio-entry${expanded?' fc-audio-entry--expanded':''}" data-entry-id-v1142="${escapeHtml(text(e?.id||o.entryId||'audio-entry'))}" data-challenge-id-v1142="${escapeHtml(text(e?.challenge_id||o.challengeId||''))}" aria-label="Audio entry by ${escapeHtml(name)}">
-      <audio src="${escapeHtml(url)}" preload="${expanded?'metadata':'none'}" crossorigin="anonymous" onloadedmetadata="fcAudioSyncV1149(this.closest('.fc-audio-entry'),this)" ondurationchange="fcAudioSyncV1149(this.closest('.fc-audio-entry'),this)" ontimeupdate="fcAudioSyncV1149(this.closest('.fc-audio-entry'),this)" onplay="fcAudioPlayStateV1123(this.closest('.fcc-fire-eq'),this);fcAudioSyncV1149(this.closest('.fc-audio-entry'),this)" onpause="fcAudioPauseStateV1123(this.closest('.fcc-fire-eq'),this);fcAudioSyncV1149(this.closest('.fc-audio-entry'),this)" onended="fcAudioPauseStateV1123(this.closest('.fcc-fire-eq'),this);fcAudioSyncV1149(this.closest('.fc-audio-entry'),this)"></audio>
-      <header class="fc-audio-entry__entrant"><div class="fc-audio-entry__avatar">${art}</div><div class="fc-audio-entry__name">${escapeHtml(name)}</div><div class="fc-audio-entry__position">${escapeHtml(pos)}</div></header>
-      <section class="fc-audio-entry__wave-stage" aria-hidden="true"><div class="fc-audio-entry__time-markers"><span data-audio-marker="0">0:00</span><span data-audio-marker=".25">0:00</span><span data-audio-marker=".5">0:00</span><span data-audio-marker=".75">0:00</span><span data-audio-marker="1">0:00</span></div><div class="fc-audio-entry__guides"></div><canvas class="fc-audio-entry__waveform"></canvas><div class="fc-audio-entry__playhead"></div></section>
-      <section class="fc-audio-entry__metadata"><div class="fc-audio-entry__artwork">${art}</div><div class="fc-audio-entry__copy"><span class="fc-audio-entry__label">Audio entry</span><strong class="fc-audio-entry__title">${escapeHtml(title)}</strong>${sub?`<small class="fc-audio-entry__subtitle">${escapeHtml(sub)}</small>`:''}</div><button type="button" class="fcc-audio-btn fc-audio-entry__play" aria-label="Play audio" onclick="event.stopPropagation();toggleFccAudioFromControlV1123(this,event)">▶</button></section>
-      <section class="fc-audio-entry__seek" onclick="event.stopPropagation()"><span class="fc-audio-current-v1142">0:00</span><input class="fc-audio-seek-v1123 fc-audio-seek-v1142 fc-audio-entry__range" type="range" min="0" max="0" step="0.1" value="0" aria-label="Seek through audio" onpointerdown="event.stopPropagation()" ontouchstart="event.stopPropagation()" onclick="event.stopPropagation()" oninput="event.stopPropagation();seekFccAudioV1123(this,event);fcAudioSyncV1149(this.closest('.fc-audio-entry'),this.closest('.fc-audio-entry').querySelector('audio'))"><span class="fc-audio-duration-v1142">0:00</span></section>
-    </article>`;
-  };
-  const prime=()=>document.querySelectorAll('.fc-audio-entry').forEach(tile=>{const cv=tile.querySelector('.fc-audio-entry__waveform');baseline(cv);const a=tile.querySelector('audio');if(a&&a.readyState>=1)fcAudioSyncV1149(tile,a)});
-  let raf=0;new MutationObserver(()=>{cancelAnimationFrame(raf);raf=requestAnimationFrame(prime)}).observe(document.documentElement,{childList:true,subtree:true});addEventListener('resize',()=>requestAnimationFrame(prime),{passive:true});requestAnimationFrame(prime);
-  window.FC_BUILD_V1149='canonical-audio-competition-ui';window.FC_V1149_VALIDATION={build:'v1149',basedOn:'v1148',productionSpecApplied:true,semanticSharedRenderer:true,feedWaveStage132:true,expandedWaveStage190:true,singleNonMirroredWaveform:true,baselineFallback:true,playOutsideWaveform:true,separatePlaySeekExpandPaths:true,viewerDuplicateIdentityHidden:true,updateRecoveryPreserved:true,askEmberChanged:false,sqlRequired:false,edgeFunctionChanges:0,serviceWorkerRequired:false};
-})();
-</script>
-
-<style id="fc-v1152-audio-presentation-css">
-/* v1152 — presentation-only audio refinement on the proven generic entry rail.
-   No carousel, playback, seek, expansion, vote, or viewer behavior is replaced here. */
-.fcc-entry-card:has(.fc-audio-entry){overflow:hidden}
-.fcc-entry-card:has(.fc-audio-entry) .fc-audio-entry{width:100%;max-width:none;margin:0;border-radius:18px;border:1px solid rgba(255,122,26,.42);background:#171717;box-shadow:none}
-.fcc-entry-card:has(.fc-audio-entry) .fc-audio-entry__wave-stage{height:132px;min-height:132px;border:0;border-radius:0;background:#111;box-shadow:none;margin:0 14px}
-.fcc-entry-card:has(.fc-audio-entry) .fc-audio-entry__waveform{height:44px!important;top:50%;transform:translateY(-50%)}
-.fcc-entry-card:has(.fc-audio-entry) .fc-audio-entry__metadata{grid-template-columns:56px minmax(0,1fr) 56px;gap:12px;padding:14px}
-.fcc-entry-card:has(.fc-audio-entry) .fc-audio-entry__artwork{width:56px;height:56px}
-.fcc-entry-card:has(.fc-audio-entry) .fc-audio-entry__title{font-size:18px;line-height:1.15;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.fcc-entry-card:has(.fc-audio-entry) .fc-audio-entry__play{width:56px;height:56px}
-.fcc-entry-card:has(.fc-audio-entry) .fc-audio-entry__seek{padding:0 14px 14px}
-.fcc-entry-card:has(.fc-audio-entry) .fc-audio-entry__entrant{padding:14px 14px 10px}
-.fcc-entry-card:has(.fc-audio-entry) .fc-audio-entry__avatar{width:44px;height:44px}
-.fcc-entry-card:has(.fc-audio-entry) .fc-audio-entry__name{font-size:16px}
-/* Keep expanded view on the same composition without changing viewer mechanics. */
-.fc-entry-viewer-v1079 .fc-audio-entry--expanded{width:min(100%,430px);max-width:430px;margin:0 auto}
-.fc-entry-viewer-v1079 .fc-audio-entry--expanded .fc-audio-entry__wave-stage{height:190px;min-height:190px}
-@media(max-width:390px){
-  .fcc-entry-card:has(.fc-audio-entry) .fc-audio-entry__metadata{grid-template-columns:52px minmax(0,1fr) 52px;gap:10px}
-  .fcc-entry-card:has(.fc-audio-entry) .fc-audio-entry__artwork,
-  .fcc-entry-card:has(.fc-audio-entry) .fc-audio-entry__play{width:52px;height:52px}
-}
-</style>
-<script id="fc-v1152-validation-js">
-window.FC_BUILD_V1152='audio-presentation-proven-carousel';
-window.FC_V1152_VALIDATION={build:'v1152',basedOn:'v1151',genericCarouselRestored:true,audioPresentationOnly:true,playbackEngineUnchanged:true,seekEngineUnchanged:true,expansionEngineUnchanged:true,swipeEngineUnchanged:true,updateRecoveryPreserved:true,askEmberChanged:false,sqlRequired:false,edgeFunctionChanges:0,serviceWorkerRequired:false};
-</script>
-
 </body>
 </html>
