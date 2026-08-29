@@ -14,14 +14,14 @@
 <meta content="no-cache, no-store, must-revalidate" http-equiv="cache-control"/>
 <meta content="no-cache" http-equiv="pragma"/>
 <meta content="0" http-equiv="expires"/>
-<title>FlamesChallenge v1161 — Visible Record Player</title>
+<title>FlamesChallenge v1162 — Restored Scene Motion</title>
 <meta content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." name="description"/>
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
      the first kilobyte, so the update check can read it with a tiny ranged
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1161 · visible-record-player" name="fc-build"/>
+<meta content="v1162 · restored-scene-motion" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
 <meta content="Added a new Record player look for audio entries." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
@@ -7634,6 +7634,59 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
 </style>
 
 
+
+<style id="fc-v1162-scene-motion-css">
+/* v1162 — Preserve the original Scene artwork exactly. Add visible motion only
+   through non-destructive overlay layers: drifting embers, water shimmer and
+   a soft light pulse. No layout, artwork or playback changes. */
+.eq-scene .fc-audio-scene-art-v1124{
+  isolation:isolate;
+  animation:fcSceneFrameV1162 8s ease-in-out infinite alternate!important;
+}
+.eq-scene .fc-audio-scene-art-v1124::before{
+  content:"";position:absolute;inset:0;z-index:2;pointer-events:none;
+  background:
+    radial-gradient(circle at 12% 86%,rgba(255,121,47,.95) 0 1px,transparent 2px),
+    radial-gradient(circle at 24% 72%,rgba(255,176,86,.82) 0 1.2px,transparent 2.2px),
+    radial-gradient(circle at 39% 91%,rgba(255,91,31,.90) 0 1px,transparent 2px),
+    radial-gradient(circle at 58% 78%,rgba(255,157,66,.92) 0 1.3px,transparent 2.3px),
+    radial-gradient(circle at 73% 88%,rgba(255,104,37,.88) 0 1px,transparent 2px),
+    radial-gradient(circle at 89% 75%,rgba(255,193,99,.82) 0 1.2px,transparent 2.2px);
+  background-size:100% 100%;
+  opacity:.78;
+  animation:fcSceneEmbersV1162 4.8s linear infinite;
+}
+.eq-scene .fc-audio-scene-art-v1124::after{
+  content:"";position:absolute;left:0;right:0;bottom:0;height:42%;z-index:1;pointer-events:none;
+  background:
+    linear-gradient(180deg,transparent 0%,rgba(255,88,28,.03) 34%,rgba(255,116,42,.13) 55%,rgba(255,76,20,.04) 72%,transparent 100%),
+    repeating-linear-gradient(90deg,transparent 0 8%,rgba(255,152,65,.08) 9%,transparent 11% 18%);
+  mix-blend-mode:screen;
+  opacity:.55;
+  transform-origin:50% 100%;
+  animation:fcSceneWaterV1162 3.6s ease-in-out infinite alternate;
+}
+.eq-scene.playing .fc-audio-scene-art-v1124::before{animation-duration:2.7s;opacity:.96}
+.eq-scene.playing .fc-audio-scene-art-v1124::after{animation-duration:2.1s;opacity:.72}
+@keyframes fcSceneFrameV1162{
+  0%{background-size:100% 100%;background-position:50% 50%;filter:brightness(.99) saturate(1.02)}
+  100%{background-size:104% 104%;background-position:50.5% 49%;filter:brightness(1.07) saturate(1.10)}
+}
+@keyframes fcSceneEmbersV1162{
+  0%{transform:translate3d(0,10%,0) scale(1);opacity:.35}
+  35%{opacity:.9}
+  100%{transform:translate3d(1.5%,-22%,0) scale(1.04);opacity:.18}
+}
+@keyframes fcSceneWaterV1162{
+  0%{transform:translateX(-1.5%) scaleX(1.02);filter:blur(.1px)}
+  100%{transform:translateX(1.5%) scaleX(.98);filter:blur(.55px)}
+}
+@media(prefers-reduced-motion:reduce){
+  .eq-scene .fc-audio-scene-art-v1124,
+  .eq-scene .fc-audio-scene-art-v1124::before,
+  .eq-scene .fc-audio-scene-art-v1124::after{animation:none!important}
+}
+</style>
 </head>
 <body>
 <!-- v1095 — stable session/data boot gate. Removed only after the signed-in
