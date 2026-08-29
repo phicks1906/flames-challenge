@@ -14,16 +14,16 @@
 <meta content="no-cache, no-store, must-revalidate" http-equiv="cache-control"/>
 <meta content="no-cache" http-equiv="pragma"/>
 <meta content="0" http-equiv="expires"/>
-<title>FlamesChallenge v1163 — Waveform Scene Audio Style</title>
+<title>FlamesChallenge v1164 — Restored Flame Motion</title>
 <meta content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." name="description"/>
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
      the first kilobyte, so the update check can read it with a tiny ranged
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1163 · waveform-scene-audio-style" name="fc-build"/>
+<meta content="v1164 · restored-flame-motion" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Curve has been replaced with a new animated waveform scene audio style." name="fc-whatsnew"/>
+<meta content="Flame audio visuals now move continuously and respond visibly during playback." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -7712,6 +7712,18 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
 @keyframes fcWaveFallbackV1163{from{height:12%}to{height:78%}}
 @media(max-width:390px){.eq-waveform .fc-audio-waveform-bars-v1163{gap:1px}.eq-waveform .fcc-audio-btn{width:52px!important;height:52px!important}}
 @media(prefers-reduced-motion:reduce){.eq-waveform .fc-audio-waveform-scene-v1163,.eq-waveform.feq-fallback .fc-audio-wave-bar-v1163{animation:none!important}}
+</style>
+
+<style id="fc-v1164-flame-motion-css">
+/* v1164 — Flame stays visually alive for the full playback session. */
+.eq-flame.playing .feq-fireimg{animation:fcFlameLiveV1164 1.25s ease-in-out infinite alternate!important}
+.eq-flame.playing .feq-segs{animation:fcFlameSegGlowV1164 .82s ease-in-out infinite alternate}
+@keyframes fcFlameLiveV1164{
+  from{transform:scale(1.015) translateY(0);filter:brightness(1) saturate(1.02)}
+  to{transform:scale(1.055) translateY(-1.5%);filter:brightness(1.16) saturate(1.14)}
+}
+@keyframes fcFlameSegGlowV1164{from{opacity:.78}to{opacity:1}}
+@media(prefers-reduced-motion:reduce){.eq-flame.playing .feq-fireimg,.eq-flame.playing .feq-segs{animation:none!important}}
 </style>
 </head>
 <body>
@@ -16589,9 +16601,22 @@ function _feqStart(tile, a) {
       } else for (let i = 0; i < NB; i++) {
         const bin = Math.min(data.length - 1, Math.floor(Math.pow(i / NB, 1.6) * data.length * 0.8) + 1);
         const v = norm(i, data[bin] / 255); sum += data[bin] / 255;
-        bars[i].style.height = isFlame
-          ? (85 - v * 70) + '%'   // cover: quiet -> 85% covered, loud -> 15% covered
-          : (10 + v * 82) + '%';  // bar: quiet -> 10% tall, loud -> 92% tall
+        if (isFlame) {
+          // v1164 — some iPhone/CORS combinations return a live but nearly flat
+          // spectrum. That prevented the silent-analyser fallback from starting,
+          // while all Flame columns appeared frozen at the same height. Preserve
+          // the real analyser response and blend in a small travelling pulse so
+          // Flame always has visible motion for the entire time audio is playing.
+          const t = performance.now() / 1000;
+          const travel = 0.5
+            + 0.27 * Math.sin(t * 5.1 + i * 0.82)
+            + 0.15 * Math.sin(t * 2.6 - i * 0.47);
+          const motion = Math.max(0, Math.min(1, travel));
+          const level = Math.max(0, Math.min(1, v * 0.72 + motion * 0.28));
+          bars[i].style.height = (86 - level * 72) + '%';
+        } else {
+          bars[i].style.height = (10 + v * 82) + '%'; // quiet -> 10%, loud -> 92%
+        }
       }
       if (sum === 0 && ++zeroFrames > 60) {
         dlog('feq', 'analyser-silent-fallback', { curve: isCurve });
