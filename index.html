@@ -14,16 +14,16 @@
 <meta content="no-cache, no-store, must-revalidate" http-equiv="cache-control"/>
 <meta content="no-cache" http-equiv="pragma"/>
 <meta content="0" http-equiv="expires"/>
-<title>FlamesChallenge v1157 — Restored v1135 Functionality</title>
+<title>FlamesChallenge v1159 — Remove Bars Option & Restore Scene Motion</title>
 <meta content="Start a challenge. Collect entries. Let the crowd vote. Crown a winner." name="description"/>
 <!-- v795 — SINGLE SOURCE OF TRUTH for the build version. It lives up here, in
      the first kilobyte, so the update check can read it with a tiny ranged
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1157 · restored-v1135-functionality" name="fc-build"/>
-<!-- v1157: restored the exact v1135 application functionality and audio behavior; only build metadata was advanced. -->
-<meta content="Restored the stable v1135 audio and application behavior." name="fc-whatsnew"/>
+<meta content="v1159 · remove-bars-restore-scene-motion" name="fc-build"/>
+<!-- v1159: removed the Bars audio style and restored motion to the original Scene artwork. -->
+<meta content="Removed the Bars audio style and restored motion to the original Scene artwork." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -7594,6 +7594,19 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
   .eq-scene .fc-audio-scene-art-v1124 .fcc-audio-btn{width:52px!important;height:52px!important}
   .eq-scene .fc-audio-controls-v1123{min-height:54px!important}
 }
+
+/* v1159 — keep the original Scene asset and composition. Restore gentle
+   movement by changing only the background framing; no bars or replacement art. */
+.eq-scene .fc-audio-scene-art-v1124{
+  animation:fcSceneMotionV1159 10s ease-in-out infinite alternate;
+  will-change:background-position,background-size,filter;
+}
+.eq-scene.playing .fc-audio-scene-art-v1124{animation-duration:5s}
+@keyframes fcSceneMotionV1159{
+  0%{background-size:100% 100%;background-position:49% 50%;filter:brightness(.98) saturate(1.02)}
+  50%{background-size:103% 103%;background-position:50% 49%;filter:brightness(1.04) saturate(1.08)}
+  100%{background-size:101.5% 101.5%;background-position:51% 50.5%;filter:brightness(1) saturate(1.04)}
+}
 </style>
 
 
@@ -8782,18 +8795,6 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
 .eq-flame .feq-segs { position:absolute; inset:0; z-index:2; pointer-events:none; opacity:.95;
   background-image: repeating-linear-gradient(0deg,#060302 0 3px,transparent 3px 16px); }
 
-/* ── v732 · EQ STYLE: GRADIENT (v726) — flat flame-gradient bars on black ─── */
-.eq-gradient { background: #060302; }
-.eq-gradient .feq-bars { position:absolute; inset:0; display:flex; align-items:flex-end; justify-content:center; gap:6px; padding:26px 14px; z-index:1; }
-.eq-gradient .feqb { flex:1; background: linear-gradient(to top,#ff2d1f 0%,#ff6a2c 45%,#ffc857 85%,#ffe9a8 100%);
-  box-shadow: 0 0 10px rgba(255,110,30,.55); border-radius:2px; transform-origin:bottom; transition: height 0.08s linear; }
-.eq-gradient .feqb-0{height:26%}.eq-gradient .feqb-1{height:52%}.eq-gradient .feqb-2{height:34%}.eq-gradient .feqb-3{height:68%}
-.eq-gradient .feqb-4{height:44%}.eq-gradient .feqb-5{height:58%}.eq-gradient .feqb-6{height:30%}.eq-gradient .feqb-7{height:62%}
-.eq-gradient .feqb-8{height:40%}.eq-gradient .feqb-9{height:54%}.eq-gradient .feqb-10{height:28%}.eq-gradient .feqb-11{height:48%}.eq-gradient .feqb-12{height:36%}
-.eq-gradient .feq-segs { position:absolute; inset:0; z-index:2; pointer-events:none; opacity:.85;
-  background-image: repeating-linear-gradient(0deg,#060302 0 2px,transparent 2px 17px); }
-/* flame + gradient reuse the shared feqDance fallback keyframe already defined */
-
 /* ── v737 · EQ STYLE: CURVE — glowing line through 13 nodes (concept art #3) ── */
 .eq-curve {
   background:
@@ -8814,15 +8815,6 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
 .eq-curve.feq-fallback .feq-node { animation: feqNodePulse 0.9s ease-in-out infinite alternate; }
 @keyframes feqNodePulse { from { r: 1.4; } to { r: 2.4; } }
 
-/* ── v737 · WATER REFLECTIONS on the Bars style (concept art #1/#2) ────────
-   Each bar mirrors below itself, fading out — the flame-pillars-over-water
-   look. Extra bottom padding gives the reflection room INSIDE the tile
-   (overflow:hidden clips anything past the edge). iOS supports
-   -webkit-box-reflect; browsers without it just show the bars as before. */
-.eq-gradient .feq-bars { padding-bottom: 110px; }
-.eq-gradient .feqb {
-  -webkit-box-reflect: below 4px linear-gradient(to bottom, rgba(0,0,0,0.45), transparent 65%);
-}
 .fcc-audio-btn {
   width: 44px; height: 44px;
   border-radius: 50%;
@@ -10345,12 +10337,16 @@ function toggleTheme() {
 // playback remains the original uploaded track. The same selection now drives
 // every competition surface instead of only a few feed/post tiles.
 const EQ_KEY = 'fc_eq_style';
-const EQ_STYLES = ['scene', 'flame', 'gradient', 'curve'];
-const EQ_LABELS = { scene: 'Scene', flame: 'Flame', gradient: 'Bars', curve: 'Curve' };
+const EQ_STYLES = ['scene', 'flame', 'curve'];
+const EQ_LABELS = { scene: 'Scene', flame: 'Flame', curve: 'Curve' };
 function getEqStyle() {
-  try { const v = localStorage.getItem(EQ_KEY); return EQ_STYLES.includes(v) ? v : 'scene'; }
-  catch (e) { return 'scene'; }
+  try {
+    const v = localStorage.getItem(EQ_KEY);
+    if (v === 'gradient') { localStorage.setItem(EQ_KEY, 'scene'); return 'scene'; }
+    return EQ_STYLES.includes(v) ? v : 'scene';
+  } catch (e) { return 'scene'; }
 }
+
 function cycleEqStyle() {
   const i = EQ_STYLES.indexOf(getEqStyle());
   const next = EQ_STYLES[(i + 1) % EQ_STYLES.length];
@@ -16316,9 +16312,6 @@ function _audioTileHtml(e, options = {}) {
     const d = idle.map((y, i) => `${i ? 'L' : 'M'}${xs[i].toFixed(1)},${y}`).join(' ');
     const nodes = idle.map((y, i) => `<circle class="feq-node" cx="${xs[i].toFixed(1)}" cy="${y}" r="1.8"/>`).join('');
     visual = `<svg class="feq-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path class="feq-path" d="${d}" data-idle="${d}"/>${nodes}</svg>`;
-  } else if (style === 'gradient') {
-    const bars = Array.from({length: NB}, (_, i) => `<div class="feqb feqb-${i}"></div>`).join('');
-    visual = `<div class="feq-bars">${bars}</div><div class="feq-segs" aria-hidden="true"></div>`;
   } else if (style === 'flame') {
     const cols = Array.from({length: NB}, (_, i) => `<div class="feqcol"><div class="feqb feqb-${i}"></div></div>`).join('');
     visual = `<img class="feq-fireimg" alt="" aria-hidden="true" loading="lazy" onerror="this.style.display='none'" src="${IMG_URL}"><div class="feq-bars">${cols}</div><div class="feq-segs" aria-hidden="true"></div>`;
@@ -39381,5 +39374,7 @@ body:has(.entrants-backdrop.open) #fcGlobalAskEmberV1131{
   };
 })();
 </script>
+
+<script>window.FC_V1159_VALIDATION={build:'v1159',basedOn:'v1135',barsOptionRemoved:true,sceneArtworkPreserved:true,sceneMotionRestored:true,swChanged:false,sqlRequired:false,edgeFunctionChanges:0};</script>
 </body>
 </html>
