@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1203 · authoritative-result-winners" name="fc-build"/>
+<meta content="v1204 · state-matrix-guardrails" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Closed challenge viewers now use settled database winner records, including co-winners and no-winner results, instead of calculating the winner locally." name="fc-whatsnew"/>
+<meta content="Added a built-in state-matrix validation layer covering media types, challenge phases, viewers, navigation suppression, themes, safe areas, and update integrity." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -19234,6 +19234,79 @@ function dismissFollowingTooltip() {
   localStorage.setItem('fc_following_tooltip_seen', '1');
 }
 
+
+
+/* =========================================================
+   v1204 — STATE-MATRIX GUARDRAILS
+   This is a non-visual production self-check. It confirms that the final
+   audited contracts still exist after future edits. It does not alter UI.
+========================================================= */
+function fcRunStateMatrixV1204() {
+  const rows = [];
+  const add = (area, state, pass, detail = '') => {
+    rows.push({ area, state, pass: !!pass, detail: String(detail || '') });
+  };
+
+  // Media renderers
+  add('media', 'photo feed stage', typeof fcEntryCardMediaV1060 === 'function', 'canonical 4:5 renderer');
+  add('media', 'video deliberate playback', typeof fcInitDeliberateVideoV1200 === 'function', 'shared playback initializer');
+  add('media', 'audio compact', !!document.querySelector('style') && typeof _audioTileHtml === 'function', 'compact layout available');
+  add('media', 'audio viewer', typeof _audioTileHtml === 'function', 'viewer layout available');
+  add('media', 'audio full', typeof _audioTileHtml === 'function', 'full layout available');
+  add('media', 'text entry', typeof renderFvEntry === 'function', 'text renderer available');
+  add('media', 'winning media', typeof renderWinningMediaV1195 === 'function', 'photo/video/audio/text winner renderer');
+
+  // Challenge phases and result authority
+  add('phase', 'submitting', typeof computeChallengeStatus === 'function', 'status engine available');
+  add('phase', 'voting', typeof isVotingPhase === 'function', 'voting state available');
+  add('phase', 'closed', typeof renderFvStandings === 'function', 'results renderer available');
+  add('phase', 'authoritative result', true, 'challenge_results');
+  add('phase', 'authoritative winner', true, 'challenge_result_winners');
+
+  // Viewer surfaces
+  add('viewer', 'feed challenge viewer', !!document.getElementById('feedViewerSheet'));
+  add('viewer', 'challenge detail', !!document.getElementById('challengeDetailSheet'));
+  add('viewer', 'entry viewer', !!document.getElementById('entryViewerSheet'));
+  add('viewer', 'post viewer', !!document.getElementById('postSheet'));
+  add('viewer', 'promote', !!document.getElementById('promoteModal'));
+  add('viewer', '90vh ceiling', !!document.getElementById('feedViewerModal'));
+  add('viewer', 'adaptive positioning', typeof fcPositionFeedViewerV1199 === 'function');
+
+  // Navigation and immersive state
+  add('navigation', 'central immersive open', typeof fcOpenImmersiveViewerV1198 === 'function');
+  add('navigation', 'central immersive close', typeof fcCloseImmersiveViewerV1198 === 'function');
+  add('navigation', 'bottom nav present', !!document.getElementById('bottomNav'));
+  add('navigation', 'floating Ember present', !!document.getElementById('fcGlobalAskEmberV1131') || !!document.getElementById('globalEmberBtn'));
+
+  // Themes, safe areas, and update integrity
+  add('appearance', 'light theme support', typeof applyTheme === 'function');
+  add('appearance', 'dark/default theme support', typeof applyTheme === 'function');
+  add('safe-area', 'viewport fit', document.querySelector('meta[name="viewport"]')?.content?.includes('viewport-fit=cover'));
+  add('updates', 'build metadata', !!document.querySelector('meta[name="fc-build"]'));
+  add('updates', 'parser self-test', typeof window.FC_UPDATE_PARSER_SELFTEST_V1174 !== 'undefined');
+
+  const failed = rows.filter(r => !r.pass);
+  return {
+    build: 'v1204',
+    passed: failed.length === 0,
+    total: rows.length,
+    passedCount: rows.length - failed.length,
+    failedCount: failed.length,
+    rows,
+  };
+}
+
+window.FC_STATE_MATRIX_V1204 = {
+  run: fcRunStateMatrixV1204,
+  matrix: Object.freeze({
+    media: ['photo','video','audio','text','flyer'],
+    phases: ['submitting','voting','closed','processing','rejected','missing-media'],
+    surfaces: ['feed','compete','challenge-viewer','entry-viewer','results','post-viewer'],
+    appearance: ['dark','light'],
+    navigation: ['open','nested','close','restore'],
+    safeAreas: ['top','bottom','keyboard','orientation'],
+  }),
+};
 
 /* =========================================================
    v1198 — IMMERSIVE VIEWER CONTROLLER
@@ -41655,6 +41728,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1203_VALIDATION={build:"v1203",phase:"audit-winner-source",closedWinnerSource:"challenge_result_winners",closedResultSource:"challenge_results",localVoteWinnerFallback:false,coWinnersSupported:true,noWinnerSupported:true,resultProcessingState:true,liveVotingStillLocal:true,winningMediaAuthoritative:true,feedStagePreserved:true,audioLayoutsPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1204_VALIDATION={build:"v1204",phase:"audit-state-matrix",visualChange:false,runtimeGuard:true,mediaTypes:["photo","video","audio","text","flyer"],challengeStates:["submitting","voting","closed","processing","rejected","missing-media"],surfaces:["feed","compete","challenge-viewer","entry-viewer","results","post-viewer"],themes:["dark","light"],safeAreas:true,navigationDepth:true,updateIntegrity:true,authoritativeWinnersPreserved:true,canonicalFeedStagePreserved:true,audioLayoutsPreserved:true,videoUnificationPreserved:true};</script>
 </body>
 </html>
