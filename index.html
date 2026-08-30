@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1202 · canonical-feed-stage" name="fc-build"/>
+<meta content="v1203 · authoritative-result-winners" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Removed obsolete portrait, square, and landscape feed-preview logic so every challenge entry now uses one explicit 4:5 stage." name="fc-whatsnew"/>
+<meta content="Closed challenge viewers now use settled database winner records, including co-winners and no-winner results, instead of calculating the winner locally." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -27724,13 +27724,43 @@ async function openFeedViewer(chId, startEntryId = null) {
 
   // Load entries
   try {
-    const [entriesRes, votesRes] = await Promise.all([
+    const authoritativeResultQueryV1203 = status === 'closed'
+      ? db.from('challenge_results')
+          .select('challenge_id, category, month, resolved_at, final_round, resolution, is_public, is_championship, eligible_competitor_count, final_entry_count, valid_ballots, max_votes, winner_count, score_awarded, snapshot')
+          .eq('challenge_id', chId)
+          .maybeSingle()
+      : Promise.resolve({ data:null, error:null });
+
+    const authoritativeWinnersQueryV1203 = status === 'closed'
+      ? db.from('challenge_result_winners')
+          .select('challenge_id, user_id, entry_id, vote_count, is_co_winner, visible_level, opponent_pts, turnout_pts, championship_score, detail')
+          .eq('challenge_id', chId)
+      : Promise.resolve({ data:[], error:null });
+
+    const [entriesRes, votesRes, resultResV1203, winnersResV1203] = await Promise.all([
       db.from('entries')
         .select('*, submitter:profiles!entries_user_id_fkey(id,name,avatar)')
         .eq('challenge_id', chId)
         .order('created_at', { ascending: true }),
       db.from('entry_votes').select('entry_id, voter_id').eq('challenge_id', chId),
+      authoritativeResultQueryV1203,
+      authoritativeWinnersQueryV1203,
     ]);
+
+    if (resultResV1203?.error) throw resultResV1203.error;
+    if (winnersResV1203?.error) throw winnersResV1203.error;
+
+    state.challengeResultsV1101 = state.challengeResultsV1101 || {};
+    state.challengeResultWinnersV1101 = state.challengeResultWinnersV1101 || {};
+    if (status === 'closed') {
+      if (resultResV1203?.data) {
+        state.challengeResultsV1101[chId] = resultResV1203.data;
+        state.challengeResultWinnersV1101[chId] = winnersResV1203?.data || [];
+      } else {
+        delete state.challengeResultsV1101[chId];
+        delete state.challengeResultWinnersV1101[chId];
+      }
+    }
 
     if (!_fvChallenge || _fvChallenge.id !== chId) return; // sheet closed while loading
 
@@ -28214,49 +28244,158 @@ function renderFvStandings(chId, votes, entriesOverride = null) {
     panel.innerHTML = '';
     return;
   }
+
   let entries = (entriesOverride && entriesOverride.length)
     ? entriesOverride
     : ((_fvEntries || []).filter(e => e.challenge_id === chId));
   entries = entries.filter(e => typeof fcEntryCompetesV1060 === 'function'
     ? fcEntryCompetesV1060(e)
     : String(e.moderation_status || '').toLowerCase() === 'approved');
+
   if (status === 'voided') {
     panel.style.display = 'none';
     panel.innerHTML = '';
     return;
   }
-  const finalRound = ch?.sd_round || 0;
-  if (finalRound > 0) entries = entries.filter(e => (e.sd_round || 0) === finalRound);
-  if (!entries.length) { panel.style.display = 'none'; return; }
 
-  const finalIds = new Set(entries.map(e => e.id));
-  const finalVotes = (votes || []).filter(v => finalIds.has(v.entry_id));
-  const tally = {};
-  finalVotes.forEach(v => { tally[v.entry_id] = (tally[v.entry_id] || 0) + 1; });
-  const total = finalVotes.length;
+  const authoritativeResultV1203 = status === 'closed'
+    ? (state.challengeResultsV1101?.[chId] || null)
+    : null;
+  const authoritativeWinnerRowsV1203 = status === 'closed'
+    ? (state.challengeResultWinnersV1101?.[chId] || [])
+    : [];
+
+  if (status === 'closed' && !authoritativeResultV1203) {
+    panel.innerHTML = `<div class="fc-v1024-final-standings">
+      <div class="fc-v1203-result-processing">
+        <strong>Result processing</strong>
+        <span>The database has not finished settling this challenge yet.</span>
+      </div>
+    </div>`;
+    panel.style.display = 'block';
+    fcPositionFeedViewerV1199();
+    return;
+  }
+
+  const finalRound = status === 'closed'
+    ? Number(authoritativeResultV1203?.final_round || 0)
+    : Number(ch?.sd_round || 0);
+  if (finalRound > 0) entries = entries.filter(e => Number(e.sd_round || 0) === finalRound);
+  if (!entries.length) {
+    panel.style.display = 'none';
+    panel.innerHTML = '';
+    return;
+  }
+
+  const finalIds = new Set(entries.map(e => String(e.id)));
+  const finalVotes = (votes || []).filter(v => finalIds.has(String(v.entry_id)));
+  const localTally = {};
+  finalVotes.forEach(v => { localTally[v.entry_id] = (localTally[v.entry_id] || 0) + 1; });
   const myVoteEntryId = finalVotes.find(v => v.voter_id === state.profile?.id)?.entry_id;
-  const sorted = [...entries].map(e => ({ e, v: tally[e.id] || 0 })).sort((a,b) => b.v - a.v);
+
+  let total = finalVotes.length;
+  let sorted = [];
+  let winnerEntriesV1203 = [];
+  let winnerIdsV1203 = new Set();
+
+  if (status === 'closed') {
+    const entryByIdV1203 = new Map(entries.map(e => [String(e.id), e]));
+    const authoritativeByEntryV1203 = new Map(
+      authoritativeWinnerRowsV1203
+        .filter(w => w.entry_id)
+        .map(w => [String(w.entry_id), w])
+    );
+
+    winnerEntriesV1203 = authoritativeWinnerRowsV1203
+      .map(w => entryByIdV1203.get(String(w.entry_id)))
+      .filter(Boolean);
+    winnerIdsV1203 = new Set(winnerEntriesV1203.map(e => String(e.id)));
+    total = Number(authoritativeResultV1203.valid_ballots || 0);
+
+    sorted = [...entries]
+      .map(e => {
+        const authoritativeWinner = authoritativeByEntryV1203.get(String(e.id));
+        return {
+          e,
+          v: authoritativeWinner
+            ? Number(authoritativeWinner.vote_count || 0)
+            : Number(localTally[e.id] || 0),
+          authoritativeWinner: !!authoritativeWinner,
+        };
+      })
+      .sort((a, b) =>
+        Number(b.authoritativeWinner) - Number(a.authoritativeWinner) ||
+        b.v - a.v
+      );
+  } else {
+    sorted = [...entries]
+      .map(e => ({ e, v: Number(localTally[e.id] || 0), authoritativeWinner:false }))
+      .sort((a, b) => b.v - a.v);
+  }
+
   const medals = ['🥇','🥈','🥉'];
   const ranks = [];
-  sorted.forEach((s,i) => { ranks[i] = i === 0 ? 1 : (s.v === sorted[i-1].v ? ranks[i-1] : i+1); });
-  const uniqueWinner = sorted.length && (sorted.length === 1 || sorted[0].v > sorted[1].v) ? sorted[0] : null;
-  const winnerEntryV1195 = uniqueWinner?.e || null;
-  const winner = winnerEntryV1195?.submitter || {};
-  const winningMediaHtmlV1195 = status === 'closed' && winnerEntryV1195
-    ? renderWinningMediaV1195(winnerEntryV1195, ch)
-    : '';
-  const winnerPctV1196 = total ? Math.round((uniqueWinner?.v || 0) / total * 100) : 0;
-  const winnerHtml = status === 'closed' && uniqueWinner ? `<div class="fc-v1196-winner-summary">
-    <span class="fc-v1196-winner-kicker">Winner</span>
-    <strong>${escapeHtml(winner.name || 'Winner')}</strong>
-    <small>${uniqueWinner.v} vote${uniqueWinner.v===1?'':'s'} · ${winnerPctV1196}%</small>
-  </div>` : '';
+  sorted.forEach((s, i) => {
+    ranks[i] = i === 0 ? 1 : (s.v === sorted[i - 1].v ? ranks[i - 1] : i + 1);
+  });
 
-  panel.innerHTML = `<div class="fc-v1024-final-standings">${winningMediaHtmlV1195}${winnerHtml}<div class="fc-v1024-final-title">${status === 'closed' ? 'Final results' : 'Live standings'}</div>${sorted.map(({e,v},i)=>{
-    const sub=e.submitter||{}; const pct=total?Math.round(v/total*100):0; const rank=ranks[i]; const pick=e.id===myVoteEntryId;
-    const icon=v===0?'#'+(i+1):(rank<=3?medals[rank-1]:rank);
-    return `<div class="fc-v1024-final-row${rank===1&&v>0?' leader':''}"><span class="rank">${icon}</span><span class="avatar">${avatarInner(sub.avatar)}</span><span class="name">${escapeHtml(sub.name||'Unknown')}${pick?' <small>· your vote</small>':''}</span><span class="votes">${v} · ${pct}%</span></div>`;
-  }).join('')}<div class="fc-v1024-final-total">${total} ballot${total===1?'':'s'} cast</div></div>`;
+  let winningMediaHtmlV1203 = '';
+  let winnerHtmlV1203 = '';
+
+  if (status === 'closed' && winnerEntriesV1203.length) {
+    winningMediaHtmlV1203 = `<div class="fc-v1203-winning-media-stack">${
+      winnerEntriesV1203.map(entry => renderWinningMediaV1195(entry, ch)).join('')
+    }</div>`;
+
+    const namesV1203 = winnerEntriesV1203
+      .map(e => e.submitter?.name || 'Winner')
+      .join(', ');
+    const winnerVoteCountsV1203 = authoritativeWinnerRowsV1203
+      .map(w => Number(w.vote_count || 0));
+    const displayedVotesV1203 = winnerVoteCountsV1203.length
+      ? Math.max(...winnerVoteCountsV1203)
+      : 0;
+    const winnerPctV1203 = total ? Math.round(displayedVotesV1203 / total * 100) : 0;
+    const coWinnerV1203 = winnerEntriesV1203.length > 1;
+
+    winnerHtmlV1203 = `<div class="fc-v1196-winner-summary">
+      <span class="fc-v1196-winner-kicker">${coWinnerV1203 ? 'Co-winners' : 'Winner'}</span>
+      <strong>${escapeHtml(namesV1203)}</strong>
+      <small>${displayedVotesV1203} vote${displayedVotesV1203 === 1 ? '' : 's'} · ${winnerPctV1203}%</small>
+    </div>`;
+  } else if (status === 'closed') {
+    const resolutionV1203 = String(authoritativeResultV1203?.resolution || '').replace(/_/g, ' ');
+    winnerHtmlV1203 = `<div class="fc-v1203-no-winner">
+      <strong>No decisive winner</strong>
+      <span>${escapeHtml(resolutionV1203 || 'The settled result did not award a winner.')}</span>
+    </div>`;
+  }
+
+  panel.innerHTML = `<div class="fc-v1024-final-standings">
+    ${winningMediaHtmlV1203}
+    ${winnerHtmlV1203}
+    <div class="fc-v1024-final-title">${status === 'closed' ? 'Final results' : 'Live standings'}</div>
+    ${sorted.map(({ e, v, authoritativeWinner }, i) => {
+      const sub = e.submitter || {};
+      const pct = total ? Math.round(v / total * 100) : 0;
+      const rank = ranks[i];
+      const pick = String(e.id) === String(myVoteEntryId || '');
+      const isSettledWinnerV1203 = status === 'closed'
+        ? winnerIdsV1203.has(String(e.id))
+        : rank === 1 && v > 0;
+      const icon = isSettledWinnerV1203
+        ? (winnerIdsV1203.size > 1 ? '🏆' : '🥇')
+        : (v === 0 ? '#' + (i + 1) : (rank <= 3 ? medals[rank - 1] : rank));
+      return `<div class="fc-v1024-final-row${isSettledWinnerV1203 ? ' leader' : ''}">
+        <span class="rank">${icon}</span>
+        <span class="avatar">${avatarInner(sub.avatar)}</span>
+        <span class="name">${escapeHtml(sub.name || 'Unknown')}${pick ? ' <small>· your vote</small>' : ''}</span>
+        <span class="votes">${v} · ${pct}%</span>
+      </div>`;
+    }).join('')}
+    <div class="fc-v1024-final-total">${total} ballot${total === 1 ? '' : 's'} cast</div>
+  </div>`;
+
   panel.style.display = 'block';
   panel.querySelectorAll('.fc-v1195-winning-video-host').forEach(host => {
     host.addEventListener('keydown', ev => {
@@ -28264,6 +28403,7 @@ function renderFvStandings(chId, votes, entriesOverride = null) {
     });
   });
   _checkFreshVideoEncoding(panel);
+  fcPositionFeedViewerV1199();
 }
 
 function renderFvChallengersPanel(ch) {
@@ -35436,6 +35576,36 @@ video[data-fc-deliberate-video-v1200="1"] {
   object-fit:cover!important;
 }
 
+
+/* v1203 — closed results are driven by settled database records. */
+.fc-v1203-winning-media-stack {
+  display:grid;
+  gap:10px;
+}
+.fc-v1203-winning-media-stack > .fc-v1195-winning-media {
+  margin:0!important;
+}
+.fc-v1203-result-processing,
+.fc-v1203-no-winner {
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  min-height:120px;
+  padding:20px;
+  border:1px solid var(--border);
+  border-radius:14px;
+  background:var(--surface-2);
+  text-align:center;
+}
+.fc-v1203-result-processing span,
+.fc-v1203-no-winner span {
+  color:var(--text-muted);
+  font-size:13px;
+  line-height:1.4;
+}
+
 </style>
 <style id="fc-legacy-walkthrough-feed-continuation-v1197">
 body.theme-light #feedContainer > .fcc-challenge-wrap:not(.champ-gold),
@@ -41485,6 +41655,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1202_VALIDATION={build:"v1202",phase:"audit-feed-stage-cleanup",canonicalFeedStage:"4:5",naturalRatioClassifierRemoved:true,staleSquareClassRemoved:true,adaptiveFeedClassesRetired:true,challengeDetailNaturalRatiosPreserved:true,audioLayoutsPreserved:true,videoPreviewPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1203_VALIDATION={build:"v1203",phase:"audit-winner-source",closedWinnerSource:"challenge_result_winners",closedResultSource:"challenge_results",localVoteWinnerFallback:false,coWinnersSupported:true,noWinnerSupported:true,resultProcessingState:true,liveVotingStillLocal:true,winningMediaAuthoritative:true,feedStagePreserved:true,audioLayoutsPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
