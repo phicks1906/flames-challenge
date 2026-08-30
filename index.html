@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1183 · wanted-statement-rendering" name="fc-build"/>
+<meta content="v1184 · promote-and-video-preview-repair" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Repaired Wanted-poster statement rendering and removed the empty ruled form when no statement is entered." name="fc-whatsnew"/>
+<meta content="Repaired challenge video snippets, Promote media selection, flyer style races, and Promote-sheet safe-area behavior." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -2161,6 +2161,14 @@ body.theme-light .auth-form input { background: #ffffff; }
 .comment-send:disabled { opacity: 0.5; }
 .comment-send:active { transform: scale(0.96); }
 
+.fcc-entry-media.fc-entry-video-v1079 > video {
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+  background:#000;
+}
+
 /* Promote / flyer modal */
 /* v796 step 1 — Promote is a full-screen sheet on phones. Header pinned,
    body scrolls on its own, footer pinned above the home indicator. Nothing
@@ -2168,6 +2176,18 @@ body.theme-light .auth-form input { background: #ffffff; }
    Scoped to #promoteModal so the shared .modal styles are untouched — the
    rest of the sheets get this same treatment in step 5. */
 #promoteModal { padding: 0; align-items: stretch; justify-content: stretch; }
+body.fc-promote-open-v1184 #bottomNav {
+  visibility:hidden!important;
+  pointer-events:none!important;
+}
+body.fc-promote-open-v1184 {
+  overflow:hidden!important;
+}
+body.fc-promote-open-v1184 .ask-ember-global,
+body.fc-promote-open-v1184 #globalEmberBtn {
+  visibility:hidden!important;
+  pointer-events:none!important;
+}
 .promote-modal {
   display: flex; flex-direction: column;
   width: 100%; max-width: 100%;
@@ -2199,14 +2219,18 @@ body.theme-light .auth-form input { background: #ffffff; }
   flex: 1 1 auto; min-height: 0;
   overflow-y: auto; -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  padding: 14px 16px 18px;
+  padding: 14px 16px max(28px, env(safe-area-inset-bottom, 0px));
+  scroll-padding-bottom: 32px;
 }
 .pm-foot {
   flex: 0 0 auto;
   display: flex; flex-direction: column; gap: 8px;
-  padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+  padding: 10px 16px calc(12px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--border);
   background: var(--surface);
+  position:relative;
+  z-index:4;
+  box-shadow:0 -12px 24px rgba(0,0,0,.34);
 }
 .pm-foot .btn { width: 100%; margin: 0; }
 
@@ -15067,10 +15091,21 @@ async function openPromote(type, item) {
   opts.creatorName = (type === 'challenge'
     ? (item.creator?.name || (item.creator_id === state.profile?.id ? state.profile?.name : null))
     : state.profile?.name) || 'A CHALLENGER';
-  promoteState = { type, id: item.id, link, shareText, blob: null, opts, heroUserUrl: null, heroAutoUrl: null,
-                   shareId: shareIdV1048, analyticsGeneratedTracked: false,
-                   heroFit: 'fill', heroFocus: { x: 0.5, y: 0.5 } };  // v800 + v1048
+  promoteState = {
+    type, id: item.id, link, shareText, blob: null, opts,
+    style: 'ember',
+    heroUserUrl: null, heroAutoUrl: null,
+    sourceMediaType: String(item.media_type || '').toLowerCase(),
+    renderTokenV1184: 0,
+    shareId: shareIdV1048, analyticsGeneratedTracked: false,
+    heroFit: 'fill', heroFocus: { x: 0.5, y: 0.5 }
+  };  // v800 + v1048 + v1184
   document.getElementById('promoteTitle').textContent = modalTitle;
+  document.querySelectorAll('#promoteStyles .pstyle').forEach(b =>
+    b.classList.toggle('on', b.dataset.fstyle === 'ember'));
+  const _rewardRowV1184 = document.getElementById('promoteRewardRow');
+  if (_rewardRowV1184) _rewardRowV1184.style.display = 'none';
+  document.body.classList.add('fc-promote-open-v1184');
   // v787 — auto-generate on open. The old opt-in button made sense before there
   // were STYLES; now it forces Generate → pick style → re-bake, and nobody can
   // tell what "Generate" does that "Post" doesn't. The flyer is the point of
@@ -15111,7 +15146,14 @@ async function openPromote(type, item) {
       // v716 — an image entry's hero is its media; a video entry's is its poster.
       // Drop anything with neither rather than handing generateFlyer a bad URL.
       const _heroable = (data || [])
-        .map(e => ({ ...e, _heroUrl: e.media_type === 'image' ? e.media_url : e.poster_url }))
+        .map(e => {
+          let hero = e.media_type === 'image' ? e.media_url : e.poster_url;
+          if (!hero && e.media_type === 'video') {
+            const m = String(e.media_url || '').match(/\/([0-9a-f-]{36})\//i);
+            if (m) hero = `https://${BUNNY_CDN_HOST}/${m[1]}/preview.webp`;
+          }
+          return { ...e, _heroUrl: hero };
+        })
         .filter(e => !!e._heroUrl);
       if (_heroable.length && promoteState && promoteState.id === item.id) {
         const data = _heroable; // eslint-disable-line no-shadow
@@ -15129,7 +15171,8 @@ async function openPromote(type, item) {
           }
         } catch (e) {}
         if (chosen && chosen._heroUrl && promoteState && !promoteState.heroUserUrl) {
-          promoteState.heroAutoUrl = chosen._heroUrl; // v716 — poster for video, media for image
+          promoteState.heroAutoUrl = chosen._heroUrl;
+          promoteState.sourceMediaType = String(chosen.media_type || promoteState.sourceMediaType || '').toLowerCase();
           // Only re-render if the user has ALREADY generated a flyer (so we swap the
           // hero in). If they haven't generated yet, just stash it for later.
           if (promoteState.flyerGenerated) { await renderPromoteFlyer(); }
@@ -15180,6 +15223,11 @@ function updateHeroTools() {
   // Chronicle and Tear-off take no photo at all — their art is in the paper.
   show('pmReplace', !paper);
   show('pmRemove', !paper && hasUser);
+  const replaceBtn = document.getElementById('pmReplace');
+  if (replaceBtn && !paper) {
+    const mediaLabel = promoteState.sourceMediaType === 'video' && !hasUser ? 'Video still' : 'Photo';
+    replaceBtn.innerHTML = `<span>${promoteState.sourceMediaType === 'video' && !hasUser ? '🎞️' : '🖼'}</span>${mediaLabel}`;
+  }
   show('pmReset', !paper && hasUser && promoteState.heroFit !== 'fit');
   show('pmFitSeg', !paper && hasUser);
   show('pmDragHint', !paper && hasUser && promoteState.heroFit !== 'fit');
@@ -15249,7 +15297,11 @@ function setFlyerStyle(style) {
   if (addBtn) addBtn.style.display = paper ? 'none' : '';
   if (remBtn && paper) remBtn.style.display = 'none';
   updatePromoteMediaButtons();
-  if (promoteState.flyerGenerated) renderPromoteFlyer();
+  if (promoteState.flyerGenerated) {
+    const preview = document.getElementById('promotePreview');
+    if (preview) preview.innerHTML = '<div class="promote-loading">Updating style…</div>';
+    renderPromoteFlyer();
+  }
 }
 
 async function userGeneratePromoteFlyer() {
@@ -15274,9 +15326,11 @@ async function userGeneratePromoteFlyer() {
 
 async function renderPromoteFlyer() {
   if (!promoteState) return;
-  const _style = promoteState.style || 'ember';
-  const opts = { ...promoteState.opts, hype: promoteState.hype || '', style: _style,
-                 reward: (promoteState.reward || '').trim() }; // v716, v784, v789
+  const stateRefV1184 = promoteState;
+  const renderTokenV1184 = ++stateRefV1184.renderTokenV1184;
+  const _style = stateRefV1184.style || 'ember';
+  const opts = { ...stateRefV1184.opts, hype: stateRefV1184.hype || '', style: _style,
+                 reward: (stateRefV1184.reward || '').trim() }; // v716, v784, v789
   // v786 — Wanted defaults to the outlaw silhouette. Auto-detected challenge
   // photos (a beach, a plate of food) look broken in a mugshot frame; a
   // silhouette always looks deliberate. Only an explicit upload overrides it.
@@ -15288,10 +15342,10 @@ async function renderPromoteFlyer() {
   // photo at all — their art is part of the paper.
   const heroSrc = (_style === 'news' || _style === 'tearoff')
     ? null
-    : promoteState.heroUserUrl;
+    : (stateRefV1184.heroUserUrl || stateRefV1184.heroAutoUrl);
   // v800 — hand the painter the user's fit mode and focal point.
-  opts.heroFit = promoteState.heroFit || 'fill';
-  opts.heroFocus = promoteState.heroFocus || { x: 0.5, y: 0.5 };
+  opts.heroFit = stateRefV1184.heroFit || 'fill';
+  opts.heroFocus = stateRefV1184.heroFocus || { x: 0.5, y: 0.5 };
   if (!heroSrc) opts.heroImage = null;
   if (heroSrc) {
     try {
@@ -15303,22 +15357,29 @@ async function renderPromoteFlyer() {
       // means that upload is unusable. Clear it and re-sync the buttons, or the
       // sheet keeps offering "Change / Remove photo" for a photo that isn't
       // there. The flyer falls back to the baked category art, not to nothing.
-      promoteState.heroUserUrl = null;
+      if (stateRefV1184.heroUserUrl === heroSrc) stateRefV1184.heroUserUrl = null;
+      if (stateRefV1184.heroAutoUrl === heroSrc) stateRefV1184.heroAutoUrl = null;
       updatePromoteMediaButtons();
     }
   }
   try {
     const { dataUrl, blob } = await generateFlyer(opts);
-    if (!promoteState) return;
-    promoteState.blob = blob;
-    document.getElementById('promotePreview').innerHTML =  `<img src="${dataUrl}" alt="Flyer" class="promote-flyer-img"><div class="promote-generated-note-v1182">This design applies to this newly generated flyer. Existing posted flyers remain unchanged.</div>`;
-    if (promoteState.type === 'challenge' && !promoteState.analyticsGeneratedTracked) {
-      promoteState.analyticsGeneratedTracked = true;
-      try { fcTrackAnalyticsV1048('promotion_generated', promoteState.id, { shareId: promoteState.shareId, source: 'flyer', metadata: { style: promoteState.style || 'ember', renderer_version: FC_FLYER_RENDERER_VERSION_V1182 } }); } catch(e) {}
+    if (!promoteState || promoteState !== stateRefV1184) return;
+    if (stateRefV1184.renderTokenV1184 !== renderTokenV1184) return;
+    if ((stateRefV1184.style || 'ember') !== _style) return;
+    stateRefV1184.blob = blob;
+    const preview = document.getElementById('promotePreview');
+    if (preview) preview.innerHTML = `<img src="${dataUrl}" alt="${escapeHtml(_style)} flyer preview" class="promote-flyer-img"><div class="promote-generated-note-v1182">This design applies to this newly generated flyer. Existing posted flyers remain unchanged.</div>`;
+    if (stateRefV1184.type === 'challenge' && !stateRefV1184.analyticsGeneratedTracked) {
+      stateRefV1184.analyticsGeneratedTracked = true;
+      try { fcTrackAnalyticsV1048('promotion_generated', stateRefV1184.id, { shareId: stateRefV1184.shareId, source: 'flyer', metadata: { style: _style, renderer_version: FC_FLYER_RENDERER_VERSION_V1182 } }); } catch(e) {}
     }
   } catch (e) {
     console.error('flyer render error', e);
-    document.getElementById('promotePreview').innerHTML = '<div class="promote-loading">Couldn\'t build the flyer, but you can still share the link below.</div>';
+    if (!promoteState || promoteState !== stateRefV1184) return;
+    if (stateRefV1184.renderTokenV1184 !== renderTokenV1184) return;
+    const preview = document.getElementById('promotePreview');
+    if (preview) preview.innerHTML = '<div class="promote-loading">Couldn\'t build the flyer, but you can still share the link below.</div>';
   }
 }
 
@@ -15566,6 +15627,8 @@ async function postFlyerToGroup(groupId, groupName) {
 
 function closePromote() {
   document.getElementById('promoteModal').classList.remove('open');
+  document.body.classList.remove('fc-promote-open-v1184');
+  if (promoteState) promoteState.renderTokenV1184 = Number(promoteState.renderTokenV1184 || 0) + 1;
   promoteState = null;
 }
 
@@ -25062,10 +25125,15 @@ function fcEntryCardMediaV1060(e, ch) {
     return `<div class="fcc-entry-media fcc-entry-placeholder fc-real-processing-v1060"><div><strong>${escapeHtml(label)}</strong><span>${type === 'video' ? 'Video preview processing' : 'Preview processing'}</span></div></div>`;
   }
   if (type === 'video') {
-    // Bunny preview images are commonly padded to 16:9 even when the source
-    // video is portrait. Keep video cards in the proven portrait stage until
-    // the actual video dimensions are available in the viewer.
-    return `<div class="fcc-entry-media fcc-video-thumb fc-entry-stage-v1060 fc-entry-video-v1079"><img class="fc-entry-blur-v1060" src="${escapeHtml(url)}" alt="" aria-hidden="true" loading="lazy"><img class="fc-entry-contain-v1060" src="${escapeHtml(url)}" alt="${escapeHtml(label)}'s video entry" loading="lazy"><span class="fcc-play-overlay" aria-hidden="true">▶</span></div>`;
+    // v1184 — challenge-entry cards now use the established three-second muted
+    // preview controller. A failed preview.webp must not collapse into a broken
+    // image icon; the video itself can still supply the short feed preview.
+    return `<div class="fcc-entry-media fcc-video-thumb fc-entry-stage-v1060 fc-entry-video-v1079">
+      <video data-src="${escapeHtml(e.media_url || '')}" ${_videoPosterAttr(e.media_url || '', e.poster_url || '')}
+        muted playsinline preload="none" data-lazy-video
+        aria-label="${escapeHtml(label)}'s three-second video preview"></video>
+      <span class="fcc-play-overlay" aria-hidden="true">▶</span>
+    </div>`;
   }
   return `<div class="fcc-entry-media fc-entry-stage-v1060"><img class="fc-entry-blur-v1060" src="${escapeHtml(url)}" alt="" aria-hidden="true" loading="lazy"><img class="fc-entry-contain-v1060" src="${escapeHtml(url)}" alt="${escapeHtml(label)}'s entry" loading="lazy" onload="fcFitEntryCardMediaV1079(this)"></div>`;
 }
@@ -40066,6 +40134,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1183_VALIDATION={build:"v1183",wantedStatementRenderer:true,emptyStatementRulesCovered:true,statementUnlabeled:true,statementMaxLines:3,generatedAssetVersion:"wanted-statement-v1183",videoPreviewPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1184_VALIDATION={build:"v1184",challengeVideoSnippet:true,promoteVideoPosterFallback:true,promoteStyleToken:true,wantedCannotBeOverwrittenByClassic:true,promoteBottomNavHidden:true,promoteSafeArea:true,videoPreviewCapSeconds:3,updateParserPreserved:true};</script>
 </body>
 </html>
