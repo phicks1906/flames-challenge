@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1188 · full-frame-flyer-feed" name="fc-build"/>
+<meta content="v1189 · audio-post-expansion" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Restored flyer posts to the full-width 4:5 poster frame and removed the later square-stage override." name="fc-whatsnew"/>
+<meta content="Separated audio playback from expansion so audio posts now open full-size while play, seek, and volume controls remain independent." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -3145,6 +3145,25 @@ body.theme-light .skeleton {
   object-fit: contain;
   display: block;
 }
+
+/* v1189 — standalone audio posts use the media surface as the expand target,
+   while direct playback controls stay independent. */
+#feedContainer .fc-audio-post-shell-v1189 .fc-audio-mode-post-v1123 {
+  cursor:zoom-in;
+}
+#postSheetBody .fc-audio-post-shell-v1189 {
+  max-height:none;
+  overflow:visible;
+}
+#postSheetBody .fc-audio-mode-viewer-v1123 {
+  width:100%;
+  min-height:min(72vh,760px);
+  cursor:default;
+}
+#postSheetBody .fc-audio-mode-viewer-v1123 .fc-audio-controls-v1123 {
+  display:flex;
+}
+
 
 /* Like (flame) button — used on posts and entries */
 .flame-btn {
@@ -15993,7 +16012,7 @@ async function openPostView(postId) {
     document.body.style.overflow = 'hidden';
   }
 
-  body.innerHTML = renderPostCard(p);
+  body.innerHTML = renderPostCard(p, { expanded: true });
 
   // Wire interactions inside the sheet (feed wiring is scoped to the feed container)
   body.querySelectorAll('[data-like-post]').forEach(btn => {
@@ -17241,7 +17260,7 @@ function _audioTileHtml(e, options = {}) {
     onplay="fcAudioPlayStateV1123(this.closest('.fcc-fire-eq'),this)"
     onpause="fcAudioPauseStateV1123(this.closest('.fcc-fire-eq'),this)"
     onended="fcAudioPauseStateV1123(this.closest('.fcc-fire-eq'),this)"></audio>`;
-  const mainButton = `<button type="button" class="fcc-audio-btn" aria-label="Play audio">▶</button>`;
+  const mainButton = `<button type="button" class="fcc-audio-btn" aria-label="Play audio" onclick="toggleFccAudio(this.closest('.fcc-fire-eq'),event)">▶</button>`;
   const controlsHtml = controls ? `<div class="fc-audio-controls-v1123" onclick="event.stopPropagation()">
       <button type="button" class="fc-audio-play-v1123" aria-label="Play audio" onclick="toggleFccAudioFromControlV1123(this,event)">▶</button>
       <span class="fc-audio-current-v1123">0:00</span>
@@ -17292,7 +17311,12 @@ function _audioTileHtml(e, options = {}) {
     mainButtonOutside = '';
   }
 
-  return `<div class="${rootClasses}"" data-audio-style="${style}" onclick="toggleFccAudio(this,event)" role="group" aria-label="Audio entry · ${escapeHtml(EQ_LABELS[style])} style">${audio}${visual}${mainButtonOutside}${controlsHtml}</div>`;
+  const expandPostId = options.expandPostId ? String(options.expandPostId) : '';
+  const rootAction = expandPostId
+    ? `onclick="openAudioPostFromTileV1189(this,event)" data-audio-expand-post="${escapeHtml(expandPostId)}"`
+    : `onclick="toggleFccAudio(this,event)"`;
+
+  return `<div class="${rootClasses}" data-audio-style="${style}" ${rootAction} role="group" aria-label="Audio entry · ${escapeHtml(EQ_LABELS[style])} style">${audio}${visual}${mainButtonOutside}${controlsHtml}</div>`;
 }
 
 function formatFccAudioTimeV1123(value) {
@@ -17371,6 +17395,21 @@ function fcAudioPauseStateV1123(tile, audio) {
   tile.querySelectorAll('.fcc-audio-btn,.fc-audio-play-v1123').forEach(btn => { btn.textContent = '▶'; btn.setAttribute('aria-label','Play audio'); });
   syncFccAudioControlsV1123(tile, audio);
   _feqStop(tile);
+}
+
+
+function openAudioPostFromTileV1189(tile, ev) {
+  if (!tile) return;
+  const target = ev?.target;
+  if (target && target.closest('button,input,a,[role="button"],.fc-audio-controls-v1123')) {
+    return;
+  }
+  if (ev) {
+    ev.preventDefault();
+    ev.stopPropagation();
+  }
+  const postId = tile.dataset.audioExpandPost;
+  if (postId) openPostView(postId);
 }
 
 function toggleFccAudio(tile, ev) {
@@ -25147,7 +25186,8 @@ function renderFeed() {
 
 }
 
-function renderPostCard(p) {
+function renderPostCard(p, options = {}) {
+  const expandedPostViewV1189 = options.expanded === true;
   // Flyer posts get their own rich card layout
   if (p.post_type === 'flyer') return renderFlyerCard(p);
 
@@ -25161,14 +25201,28 @@ function renderPostCard(p) {
       // v739 — audio posts get the SAME fire EQ tile as challenge entries (all
       // four styles, analyser-driven) instead of the plain grey iOS player.
       // _audioTileHtml keys off .media_url, which is what this branch has.
-      mediaHtml = `<div class="post-card-media" style="padding:0;background:transparent">${_audioTileHtml({ media_url: p.media_url })}</div>`;
+      mediaHtml = `<div class="post-card-media fc-audio-post-shell-v1189" style="padding:0;background:transparent">${
+        _audioTileHtml(
+          { media_url: p.media_url },
+          expandedPostViewV1189
+            ? { mode: 'viewer', controls: true }
+            : { mode: 'post', expandPostId: p.id }
+        )
+      }</div>`;
     } else {
       mediaHtml = `<div class="post-card-media"><img src="${escapeHtml(p.media_url)}" alt="post media" loading="lazy"></div>`;
     }
   }
   if (p.audio_url) {
     // v739 — same EQ tile for the audio_url attachment path
-    mediaHtml += `<div class="post-card-media" style="padding:0;background:transparent;margin:0 0 8px">${_audioTileHtml({ media_url: p.audio_url })}</div>`;
+    mediaHtml += `<div class="post-card-media fc-audio-post-shell-v1189" style="padding:0;background:transparent;margin:0 0 8px">${
+      _audioTileHtml(
+        { media_url: p.audio_url },
+        expandedPostViewV1189
+          ? { mode: 'viewer', controls: true }
+          : { mode: 'post', expandPostId: p.id }
+      )
+    }</div>`;
   }
   const likeCount = state.postLikeCounts[p.id] || 0;
   const iLiked = state.myPostLikes.has(p.id);
@@ -40424,6 +40478,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1188_VALIDATION={build:"v1188",phase:2,flyerFrame:"4:5",flyerFullWidth:true,flyerContain:true,squareOverrideRemoved:true,flyerViewerPreserved:true,videoPreviewPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1189_VALIDATION={build:"v1189",phase:3,audioPostTapExpands:true,playButtonIndependent:true,seekIndependent:true,volumeIndependent:true,expandedAudioControls:true,challengeAudioBehaviorPreserved:true,videoPreviewPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
