@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1171 · clean-audio-renderers" name="fc-build"/>
+<meta content="v1172 · audio-control-fade" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Rebuilt Scene and Waveform with isolated renderers, clean artwork, and working analyser-driven motion." name="fc-whatsnew"/>
+<meta content="Restored the audio play/pause control fade behavior with reliable touch reappearance." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -7920,6 +7920,52 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
 
 @media(prefers-reduced-motion:reduce) {
   .fc-audio-scene-bar-v1171,.fc-audio-wave-bar-v1171 { transition:none; }
+}
+</style>
+
+
+<style id="fc-v1172-audio-control-fade-css">
+/* v1172 — main play/pause control stays visible while paused, appears
+   immediately on play/touch, then fades back without relying on :hover. */
+.fcc-fire-eq .fcc-audio-btn {
+  opacity:1!important;
+  visibility:visible!important;
+  transition:
+    opacity .42s ease,
+    transform .15s ease,
+    background .18s ease,
+    box-shadow .18s ease!important;
+  will-change:opacity;
+}
+
+.fcc-fire-eq.playing .fcc-audio-btn {
+  opacity:.12!important;
+}
+
+.fcc-fire-eq.playing.fc-audio-control-awake-v1172 .fcc-audio-btn,
+.fcc-fire-eq.playing:focus-within .fcc-audio-btn {
+  opacity:.96!important;
+}
+
+.fcc-fire-eq:not(.playing) .fcc-audio-btn {
+  opacity:1!important;
+}
+
+/* Do not let stale desktop hover rules keep the button permanently visible
+   on touch devices. */
+@media (hover:none) and (pointer:coarse) {
+  .fcc-fire-eq.playing:hover .fcc-audio-btn {
+    opacity:.12!important;
+  }
+  .fcc-fire-eq.playing.fc-audio-control-awake-v1172:hover .fcc-audio-btn {
+    opacity:.96!important;
+  }
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .fcc-fire-eq .fcc-audio-btn {
+    transition:none!important;
+  }
 }
 </style>
 
@@ -16676,10 +16722,38 @@ function syncFccAudioControlsV1123(tile, audio) {
   }
 }
 
+
+const _fcAudioControlFadeTimersV1172 = new WeakMap();
+
+function showFccAudioControlV1172(tile, holdMs = 1150) {
+  if (!tile) return;
+  const prior = _fcAudioControlFadeTimersV1172.get(tile);
+  if (prior) clearTimeout(prior);
+  tile.classList.add('fc-audio-control-awake-v1172');
+
+  if (!tile.classList.contains('playing')) return;
+
+  const timer = setTimeout(() => {
+    tile.classList.remove('fc-audio-control-awake-v1172');
+    _fcAudioControlFadeTimersV1172.delete(tile);
+  }, Math.max(500, Number(holdMs) || 1150));
+
+  _fcAudioControlFadeTimersV1172.set(tile, timer);
+}
+
+function clearFccAudioControlFadeV1172(tile) {
+  if (!tile) return;
+  const prior = _fcAudioControlFadeTimersV1172.get(tile);
+  if (prior) clearTimeout(prior);
+  _fcAudioControlFadeTimersV1172.delete(tile);
+  tile.classList.remove('fc-audio-control-awake-v1172');
+}
+
 function fcAudioPlayStateV1123(tile, audio) {
   if (!tile || !audio) return;
   tile.classList.add('playing');
   tile.querySelectorAll('.fcc-audio-btn,.fc-audio-play-v1123').forEach(btn => { btn.textContent = '⏸'; btn.setAttribute('aria-label','Pause audio'); });
+  showFccAudioControlV1172(tile, 1250);
   syncFccAudioControlsV1123(tile, audio);
   _feqStart(tile, audio);
 }
@@ -16687,6 +16761,7 @@ function fcAudioPlayStateV1123(tile, audio) {
 function fcAudioPauseStateV1123(tile, audio) {
   if (!tile || !audio) return;
   tile.classList.remove('playing');
+  clearFccAudioControlFadeV1172(tile);
   tile.querySelectorAll('.fcc-audio-btn,.fc-audio-play-v1123').forEach(btn => { btn.textContent = '▶'; btn.setAttribute('aria-label','Play audio'); });
   syncFccAudioControlsV1123(tile, audio);
   _feqStop(tile);
@@ -16694,6 +16769,7 @@ function fcAudioPauseStateV1123(tile, audio) {
 
 function toggleFccAudio(tile, ev) {
   if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+  showFccAudioControlV1172(tile, 1250);
   const audio = tile?.querySelector('audio');
   if (!audio) return;
   if (audio.paused) {
@@ -39693,6 +39769,13 @@ body:has(.entrants-backdrop.open) #fcGlobalAskEmberV1131{
 <script>window.FC_V1165_VALIDATION={build:"v1165",flameRestoredFrom:"v1135",waveformTimeDomain:true,waveformSceneEmbedded:true};</script>
 <script>window.FC_V1167_VALIDATION={build:"v1167",sceneRenderer:"original-live-fire-pillars",sceneAnalyserDriven:true,waveformUnchanged:true,flameUnchanged:true,recordUnchanged:true};</script>
 <script>window.FC_V1169_VALIDATION={build:"v1169",sceneRenderer:"restored-v1167-live-composition",rejectedV1168SceneTuningRemoved:true,sceneAnalyserDriven:true,waveformModeUnchanged:true,flameUnchanged:true,recordUnchanged:true};</script>
-<script>window.FC_V1171_VALIDATION={build:"v1171",sceneRenderer:"isolated",waveformRenderer:"isolated",legacyFeqbNotUsedByScene:true,legacyFeqbNotUsedByWaveform:true};</script>
+
+<script id="fc-v1172-audio-control-touch-js">
+document.addEventListener('pointerdown', function(event) {
+  const tile = event.target && event.target.closest ? event.target.closest('.fcc-fire-eq') : null;
+  if (tile && tile.classList.contains('playing')) showFccAudioControlV1172(tile, 1250);
+}, {capture:true, passive:true});
+</script>
+<script>window.FC_V1172_VALIDATION={build:"v1172",audioControlFade:true,touchWake:true,pausedVisible:true,playingFadeDelayMs:1250};</script>
 </body>
 </html>
