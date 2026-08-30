@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1192 · challenge-viewer-balance" name="fc-build"/>
+<meta content="v1193 · adaptive-challenge-viewer" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Removed the forced empty height from short challenge viewers and consolidated feed previews under one authoritative 4:5 stage." name="fc-whatsnew"/>
+<meta content="Added an adaptive challenge viewer: closed challenges show results directly, active challenges keep entries, and audio fills the standard feed stage." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -27550,7 +27550,12 @@ async function openFeedViewer(chId, startEntryId = null) {
   btn.style.display = 'block';
   const promoteBtn = document.getElementById('fvPromoteBtn');
   if (promoteBtn) promoteBtn.style.display = (ch.is_public && status !== 'closed' && status !== 'voided') ? 'block' : 'none';
+  list.style.display = 'flex';
   list.innerHTML    = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Loading…</div>';
+  const fvCounterResetV1193 = document.getElementById('fvCounter');
+  const fvDotsResetV1193 = document.getElementById('fvDots');
+  if (fvCounterResetV1193) fvCounterResetV1193.style.display = '';
+  if (fvDotsResetV1193) fvDotsResetV1193.style.display = '';
   empty.style.display = 'none';
   sheet.classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -27607,9 +27612,44 @@ async function openFeedViewer(chId, startEntryId = null) {
     }
 
     const canVote = isVotingPhase(status);
-    list.innerHTML = _eligibleVisibleV1047.map(e => renderFvEntry(e, ch, canVote, myVoteEntryId, status)).join('');
-    _checkFreshVideoEncoding(list);
-    if (status === 'closed' || isVotingPhase(status)) renderFvStandings(chId, _validVotesV1047, _eligibleVisibleV1047);
+    const viewerModeV1193 = status === 'closed'
+      ? 'results'
+      : canVote
+        ? 'voting'
+        : 'entries';
+
+    const scrollRegionV1193 = document.getElementById('fvScrollRegion');
+    const counterV1193 = document.getElementById('fvCounter');
+    const dotsV1193 = document.getElementById('fvDots');
+
+    if (viewerModeV1193 === 'results') {
+      // Closed challenges lead with the winner and final standings. The entry
+      // carousel remains available through View Details, but is not rendered as
+      // a large obsolete stage above the result.
+      list.innerHTML = '';
+      list.style.display = 'none';
+      empty.style.display = 'none';
+      if (counterV1193) {
+        counterV1193.textContent = '';
+        counterV1193.style.display = 'none';
+      }
+      if (dotsV1193) {
+        dotsV1193.innerHTML = '';
+        dotsV1193.style.display = 'none';
+      }
+      if (scrollRegionV1193) scrollRegionV1193.dataset.viewerModeV1193 = 'results';
+      renderFvStandings(chId, _validVotesV1047, _eligibleVisibleV1047);
+    } else {
+      list.style.display = 'flex';
+      list.innerHTML = _eligibleVisibleV1047.map(e => renderFvEntry(e, ch, canVote, myVoteEntryId, status)).join('');
+      _checkFreshVideoEncoding(list);
+      if (counterV1193) counterV1193.style.display = '';
+      if (dotsV1193) dotsV1193.style.display = '';
+      if (scrollRegionV1193) scrollRegionV1193.dataset.viewerModeV1193 = viewerModeV1193;
+      if (viewerModeV1193 === 'voting') {
+        renderFvStandings(chId, _validVotesV1047, _eligibleVisibleV1047);
+      }
+    }
 
     const total = _eligibleVisibleV1047.length;
     const userHasEntered = !!myLiveEntry(entries); // v715
@@ -27627,23 +27667,24 @@ async function openFeedViewer(chId, startEntryId = null) {
       btn.style.display = 'block';
     }
 
-    // Dots + counter
+    // Dots + counter belong only to entry/voting modes.
     const counter = document.getElementById('fvCounter');
     const dotsEl  = document.getElementById('fvDots');
-    if (counter) counter.textContent = total > 1 ? `1 of ${total}` : '';
-    if (dotsEl) {
-      dotsEl.innerHTML = total > 1
-        ? _eligibleVisibleV1047.map((_, i) => `<span style="width:7px;height:7px;border-radius:50%;background:${i===0?'var(--ember)':'var(--border-bright)'};transition:background 0.2s,transform 0.2s;display:inline-block;${i===0?'transform:scale(1.3)':''}"></span>`).join('')
-        : '';
-      // Update dots + challenger card on scroll
-      list.addEventListener('scroll', () => {
-        const idx = Math.round(list.scrollLeft / list.offsetWidth);
-        if (counter) counter.textContent = total > 1 ? `${idx+1} of ${total}` : '';
-        if (dotsEl) dotsEl.querySelectorAll('span').forEach((d,i) => {
-          d.style.background = i===idx ? 'var(--ember)' : 'var(--border-bright)';
-          d.style.transform  = i===idx ? 'scale(1.3)' : 'scale(1)';
-        });
-      }, { passive: true });
+    if (viewerModeV1193 !== 'results') {
+      if (counter) counter.textContent = total > 1 ? `1 of ${total}` : '';
+      if (dotsEl) {
+        dotsEl.innerHTML = total > 1
+          ? _eligibleVisibleV1047.map((_, i) => `<span style="width:7px;height:7px;border-radius:50%;background:${i===0?'var(--ember)':'var(--border-bright)'};transition:background 0.2s,transform 0.2s;display:inline-block;${i===0?'transform:scale(1.3)':''}"></span>`).join('')
+          : '';
+        list.addEventListener('scroll', () => {
+          const idx = Math.round(list.scrollLeft / list.offsetWidth);
+          if (counter) counter.textContent = total > 1 ? `${idx+1} of ${total}` : '';
+          if (dotsEl) dotsEl.querySelectorAll('span').forEach((d,i) => {
+            d.style.background = i===idx ? 'var(--ember)' : 'var(--border-bright)';
+            d.style.transform  = i===idx ? 'scale(1.3)' : 'scale(1)';
+          });
+        }, { passive: true });
+      }
     }
 
     // Tap poster → promote the pre-buffered hidden video to the playback position.
@@ -34563,6 +34604,60 @@ body.fc-hw-open .bottom-nav{visibility:hidden!important;pointer-events:none!impo
   display:none!important;
 }
 
+/* v1193 — adaptive viewer with a hard 90vh ceiling. */
+#feedViewerModal {
+  height:auto!important;
+  min-height:0!important;
+  max-height:90vh!important;
+}
+#feedViewerModal #fvScrollRegion {
+  flex:0 1 auto!important;
+  min-height:0!important;
+  max-height:calc(90vh - 190px - env(safe-area-inset-bottom,0px))!important;
+  overflow-y:auto!important;
+}
+#feedViewerModal #fvScrollRegion[data-viewer-mode-v1193="results"] {
+  overflow-y:auto!important;
+}
+#feedViewerModal #fvScrollRegion[data-viewer-mode-v1193="results"] #fvStandings {
+  padding-top:12px!important;
+  padding-bottom:12px!important;
+}
+#feedViewerModal #fvEntries img,
+#feedViewerModal #fvEntries .fv-media-host,
+#feedViewerModal #fvEntries .fc-audio-mode-feed-viewer-v1123 {
+  max-height:60vh!important;
+}
+
+
+
+/* v1193 — audio fills the standard 4:5 feed/Compete judging stage. */
+#feedContainer .fc-entry-rail-v1079 .fc-audio-mode-card-v1123,
+#challengesGrid .fc-entry-rail-v1079 .fc-audio-mode-card-v1123 {
+  position:relative!important;
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  aspect-ratio:4/5!important;
+  padding:0!important;
+  overflow:hidden!important;
+}
+#feedContainer .fc-entry-rail-v1079 .fc-audio-mode-card-v1123 .fc-audio-scene-v1171,
+#feedContainer .fc-entry-rail-v1079 .fc-audio-mode-card-v1123 .fc-audio-waveform-v1171,
+#challengesGrid .fc-entry-rail-v1079 .fc-audio-mode-card-v1123 .fc-audio-scene-v1171,
+#challengesGrid .fc-entry-rail-v1079 .fc-audio-mode-card-v1123 .fc-audio-waveform-v1171 {
+  position:absolute!important;
+  inset:0!important;
+  width:100%!important;
+  height:100%!important;
+  aspect-ratio:auto!important;
+}
+#feedContainer .fc-entry-rail-v1079 .fc-audio-mode-card-v1123 .fc-audio-record-v1160,
+#challengesGrid .fc-entry-rail-v1079 .fc-audio-mode-card-v1123 .fc-audio-record-v1160 {
+  position:absolute!important;
+  inset:0!important;
+}
 
 body.theme-light #feedContainer > .fcc-challenge-wrap:not(.champ-gold),
 body.theme-light #feedContainer > .feed-activity-card,
@@ -40611,6 +40706,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1192_VALIDATION={build:"v1192",feedPreviewStage:"4:5",obsoleteAdaptiveFeedClassesRetired:true,detailNaturalRatiosPreserved:true,viewerMinHeightRemoved:true,viewerMaxHeight:"90vh",viewerActionBarPreserved:true,swipeCarouselPreserved:true,videoPreviewPreserved:true,postExpansionPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1193_VALIDATION={build:"v1193",viewerModes:["entries","voting","results"],closedCarouselHidden:true,closedCounterHidden:true,closedResultsDirect:true,viewerMaxHeight:"90vh",entryMediaMaxHeight:"60vh",audioFeedStageFilled:true,swipePreservedForActive:true,votingPreserved:true,videoPreviewPreserved:true,postExpansionPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
