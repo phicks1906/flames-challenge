@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1180 · full-frame-video-posts" name="fc-build"/>
+<meta content="v1182 · generated-flyer-versioning" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Standardized feed video posts to a full-width 4:5 preview frame while preserving the uncropped post viewer." name="fc-whatsnew"/>
+<meta content="Versioned newly generated flyers so stored poster assets can be distinguished from live-rendered UI and older flyer designs." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -2232,6 +2232,17 @@ body.theme-light .auth-form input { background: #ffffff; }
    viewport so the style picker stays visible without scrolling. */
 .pm-body .promote-preview { max-height: 44vh; }
 .promote-flyer-img { width: 100%; max-height: 44vh; object-fit: contain; display: block; }
+.promote-generated-note-v1182 {
+  margin-top:8px;
+  padding:8px 10px;
+  border:1px solid rgba(255,106,44,.22);
+  border-radius:10px;
+  background:rgba(255,106,44,.07);
+  color:var(--text-dim);
+  font-size:11px;
+  line-height:1.35;
+  text-align:center;
+}
 .promote-loading { padding: 70px 24px; color: var(--text-muted); font-size: 14px; text-align: center; line-height: 1.5; }
 .promote-actions { display: flex; gap: 10px; margin-top: 10px; }
 .promote-media-row {
@@ -9358,6 +9369,7 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
   max-height: none;
   object-fit: cover;
   display: block;
+  background:#000;
 }
 /* ═══════════════════ end v729 (was v683 / v694) ═══════════════════ */
 
@@ -14297,6 +14309,11 @@ function setupMentionAutocomplete(input, box) {
 }
 
 /* ---------- PROMOTE: flyer generation + share ---------- */
+/* v1182 — flyers are generated assets, not live-rendered feed UI.
+   This version travels with every newly created flyer so older stored PNGs can
+   be distinguished from current renderer output during audits and migrations. */
+const FC_FLYER_RENDERER_VERSION_V1182 = 'wanted-quote-v1179';
+
 let promoteState = null;
 
 function flyerLink(type, id) {
@@ -15274,10 +15291,10 @@ async function renderPromoteFlyer() {
     const { dataUrl, blob } = await generateFlyer(opts);
     if (!promoteState) return;
     promoteState.blob = blob;
-    document.getElementById('promotePreview').innerHTML = `<img src="${dataUrl}" alt="Flyer" class="promote-flyer-img">`;
+    document.getElementById('promotePreview').innerHTML =  `<img src="${dataUrl}" alt="Flyer" class="promote-flyer-img"><div class="promote-generated-note-v1182">This design applies to this newly generated flyer. Existing posted flyers remain unchanged.</div>`;
     if (promoteState.type === 'challenge' && !promoteState.analyticsGeneratedTracked) {
       promoteState.analyticsGeneratedTracked = true;
-      try { fcTrackAnalyticsV1048('promotion_generated', promoteState.id, { shareId: promoteState.shareId, source: 'flyer', metadata: { style: promoteState.style || 'ember' } }); } catch(e) {}
+      try { fcTrackAnalyticsV1048('promotion_generated', promoteState.id, { shareId: promoteState.shareId, source: 'flyer', metadata: { style: promoteState.style || 'ember', renderer_version: FC_FLYER_RENDERER_VERSION_V1182 } }); } catch(e) {}
     }
   } catch (e) {
     console.error('flyer render error', e);
@@ -15379,7 +15396,7 @@ async function postFlyerToFeed() {
       return;
     }
     if (blob) {
-      const path = `${state.profile.id}/flyer-${ch.id}-${Date.now()}.png`;
+      const path = `${state.profile.id}/flyer-${FC_FLYER_RENDERER_VERSION_V1182}-${ch.id}-${Date.now()}.png`;
       btn.textContent = 'Uploading...';
       // Plain insert (upsert:false). Bucket has INSERT/DELETE policies only — an
       // upsert turns this into INSERT...ON CONFLICT DO UPDATE which also needs
@@ -15425,7 +15442,7 @@ async function postFlyerToFeed() {
 
     if (error) throw error;
 
-    try { fcTrackAnalyticsV1048('promotion_shared', ch.id, { shareId: promoteState?.shareId || null, source: 'flames_feed', metadata: { post_id: inserted?.id || null } }); } catch(e) {}
+    try { fcTrackAnalyticsV1048('promotion_shared', ch.id, { shareId: promoteState?.shareId || null, source: 'flames_feed', metadata: { post_id: inserted?.id || null, renderer_version: FC_FLYER_RENDERER_VERSION_V1182 } }); } catch(e) {}
     toast('🔥 Posted to your feed!');
     closePromote();
     // Land the user on the feed where the flyer now lives — not the challenge page
@@ -24786,7 +24803,7 @@ function renderPostCard(p) {
   let mediaHtml = '';
   if (p.media_url) {
     if (p.media_type === 'video') {
-      mediaHtml = `<div class="post-card-media post-card-media-video-v1180"><video src="${escapeHtml(p.media_url)}#t=0.1" controls playsinline preload="metadata"></video></div>`;
+      mediaHtml = `<div class="post-card-media post-card-media-video-v1180"><video data-src="${escapeHtml(p.media_url)}" ${_videoPosterAttr(p.media_url,p.poster_url||'')} muted playsinline preload="none" data-lazy-video aria-label="Three-second muted video preview"></video></div>`;
     } else if (p.media_type === 'audio') {
       // v739 — audio posts get the SAME fire EQ tile as challenge entries (all
       // four styles, analyser-driven) instead of the plain grey iOS player.
@@ -28908,7 +28925,7 @@ function renderProfileTab() {
       let mediaHtml = '';
       if (p.media_url) {
         mediaHtml = p.media_type === 'video'
-          ? `<div class="post-card-media"><video src="${escapeHtml(p.media_url)}#t=0.1" controls playsinline preload="metadata"></video></div>`
+          ? `<div class="post-card-media post-card-media-video-v1180"><video data-src="${escapeHtml(p.media_url)}" ${_videoPosterAttr(p.media_url,p.poster_url||'')} muted playsinline preload="none" data-lazy-video aria-label="Three-second muted video preview"></video></div>`
           : `<div class="post-card-media"><img src="${escapeHtml(p.media_url)}" alt="" loading="lazy"></div>`;
       }
       const likeCount = psState.postLikeCounts[p.id] || 0;
@@ -40029,6 +40046,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1180_VALIDATION={build:"v1180",phase:1,feedVideoFrame:"4:5",feedVideoFullWidth:true,postViewerUncropped:true,photoPostBehaviorPreserved:true,audioFlyerChallengeCardsUntouched:true,updateParserPreserved:true};</script>
+<script>window.FC_V1182_VALIDATION={build:"v1182",generatedFlyerVersioning:true,flyerRendererVersion:"wanted-quote-v1179",existingFlyersExplicitlyUnchanged:true,videoPreviewPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
