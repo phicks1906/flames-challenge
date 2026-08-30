@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1185 · styled-creator-media-flyers" name="fc-build"/>
+<meta content="v1186 · flyer-media-source-selector" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Classic now uses creator media naturally, while Wanted, Chronicle, and Tear-off transform creator media to match each poster style." name="fc-whatsnew"/>
+<meta content="Added per-style media-source choices: Classic defaults to creator media, while Wanted, Chronicle, and Tear-off default to original artwork." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -5793,6 +5793,40 @@ body.theme-light .champ-ticker {
 }
 .promote-actions .btn { font-size: 12.5px; padding: 10px 6px; }
 
+.promote-media-source-v1186 {
+  margin-top:12px;padding:12px;border:1px solid var(--border);border-radius:16px;
+  background:rgba(255,255,255,.025);
+}
+.promote-media-source-head-v1186 {
+  display:flex;justify-content:space-between;align-items:center;gap:10px;
+  margin-bottom:9px;color:var(--text);font-size:13px;font-weight:800;
+}
+#promoteMediaSourceNoteV1186 {
+  color:var(--text-muted);font-size:10px;font-weight:700;text-align:right;
+}
+.promote-media-source-options-v1186 {
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;
+}
+.promote-media-source-options-v1186 button {
+  min-width:0;min-height:70px;padding:9px 8px;border:1px solid var(--border);
+  border-radius:12px;background:var(--surface);color:var(--text);text-align:left;
+  font:inherit;cursor:pointer;
+}
+.promote-media-source-options-v1186 button strong,
+.promote-media-source-options-v1186 button small { display:block; }
+.promote-media-source-options-v1186 button strong { font-size:12px;line-height:1.2; }
+.promote-media-source-options-v1186 button small {
+  margin-top:4px;color:var(--text-muted);font-size:9px;line-height:1.25;
+}
+.promote-media-source-options-v1186 button.on {
+  border-color:var(--ember);background:rgba(255,92,31,.10);
+  box-shadow:0 0 0 1px rgba(255,92,31,.24) inset;
+}
+@media(max-width:420px) {
+  .promote-media-source-options-v1186 { grid-template-columns:1fr; }
+  .promote-media-source-options-v1186 button { min-height:58px; }
+}
+
 /* v800 step 3 — media toolbar above the flyer preview. */
 .pm-tools {
   display: flex; align-items: center; gap: 8px;
@@ -9583,6 +9617,23 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
 <img alt="" data-fthumb="news" loading="lazy" src=""/><span>Chronicle</span></button>
 <button class="pstyle" data-fstyle="tearoff" onclick="setFlyerStyle('tearoff')">
 <img alt="" data-fthumb="tearoff" loading="lazy" src=""/><span>Tear-off</span></button>
+</div>
+<div class="promote-media-source-v1186" id="promoteMediaSourceV1186">
+  <div class="promote-media-source-head-v1186">
+    <span>Artwork</span>
+    <span id="promoteMediaSourceNoteV1186"></span>
+  </div>
+  <div class="promote-media-source-options-v1186">
+    <button type="button" data-media-source="artwork" onclick="setPromoteMediaSourceV1186('artwork')">
+      <strong>Original artwork</strong><small>Recommended for poster styles</small>
+    </button>
+    <button type="button" data-media-source="detected" onclick="setPromoteMediaSourceV1186('detected')">
+      <strong id="promoteDetectedMediaLabelV1186">Creator media</strong><small id="promoteDetectedMediaHelpV1186">Use the challenge media</small>
+    </button>
+    <button type="button" data-media-source="custom" onclick="choosePromoteCustomMediaV1186()">
+      <strong>Upload another image</strong><small>Use your own replacement</small>
+    </button>
+  </div>
 </div>
 <!-- v789 — the ONE piece of template furniture worth opening up. On a real
          wanted poster the reward is the funniest line; everything else
@@ -14336,7 +14387,7 @@ function setupMentionAutocomplete(input, box) {
 /* v1182 — flyers are generated assets, not live-rendered feed UI.
    This version travels with every newly created flyer so older stored PNGs can
    be distinguished from current renderer output during audits and migrations. */
-const FC_FLYER_RENDERER_VERSION_V1182 = 'styled-creator-media-v1185';
+const FC_FLYER_RENDERER_VERSION_V1182 = 'media-source-selector-v1186';
 
 let promoteState = null;
 
@@ -15189,6 +15240,12 @@ async function openPromote(type, item) {
     style: 'ember',
     heroUserUrl: null, heroAutoUrl: null,
     sourceMediaType: String(item.media_type || '').toLowerCase(),
+    mediaSourceByStyleV1186: {
+      ember: 'detected',
+      wanted: 'artwork',
+      news: 'artwork',
+      tearoff: 'artwork'
+    },
     renderTokenV1184: 0,
     shareId: shareIdV1048, analyticsGeneratedTracked: false,
     heroFit: 'fill', heroFocus: { x: 0.5, y: 0.5 }
@@ -15213,6 +15270,7 @@ async function openPromote(type, item) {
   wireHeroDrag();
   document.getElementById('promoteModal').classList.add('open');
   updatePromoteMediaButtons();
+  updatePromoteMediaSourceV1186();
   // Build it right away — the hero preload below runs in parallel and a style
   // tap re-bakes, so nothing is lost by starting now.
   setTimeout(() => { try { userGeneratePromoteFlyer(); } catch(e) {} }, 60);
@@ -15266,6 +15324,7 @@ async function openPromote(type, item) {
         if (chosen && chosen._heroUrl && promoteState && !promoteState.heroUserUrl) {
           promoteState.heroAutoUrl = chosen._heroUrl;
           promoteState.sourceMediaType = String(chosen.media_type || promoteState.sourceMediaType || '').toLowerCase();
+          updatePromoteMediaSourceV1186();
           // Only re-render if the user has ALREADY generated a flyer (so we swap the
           // hero in). If they haven't generated yet, just stash it for later.
           if (promoteState.flyerGenerated) { await renderPromoteFlyer(); }
@@ -15309,23 +15368,20 @@ function resetHeroFocus() {
 
 function updateHeroTools() {
   if (!promoteState) return;
-  const style = promoteState.style;
-  const paper = style === 'news' || style === 'tearoff';
-  const hasUser = !!promoteState.heroUserUrl;
+  const style = promoteState.style || 'ember';
+  const source = _currentPromoteMediaSourceV1186();
+  const usingMedia = source === 'detected' || source === 'custom';
+  const usingCustom = source === 'custom' && !!promoteState.heroUserUrl;
   const show = (id, on) => { const e = document.getElementById(id); if (e) e.style.display = on ? '' : 'none'; };
-  // Chronicle and Tear-off take no photo at all — their art is in the paper.
-  show('pmReplace', !paper);
-  show('pmRemove', !paper && hasUser);
+  show('pmReplace', true);
+  show('pmRemove', usingCustom);
   const replaceBtn = document.getElementById('pmReplace');
-  if (replaceBtn && !paper) {
-    const mediaLabel = promoteState.sourceMediaType === 'video' && !hasUser ? 'Video still' : 'Photo';
-    replaceBtn.innerHTML = `<span>${promoteState.sourceMediaType === 'video' && !hasUser ? '🎞️' : '🖼'}</span>${mediaLabel}`;
-  }
-  show('pmReset', !paper && hasUser && promoteState.heroFit !== 'fit');
-  show('pmFitSeg', !paper && hasUser);
-  show('pmDragHint', !paper && hasUser && promoteState.heroFit !== 'fit');
+  if (replaceBtn) replaceBtn.innerHTML = `<span>🖼</span>${usingCustom ? 'Replace image' : 'Upload image'}`;
+  show('pmReset', usingMedia && promoteState.heroFit !== 'fit');
+  show('pmFitSeg', usingMedia);
+  show('pmDragHint', usingMedia && promoteState.heroFit !== 'fit');
   const prev = document.getElementById('promotePreview');
-  if (prev) prev.classList.toggle('pm-draggable', !paper && hasUser && promoteState.heroFit !== 'fit');
+  if (prev) prev.classList.toggle('pm-draggable', usingMedia && promoteState.heroFit !== 'fit');
 }
 
 let _pmDrag = null, _pmPending = false;
@@ -15371,6 +15427,71 @@ function wireFlyerThumbs() {
   });
 }
 
+
+function _currentPromoteMediaSourceV1186() {
+  if (!promoteState) return 'artwork';
+  const style = promoteState.style || 'ember';
+  const map = promoteState.mediaSourceByStyleV1186 || {};
+  return map[style] || (style === 'ember' ? 'detected' : 'artwork');
+}
+
+function updatePromoteMediaSourceV1186() {
+  if (!promoteState) return;
+  const style = promoteState.style || 'ember';
+  const source = _currentPromoteMediaSourceV1186();
+  const detectedAvailable = !!promoteState.heroAutoUrl;
+  const customAvailable = !!promoteState.heroUserUrl;
+  const sourceIsVideo = promoteState.sourceMediaType === 'video';
+
+  const detectedLabel = document.getElementById('promoteDetectedMediaLabelV1186');
+  const detectedHelp = document.getElementById('promoteDetectedMediaHelpV1186');
+  if (detectedLabel) detectedLabel.textContent = sourceIsVideo ? 'Use video still' : 'Use creator photo';
+  if (detectedHelp) detectedHelp.textContent = detectedAvailable
+    ? (style === 'ember' ? 'Shown naturally in Classic' : 'Styled to match this poster')
+    : 'No usable challenge media found';
+
+  document.querySelectorAll('#promoteMediaSourceV1186 [data-media-source]').forEach(btn => {
+    const value = btn.dataset.mediaSource;
+    btn.classList.toggle('on', value === source);
+    btn.disabled = (value === 'detected' && !detectedAvailable) ||
+                   (value === 'custom' && !customAvailable);
+    btn.style.opacity = btn.disabled ? '.45' : '';
+  });
+
+  const note = document.getElementById('promoteMediaSourceNoteV1186');
+  if (note) note.textContent = style === 'ember'
+    ? 'Classic defaults to creator media'
+    : 'Poster styles default to original artwork';
+
+  updateHeroTools();
+}
+
+function setPromoteMediaSourceV1186(source) {
+  if (!promoteState) return;
+  const style = promoteState.style || 'ember';
+  if (source === 'detected' && !promoteState.heroAutoUrl) {
+    toast('No usable challenge media was found.');
+    return;
+  }
+  if (source === 'custom' && !promoteState.heroUserUrl) {
+    choosePromoteCustomMediaV1186();
+    return;
+  }
+  promoteState.mediaSourceByStyleV1186 = promoteState.mediaSourceByStyleV1186 || {};
+  promoteState.mediaSourceByStyleV1186[style] = source;
+  updatePromoteMediaSourceV1186();
+  if (promoteState.flyerGenerated) {
+    const preview = document.getElementById('promotePreview');
+    if (preview) preview.innerHTML = '<div class="promote-loading">Updating artwork…</div>';
+    renderPromoteFlyer();
+  }
+}
+
+function choosePromoteCustomMediaV1186() {
+  const input = document.getElementById('promoteFileInput');
+  if (input) input.click();
+}
+
 function setFlyerStyle(style) {
   if (!promoteState) return;
   promoteState.style = style;
@@ -15389,6 +15510,7 @@ function setFlyerStyle(style) {
   const remBtn = document.getElementById('promoteRemovePhotoBtn');
   if (remBtn) remBtn.style.display = promoteState.heroUserUrl ? 'inline-block' : 'none';
   updatePromoteMediaButtons();
+  updatePromoteMediaSourceV1186();
   if (promoteState.flyerGenerated) {
     const preview = document.getElementById('promotePreview');
     if (preview) preview.innerHTML = '<div class="promote-loading">Updating style…</div>';
@@ -15432,10 +15554,18 @@ async function renderPromoteFlyer() {
   // detected challenge photo no longer overrides it. Only an explicit upload
   // does. Same rule Wanted has always used. Chronicle and Tear-off take no
   // photo at all — their art is part of the paper.
-  // v1185 — all four styles use creator media when available. Classic keeps
-  // it natural; Wanted, Chronicle, and Tear-off transform it client-side.
-  // If loading fails, each template's category artwork remains the fallback.
-  const heroSrc = stateRefV1184.heroUserUrl || stateRefV1184.heroAutoUrl;
+  // v1186 — each flyer style owns its own explicit media-source choice.
+  // Classic defaults to detected creator media. Poster styles default to their
+  // original artwork and use styled creator media only when selected.
+  const mediaSourceV1186 = (() => {
+    const map = stateRefV1184.mediaSourceByStyleV1186 || {};
+    return map[_style] || (_style === 'ember' ? 'detected' : 'artwork');
+  })();
+  const heroSrc = mediaSourceV1186 === 'custom'
+    ? stateRefV1184.heroUserUrl
+    : mediaSourceV1186 === 'detected'
+      ? stateRefV1184.heroAutoUrl
+      : null;
   // v800 — hand the painter the user's fit mode and focal point.
   opts.heroFit = stateRefV1184.heroFit || 'fill';
   opts.heroFocus = stateRefV1184.heroFocus || { x: 0.5, y: 0.5 };
@@ -15450,9 +15580,13 @@ async function renderPromoteFlyer() {
       // means that upload is unusable. Clear it and re-sync the buttons, or the
       // sheet keeps offering "Change / Remove photo" for a photo that isn't
       // there. The flyer falls back to the baked category art, not to nothing.
-      if (stateRefV1184.heroUserUrl === heroSrc) stateRefV1184.heroUserUrl = null;
-      if (stateRefV1184.heroAutoUrl === heroSrc) stateRefV1184.heroAutoUrl = null;
+      if (mediaSourceV1186 === 'custom' && stateRefV1184.heroUserUrl === heroSrc) {
+        stateRefV1184.heroUserUrl = null;
+      }
+      stateRefV1184.mediaSourceByStyleV1186 = stateRefV1184.mediaSourceByStyleV1186 || {};
+      stateRefV1184.mediaSourceByStyleV1186[_style] = _style === 'ember' ? 'detected' : 'artwork';
       updatePromoteMediaButtons();
+      updatePromoteMediaSourceV1186();
     }
   }
   try {
@@ -15523,6 +15657,8 @@ function onPromoteFileSelected(input) {
   reader.onload = async () => {
     if (!promoteState) return;
     promoteState.heroUserUrl = reader.result;
+    promoteState.mediaSourceByStyleV1186 = promoteState.mediaSourceByStyleV1186 || {};
+    promoteState.mediaSourceByStyleV1186[promoteState.style || 'ember'] = 'custom';
     promoteState.heroFocus = { x: 0.5, y: 0.5 };   // v800 — new photo, fresh framing
     promoteState.heroFit = 'fill';
     promoteState.flyerGenerated = true;
@@ -15536,10 +15672,15 @@ function onPromoteFileSelected(input) {
 
 function clearPromoteHero() {
   if (!promoteState) return;
+  const style = promoteState.style || 'ember';
   promoteState.heroUserUrl = null;
-  promoteState.heroAutoUrl = null;
+  promoteState.mediaSourceByStyleV1186 = promoteState.mediaSourceByStyleV1186 || {};
+  promoteState.mediaSourceByStyleV1186[style] = style === 'ember' ? 'detected' : 'artwork';
   document.getElementById('promotePreview').innerHTML = '<div class="promote-loading">Updating flyer…</div>';
-  renderPromoteFlyer().then(updatePromoteMediaButtons);
+  renderPromoteFlyer().then(() => {
+    updatePromoteMediaButtons();
+    updatePromoteMediaSourceV1186();
+  });
 }
 
 async function postFlyerToFeed() {
@@ -40236,6 +40377,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1185_VALIDATION={build:"v1185",classicNaturalCreatorMedia:true,wantedAgedCreatorMedia:true,chronicleNewsprintCreatorMedia:true,tearoffPhotocopyCreatorMedia:true,categoryArtworkFallback:true,clientSideOnly:true,generatedAssetVersion:"styled-creator-media-v1185",videoPreviewPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1186_VALIDATION={build:"v1186",perStyleMediaChoice:true,classicDefault:"detected",wantedDefault:"artwork",chronicleDefault:"artwork",tearoffDefault:"artwork",customUploadChoice:true,choicesRememberedPerStyle:true,generatedAssetVersion:"media-source-selector-v1186",videoPreviewPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
