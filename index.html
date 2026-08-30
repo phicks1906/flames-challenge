@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1197 · viewer-style-ownership" name="fc-build"/>
+<meta content="v1198 · immersive-viewer-controller" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Moved the active viewer and media rules into one dedicated authoritative style block without changing their order or values." name="fc-whatsnew"/>
+<meta content="Centralized immersive viewer state so bottom navigation and floating Ember stay hidden until the final open viewer closes." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -15365,6 +15365,7 @@ async function openPromote(type, item) {
   const _rewardRowV1184 = document.getElementById('promoteRewardRow');
   if (_rewardRowV1184) _rewardRowV1184.style.display = 'none';
   document.body.classList.add('fc-promote-open-v1184');
+  fcOpenImmersiveViewerV1198('promote');
   // v787 — auto-generate on open. The old opt-in button made sense before there
   // were STYLES; now it forces Generate → pick style → re-bake, and nobody can
   // tell what "Generate" does that "Post" doesn't. The flyer is the point of
@@ -15989,6 +15990,7 @@ async function postFlyerToGroup(groupId, groupName) {
 function closePromote() {
   document.getElementById('promoteModal').classList.remove('open');
   document.body.classList.remove('fc-promote-open-v1184');
+  fcCloseImmersiveViewerV1198('promote');
   if (promoteState) promoteState.renderTokenV1184 = Number(promoteState.renderTokenV1184 || 0) + 1;
   promoteState = null;
 }
@@ -16051,13 +16053,13 @@ async function openPostView(postId) {
   const sheet = document.getElementById('postSheet');
   const body = document.getElementById('postSheetBody');
   if (!sheet || !body) return;
+  fcOpenImmersiveViewerV1198('post-viewer');
 
   let p = (state.posts || []).find(x => x.id === postId);
   if (!p) {
     // Post not in the loaded feed (old or direct link) — fetch it directly
     body.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px 0;">Loading…</div>';
     sheet.classList.add('open');
-    document.body.style.overflow = 'hidden';
     const { data, error } = await db.from('posts')
       .select('*, post_type, challenge_id, group_id, author:profiles!posts_user_id_fkey(id, name, avatar)')
       .eq('id', postId)
@@ -16081,7 +16083,6 @@ async function openPostView(postId) {
     } catch(e) { console.warn('post counts fetch', e); }
   } else {
     sheet.classList.add('open');
-    document.body.style.overflow = 'hidden';
   }
 
   body.innerHTML = renderPostCard(p, { expanded: true });
@@ -16119,7 +16120,7 @@ function closePostView() {
   if (!sheet) return;
   sheet.querySelectorAll('video, audio').forEach(m => { try { m.pause(); m.currentTime = 0; } catch(_) {} });
   sheet.classList.remove('open');
-  document.body.style.overflow = '';
+  fcCloseImmersiveViewerV1198('post-viewer');
 }
 
 function copyPostLink(postId) {
@@ -19226,6 +19227,50 @@ function dismissFollowingTooltip() {
   localStorage.setItem('fc_following_tooltip_seen', '1');
 }
 
+
+/* =========================================================
+   v1198 — IMMERSIVE VIEWER CONTROLLER
+   A named token is added for each open immersive surface. App navigation,
+   floating Ember, and page scrolling are restored only when the final token
+   closes. This replaces independent open/close assumptions between viewers.
+========================================================= */
+const FC_IMMERSIVE_VIEWERS_V1198 = new Set();
+let FC_IMMERSIVE_PREV_OVERFLOW_V1198 = '';
+
+function fcSyncImmersiveViewerStateV1198() {
+  const active = FC_IMMERSIVE_VIEWERS_V1198.size > 0;
+  document.body.classList.toggle('fc-immersive-active-v1198', active);
+  document.body.dataset.fcImmersiveDepthV1198 = String(FC_IMMERSIVE_VIEWERS_V1198.size);
+
+  if (active) {
+    document.body.style.overflow = 'hidden';
+  } else {
+    document.body.style.overflow = FC_IMMERSIVE_PREV_OVERFLOW_V1198;
+    delete document.body.dataset.fcImmersiveDepthV1198;
+  }
+}
+
+function fcOpenImmersiveViewerV1198(token) {
+  const key = String(token || '').trim();
+  if (!key) return;
+  if (FC_IMMERSIVE_VIEWERS_V1198.size === 0) {
+    FC_IMMERSIVE_PREV_OVERFLOW_V1198 = document.body.style.overflow || '';
+  }
+  FC_IMMERSIVE_VIEWERS_V1198.add(key);
+  fcSyncImmersiveViewerStateV1198();
+}
+
+function fcCloseImmersiveViewerV1198(token) {
+  const key = String(token || '').trim();
+  if (key) FC_IMMERSIVE_VIEWERS_V1198.delete(key);
+  fcSyncImmersiveViewerStateV1198();
+}
+
+function fcResetImmersiveViewersV1198() {
+  FC_IMMERSIVE_VIEWERS_V1198.clear();
+  fcSyncImmersiveViewerStateV1198();
+}
+
 /* ---------- ENTRY VIEWER ---------- */
 let _evEntry = null;
 let _evChallenge = null;
@@ -19294,7 +19339,7 @@ async function openEntryViewer(entryId, chId) {
 
   document.getElementById('entryViewerSheet').classList.add('open');
   document.body.classList.add('fc-entry-viewer-open-v1194');
-  document.body.style.overflow = 'hidden';
+  fcOpenImmersiveViewerV1198('entry-viewer');
   if (state.profile && isVotingPhase(computeChallengeStatus(ch))) {
     hydrateEntryVotesV1083().then(() => {
       if (!_evChallenge || String(_evChallenge.id) !== String(chId)) return;
@@ -19639,7 +19684,7 @@ async function toggleEntryLikeFromViewer(entryId) {
 function closeEntryViewer() {
   document.getElementById('entryViewerSheet').classList.remove('open');
   document.body.classList.remove('fc-entry-viewer-open-v1194');
-  document.body.style.overflow = '';
+  fcCloseImmersiveViewerV1198('entry-viewer');
   document.getElementById('evMedia').querySelectorAll('video,audio').forEach(m => { try { m.pause(); m.currentTime = 0; m.src = ''; m.load(); } catch(_) {} });
   _evEntry = null;
   _evChallenge = null;
@@ -22373,7 +22418,7 @@ async function openChallenge(ch) {
   document.getElementById('cdHeaderTitle').textContent = ch.title;
   document.getElementById('cdEntriesGrid').innerHTML = '<div class="cd-entries-pager-empty">Loading…</div>';
   document.getElementById('challengeDetailSheet').classList.add('open');
-  document.body.style.overflow = 'hidden';
+  fcOpenImmersiveViewerV1198('challenge-detail');
   try {
     await loadChallengeDetail(ch.id);
   } catch (err) {
@@ -22390,7 +22435,7 @@ function closeChallengeDetail() {
   const cdSheet = document.getElementById('challengeDetailSheet');
   cdSheet.querySelectorAll('video, audio').forEach(m => { try { m.pause(); m.currentTime = 0; } catch(_) {} });
   cdSheet.classList.remove('open');
-  document.body.style.overflow = '';
+  fcCloseImmersiveViewerV1198('challenge-detail');
   state.currentChallenge = null;
   state.currentEntries = [];
   state.currentVotes = [];
@@ -27583,7 +27628,7 @@ async function openFeedViewer(chId, startEntryId = null) {
   if (fvDotsResetV1193) fvDotsResetV1193.style.display = '';
   empty.style.display = 'none';
   sheet.classList.add('open');
-  document.body.style.overflow = 'hidden';
+  fcOpenImmersiveViewerV1198('feed-viewer');
 
   // Load entries
   try {
@@ -28485,7 +28530,7 @@ function closeFeedViewer() {
   });
   _userAudioActive = false; // viewer closed — previews can resume
   sheet.classList.remove('open');
-  document.body.style.overflow = '';
+  fcCloseImmersiveViewerV1198('feed-viewer');
   _fvChallenge = null;
 }
 
@@ -35109,6 +35154,20 @@ button.fc-v1195-winning-media {
 #feedViewerModal #fvStandings .fc-v1024-winner-reveal {
   display:none!important;
 }
+
+/* v1198 — app chrome is suppressed by immersive depth, not by each viewer. */
+body.fc-immersive-active-v1198 #bottomNav,
+body.fc-immersive-active-v1198 #fcGlobalAskEmberV1131,
+body.fc-immersive-active-v1198 #globalEmberBtn,
+body.fc-immersive-active-v1198 .ask-ember-global {
+  visibility:hidden!important;
+  opacity:0!important;
+  pointer-events:none!important;
+}
+body.fc-immersive-active-v1198 {
+  overflow:hidden!important;
+}
+
 </style>
 <style id="fc-legacy-walkthrough-feed-continuation-v1197">
 body.theme-light #feedContainer > .fcc-challenge-wrap:not(.champ-gold),
@@ -41158,6 +41217,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1197_VALIDATION={build:"v1197",phase:"audit-ownership-1",viewerStyleAuthority:"fc-viewer-media-authority-v1197",visualChange:false,selectorOrderPreserved:true,declarationValuesPreserved:true,adaptiveViewerPreserved:true,winningMediaPreserved:true,compactWinnerSummaryPreserved:true,videoPreviewPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1198_VALIDATION={build:"v1198",phase:"audit-modal-controller",centralImmersiveController:true,depthAware:true,feedViewerRegistered:true,entryViewerRegistered:true,postViewerRegistered:true,challengeDetailRegistered:true,promoteRegistered:true,bottomNavCentralized:true,floatingEmberCentralized:true,viewerStyleAuthorityPreserved:true,videoPreviewPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
