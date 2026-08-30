@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1199 · adaptive-viewer-positioning" name="fc-build"/>
+<meta content="v1200 · unified-deliberate-video" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Compact challenge viewers now center vertically, while tall viewers still behave like bottom sheets and remain capped at 90% of the screen." name="fc-whatsnew"/>
+<meta content="User-started videos now share one playback initializer for controls, sound, metadata, HLS, decoder cleanup, and playback-state handling." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -19421,6 +19421,62 @@ function fcRepairVideoMetadataV1194(video) {
   video.addEventListener('durationchange', normalize, { once: true });
 }
 
+function fcPauseCompetingMediaV1200(except = null) {
+  document.querySelectorAll('video,audio').forEach(media => {
+    if (media === except) return;
+    try { media.pause(); } catch (_) {}
+  });
+  if (_activePreview) {
+    try { _stopPreview(_activePreview); } catch (_) {}
+    _activePreview = null;
+  }
+}
+
+function fcInitDeliberateVideoV1200(video, options = {}) {
+  if (!video) return null;
+
+  const autoplay = options.autoplay === true;
+  const userStarted = options.userStarted !== false;
+  const className = options.className || '';
+  const onEnded = typeof options.onEnded === 'function' ? options.onEnded : null;
+  const onError = typeof options.onError === 'function' ? options.onError : null;
+
+  fcPauseCompetingMediaV1200(video);
+
+  video.controls = true;
+  video.playsInline = true;
+  video.preload = options.preload || 'metadata';
+  video.autoplay = autoplay;
+  video.muted = false;
+  video.volume = 1;
+  if (className) video.className = className;
+  video.dataset.fcDeliberateVideoV1200 = '1';
+
+  if (userStarted) _userAudioActive = true;
+
+  fcRepairVideoMetadataV1194(video);
+  attachHlsIfNeeded(video);
+
+  const release = () => {
+    if (video.ended || video.currentTime === 0 || video.paused) {
+      _userAudioActive = false;
+    }
+  };
+
+  video.addEventListener('loadedmetadata', () => fcRepairVideoMetadataV1194(video), { once:true });
+  video.addEventListener('durationchange', () => fcRepairVideoMetadataV1194(video), { once:true });
+  video.addEventListener('ended', () => {
+    _userAudioActive = false;
+    if (onEnded) onEnded(video);
+  }, { once:true });
+  video.addEventListener('pause', release);
+  if (onError) video.addEventListener('error', () => onError(video), { once:true });
+
+  return video;
+}
+
+
+
 function _renderEvEntry() {
   const entry = _evEntry;
   const ch = _evChallenge;
@@ -19483,8 +19539,12 @@ function _renderEvEntry() {
       onloadedmetadata="fcRepairVideoMetadataV1194(this)">
     </video>`;
     const evVideoV1194 = mediaContent.querySelector('video');
-    attachHlsIfNeeded(evVideoV1194);
-    fcRepairVideoMetadataV1194(evVideoV1194);
+    fcInitDeliberateVideoV1200(evVideoV1194, {
+      autoplay:false,
+      userStarted:false,
+      preload:'metadata',
+      className:'fc-ev-media-v1079 fc-ev-video-v1194'
+    });
     _validateVideoPosters(mediaContent);
   } else if (entryMediaType === 'audio' && entry.media_url) {
     mediaContent.classList.add('fc-ev-simple-v1079', 'fc-ev-audio-v1123');
@@ -27819,21 +27879,16 @@ async function openFeedViewer(chId, startEntryId = null) {
       target.dataset.fvPlaying = '1';
       const src = target.dataset.fvPlay;
       dlog('video', 'tap-play', { src: src.slice(-40) });
-      // Free up iOS decoder slots — pause every other video first
-      document.querySelectorAll('video').forEach(v => { try { v.pause(); } catch(_) {} });
-      if (_activePreview) { try { _stopPreview(_activePreview); } catch(_) {} _activePreview = null; }
-      _userAudioActive = true; // block lazy previews immediately — before play() resolves
-      // PROVEN PATTERN (v388, worked for weeks): create element, set src, set props,
-      // replaceWith, then SYNCHRONOUS play() inside the gesture. No load(), no async
-      // DOM work between tap and play() — iOS drops audio / blocks autoplay otherwise.
+      // Build the element synchronously inside the member gesture, then apply
+      // the shared deliberate-play contract. Stage fitting and retry behavior
+      // remain specific to this horizontal viewer.
       const newVid = document.createElement('video');
       newVid.src = src;
-      newVid.controls = true;
-      newVid.autoplay = true;
-      newVid.playsInline = true;
-      newVid.muted = false;   // explicit: this is a user-gesture play, sound allowed
-      newVid.volume = 1;
-      newVid.preload = 'auto';
+      fcInitDeliberateVideoV1200(newVid, {
+        autoplay:true,
+        userStarted:true,
+        preload:'auto'
+      });
       // v679 — 9:16 stage + blurred backdrop instead of black bars.
       // The bars were never Bunny's fault: the v678 vdim log proved the encode is
       // a clean 720x1280 PORTRAIT (ar 0.563). The bars came from THIS element —
@@ -27889,8 +27944,6 @@ async function openFeedViewer(chId, startEntryId = null) {
           const t = setInterval(() => { if (_fitStage() || ++n > 25) clearInterval(t); }, 200);
         });
       });
-      newVid.addEventListener('ended', () => { dlog('audio', 'ended', { t: newVid.currentTime }); _userAudioActive = false; });
-      newVid.addEventListener('pause', () => { dlog('audio', 'pause', { t: newVid.currentTime, ended: newVid.ended }); if (newVid.ended || newVid.currentTime === 0) _userAudioActive = false; });
       newVid.addEventListener('playing', () => dlog('audio', 'playing', { muted: newVid.muted, t: newVid.currentTime }));
       newVid.addEventListener('stalled', () => dlog('audio', 'stalled', { t: newVid.currentTime }));
       // If the video fails to load (still encoding on Bunny, or a transient HLS
@@ -27923,7 +27976,6 @@ async function openFeedViewer(chId, startEntryId = null) {
       fvStage.appendChild(newVid);
       target.replaceWith(fvStage);
       newVid.play().catch(() => {});      // synchronous within the gesture
-      attachHlsIfNeeded(newVid);          // no-op on iOS, non-blocking
     }, { once: false });
     } // end once-only fvPlayWired guard
 
@@ -28088,24 +28140,18 @@ function playFvWinnerVideoV1195(host, ev) {
   if (!src) return;
 
   host.dataset.playing = '1';
-  document.querySelectorAll('video').forEach(v => { try { v.pause(); } catch (_) {} });
-  if (_activePreview) {
-    try { _stopPreview(_activePreview); } catch (_) {}
-    _activePreview = null;
-  }
-  _userAudioActive = true;
 
   const video = document.createElement('video');
   video.src = src;
-  video.controls = true;
-  video.playsInline = true;
-  video.preload = 'metadata';
-  video.className = 'fc-v1195-winning-video';
-  video.addEventListener('loadedmetadata', () => fcRepairVideoMetadataV1194(video), { once:true });
-  video.addEventListener('ended', () => { host.dataset.playing = '0'; }, { once:true });
   host.replaceChildren(video);
-  attachHlsIfNeeded(video);
-  fcRepairVideoMetadataV1194(video);
+  fcInitDeliberateVideoV1200(video, {
+    autoplay:false,
+    userStarted:true,
+    preload:'metadata',
+    className:'fc-v1195-winning-video',
+    onEnded:() => { host.dataset.playing = '0'; },
+    onError:() => { host.dataset.playing = '0'; }
+  });
   video.play().catch(() => { host.dataset.playing = '0'; });
 }
 
@@ -35254,6 +35300,13 @@ body.fc-immersive-active-v1198 {
   }
 }
 
+
+/* v1200 — deliberate video elements share one behavioral initializer.
+   Visual dimensions remain owned by their existing surface-specific classes. */
+video[data-fc-deliberate-video-v1200="1"] {
+  -webkit-tap-highlight-color:transparent;
+}
+
 </style>
 <style id="fc-legacy-walkthrough-feed-continuation-v1197">
 body.theme-light #feedContainer > .fcc-challenge-wrap:not(.champ-gold),
@@ -41303,6 +41356,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1199_VALIDATION={build:"v1199",phase:"audit-shell-positioning",compactViewerCentered:true,tallViewerBottomAligned:true,compactThreshold:0.82,viewerMaxHeight:"90vh",safeAreasPreserved:true,orientationResponsive:true,immersiveControllerPreserved:true,winningMediaPreserved:true,videoPreviewPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1200_VALIDATION={build:"v1200",phase:"audit-video-unification",sharedDeliberateVideoInitializer:true,feedChallengePlaybackUnified:true,fullEntryPlaybackUnified:true,winningVideoPlaybackUnified:true,mutedThreeSecondPreviewSeparate:true,metadataRepairShared:true,hlsShared:true,decoderCleanupShared:true,playbackStateShared:true,adaptivePositioningPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
