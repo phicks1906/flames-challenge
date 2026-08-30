@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1186 · flyer-media-source-selector" name="fc-build"/>
+<meta content="v1187 · promote-toolbar-controls" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Added per-style media-source choices: Classic defaults to creator media, while Wanted, Chronicle, and Tear-off default to original artwork." name="fc-whatsnew"/>
+<meta content="Repaired the Promote upload icon, corrected Center spelling, and made Center visibly reset and rerender media positioning." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -5835,6 +5835,22 @@ body.theme-light .champ-ticker {
 .pm-tool {
   display: flex; align-items: center; gap: 6px;
   padding: 8px 12px; border-radius: 999px;
+}
+.pm-tool-icon-v1187 {
+  width:18px;height:18px;display:inline-grid;place-items:center;flex:0 0 18px;
+}
+.pm-tool-icon-v1187 svg {
+  width:18px;height:18px;display:block;fill:none;stroke:currentColor;
+  stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;
+}
+.pm-tool-label-v1187 { display:inline-block; }
+.pm-center-icon-v1187 {
+  display:inline-grid;place-items:center;width:18px;height:18px;
+  font-size:17px;line-height:1;
+}
+.pm-tool {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 12px; border-radius: 999px;
   border: 1px solid var(--border); background: var(--bg-2);
   color: var(--text); font-family: inherit; font-size: 13px; font-weight: 600;
   cursor: pointer;
@@ -9587,11 +9603,13 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
          sat below everything with no way to adjust what it inserted. -->
 <div class="pm-tools" id="promoteTools">
 <button class="pm-tool" id="pmReplace" onclick="document.getElementById('promoteFileInput').click()">
-<span>🖼</span>Photo</button>
+<span class="pm-tool-icon-v1187" aria-hidden="true">
+<svg viewBox="0 0 24 24" focusable="false"><path d="M4 5.5h16v13H4zM7.2 15.5l3.2-3.7 2.5 2.7 1.7-1.9 2.2 2.9M8 9h.01"/></svg>
+</span><span class="pm-tool-label-v1187">Upload image</span></button>
 <button class="pm-tool" id="pmRemove" onclick="clearPromoteHero()" style="display:none">
 <span>🚫</span>Remove</button>
 <button class="pm-tool" id="pmReset" onclick="resetHeroFocus()" style="display:none">
-<span>◎</span>Centre</button>
+<span class="pm-center-icon-v1187" aria-hidden="true">◎</span><span>Center</span></button>
 <div class="pm-fitseg" id="pmFitSeg" style="display:none">
 <button class="on" data-fit="fill" onclick="setHeroFit('fill')">Fill</button>
 <button data-fit="fit" onclick="setHeroFit('fit')">Fit</button>
@@ -15363,7 +15381,12 @@ function setHeroFit(f) {
 function resetHeroFocus() {
   if (!promoteState) return;
   promoteState.heroFocus = { x: 0.5, y: 0.5 };
-  renderPromoteFlyer();
+  const preview = document.getElementById('promotePreview');
+  if (preview) preview.innerHTML = '<div class="promote-loading">Centering image…</div>';
+  renderPromoteFlyer().then(() => {
+    updateHeroTools();
+    toast('Image centered');
+  });
 }
 
 function updateHeroTools() {
@@ -15376,7 +15399,11 @@ function updateHeroTools() {
   show('pmReplace', true);
   show('pmRemove', usingCustom);
   const replaceBtn = document.getElementById('pmReplace');
-  if (replaceBtn) replaceBtn.innerHTML = `<span>🖼</span>${usingCustom ? 'Replace image' : 'Upload image'}`;
+  if (replaceBtn) {
+    replaceBtn.innerHTML = `<span class="pm-tool-icon-v1187" aria-hidden="true">
+      <svg viewBox="0 0 24 24" focusable="false"><path d="M4 5.5h16v13H4zM7.2 15.5l3.2-3.7 2.5 2.7 1.7-1.9 2.2 2.9M8 9h.01"/></svg>
+    </span><span class="pm-tool-label-v1187">${usingCustom ? 'Replace image' : 'Upload image'}</span>`;
+  }
   show('pmReset', usingMedia && promoteState.heroFit !== 'fit');
   show('pmFitSeg', usingMedia);
   show('pmDragHint', usingMedia && promoteState.heroFit !== 'fit');
@@ -40377,6 +40404,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1186_VALIDATION={build:"v1186",perStyleMediaChoice:true,classicDefault:"detected",wantedDefault:"artwork",chronicleDefault:"artwork",tearoffDefault:"artwork",customUploadChoice:true,choicesRememberedPerStyle:true,generatedAssetVersion:"media-source-selector-v1186",videoPreviewPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1187_VALIDATION={build:"v1187",uploadIconSvg:true,centerSpellingUS:true,centerRerenders:true,centerResetsFocus:true,mediaSourceSelectorPreserved:true,videoPreviewPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
