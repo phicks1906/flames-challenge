@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1182 · generated-flyer-versioning" name="fc-build"/>
+<meta content="v1183 · wanted-statement-rendering" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Versioned newly generated flyers so stored poster assets can be distinguished from live-rendered UI and older flyer designs." name="fc-whatsnew"/>
+<meta content="Repaired Wanted-poster statement rendering and removed the empty ruled form when no statement is entered." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -9571,9 +9571,9 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
 </div>
 </div>
 <div style="margin-top:10px">
-<input id="promoteHype" maxlength="60" oninput="document.getElementById('promoteHypeCount').textContent = (60 - this.value.length)" placeholder="Add a line to the flyer (optional)" style="width:100%;box-sizing:border-box;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg-2);color:var(--text);font-size:14px" type="text"/>
+<input id="promoteHype" maxlength="60" oninput="document.getElementById('promoteHypeCount').textContent = (60 - this.value.length)" placeholder="Personal statement for the flyer (optional)" style="width:100%;box-sizing:border-box;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg-2);color:var(--text);font-size:14px" type="text"/>
 <div style="display:flex;justify-content:space-between;margin-top:4px">
-<span style="font-size:11px;color:var(--text-muted)">Add a hook that gives people a reason to enter.</span>
+<span style="font-size:11px;color:var(--text-muted)">Shown prominently on the flyer. Leave blank for a clean poster.</span>
 <span style="font-size:11px;color:var(--text-muted)"><span id="promoteHypeCount">60</span> left</span>
 </div>
 </div>
@@ -14312,7 +14312,7 @@ function setupMentionAutocomplete(input, box) {
 /* v1182 — flyers are generated assets, not live-rendered feed UI.
    This version travels with every newly created flyer so older stored PNGs can
    be distinguished from current renderer output during audits and migrations. */
-const FC_FLYER_RENDERER_VERSION_V1182 = 'wanted-quote-v1179';
+const FC_FLYER_RENDERER_VERSION_V1182 = 'wanted-statement-v1183';
 
 let promoteState = null;
 
@@ -14554,76 +14554,96 @@ async function _drawWantedFlyer(ctx, W, H, opts) {
   // focal quote rather than a faint form-field entry.
   ink((opts.kicker || 'A CHALLENGE').toUpperCase(), 0.7010, 46, 'Rye, Georgia, serif', 0.92, 0.70);
 
-  if (opts.hype) {
-    const quote = '“' + String(opts.hype).trim() + '”';
+  {
+    const statement = String(opts.hype || '').trim();
     const boxX = W * 0.125;
-    const boxY = H * 0.7165;
+    const boxY = H * 0.714;
     const boxW = W * 0.750;
-    const boxH = H * 0.078;
+    const boxH = H * 0.082;
 
-    // A restrained parchment wash reduces interference from the ruled lines
-    // while preserving the underlying paper texture and red spray treatment.
+    // v1183 — the template's ruled form is baked into the artwork. Cover it
+    // every time so an empty optional statement does not leave an unfinished
+    // blank form, and entered text is not competing with horizontal rules.
     ctx.save();
     ctx.globalCompositeOperation = 'source-over';
-    ctx.fillStyle = 'rgba(215,185,128,.42)';
+    const wash = ctx.createLinearGradient(boxX, boxY, boxX, boxY + boxH);
+    wash.addColorStop(0, 'rgba(218,188,132,.91)');
+    wash.addColorStop(.55, 'rgba(207,174,116,.94)');
+    wash.addColorStop(1, 'rgba(193,157,102,.91)');
+    ctx.fillStyle = wash;
     _roundRect(ctx, boxX, boxY, boxW, boxH, Math.max(8, W * 0.012));
     ctx.fill();
+
+    // Reintroduce restrained paper grain so the patch belongs to the poster.
+    ctx.globalAlpha = .16;
+    ctx.fillStyle = '#4b2d14';
+    for (let i = 0; i < 110; i++) {
+      const x = boxX + Math.random() * boxW;
+      const y = boxY + Math.random() * boxH;
+      ctx.fillRect(x, y, Math.random() * 2 + .4, Math.random() * 1.2 + .25);
+    }
     ctx.restore();
 
-    ctx.save();
-    ctx.globalCompositeOperation = 'multiply';
-    ctx.globalAlpha = 0.98;
-    ctx.fillStyle = '#1d1106';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
+    if (statement) {
+      const quote = '“' + statement + '”';
+      ctx.save();
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#170c04';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
 
-    const family = '"Special Elite", Courier, monospace';
-    let fontSize = Math.round(W * 0.038);
-    const maxWidth = boxW * 0.88;
-    const words = quote.split(/\s+/);
-    let lines = [];
-    let line = '';
+      const family = '"Special Elite", Courier, monospace';
+      let fontSize = Math.round(W * 0.044);
+      const minFontSize = Math.round(W * 0.030);
+      const maxWidth = boxW * 0.88;
+      const words = quote.split(/\s+/);
+      let lines = [];
+      let line = '';
 
-    const buildLines = () => {
-      lines = [];
-      line = '';
-      ctx.font = `${fontSize}px ${family}`;
-      for (const word of words) {
-        const test = line ? line + ' ' + word : word;
-        if (ctx.measureText(test).width > maxWidth && line) {
-          lines.push(line);
-          line = word;
-        } else {
-          line = test;
+      const buildLines = () => {
+        lines = [];
+        line = '';
+        ctx.font = `700 ${fontSize}px ${family}`;
+        for (const word of words) {
+          const test = line ? line + ' ' + word : word;
+          if (ctx.measureText(test).width > maxWidth && line) {
+            lines.push(line);
+            line = word;
+          } else {
+            line = test;
+          }
         }
-      }
-      if (line) lines.push(line);
-    };
+        if (line) lines.push(line);
+      };
 
-    buildLines();
-    while (lines.length > 3 && fontSize > Math.round(W * 0.027)) {
-      fontSize -= 2;
       buildLines();
-    }
-
-    if (lines.length > 3) {
-      lines = lines.slice(0, 3);
-      let last = lines[2];
-      while (ctx.measureText(last + '…').width > maxWidth && last.length > 1) {
-        last = last.slice(0, -1);
+      while (lines.length > 3 && fontSize > minFontSize) {
+        fontSize -= 2;
+        buildLines();
       }
-      lines[2] = last.trimEnd() + '…';
+
+      if (lines.length > 3) {
+        lines = lines.slice(0, 3);
+        let last = lines[2];
+        ctx.font = `700 ${fontSize}px ${family}`;
+        while (ctx.measureText(last + '…').width > maxWidth && last.length > 1) {
+          last = last.slice(0, -1);
+        }
+        lines[2] = last.trimEnd() + '…';
+      }
+
+      ctx.font = `700 ${fontSize}px ${family}`;
+      const lineHeight = fontSize * 1.12;
+      const totalHeight = (lines.length - 1) * lineHeight;
+      const centerY = boxY + boxH / 2;
+      const startY = centerY - totalHeight / 2;
+
+      lines.forEach((text, index) => {
+        ctx.fillText(text, W / 2, startY + index * lineHeight);
+      });
+      ctx.restore();
     }
-
-    const lineHeight = fontSize * 1.16;
-    const totalHeight = (lines.length - 1) * lineHeight;
-    const centerY = boxY + boxH / 2;
-    const startY = centerY - totalHeight / 2;
-
-    lines.forEach((text, index) => {
-      ctx.fillText(text, W / 2, startY + index * lineHeight);
-    });
-    ctx.restore();
   }
 
   // reward box
@@ -40046,6 +40066,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1182_VALIDATION={build:"v1182",generatedFlyerVersioning:true,flyerRendererVersion:"wanted-quote-v1179",existingFlyersExplicitlyUnchanged:true,videoPreviewPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1183_VALIDATION={build:"v1183",wantedStatementRenderer:true,emptyStatementRulesCovered:true,statementUnlabeled:true,statementMaxLines:3,generatedAssetVersion:"wanted-statement-v1183",videoPreviewPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
