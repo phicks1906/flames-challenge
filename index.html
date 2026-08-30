@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1195 · winning-media-results" name="fc-build"/>
+<meta content="v1196 · compact-winner-summary" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Closed challenge results now lead with the winning photo, video, audio, or text entry above the winner and final standings." name="fc-whatsnew"/>
+<meta content="Replaced the oversized winner reveal card with a compact winner summary beneath the winning media." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -28121,7 +28121,12 @@ function renderFvStandings(chId, votes, entriesOverride = null) {
   const winningMediaHtmlV1195 = status === 'closed' && winnerEntryV1195
     ? renderWinningMediaV1195(winnerEntryV1195, ch)
     : '';
-  const winnerHtml = status === 'closed' && uniqueWinner ? `<div class="fc-v1024-winner-reveal"><span>Winner</span><strong>${escapeHtml(winner.name || 'Winner')}</strong><small>${uniqueWinner.v} vote${uniqueWinner.v===1?'':'s'} · chosen by the crowd</small></div>` : '';
+  const winnerPctV1196 = total ? Math.round((uniqueWinner?.v || 0) / total * 100) : 0;
+  const winnerHtml = status === 'closed' && uniqueWinner ? `<div class="fc-v1196-winner-summary">
+    <span class="fc-v1196-winner-kicker">Winner</span>
+    <strong>${escapeHtml(winner.name || 'Winner')}</strong>
+    <small>${uniqueWinner.v} vote${uniqueWinner.v===1?'':'s'} · ${winnerPctV1196}%</small>
+  </div>` : '';
 
   panel.innerHTML = `<div class="fc-v1024-final-standings">${winningMediaHtmlV1195}${winnerHtml}<div class="fc-v1024-final-title">${status === 'closed' ? 'Final results' : 'Live standings'}</div>${sorted.map(({e,v},i)=>{
     const sub=e.submitter||{}; const pct=total?Math.round(v/total*100):0; const rank=ranks[i]; const pick=e.id===myVoteEntryId;
@@ -35039,6 +35044,58 @@ button.fc-v1195-winning-media {
   font-size:13px;
 }
 
+/* v1196 — the winning media is the hero; the winner summary is only a label. */
+.fc-v1196-winner-summary {
+  display:grid;
+  grid-template-columns:auto 1fr auto;
+  align-items:center;
+  gap:10px;
+  padding:12px 14px;
+  border:1px solid rgba(255,188,72,.24);
+  border-radius:14px;
+  background:
+    linear-gradient(90deg,rgba(255,184,54,.10),rgba(255,92,31,.035));
+  min-height:0;
+}
+.fc-v1196-winner-kicker {
+  color:#ffc45a;
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+}
+.fc-v1196-winner-summary strong {
+  font-size:18px;
+  line-height:1.15;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.fc-v1196-winner-summary small {
+  color:var(--text-muted);
+  font-size:12px;
+  white-space:nowrap;
+}
+#feedViewerModal #fvStandings .fc-v1024-final-standings {
+  gap:10px;
+}
+#feedViewerModal #fvStandings .fc-v1024-final-title {
+  margin-top:2px!important;
+}
+@media(max-width:380px) {
+  .fc-v1196-winner-summary {
+    grid-template-columns:auto 1fr;
+  }
+  .fc-v1196-winner-summary small {
+    grid-column:2;
+  }
+}
+
+#feedViewerModal #fvStandings .fc-v1024-winner-reveal {
+  display:none!important;
+}
+
 body.theme-light #feedContainer > .fcc-challenge-wrap:not(.champ-gold),
 body.theme-light #feedContainer > .feed-activity-card,
 body.theme-light #feedContainer > .feed-card,
@@ -41086,6 +41143,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1195_VALIDATION={build:"v1195",winningMediaInResults:true,winningPhoto:true,winningVideo:true,winningAudio:true,winningText:true,winningMediaMaxHeight:"42dvh",resultsViewerMaxHeight:"90dvh",closedCarouselStillHidden:true,finalStandingsPreserved:true,videoMetadataRepairPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1196_VALIDATION={build:"v1196",compactWinnerSummary:true,winningMediaPreserved:true,finalStandingsPreserved:true,winnerSummaryShowsPercent:true,viewerMaxHeight:"90dvh",updateParserPreserved:true};</script>
 </body>
 </html>
