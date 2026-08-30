@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1193 · adaptive-challenge-viewer" name="fc-build"/>
+<meta content="v1194 · viewer-shell-consistency" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Added an adaptive challenge viewer: closed challenges show results directly, active challenges keep entries, and audio fills the standard feed stage." name="fc-whatsnew"/>
+<meta content="Standardized viewer shells, repaired full-video sizing, contained audio artwork, tightened carousel spacing, and prevented Ember/action overlap." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -19293,6 +19293,7 @@ async function openEntryViewer(entryId, chId) {
   };
 
   document.getElementById('entryViewerSheet').classList.add('open');
+  document.body.classList.add('fc-entry-viewer-open-v1194');
   document.body.style.overflow = 'hidden';
   if (state.profile && isVotingPhase(computeChallengeStatus(ch))) {
     hydrateEntryVotesV1083().then(() => {
@@ -19315,6 +19316,27 @@ function evNavigate(dir) {
   // Stop current media
   document.getElementById('evMedia').querySelectorAll('video,audio').forEach(m => { m.pause(); m.currentTime = 0; });
   _renderEvEntry();
+}
+
+
+function fcRepairVideoMetadataV1194(video) {
+  if (!video) return;
+  const normalize = () => {
+    const d = Number(video.duration);
+    if (Number.isFinite(d) && d > 0) return;
+    try {
+      const original = Number.isFinite(video.currentTime) ? video.currentTime : 0;
+      const restore = () => {
+        video.removeEventListener('timeupdate', restore);
+        try { video.currentTime = Math.max(0, original); } catch (_) {}
+      };
+      video.addEventListener('timeupdate', restore, { once: true });
+      video.currentTime = 1e7;
+    } catch (_) {}
+  };
+  if (video.readyState >= 1) normalize();
+  video.addEventListener('loadedmetadata', normalize, { once: true });
+  video.addEventListener('durationchange', normalize, { once: true });
 }
 
 function _renderEvEntry() {
@@ -19356,6 +19378,8 @@ function _renderEvEntry() {
   mediaContent.className = 'fc-ev-media-content-v1079';
   // Fall back to challenge media_type if entry's own is missing
   const entryMediaType = entry.media_type || _evChallenge?.media_type;
+  mediaEl.dataset.entryMediaTypeV1194 = String(entryMediaType || 'unknown').toLowerCase();
+  mediaContent.classList.add(`fc-ev-type-${String(entryMediaType || 'unknown').toLowerCase()}-v1194`);
   if (entry.moderation_status === 'rejected') {
     // v657: matches the other two entry surfaces — rejected blocks the content itself.
     mediaContent.innerHTML = `<div class="cd-entry-blocked" style="padding:40px 24px;">
@@ -19368,17 +19392,17 @@ function _renderEvEntry() {
     mediaContent.classList.add('fc-ev-stage-v1079');
     mediaContent.innerHTML = `<img class="fc-ev-backdrop-v1079" src="${photoUrl}" alt="" aria-hidden="true"><img class="fc-ev-media-v1079" src="${photoUrl}" alt="${escapeHtml(sub.name || 'Competitor')} entry">`;
   } else if (entryMediaType === 'video' && entry.media_url) {
-    // Free decoder slots — pause all other videos before autoplay with sound
     document.querySelectorAll('video').forEach(v => { try { v.pause(); } catch(_) {} });
-    // iOS Safari plays HLS (.m3u8) natively via the src attribute — no extra handling needed
-    const posterUrl = entry.poster_url ? escapeHtml(entry.poster_url) : '';
-    mediaContent.classList.add('fc-ev-stage-v1079');
-    mediaContent.innerHTML = `${posterUrl ? `<img class="fc-ev-backdrop-v1079" src="${posterUrl}" alt="" aria-hidden="true">` : ''}<video class="fc-ev-media-v1079"
+    mediaContent.classList.add('fc-ev-stage-v1079', 'fc-ev-video-stage-v1194');
+    mediaContent.innerHTML = `<video class="fc-ev-media-v1079 fc-ev-video-v1194"
       src="${escapeHtml(entry.media_url)}"
       ${_videoPosterAttr(entry.media_url, entry.poster_url)}
-      controls autoplay playsinline preload="auto">
+      controls playsinline preload="metadata"
+      onloadedmetadata="fcRepairVideoMetadataV1194(this)">
     </video>`;
-    attachHlsIfNeeded(mediaContent.querySelector('video'));
+    const evVideoV1194 = mediaContent.querySelector('video');
+    attachHlsIfNeeded(evVideoV1194);
+    fcRepairVideoMetadataV1194(evVideoV1194);
     _validateVideoPosters(mediaContent);
   } else if (entryMediaType === 'audio' && entry.media_url) {
     mediaContent.classList.add('fc-ev-simple-v1079', 'fc-ev-audio-v1123');
@@ -19614,6 +19638,7 @@ async function toggleEntryLikeFromViewer(entryId) {
 
 function closeEntryViewer() {
   document.getElementById('entryViewerSheet').classList.remove('open');
+  document.body.classList.remove('fc-entry-viewer-open-v1194');
   document.body.style.overflow = '';
   document.getElementById('evMedia').querySelectorAll('video,audio').forEach(m => { try { m.pause(); m.currentTime = 0; m.src = ''; m.load(); } catch(_) {} });
   _evEntry = null;
@@ -34659,6 +34684,146 @@ body.fc-hw-open .bottom-nav{visibility:hidden!important;pointer-events:none!impo
   inset:0!important;
 }
 
+/* v1194 — shared viewer shell and media consistency. */
+body.fc-entry-viewer-open-v1194 #bottomNav,
+body.fc-entry-viewer-open-v1194 #fcGlobalAskEmberV1131 {
+  visibility:hidden!important;
+  pointer-events:none!important;
+}
+
+#entryViewerSheet {
+  align-items:flex-end!important;
+  background:rgba(0,0,0,.72)!important;
+}
+.entry-viewer-modal.fc-entry-viewer-v1079 {
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:90dvh!important;
+  border-radius:22px 22px 0 0!important;
+  display:flex!important;
+  flex-direction:column!important;
+  overflow:hidden!important;
+  background:var(--surface)!important;
+  animation:slideUp .3s cubic-bezier(.16,1,.3,1)!important;
+  border-top:3px solid var(--ember)!important;
+  box-shadow:0 -10px 42px rgba(255,92,31,.22)!important;
+}
+.fc-entry-viewer-v1079 .entry-viewer-header {
+  flex:0 0 auto!important;
+  min-height:76px!important;
+  padding:calc(10px + env(safe-area-inset-top,0px)) 14px 10px!important;
+}
+.fc-entry-viewer-v1079 .entry-viewer-media {
+  flex:0 1 auto!important;
+  width:100%!important;
+  min-height:0!important;
+  max-height:60dvh!important;
+  overflow:hidden!important;
+  background:#090807!important;
+}
+.fc-entry-viewer-v1079 .fc-ev-media-content-v1079 {
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:60dvh!important;
+}
+.fc-entry-viewer-v1079 .fc-ev-stage-v1079 {
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:60dvh!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  background:#090807!important;
+}
+.fc-entry-viewer-v1079 .fc-ev-video-stage-v1194 {
+  aspect-ratio:16/9!important;
+}
+.fc-entry-viewer-v1079 .fc-ev-video-v1194 {
+  width:100%!important;
+  height:100%!important;
+  max-height:60dvh!important;
+  object-fit:contain!important;
+  background:#000!important;
+  display:block!important;
+}
+.fc-entry-viewer-v1079 .fc-ev-type-photo-v1194 {
+  max-height:60dvh!important;
+}
+.fc-entry-viewer-v1079 .fc-ev-type-photo-v1194 .fc-ev-media-v1079 {
+  max-height:60dvh!important;
+  object-fit:contain!important;
+}
+.fc-entry-viewer-v1079 .fc-ev-caption-v1079,
+.fc-entry-viewer-v1079 .entry-viewer-actions {
+  flex:0 0 auto!important;
+}
+.fc-entry-viewer-v1079 .entry-viewer-actions {
+  padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))!important;
+}
+
+/* Active challenge viewer: keep metadata, counter, and dots visually attached. */
+#feedViewerModal #fvEntries .fc-v1024-fv-slide {
+  min-height:0!important;
+  height:auto!important;
+  display:flex!important;
+  flex-direction:column!important;
+}
+#feedViewerModal #fvEntries .fc-v1024-fv-slide > div:last-child {
+  flex:0 0 auto!important;
+}
+#feedViewerModal #fvCounter {
+  padding:4px 0 4px!important;
+  margin:0!important;
+}
+#feedViewerModal #fvDots {
+  margin:0!important;
+  padding:0 0 6px!important;
+}
+#feedViewerModal #fvEntries .fv-media-host,
+#feedViewerModal #fvEntries > .fc-v1024-fv-slide > img {
+  max-height:52dvh!important;
+}
+
+/* Audio feed cards retain the 4:5 shell without stretching the artwork. */
+#feedContainer .fc-entry-rail-v1079 .fc-audio-mode-card-v1123,
+#challengesGrid .fc-entry-rail-v1079 .fc-audio-mode-card-v1123 {
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  background:
+    radial-gradient(circle at 50% 38%,rgba(255,92,31,.18),transparent 34%),
+    linear-gradient(180deg,#0c0705 0%,#050302 100%)!important;
+}
+#feedContainer .fc-entry-rail-v1079 .fc-audio-mode-card-v1123 .fc-audio-scene-v1171,
+#feedContainer .fc-entry-rail-v1079 .fc-audio-mode-card-v1123 .fc-audio-waveform-v1171,
+#challengesGrid .fc-entry-rail-v1079 .fc-audio-mode-card-v1123 .fc-audio-scene-v1171,
+#challengesGrid .fc-entry-rail-v1079 .fc-audio-mode-card-v1123 .fc-audio-waveform-v1171 {
+  position:relative!important;
+  inset:auto!important;
+  width:100%!important;
+  height:auto!important;
+  aspect-ratio:615/310!important;
+  flex:0 0 auto!important;
+}
+#feedContainer .fc-entry-rail-v1079 .fc-audio-mode-card-v1123 .fc-audio-record-v1160,
+#challengesGrid .fc-entry-rail-v1079 .fc-audio-mode-card-v1123 .fc-audio-record-v1160 {
+  position:relative!important;
+  inset:auto!important;
+  width:100%!important;
+  height:auto!important;
+  aspect-ratio:1/1!important;
+  max-height:100%!important;
+}
+
+/* Keep the global launcher clear of primary feed actions. */
+#fcGlobalAskEmberV1131 {
+  bottom:calc(var(--fc-bottom-nav-bar-h) + 82px)!important;
+}
+
+
 body.theme-light #feedContainer > .fcc-challenge-wrap:not(.champ-gold),
 body.theme-light #feedContainer > .feed-activity-card,
 body.theme-light #feedContainer > .feed-card,
@@ -40706,6 +40871,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1193_VALIDATION={build:"v1193",viewerModes:["entries","voting","results"],closedCarouselHidden:true,closedCounterHidden:true,closedResultsDirect:true,viewerMaxHeight:"90vh",entryMediaMaxHeight:"60vh",audioFeedStageFilled:true,swipePreservedForActive:true,votingPreserved:true,videoPreviewPreserved:true,postExpansionPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1194_VALIDATION={build:"v1194",entryViewerMaxHeight:"90dvh",entryMediaMaxHeight:"60dvh",bottomNavHiddenInEntryViewer:true,globalEmberHiddenInEntryViewer:true,videoBackdropRemoved:true,videoMetadataRepair:true,audioArtworkContained:true,carouselSpacingTightened:true,globalEmberRaised:true,adaptiveViewerPreserved:true,videoPreviewPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
