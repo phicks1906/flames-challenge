@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1184 · promote-and-video-preview-repair" name="fc-build"/>
+<meta content="v1185 · styled-creator-media-flyers" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Repaired challenge video snippets, Promote media selection, flyer style races, and Promote-sheet safe-area behavior." name="fc-whatsnew"/>
+<meta content="Classic now uses creator media naturally, while Wanted, Chronicle, and Tear-off transform creator media to match each poster style." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -14336,7 +14336,7 @@ function setupMentionAutocomplete(input, box) {
 /* v1182 — flyers are generated assets, not live-rendered feed UI.
    This version travels with every newly created flyer so older stored PNGs can
    be distinguished from current renderer output during audits and migrations. */
-const FC_FLYER_RENDERER_VERSION_V1182 = 'wanted-statement-v1183';
+const FC_FLYER_RENDERER_VERSION_V1182 = 'styled-creator-media-v1185';
 
 let promoteState = null;
 
@@ -14561,14 +14561,11 @@ async function _drawWantedFlyer(ctx, W, H, opts) {
     // x 0.272→0.754, y 0.2510→0.5480 (measured). Inset slightly so the photo
     // never overlaps the ornamental border.
     const bx = 0.278, by = 0.2560, bw = 0.470, bh = 0.2870;
-    _paintHero(ctx, opts.heroImage, bx * W, by * H, bw * W, bh * H, opts.heroFit, opts.heroFocus);
-    ctx.save();
-    ctx.beginPath(); ctx.rect(bx * W, by * H, bw * W, bh * H); ctx.clip();
-    ctx.globalCompositeOperation = 'saturation';
-    ctx.fillStyle = '#808080'; ctx.fillRect(bx * W, by * H, bw * W, bh * H);
-    ctx.globalCompositeOperation = 'multiply';
-    ctx.fillStyle = 'rgba(122,90,48,0.72)'; ctx.fillRect(bx * W, by * H, bw * W, bh * H);
-    ctx.restore();
+    _paintStyledHeroV1185(
+      ctx, opts.heroImage,
+      bx * W, by * H, bw * W, bh * H,
+      'wanted', opts.heroFit, opts.heroFocus
+    );
   }
 
   // name plate — vertically centred in its bracketed box
@@ -14808,6 +14805,90 @@ function _trackedText(ctx, text, cx, y, px, family, weight, trackPx) {
   ctx.textAlign = 'center';
 }
 
+
+function _paintStyledHeroV1185(ctx, img, x, y, w, h, style, fit, focus) {
+  if (!img) return;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.clip();
+
+  // Draw through the existing crop/focal-point system. Canvas filters are
+  // deterministic and execute on the user's device; no AI or server render.
+  if (style === 'wanted') {
+    ctx.filter = 'grayscale(1) sepia(.88) contrast(1.18) brightness(.88)';
+  } else if (style === 'news') {
+    ctx.filter = 'grayscale(1) contrast(1.28) brightness(.96)';
+  } else if (style === 'tearoff') {
+    ctx.filter = 'grayscale(1) contrast(1.62) brightness(1.04)';
+  } else {
+    ctx.filter = 'none';
+  }
+
+  _paintHero(ctx, img, x, y, w, h, fit, focus);
+  ctx.filter = 'none';
+
+  if (style === 'wanted') {
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.fillStyle = 'rgba(126,88,43,.58)';
+    ctx.fillRect(x, y, w, h);
+
+    const vignette = ctx.createRadialGradient(
+      x + w * .5, y + h * .43, Math.min(w, h) * .10,
+      x + w * .5, y + h * .50, Math.max(w, h) * .72
+    );
+    vignette.addColorStop(0, 'rgba(255,232,178,0)');
+    vignette.addColorStop(1, 'rgba(50,25,7,.50)');
+    ctx.fillStyle = vignette;
+    ctx.fillRect(x, y, w, h);
+  }
+
+  if (style === 'news' || style === 'tearoff') {
+    // Fine halftone/newsprint screen. It is intentionally restrained for
+    // Chronicle and stronger for Tear-off's photocopied street-poster look.
+    const step = style === 'news' ? 6 : 5;
+    const alpha = style === 'news' ? .18 : .29;
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.fillStyle = `rgba(28,22,16,${alpha})`;
+    for (let py = y + 2; py < y + h; py += step) {
+      const offset = ((Math.floor((py - y) / step) % 2) * step) / 2;
+      for (let px = x + 2 + offset; px < x + w; px += step) {
+        ctx.beginPath();
+        ctx.arc(px, py, style === 'news' ? .85 : 1.05, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    ctx.globalCompositeOperation = 'source-over';
+    const edge = ctx.createLinearGradient(x, y, x, y + h);
+    edge.addColorStop(0, 'rgba(242,231,204,.09)');
+    edge.addColorStop(.50, 'rgba(255,255,255,0)');
+    edge.addColorStop(1, 'rgba(38,31,23,.14)');
+    ctx.fillStyle = edge;
+    ctx.fillRect(x, y, w, h);
+  }
+
+  ctx.restore();
+}
+
+function _paperHeroSlotV1185(kind, W, H) {
+  if (kind === 'news') {
+    return {
+      x: W * .067,
+      y: H * .3081,
+      w: W * (.949 - .067),
+      h: H * (.6298 - .3081)
+    };
+  }
+  return {
+    x: W * .067,
+    y: H * .2518,
+    w: W * (.929 - .067),
+    h: H * (.6583 - .2518)
+  };
+}
+
 async function _drawPaperFlyer(ctx, W, H, opts, kind) {
   const cat = _flyerCatKey(opts.kicker);
   // v792.2 — versioned filenames. Same-name re-uploads collided with browser
@@ -14816,6 +14897,17 @@ async function _drawPaperFlyer(ctx, W, H, opts, kind) {
   const tpl = await _loadImg(FLYER_ASSET_BASE + `flyer-${kind}-${PAPER_TPL_VER}-${cat}.jpg`);
   if (!tpl) throw new Error(`flyer template failed: ${kind}/${cat}`);
   ctx.drawImage(tpl, 0, 0, W, H);
+
+  // v1185 — the baked category art remains the fallback. When creator media is
+  // available, reinterpret it as newspaper/photocopy print before placing it
+  // into the template's measured hero frame.
+  if (opts.heroImage) {
+    const hs = _paperHeroSlotV1185(kind, W, H);
+    _paintStyledHeroV1185(
+      ctx, opts.heroImage, hs.x, hs.y, hs.w, hs.h,
+      kind, opts.heroFit, opts.heroFocus
+    );
+  }
 
   const S = kind === 'news' ? NEWS_SLOTS : TEAR_SLOTS;
   const serif = 'Georgia, "Times New Roman", serif';
@@ -14921,7 +15013,8 @@ async function _drawClassicFlyer(ctx, W, H, opts) {
   const sans = '"DM Sans", system-ui, sans-serif';
   const head = 'Anton, Impact, sans-serif';
 
-  // hero photo, cover-cropped into the ember frame
+  // v1185 — Classic is the natural-media treatment: no sepia, halftone,
+  // photocopy, or artificial aging. Category artwork remains the fallback.
   const h = box('hero');
   if (opts.heroImage) _paintHero(ctx, opts.heroImage, h.x, h.y, h.w, h.h, opts.heroFit, opts.heroFocus);
 
@@ -15285,17 +15378,16 @@ function setFlyerStyle(style) {
     b.classList.toggle('on', b.dataset.fstyle === style));
   const rr = document.getElementById('promoteRewardRow');
   if (rr) rr.style.display = style === 'wanted' ? 'block' : 'none';
-  // v792 — Chronicle and Tear-off take no user photo and no extra line. They
-  // are announcements: headline, creator, deadline, all from the challenge.
-  // Hiding the controls is the honest thing — showing a photo button that does
-  // nothing is worse than not having one.
+  // v1185 — Chronicle and Tear-off now accept creator media after applying
+  // style-specific print treatments. Their optional statement remains hidden
+  // because those formats are editorial announcements, not quote posters.
   const paper = style === 'news' || style === 'tearoff';
   const hypeWrap = document.getElementById('promoteHype')?.closest('div');
   if (hypeWrap) hypeWrap.style.display = paper ? 'none' : '';
   const addBtn = document.getElementById('promoteAddPhotoBtn');
+  if (addBtn) addBtn.style.display = '';
   const remBtn = document.getElementById('promoteRemovePhotoBtn');
-  if (addBtn) addBtn.style.display = paper ? 'none' : '';
-  if (remBtn && paper) remBtn.style.display = 'none';
+  if (remBtn) remBtn.style.display = promoteState.heroUserUrl ? 'inline-block' : 'none';
   updatePromoteMediaButtons();
   if (promoteState.flyerGenerated) {
     const preview = document.getElementById('promotePreview');
@@ -15340,9 +15432,10 @@ async function renderPromoteFlyer() {
   // detected challenge photo no longer overrides it. Only an explicit upload
   // does. Same rule Wanted has always used. Chronicle and Tear-off take no
   // photo at all — their art is part of the paper.
-  const heroSrc = (_style === 'news' || _style === 'tearoff')
-    ? null
-    : (stateRefV1184.heroUserUrl || stateRefV1184.heroAutoUrl);
+  // v1185 — all four styles use creator media when available. Classic keeps
+  // it natural; Wanted, Chronicle, and Tear-off transform it client-side.
+  // If loading fails, each template's category artwork remains the fallback.
+  const heroSrc = stateRefV1184.heroUserUrl || stateRefV1184.heroAutoUrl;
   // v800 — hand the painter the user's fit mode and focal point.
   opts.heroFit = stateRefV1184.heroFit || 'fill';
   opts.heroFocus = stateRefV1184.heroFocus || { x: 0.5, y: 0.5 };
@@ -15387,12 +15480,8 @@ function updatePromoteMediaButtons() {
   if (!promoteState) return;
   const addBtn = document.getElementById('promoteAddPhotoBtn');
   const remBtn = document.getElementById('promoteRemovePhotoBtn');
-  // v792 — paper styles: no photo controls at all.
-  if (promoteState.style === 'news' || promoteState.style === 'tearoff') {
-    if (addBtn) addBtn.style.display = 'none';
-    if (remBtn) remBtn.style.display = 'none';
-    return;
-  }
+  // v1185 — every style can accept creator media. The style renderer decides
+  // whether it remains natural or is converted to antique/newsprint treatment.
   if (addBtn) addBtn.style.display = '';
   updateHeroTools();   // v800 — toolbar mirrors the same state
   // v789 — Wanted only counts an EXPLICIT upload (the auto-detected challenge
@@ -15400,13 +15489,26 @@ function updatePromoteMediaButtons() {
   // does in this style: it replaces the outlaw, not "adds a photo".
   // v794.2 — an explicit upload is the only thing that counts as "has photo"
   // now, for every style. The auto-detected one no longer replaces baked art.
-  const wanted = promoteState.style === 'wanted';
+  const style = promoteState.style || 'ember';
   const has = !!promoteState.heroUserUrl;
-  if (addBtn) addBtn.textContent = wanted
-    ? (has ? '🔁 Change mugshot' : '🤠 Use my photo instead of the outlaw')
-    : (has ? '🔁 Change photo' : '📷 Add photo');
+  const sourceIsVideo = promoteState.sourceMediaType === 'video';
+  const sourceNoun = sourceIsVideo ? 'video still' : 'creator photo';
+  const styleLabel = style === 'wanted'
+    ? 'aged wanted portrait'
+    : style === 'news'
+      ? 'Chronicle newsprint'
+      : style === 'tearoff'
+        ? 'tear-off photocopy'
+        : 'natural creator media';
+
+  if (addBtn) {
+    addBtn.textContent = has
+      ? `🔁 Replace ${sourceNoun}`
+      : `🖼 Use a different ${sourceNoun}`;
+    addBtn.title = `Current treatment: ${styleLabel}`;
+  }
   if (remBtn) {
-    remBtn.textContent = wanted ? 'Back to the outlaw' : 'Remove photo';
+    remBtn.textContent = 'Use detected creator media';
     remBtn.style.display = has ? 'inline-block' : 'none';
   }
 }
@@ -40134,6 +40236,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1184_VALIDATION={build:"v1184",challengeVideoSnippet:true,promoteVideoPosterFallback:true,promoteStyleToken:true,wantedCannotBeOverwrittenByClassic:true,promoteBottomNavHidden:true,promoteSafeArea:true,videoPreviewCapSeconds:3,updateParserPreserved:true};</script>
+<script>window.FC_V1185_VALIDATION={build:"v1185",classicNaturalCreatorMedia:true,wantedAgedCreatorMedia:true,chronicleNewsprintCreatorMedia:true,tearoffPhotocopyCreatorMedia:true,categoryArtworkFallback:true,clientSideOnly:true,generatedAssetVersion:"styled-creator-media-v1185",videoPreviewPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
