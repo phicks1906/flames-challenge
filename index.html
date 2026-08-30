@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1194 · viewer-shell-consistency" name="fc-build"/>
+<meta content="v1195 · winning-media-results" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Standardized viewer shells, repaired full-video sizing, contained audio artwork, tightened carousel spacing, and prevented Ember/action overlap." name="fc-whatsnew"/>
+<meta content="Closed challenge results now lead with the winning photo, video, audio, or text entry above the winner and final standings." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -27982,6 +27982,104 @@ async function openFeedViewer(chId, startEntryId = null) {
 }
 
 
+
+function fcWinnerMediaTypeV1195(entry, ch) {
+  let type = String(entry?.media_type || ch?.media_type || '').toLowerCase();
+  if (!type && entry?.media_url) {
+    const u = String(entry.media_url).toLowerCase();
+    if (/\.(jpg|jpeg|png|gif|webp|heic)(?:$|\?)/.test(u)) type = 'photo';
+    else if (/\.(mp4|mov|m4v|avi|webm|mkv)(?:$|\?)/.test(u) || u.includes('.m3u8')) type = 'video';
+    else if (/\.(mp3|m4a|wav|aac|ogg|flac)(?:$|\?)/.test(u)) type = 'audio';
+  }
+  return type || 'unknown';
+}
+
+function playFvWinnerVideoV1195(host, ev) {
+  if (ev) {
+    ev.preventDefault();
+    ev.stopPropagation();
+  }
+  if (!host || host.dataset.playing === '1') return;
+  const src = host.dataset.winnerVideo;
+  if (!src) return;
+
+  host.dataset.playing = '1';
+  document.querySelectorAll('video').forEach(v => { try { v.pause(); } catch (_) {} });
+  if (_activePreview) {
+    try { _stopPreview(_activePreview); } catch (_) {}
+    _activePreview = null;
+  }
+  _userAudioActive = true;
+
+  const video = document.createElement('video');
+  video.src = src;
+  video.controls = true;
+  video.playsInline = true;
+  video.preload = 'metadata';
+  video.className = 'fc-v1195-winning-video';
+  video.addEventListener('loadedmetadata', () => fcRepairVideoMetadataV1194(video), { once:true });
+  video.addEventListener('ended', () => { host.dataset.playing = '0'; }, { once:true });
+  host.replaceChildren(video);
+  attachHlsIfNeeded(video);
+  fcRepairVideoMetadataV1194(video);
+  video.play().catch(() => { host.dataset.playing = '0'; });
+}
+
+function renderWinningMediaV1195(entry, ch) {
+  if (!entry) return '';
+  const type = fcWinnerMediaTypeV1195(entry, ch);
+  const label = escapeHtml(entry.submitter?.name || 'Winner');
+
+  if (entry.moderation_status === 'rejected') {
+    return `<div class="fc-v1195-winning-media fc-v1195-winning-fallback">
+      <strong>Winning entry unavailable</strong>
+      <span>This media is no longer visible.</span>
+    </div>`;
+  }
+
+  if (type === 'photo' && entry.media_url) {
+    return `<button type="button" class="fc-v1195-winning-media fc-v1195-winning-photo"
+      onclick="openEntryViewer('${escapeHtml(entry.id)}','${escapeHtml(ch.id)}')"
+      aria-label="Open ${label}'s winning photo full size">
+      <img src="${escapeHtml(entry.media_url)}" alt="${label}'s winning entry" loading="lazy">
+    </button>`;
+  }
+
+  if (type === 'video' && entry.media_url) {
+    const poster = entry.poster_url || '';
+    const posterHtml = poster
+      ? `<img src="${escapeHtml(poster)}" alt="${label}'s winning video" loading="lazy">`
+      : `<div class="fc-v1195-winning-video-fallback">Winning video</div>`;
+    return `<div class="fc-v1195-winning-media fc-v1195-winning-video-host"
+      data-winner-video="${escapeHtml(entry.media_url)}"
+      onclick="playFvWinnerVideoV1195(this,event)"
+      role="button" tabindex="0" aria-label="Play ${label}'s winning video">
+      ${posterHtml}
+      <span class="fc-v1195-winning-play" aria-hidden="true">▶</span>
+    </div>`;
+  }
+
+  if (type === 'audio' && entry.media_url) {
+    return `<div class="fc-v1195-winning-media fc-v1195-winning-audio">
+      ${_audioTileHtml(entry, { mode: 'winner-results', controls: true })}
+    </div>`;
+  }
+
+  if (type === 'text' && entry.caption) {
+    return `<button type="button" class="fc-v1195-winning-media fc-v1195-winning-text"
+      onclick="openEntryViewer('${escapeHtml(entry.id)}','${escapeHtml(ch.id)}')"
+      aria-label="Open ${label}'s winning text entry">
+      ${escapeHtml(entry.caption)}
+    </button>`;
+  }
+
+  return `<button type="button" class="fc-v1195-winning-media fc-v1195-winning-fallback"
+    onclick="openEntryViewer('${escapeHtml(entry.id)}','${escapeHtml(ch.id)}')">
+    <strong>View winning entry</strong>
+    <span>The media preview is unavailable.</span>
+  </button>`;
+}
+
 function renderFvStandings(chId, votes, entriesOverride = null) {
   const panel = document.getElementById('fvStandings');
   if (!panel) return;
@@ -28018,15 +28116,25 @@ function renderFvStandings(chId, votes, entriesOverride = null) {
   const ranks = [];
   sorted.forEach((s,i) => { ranks[i] = i === 0 ? 1 : (s.v === sorted[i-1].v ? ranks[i-1] : i+1); });
   const uniqueWinner = sorted.length && (sorted.length === 1 || sorted[0].v > sorted[1].v) ? sorted[0] : null;
-  const winner = uniqueWinner?.e?.submitter || {};
+  const winnerEntryV1195 = uniqueWinner?.e || null;
+  const winner = winnerEntryV1195?.submitter || {};
+  const winningMediaHtmlV1195 = status === 'closed' && winnerEntryV1195
+    ? renderWinningMediaV1195(winnerEntryV1195, ch)
+    : '';
   const winnerHtml = status === 'closed' && uniqueWinner ? `<div class="fc-v1024-winner-reveal"><span>Winner</span><strong>${escapeHtml(winner.name || 'Winner')}</strong><small>${uniqueWinner.v} vote${uniqueWinner.v===1?'':'s'} · chosen by the crowd</small></div>` : '';
 
-  panel.innerHTML = `<div class="fc-v1024-final-standings">${winnerHtml}<div class="fc-v1024-final-title">${status === 'closed' ? 'Final results' : 'Live standings'}</div>${sorted.map(({e,v},i)=>{
+  panel.innerHTML = `<div class="fc-v1024-final-standings">${winningMediaHtmlV1195}${winnerHtml}<div class="fc-v1024-final-title">${status === 'closed' ? 'Final results' : 'Live standings'}</div>${sorted.map(({e,v},i)=>{
     const sub=e.submitter||{}; const pct=total?Math.round(v/total*100):0; const rank=ranks[i]; const pick=e.id===myVoteEntryId;
     const icon=v===0?'#'+(i+1):(rank<=3?medals[rank-1]:rank);
     return `<div class="fc-v1024-final-row${rank===1&&v>0?' leader':''}"><span class="rank">${icon}</span><span class="avatar">${avatarInner(sub.avatar)}</span><span class="name">${escapeHtml(sub.name||'Unknown')}${pick?' <small>· your vote</small>':''}</span><span class="votes">${v} · ${pct}%</span></div>`;
   }).join('')}<div class="fc-v1024-final-total">${total} ballot${total===1?'':'s'} cast</div></div>`;
   panel.style.display = 'block';
+  panel.querySelectorAll('.fc-v1195-winning-video-host').forEach(host => {
+    host.addEventListener('keydown', ev => {
+      if (ev.key === 'Enter' || ev.key === ' ') playFvWinnerVideoV1195(host, ev);
+    });
+  });
+  _checkFreshVideoEncoding(panel);
 }
 
 function renderFvChallengersPanel(ch) {
@@ -34824,6 +34932,113 @@ body.fc-entry-viewer-open-v1194 #fcGlobalAskEmberV1131 {
 }
 
 
+/* v1195 — winning media leads closed challenge results. */
+#feedViewerModal #fvStandings .fc-v1024-final-standings {
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+}
+.fc-v1195-winning-media {
+  width:100%;
+  margin:0;
+  border:1px solid rgba(255,188,72,.30);
+  border-radius:16px;
+  overflow:hidden;
+  background:#080604;
+  color:var(--text);
+  box-sizing:border-box;
+}
+button.fc-v1195-winning-media {
+  padding:0;
+  font:inherit;
+  text-align:inherit;
+  cursor:pointer;
+}
+.fc-v1195-winning-photo {
+  display:block;
+  max-height:42dvh;
+}
+.fc-v1195-winning-photo img {
+  width:100%;
+  height:auto;
+  max-height:42dvh;
+  object-fit:contain;
+  display:block;
+  background:#050403;
+}
+.fc-v1195-winning-video-host {
+  position:relative;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  aspect-ratio:16/9;
+  max-height:42dvh;
+  cursor:pointer;
+}
+.fc-v1195-winning-video-host > img,
+.fc-v1195-winning-video {
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  display:block;
+  background:#000;
+}
+.fc-v1195-winning-play {
+  position:absolute;
+  left:50%;
+  top:50%;
+  transform:translate(-50%,-50%);
+  width:64px;
+  height:64px;
+  border-radius:50%;
+  display:grid;
+  place-items:center;
+  padding-left:4px;
+  background:rgba(0,0,0,.68);
+  border:1px solid var(--ember);
+  color:#fff;
+  font-size:25px;
+  pointer-events:none;
+}
+.fc-v1195-winning-video-fallback {
+  color:var(--text-muted);
+  font-weight:700;
+}
+.fc-v1195-winning-audio {
+  max-height:42dvh;
+}
+.fc-v1195-winning-audio .fc-audio-mode-winner-results-v1123 {
+  width:100%!important;
+  min-height:260px!important;
+  max-height:42dvh!important;
+  aspect-ratio:16/10!important;
+}
+.fc-v1195-winning-text {
+  min-height:180px;
+  max-height:36dvh;
+  overflow:auto;
+  padding:26px 22px!important;
+  font-family:var(--font-bricolage);
+  font-size:20px;
+  line-height:1.55;
+  white-space:pre-wrap;
+  background:var(--surface-2);
+}
+.fc-v1195-winning-fallback {
+  min-height:150px;
+  padding:24px!important;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  gap:6px;
+  text-align:center!important;
+}
+.fc-v1195-winning-fallback span {
+  color:var(--text-muted);
+  font-size:13px;
+}
+
 body.theme-light #feedContainer > .fcc-challenge-wrap:not(.champ-gold),
 body.theme-light #feedContainer > .feed-activity-card,
 body.theme-light #feedContainer > .feed-card,
@@ -40871,6 +41086,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1194_VALIDATION={build:"v1194",entryViewerMaxHeight:"90dvh",entryMediaMaxHeight:"60dvh",bottomNavHiddenInEntryViewer:true,globalEmberHiddenInEntryViewer:true,videoBackdropRemoved:true,videoMetadataRepair:true,audioArtworkContained:true,carouselSpacingTightened:true,globalEmberRaised:true,adaptiveViewerPreserved:true,videoPreviewPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1195_VALIDATION={build:"v1195",winningMediaInResults:true,winningPhoto:true,winningVideo:true,winningAudio:true,winningText:true,winningMediaMaxHeight:"42dvh",resultsViewerMaxHeight:"90dvh",closedCarouselStillHidden:true,finalStandingsPreserved:true,videoMetadataRepairPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
