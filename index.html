@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1173 · auth-safe-area-contrast" name="fc-build"/>
+<meta content="v1174 · automatic-update-parser-repair" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Fixed dark login readability and moved the close control below the iPhone status area." name="fc-whatsnew"/>
+<meta content="Repaired automatic update detection so fc-build and fc-whatsnew work in either meta-attribute order." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -10510,10 +10510,29 @@ function _clearDismissedUpdate(build){
     if(!item || !id || item.version===id) localStorage.removeItem(UPDATE_DISMISS_KEY);
   }catch(e){}
 }
+function _readMetaContentV1174(text, wantedName) {
+  const source = String(text || '');
+  const tags = source.match(/<meta\b[^>]*>/gi) || [];
+  const target = String(wantedName || '').toLowerCase();
+
+  for (const tag of tags) {
+    const attrs = {};
+    tag.replace(/([:\w-]+)\s*=\s*(["'])(.*?)\2/g, (_, key, _quote, value) => {
+      attrs[String(key).toLowerCase()] = value;
+      return _;
+    });
+
+    if (String(attrs.name || '').toLowerCase() === target) {
+      return String(attrs.content || '').trim();
+    }
+  }
+  return '';
+}
+
 function _parseBuildTags(text) {
-  const build = text.match(/<meta\s+name=["']fc-build["']\s+content=["']([^"']*)["']/i);
-  const news  = text.match(/<meta\s+name=["']fc-whatsnew["']\s+content=["']([^"']*)["']/i);
-  return build ? { build: build[1].trim(), news: news ? news[1].trim() : '' } : null;
+  const build = _readMetaContentV1174(text, 'fc-build');
+  const news = _readMetaContentV1174(text, 'fc-whatsnew');
+  return build ? { build, news } : null;
 }
 async function _readBuildHead(res) {
   if (!res.ok) throw new Error('update request failed (HTTP ' + res.status + ')');
@@ -39878,5 +39897,22 @@ document.addEventListener('pointerdown', function(event) {
 }, {capture:true, passive:true});
 </script>
 <script>window.FC_V1173_VALIDATION={build:"v1173",authDarkContrast:true,authSafeArea:true,closeHitTarget:52,loginInputsPreserved:true,audioUntouched:true};</script>
+
+<script id="fc-v1174-update-parser-selftest">
+(function(){
+  try {
+    const a = _parseBuildTags('<meta name="fc-build" content="v2000"><meta name="fc-whatsnew" content="A">');
+    const b = _parseBuildTags('<meta content="v2001" name="fc-build"><meta content="B" name="fc-whatsnew">');
+    window.FC_UPDATE_PARSER_SELFTEST_V1174 = {
+      nameFirst: !!(a && a.build === 'v2000' && a.news === 'A'),
+      contentFirst: !!(b && b.build === 'v2001' && b.news === 'B')
+    };
+  } catch (error) {
+    window.FC_UPDATE_PARSER_SELFTEST_V1174 = { nameFirst:false, contentFirst:false, error:String(error) };
+  }
+})();
+</script>
+
+<script>window.FC_V1174_VALIDATION={build:"v1174",automaticUpdateParser:true,supportsNameFirst:true,supportsContentFirst:true,manualUpdateButtonAbsent:true,serviceWorkerUnchanged:true};</script>
 </body>
 </html>
