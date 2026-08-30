@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1198 · immersive-viewer-controller" name="fc-build"/>
+<meta content="v1199 · adaptive-viewer-positioning" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Centralized immersive viewer state so bottom navigation and floating Ember stay hidden until the final open viewer closes." name="fc-whatsnew"/>
+<meta content="Compact challenge viewers now center vertically, while tall viewers still behave like bottom sheets and remain capped at 90% of the screen." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -19271,6 +19271,43 @@ function fcResetImmersiveViewersV1198() {
   fcSyncImmersiveViewerStateV1198();
 }
 
+function fcPositionFeedViewerV1199() {
+  const sheet = document.getElementById('feedViewerSheet');
+  const modal = document.getElementById('feedViewerModal');
+  if (!sheet || !modal || !sheet.classList.contains('open')) return;
+
+  // Compact viewers read as modal cards. Near-full-height viewers retain the
+  // familiar bottom-sheet position so tall content, safe areas, and scrolling
+  // remain predictable.
+  requestAnimationFrame(() => {
+    const viewportH = Math.max(
+      1,
+      window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight || 1
+    );
+    const modalH = modal.getBoundingClientRect().height;
+    const compact = modalH <= viewportH * 0.82;
+    sheet.classList.toggle('fc-viewer-centered-v1199', compact);
+    sheet.classList.toggle('fc-viewer-bottom-v1199', !compact);
+  });
+}
+
+window.addEventListener('resize', () => {
+  if (document.getElementById('feedViewerSheet')?.classList.contains('open')) {
+    fcPositionFeedViewerV1199();
+  }
+}, { passive:true });
+
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', () => {
+    if (document.getElementById('feedViewerSheet')?.classList.contains('open')) {
+      fcPositionFeedViewerV1199();
+    }
+  }, { passive:true });
+}
+
+
+
+
 /* ---------- ENTRY VIEWER ---------- */
 let _evEntry = null;
 let _evChallenge = null;
@@ -27629,6 +27666,7 @@ async function openFeedViewer(chId, startEntryId = null) {
   empty.style.display = 'none';
   sheet.classList.add('open');
   fcOpenImmersiveViewerV1198('feed-viewer');
+  fcPositionFeedViewerV1199();
 
   // Load entries
   try {
@@ -28024,6 +28062,7 @@ async function openFeedViewer(chId, startEntryId = null) {
     list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Couldn\'t load entries</div>';
   }
   renderFvChallengersPanel(ch);
+  fcPositionFeedViewerV1199();
 }
 
 
@@ -28530,6 +28569,7 @@ function closeFeedViewer() {
   });
   _userAudioActive = false; // viewer closed — previews can resume
   sheet.classList.remove('open');
+  sheet.classList.remove('fc-viewer-centered-v1199','fc-viewer-bottom-v1199');
   fcCloseImmersiveViewerV1198('feed-viewer');
   _fvChallenge = null;
 }
@@ -35168,6 +35208,52 @@ body.fc-immersive-active-v1198 {
   overflow:hidden!important;
 }
 
+
+/* v1199 — compact challenge viewers center; tall viewers remain bottom sheets. */
+#feedViewerSheet {
+  padding:
+    calc(env(safe-area-inset-top,0px) + 18px)
+    0
+    calc(env(safe-area-inset-bottom,0px) + 18px)!important;
+  box-sizing:border-box!important;
+  transition:none!important;
+}
+#feedViewerSheet.fc-viewer-centered-v1199 {
+  align-items:center!important;
+  justify-content:center!important;
+}
+#feedViewerSheet.fc-viewer-bottom-v1199 {
+  align-items:flex-end!important;
+  justify-content:flex-end!important;
+}
+#feedViewerSheet.fc-viewer-centered-v1199 #feedViewerModal {
+  border-radius:22px!important;
+  border:1px solid rgba(255,92,31,.42)!important;
+  border-top:3px solid var(--ember)!important;
+  width:calc(100% - 32px)!important;
+  max-width:680px!important;
+  margin:0 auto!important;
+  overflow:hidden!important;
+  box-shadow:0 18px 70px rgba(0,0,0,.54),0 0 34px rgba(255,92,31,.16)!important;
+}
+#feedViewerSheet.fc-viewer-bottom-v1199 #feedViewerModal {
+  width:100%!important;
+  max-width:none!important;
+  border-radius:22px 22px 0 0!important;
+  margin:0!important;
+}
+@media(max-height:700px) {
+  #feedViewerSheet.fc-viewer-centered-v1199 {
+    align-items:flex-end!important;
+    justify-content:flex-end!important;
+  }
+  #feedViewerSheet.fc-viewer-centered-v1199 #feedViewerModal {
+    width:100%!important;
+    max-width:none!important;
+    border-radius:22px 22px 0 0!important;
+  }
+}
+
 </style>
 <style id="fc-legacy-walkthrough-feed-continuation-v1197">
 body.theme-light #feedContainer > .fcc-challenge-wrap:not(.champ-gold),
@@ -41217,6 +41303,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1198_VALIDATION={build:"v1198",phase:"audit-modal-controller",centralImmersiveController:true,depthAware:true,feedViewerRegistered:true,entryViewerRegistered:true,postViewerRegistered:true,challengeDetailRegistered:true,promoteRegistered:true,bottomNavCentralized:true,floatingEmberCentralized:true,viewerStyleAuthorityPreserved:true,videoPreviewPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1199_VALIDATION={build:"v1199",phase:"audit-shell-positioning",compactViewerCentered:true,tallViewerBottomAligned:true,compactThreshold:0.82,viewerMaxHeight:"90vh",safeAreasPreserved:true,orientationResponsive:true,immersiveControllerPreserved:true,winningMediaPreserved:true,videoPreviewPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
