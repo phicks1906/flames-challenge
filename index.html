@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1200 · unified-deliberate-video" name="fc-build"/>
+<meta content="v1201 · consolidated-audio-layouts" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="User-started videos now share one playback initializer for controls, sound, metadata, HLS, decoder cleanup, and playback-state handling." name="fc-whatsnew"/>
+<meta content="Reduced audio presentation to three stable outer layouts—compact, viewer, and full—while preserving all four selectable visual styles." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -17322,10 +17322,17 @@ function _audioTileHtml(e, options = {}) {
   const NB = 13;
   const style = getEqStyle();
   const mode = String(options.mode || 'card').replace(/[^a-z0-9_-]/gi, '') || 'card';
+  const compactModesV1201 = new Set(['card', 'post', 'winner']);
+  const fullModesV1201 = new Set(['viewer']);
+  const audioLayoutV1201 = fullModesV1201.has(mode)
+    ? 'full'
+    : compactModesV1201.has(mode)
+      ? 'compact'
+      : 'viewer';
   const controls = options.controls === true;
   const preload = controls ? 'metadata' : 'none';
   const IMG_URL = 'https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/Assets/fire.jpeg';
-  const rootClasses = `fcc-entry-media fcc-fire-eq eq-${style} fc-audio-mode-${mode}-v1123${controls ? ' fc-audio-has-controls-v1123' : ''}`;
+  const rootClasses = `fcc-entry-media fcc-fire-eq eq-${style} fc-audio-mode-${mode}-v1123 fc-audio-layout-${audioLayoutV1201}-v1201${controls ? ' fc-audio-has-controls-v1123' : ''}`;
   const audio = `<audio src="${escapeHtml(mediaUrl)}" preload="${preload}" crossorigin="anonymous"
     onloadedmetadata="syncFccAudioControlsV1123(this.closest('.fcc-fire-eq'),this)"
     ondurationchange="syncFccAudioControlsV1123(this.closest('.fcc-fire-eq'),this)"
@@ -17390,7 +17397,7 @@ function _audioTileHtml(e, options = {}) {
     ? `onclick="openAudioPostFromTileV1189(this,event)" data-audio-expand-post="${escapeHtml(expandPostId)}"`
     : `onclick="toggleFccAudio(this,event)"`;
 
-  return `<div class="${rootClasses}" data-audio-style="${style}" ${rootAction} role="group" aria-label="Audio entry · ${escapeHtml(EQ_LABELS[style])} style">${audio}${visual}${mainButtonOutside}${controlsHtml}</div>`;
+  return `<div class="${rootClasses}" data-audio-style="${style}" data-audio-layout-v1201="${audioLayoutV1201}" ${rootAction} role="group" aria-label="Audio entry · ${escapeHtml(EQ_LABELS[style])} style">${audio}${visual}${mainButtonOutside}${controlsHtml}</div>`;
 }
 
 function formatFccAudioTimeV1123(value) {
@@ -35307,6 +35314,118 @@ video[data-fc-deliberate-video-v1200="1"] {
   -webkit-tap-highlight-color:transparent;
 }
 
+
+/* v1201 — three supported audio compositions.
+   Visual style changes artwork only; it no longer owns outer dimensions. */
+.fc-audio-layout-compact-v1201 {
+  position:relative!important;
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  aspect-ratio:4/5!important;
+  padding:0!important;
+  overflow:hidden!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  background:
+    radial-gradient(circle at 50% 38%,rgba(255,92,31,.18),transparent 34%),
+    linear-gradient(180deg,#0c0705 0%,#050302 100%)!important;
+}
+
+.fc-audio-layout-viewer-v1201 {
+  position:relative!important;
+  width:100%!important;
+  height:auto!important;
+  min-height:240px!important;
+  max-height:60dvh!important;
+  aspect-ratio:16/10!important;
+  padding:0!important;
+  overflow:hidden!important;
+  display:flex!important;
+  flex-direction:column!important;
+  justify-content:center!important;
+  background:#070403!important;
+}
+
+.fc-audio-layout-full-v1201 {
+  position:relative!important;
+  width:min(100%,520px)!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:72dvh!important;
+  aspect-ratio:4/5!important;
+  padding:0!important;
+  overflow:hidden!important;
+  display:flex!important;
+  flex-direction:column!important;
+  justify-content:center!important;
+  margin:auto!important;
+  border-radius:18px!important;
+  border:1px solid var(--border-bright)!important;
+  box-shadow:0 24px 70px rgba(0,0,0,.48)!important;
+  background:#070403!important;
+}
+
+/* Scene and Waveform keep their measured 615:310 composition inside shells. */
+.fc-audio-layout-compact-v1201 .fc-audio-scene-v1171,
+.fc-audio-layout-compact-v1201 .fc-audio-waveform-v1171 {
+  position:relative!important;
+  inset:auto!important;
+  width:100%!important;
+  height:auto!important;
+  aspect-ratio:615/310!important;
+  flex:0 0 auto!important;
+}
+.fc-audio-layout-viewer-v1201 .fc-audio-scene-v1171,
+.fc-audio-layout-viewer-v1201 .fc-audio-waveform-v1171,
+.fc-audio-layout-full-v1201 .fc-audio-scene-v1171,
+.fc-audio-layout-full-v1201 .fc-audio-waveform-v1171 {
+  position:relative!important;
+  inset:auto!important;
+  width:100%!important;
+  height:auto!important;
+  max-height:calc(100% - 48px)!important;
+  aspect-ratio:615/310!important;
+  flex:0 1 auto!important;
+}
+
+/* Vinyl remains square inside every stable shell. */
+.fc-audio-layout-compact-v1201 .fc-audio-record-v1160,
+.fc-audio-layout-viewer-v1201 .fc-audio-record-v1160,
+.fc-audio-layout-full-v1201 .fc-audio-record-v1160 {
+  position:relative!important;
+  inset:auto!important;
+  width:100%!important;
+  height:auto!important;
+  aspect-ratio:1/1!important;
+  max-height:100%!important;
+  flex:0 1 auto!important;
+}
+
+/* Controls always occupy the bottom row in viewer/full compositions. */
+.fc-audio-layout-viewer-v1201.fc-audio-has-controls-v1123,
+.fc-audio-layout-full-v1201.fc-audio-has-controls-v1123 {
+  justify-content:flex-start!important;
+}
+.fc-audio-layout-viewer-v1201 .fc-audio-controls-v1123,
+.fc-audio-layout-full-v1201 .fc-audio-controls-v1123 {
+  flex:0 0 auto!important;
+  width:100%!important;
+  margin-top:auto!important;
+  box-sizing:border-box!important;
+}
+
+/* Surface-specific ceilings may only make a canonical shell smaller. */
+.fc-v1195-winning-audio .fc-audio-layout-viewer-v1201 {
+  min-height:240px!important;
+  max-height:42dvh!important;
+}
+#feedViewerModal .fc-audio-layout-viewer-v1201 {
+  max-height:60dvh!important;
+}
+
 </style>
 <style id="fc-legacy-walkthrough-feed-continuation-v1197">
 body.theme-light #feedContainer > .fcc-challenge-wrap:not(.champ-gold),
@@ -41356,6 +41475,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1200_VALIDATION={build:"v1200",phase:"audit-video-unification",sharedDeliberateVideoInitializer:true,feedChallengePlaybackUnified:true,fullEntryPlaybackUnified:true,winningVideoPlaybackUnified:true,mutedThreeSecondPreviewSeparate:true,metadataRepairShared:true,hlsShared:true,decoderCleanupShared:true,playbackStateShared:true,adaptivePositioningPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1201_VALIDATION={build:"v1201",phase:"audit-audio-consolidation",audioLayouts:["compact","viewer","full"],legacyModesMapped:true,visualStylesPreserved:["scene","waveform","vinyl","flame"],compactRatio:"4/5",viewerRatio:"16/10",fullRatio:"4/5",controlsBottomAnchored:true,videoUnificationPreserved:true,adaptivePositioningPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
