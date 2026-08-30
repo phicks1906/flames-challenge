@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1191 · full-width-challenge-hero" name="fc-build"/>
+<meta content="v1192 · challenge-viewer-balance" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Removed the nested challenge-entry frame and standardized challenge cards around one full-width 4:5 swipe hero." name="fc-whatsnew"/>
+<meta content="Removed the forced empty height from short challenge viewers and consolidated feed previews under one authoritative 4:5 stage." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -10177,13 +10177,10 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
 </div>
 <!-- FEED VIEWER SHEET -->
 <div class="modal-backdrop" id="feedViewerSheet" onclick="if(event.target===this)closeFeedViewer()" style="align-items:flex-end;background:rgba(0,0,0,0.5);">
-<!-- v804 — height:88vh (was only max-height, so the sheet shrank to fit its
-       content and sat low on the screen). A detail view wants to feel like a
-       screen, not a tray. -->
-<!-- v805 — min 62vh / max 90vh. A fixed 88vh left a big empty body on sparse
-       challenges; no floor let it collapse into a tray. Between those it sizes
-       to content. -->
-<div id="feedViewerModal" style="background:var(--surface);border-radius:var(--radius) var(--radius) 0 0;width:100%;min-height:62vh;max-height:90vh;display:flex;flex-direction:column;position:relative;animation:slideUp 0.3s cubic-bezier(0.16,1,0.3,1);border-top:3px solid var(--ember);box-shadow:0 -8px 40px rgba(255,106,44,0.18);padding-bottom:0;">
+<!-- v1192 — content-sized up to a 90vh ceiling. Short landscape entries
+       end after their real content; tall portrait/video entries scroll inside
+       the dedicated region while the action bar remains a flex sibling. -->
+<div id="feedViewerModal" style="background:var(--surface);border-radius:var(--radius) var(--radius) 0 0;width:100%;height:auto;max-height:90vh;display:flex;flex-direction:column;position:relative;animation:slideUp 0.3s cubic-bezier(0.16,1,0.3,1);border-top:3px solid var(--ember);box-shadow:0 -8px 40px rgba(255,106,44,0.18);padding-bottom:0;">
 <!-- Drag handle -->
 <div style="display:flex;justify-content:center;padding:10px 0 4px;flex-shrink:0;">
 <div style="width:36px;height:4px;border-radius:2px;background:var(--border-bright);opacity:0.6;"></div>
@@ -10208,7 +10205,7 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
          entry. Same root cause this codebase already fixed once for feed cards
          (overflow:hidden traps scroll unless the scroll region is a distinct
          box) — action bar is now a true flex sibling, always visible. -->
-<div id="fvScrollRegion" style="flex:1;min-height:0;overflow-y:auto;">
+<div id="fvScrollRegion" style="flex:0 1 auto;min-height:0;max-height:calc(90vh - 190px - env(safe-area-inset-bottom,0px));overflow-y:auto;">
 <!-- Horizontal snap-scroll entries -->
 <div style="position:relative;">
 <div id="fvEntries" style="display:flex;flex-direction:row;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scroll-snap-stop:always;-webkit-overflow-scrolling:touch;scrollbar-width:none;gap:0;"></div>
@@ -25507,13 +25504,18 @@ function fcEntryPreviewUrlV1060(e) {
   return e.media_url;
 }
 function fcFitEntryCardMediaV1079(img) {
-  // v1082 — preview cards are deliberately uniform. Natural dimensions are
-  // preserved in the full-screen viewer, while every voting preview gets the
-  // same square judging surface so the rail never changes height mid-swipe.
+  // v1192 — feed/Compete previews have one authoritative 4:5 judging stage.
+  // The source image remains uncropped over its blurred fill, and the full
+  // viewer still uses the media's meaningful natural ratio.
   const card = img?.closest?.('.fcc-entry-card');
   if (!card) return;
-  card.classList.remove('fc-entry-landscape-v1079', 'fc-entry-square-v1079', 'fc-entry-portrait-v1079');
-  card.classList.add('fc-entry-square-v1082');
+  card.classList.remove(
+    'fc-entry-landscape-v1079',
+    'fc-entry-square-v1079',
+    'fc-entry-portrait-v1079',
+    'fc-entry-square-v1082'
+  );
+  card.classList.add('fc-entry-fixed-v1192');
 }
 function fcEntryCardMediaV1060(e, ch) {
   const label = e.submitter?.name || 'Competitor';
@@ -34544,6 +34546,24 @@ body.fc-hw-open .bottom-nav{visibility:hidden!important;pointer-events:none!impo
   object-fit:cover!important;
 }
 
+/* v1192 — sparse landscape challenge viewers finish naturally instead of
+   stretching to a 62vh minimum and leaving an empty bordered panel. */
+#feedViewerModal {
+  min-height:0!important;
+}
+#feedViewerModal #fvScrollRegion {
+  flex-grow:0!important;
+  overscroll-behavior-y:contain;
+}
+#feedViewerModal #fvEntries > * {
+  align-self:flex-start;
+}
+#feedViewerModal #fvCounter:empty,
+#feedViewerModal #fvDots:empty {
+  display:none!important;
+}
+
+
 body.theme-light #feedContainer > .fcc-challenge-wrap:not(.champ-gold),
 body.theme-light #feedContainer > .feed-activity-card,
 body.theme-light #feedContainer > .feed-card,
@@ -35806,9 +35826,9 @@ html[data-theme="light"] body .fc-score-race-v1032 .fc-score-metric-v1032{box-sh
   font-variant-numeric:tabular-nums;
 }
 .fc-entry-rail-v1079 .fcc-entry-media{height:auto!important;min-height:0!important;transition:aspect-ratio .18s ease}
-.fc-entry-rail-v1079 .fc-entry-portrait-v1079 .fcc-entry-media{aspect-ratio:4/5!important}
-.fc-entry-rail-v1079 .fc-entry-square-v1079 .fcc-entry-media{aspect-ratio:1/1!important}
-.fc-entry-rail-v1079 .fc-entry-landscape-v1079 .fcc-entry-media{aspect-ratio:16/9!important}
+.fc-entry-rail-v1079 
+.fc-entry-rail-v1079 
+.fc-entry-rail-v1079 
 .fc-entry-rail-v1079 .fc-entry-text-v1079,
 .fc-entry-rail-v1079 .fc-entry-audio-v1079{aspect-ratio:1/1!important}
 .fc-entry-rail-v1079 .fcc-dots{display:none!important}
@@ -36113,10 +36133,7 @@ body.fc-insights-unavailable-v1081 .pm-tile[onclick*="openCreatorInsightsV1048"]
   will-change:auto!important;
 }
 .fc-entry-rail-v1079 .fcc-entry-media,
-.fc-entry-rail-v1079 .fc-entry-portrait-v1079 .fcc-entry-media,
-.fc-entry-rail-v1079 .fc-entry-square-v1079 .fcc-entry-media,
-.fc-entry-rail-v1079 .fc-entry-landscape-v1079 .fcc-entry-media,
-.fc-entry-rail-v1079 .fc-entry-square-v1082 .fcc-entry-media,
+.fc-entry-rail-v1079 .fc-entry-fixed-v1192 .fcc-entry-media,
 .fc-entry-rail-v1079 .fc-entry-video-v1079,
 .fc-entry-rail-v1079 .fc-entry-text-v1079,
 .fc-entry-rail-v1079 .fc-entry-audio-v1079{
@@ -40594,6 +40611,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1191_VALIDATION={build:"v1191",phase:5,challengeHero:"4:5",challengeHeroFullWidth:true,nestedEntryFrameRemoved:true,swipeCarouselPreserved:true,dotPagerPreserved:true,entryTapPreserved:true,directVotePreserved:true,postExpansionPreserved:true,videoPreviewPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1192_VALIDATION={build:"v1192",feedPreviewStage:"4:5",obsoleteAdaptiveFeedClassesRetired:true,detailNaturalRatiosPreserved:true,viewerMinHeightRemoved:true,viewerMaxHeight:"90vh",viewerActionBarPreserved:true,swipeCarouselPreserved:true,videoPreviewPreserved:true,postExpansionPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
