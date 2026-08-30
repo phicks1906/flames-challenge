@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1178 · integrity-enforcement-copy" name="fc-build"/>
+<meta content="v1180 · full-frame-video-posts" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Clarified anti-manipulation enforcement, penalties, and the distinction between integrity controls and write validation." name="fc-whatsnew"/>
+<meta content="Standardized feed video posts to a full-width 4:5 preview frame while preserving the uncropped post viewer." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -9340,6 +9340,25 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
   object-fit: contain;
   display: block;
 }
+
+/* v1180 — feed video posts use the same deliberate full-width content frame
+   as the rest of the feed instead of shrinking to the video's initial
+   intrinsic height. This is scoped to #feedContainer so the existing post
+   sheet continues to show the complete, uncropped video. */
+#feedContainer .post-card-media-video-v1180 {
+  width: 100%;
+  max-height: none;
+  aspect-ratio: 4 / 5;
+  background: #000;
+  overflow: hidden;
+}
+#feedContainer .post-card-media-video-v1180 > video {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  object-fit: cover;
+  display: block;
+}
 /* ═══════════════════ end v729 (was v683 / v694) ═══════════════════ */
 
 .dm-compose-input { width:100%; box-sizing:border-box; margin-bottom:14px; border-radius:12px; border:1px solid var(--border); background:var(--overlay-2); color:var(--text); padding:12px 16px; font-size:16px; outline:none; }
@@ -14513,10 +14532,83 @@ async function _drawWantedFlyer(ctx, W, H, opts) {
 
   // name plate — vertically centred in its bracketed box
   ink((opts.creatorName || 'A CHALLENGER').toUpperCase(), 0.6240, 58, 'Rye, Georgia, serif', 0.94, 0.50);
-  // ruled box — category on the first rule, optional hype line on the second
+  // ruled box — category first, then the competitor's own words.
+  // v1179: the statement remains intentionally unlabeled. It is drawn as a
+  // focal quote rather than a faint form-field entry.
   ink((opts.kicker || 'A CHALLENGE').toUpperCase(), 0.7010, 46, 'Rye, Georgia, serif', 0.92, 0.70);
-  ink(opts.hype ? '"' + opts.hype + '"' : '', 0.7530, 28,
-      '"Special Elite", Courier, monospace', 0.86, 0.72);
+
+  if (opts.hype) {
+    const quote = '“' + String(opts.hype).trim() + '”';
+    const boxX = W * 0.125;
+    const boxY = H * 0.7165;
+    const boxW = W * 0.750;
+    const boxH = H * 0.078;
+
+    // A restrained parchment wash reduces interference from the ruled lines
+    // while preserving the underlying paper texture and red spray treatment.
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = 'rgba(215,185,128,.42)';
+    _roundRect(ctx, boxX, boxY, boxW, boxH, Math.max(8, W * 0.012));
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalAlpha = 0.98;
+    ctx.fillStyle = '#1d1106';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    const family = '"Special Elite", Courier, monospace';
+    let fontSize = Math.round(W * 0.038);
+    const maxWidth = boxW * 0.88;
+    const words = quote.split(/\s+/);
+    let lines = [];
+    let line = '';
+
+    const buildLines = () => {
+      lines = [];
+      line = '';
+      ctx.font = `${fontSize}px ${family}`;
+      for (const word of words) {
+        const test = line ? line + ' ' + word : word;
+        if (ctx.measureText(test).width > maxWidth && line) {
+          lines.push(line);
+          line = word;
+        } else {
+          line = test;
+        }
+      }
+      if (line) lines.push(line);
+    };
+
+    buildLines();
+    while (lines.length > 3 && fontSize > Math.round(W * 0.027)) {
+      fontSize -= 2;
+      buildLines();
+    }
+
+    if (lines.length > 3) {
+      lines = lines.slice(0, 3);
+      let last = lines[2];
+      while (ctx.measureText(last + '…').width > maxWidth && last.length > 1) {
+        last = last.slice(0, -1);
+      }
+      lines[2] = last.trimEnd() + '…';
+    }
+
+    const lineHeight = fontSize * 1.16;
+    const totalHeight = (lines.length - 1) * lineHeight;
+    const centerY = boxY + boxH / 2;
+    const startY = centerY - totalHeight / 2;
+
+    lines.forEach((text, index) => {
+      ctx.fillText(text, W / 2, startY + index * lineHeight);
+    });
+    ctx.restore();
+  }
+
   // reward box
   ink((opts.reward || ('THE ' + (opts.kicker || 'FLAMES') + ' CROWN')).toUpperCase(), 0.8940, 56,
       'Rye, Georgia, serif', 0.94, 0.66);
@@ -24694,7 +24786,7 @@ function renderPostCard(p) {
   let mediaHtml = '';
   if (p.media_url) {
     if (p.media_type === 'video') {
-      mediaHtml = `<div class="post-card-media"><video src="${escapeHtml(p.media_url)}#t=0.1" controls playsinline preload="metadata"></video></div>`;
+      mediaHtml = `<div class="post-card-media post-card-media-video-v1180"><video src="${escapeHtml(p.media_url)}#t=0.1" controls playsinline preload="metadata"></video></div>`;
     } else if (p.media_type === 'audio') {
       // v739 — audio posts get the SAME fire EQ tile as challenge entries (all
       // four styles, analyser-driven) instead of the plain grey iOS player.
@@ -39937,6 +40029,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1178_VALIDATION={build:"v1178",antiManipulationPenaltiesVisible:true,votingBadgeSpecific:true,databaseWriteBadgePreservedElsewhere:true,updateParserPreserved:true,audioUntouched:true};</script>
+<script>window.FC_V1180_VALIDATION={build:"v1180",phase:1,feedVideoFrame:"4:5",feedVideoFullWidth:true,postViewerUncropped:true,photoPostBehaviorPreserved:true,audioFlyerChallengeCardsUntouched:true,updateParserPreserved:true};</script>
 </body>
 </html>
