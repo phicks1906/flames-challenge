@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1217 · public-championship-promotion" name="fc-build"/>
+<meta content="v1218 · complete-championship-promotion" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Any signed-in member can now promote an active public Championship, while challenge management remains restricted to authorized users." name="fc-whatsnew"/>
+<meta content="Championship promotion now includes Share, Save Flyer, Copy Link, and Close actions instead of a preview-only screen." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -15163,12 +15163,110 @@ async function previewChampFlyer(chId) {
       console.warn('champ flyer preview', j);
       return;
     }
+    const dataUrlV1218 = `data:image/png;base64,${hit.png_base64}`;
+    const byteStringV1218 = atob(hit.png_base64);
+    const bytesV1218 = new Uint8Array(byteStringV1218.length);
+    for (let i = 0; i < byteStringV1218.length; i++) bytesV1218[i] = byteStringV1218.charCodeAt(i);
+    const blobV1218 = new Blob([bytesV1218], { type:'image/png' });
+    const fileNameV1218 = `flameschallenge-championship-${String(chId).slice(0,8)}.png`;
+    const fileV1218 = new File([blobV1218], fileNameV1218, { type:'image/png' });
+    const shareUrlV1218 = typeof fcPromotionLinkV1048 === 'function'
+      ? fcPromotionLinkV1048('challenge', chId, null, 'championship_promotion')
+      : `${location.origin}${location.pathname}?challenge=${encodeURIComponent(chId)}`;
+    const titleV1218 = `${chV1217?.category || ''} Championship`.trim();
+
     const ov = document.createElement('div');
-    ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px';
-    ov.innerHTML = `<div style="color:var(--gold);font-size:12px;letter-spacing:.2em">${(hit.variant||'').toUpperCase()} · ${(hit.roster||[]).join(' vs ')}</div>
-      <img src="data:image/png;base64,${hit.png_base64}" style="max-width:100%;max-height:80vh;object-fit:contain;border-radius:8px">
-      <button style="padding:10px 22px;border:none;border-radius:999px;background:var(--ember);color:#fff;font-weight:700">Close</button>`;
-    ov.querySelector('button').onclick = () => ov.remove();
+    ov.className = 'fc-champ-promote-overlay-v1218';
+    ov.innerHTML = `
+      <div class="fc-champ-promote-card-v1218" role="dialog" aria-modal="true" aria-labelledby="fcChampPromoteTitleV1218">
+        <div class="fc-champ-promote-head-v1218">
+          <div>
+            <div class="fc-champ-promote-kicker-v1218">CHAMPIONSHIP</div>
+            <h2 id="fcChampPromoteTitleV1218">Promote Championship</h2>
+          </div>
+          <button type="button" class="fc-champ-promote-x-v1218" aria-label="Close">×</button>
+        </div>
+        <div class="fc-champ-promote-meta-v1218">${escapeHtml((hit.variant||'').toUpperCase())} · ${escapeHtml((hit.roster||[]).join(' vs '))}</div>
+        <img class="fc-champ-promote-img-v1218" src="${dataUrlV1218}" alt="${escapeHtml(titleV1218)} promotional flyer">
+        <div class="fc-champ-promote-actions-v1218">
+          <button type="button" class="fc-champ-promote-primary-v1218" data-action="share">Share</button>
+          <button type="button" data-action="save">Save Flyer</button>
+          <button type="button" data-action="copy">Copy Link</button>
+        </div>
+        <button type="button" class="fc-champ-promote-close-v1218" data-action="close">Close</button>
+      </div>`;
+
+    const closeV1218 = () => {
+      ov.remove();
+      document.body.classList.remove('fc-champ-promote-open-v1218');
+    };
+
+    ov.querySelector('.fc-champ-promote-x-v1218').onclick = closeV1218;
+    ov.querySelector('[data-action="close"]').onclick = closeV1218;
+    ov.addEventListener('click', e => { if (e.target === ov) closeV1218(); });
+
+    ov.querySelector('[data-action="share"]').onclick = async () => {
+      try {
+        if (navigator.canShare?.({ files:[fileV1218] })) {
+          await navigator.share({
+            title:titleV1218,
+            text:'Watch and share this FlamesChallenge Championship.',
+            url:shareUrlV1218,
+            files:[fileV1218],
+          });
+          return;
+        }
+        if (navigator.share) {
+          await navigator.share({
+            title:titleV1218,
+            text:'Watch and share this FlamesChallenge Championship.',
+            url:shareUrlV1218,
+          });
+          return;
+        }
+        await navigator.clipboard.writeText(shareUrlV1218);
+        toast('Championship link copied');
+      } catch (e) {
+        if (e?.name !== 'AbortError') {
+          console.error('championship share', e);
+          toast('Could not open sharing');
+        }
+      }
+    };
+
+    ov.querySelector('[data-action="save"]').onclick = async () => {
+      try {
+        if (navigator.canShare?.({ files:[fileV1218] })) {
+          await navigator.share({ files:[fileV1218], title:titleV1218 });
+          return;
+        }
+        const objectUrlV1218 = URL.createObjectURL(blobV1218);
+        const aV1218 = document.createElement('a');
+        aV1218.href = objectUrlV1218;
+        aV1218.download = fileNameV1218;
+        document.body.appendChild(aV1218);
+        aV1218.click();
+        aV1218.remove();
+        setTimeout(() => URL.revokeObjectURL(objectUrlV1218), 4000);
+      } catch (e) {
+        if (e?.name !== 'AbortError') {
+          console.error('championship save', e);
+          toast('Could not save flyer');
+        }
+      }
+    };
+
+    ov.querySelector('[data-action="copy"]').onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(shareUrlV1218);
+        toast('Championship link copied');
+      } catch (e) {
+        console.error('championship copy link', e);
+        toast('Could not copy link');
+      }
+    };
+
+    document.body.classList.add('fc-champ-promote-open-v1218');
     document.body.appendChild(ov);
   } catch (e) {
     console.error('champ flyer preview', e);
@@ -23333,7 +23431,7 @@ function renderChampionshipHero(ch, status, countdownTarget) {
     <div class="champ-arena flow">
       <div class="champ-arena-topbar">
         <span class="champ-arena-status ${status}"><span class="dot"></span>${status === 'submitting' ? 'CONTENDERS ENTERING' : isVotingPhase(status) ? 'VOTING' : status === 'closed' ? 'DECIDED' : ''}</span>
-        ${fcCanPromoteChampionshipV1217(ch) ? `<button class="cd-delete-btn fc-icon-label-v1216" onclick="previewChampFlyer('${ch.id}')">${fcPictureIconV1216('fc-picture-icon-v1216')}<span>Flyer</span></button>` : ''}
+        ${fcCanPromoteChampionshipV1217(ch) ? `<button class="cd-delete-btn fc-icon-label-v1216" onclick="previewChampFlyer('${ch.id}')">${fcPictureIconV1216('fc-picture-icon-v1216')}<span>Promote</span></button>` : ''}
         ${canDelete ? `<button class="cd-delete-btn" id="cdDeleteBtn">🗑 Delete</button>` : ''}
       </div>
       <div class="champ-arena-crown">👑</div>
@@ -36576,6 +36674,126 @@ body.fc-challenge-rules-open-v1213 #challengeRulesSheetV1212 .fc-challenge-rules
   color:currentColor;
 }
 
+
+/* v1218 — complete championship promotion flow. */
+body.fc-champ-promote-open-v1218 {
+  overflow:hidden!important;
+}
+body.fc-champ-promote-open-v1218 #bottomNav,
+body.fc-champ-promote-open-v1218 #fcGlobalAskEmberV1131,
+body.fc-champ-promote-open-v1218 #globalEmberBtn,
+body.fc-champ-promote-open-v1218 .ask-ember-global {
+  visibility:hidden!important;
+  opacity:0!important;
+  pointer-events:none!important;
+}
+.fc-champ-promote-overlay-v1218 {
+  position:fixed;
+  inset:0;
+  z-index:2147483000;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:
+    calc(env(safe-area-inset-top,0px) + 18px)
+    16px
+    calc(env(safe-area-inset-bottom,0px) + 18px);
+  background:rgba(0,0,0,.94);
+  box-sizing:border-box;
+}
+.fc-champ-promote-card-v1218 {
+  width:min(100%,560px);
+  max-height:92dvh;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  padding:16px;
+  border:1px solid rgba(255,159,52,.32);
+  border-radius:22px;
+  background:#0b0705;
+  box-shadow:0 28px 90px rgba(0,0,0,.68),0 0 40px rgba(255,116,35,.14);
+}
+.fc-champ-promote-head-v1218 {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+.fc-champ-promote-kicker-v1218 {
+  color:var(--gold);
+  font-size:9px;
+  font-weight:800;
+  letter-spacing:.18em;
+}
+.fc-champ-promote-head-v1218 h2 {
+  margin:3px 0 0;
+  color:#fff;
+  font-size:22px;
+}
+.fc-champ-promote-x-v1218 {
+  width:44px;
+  height:44px;
+  flex:0 0 44px;
+  display:grid;
+  place-items:center;
+  border-radius:50%;
+  border:1px solid rgba(255,255,255,.18);
+  background:#17110e;
+  color:#fff;
+  font-size:28px;
+}
+.fc-champ-promote-meta-v1218 {
+  color:var(--gold);
+  font-size:10px;
+  letter-spacing:.16em;
+  text-align:center;
+}
+.fc-champ-promote-img-v1218 {
+  display:block;
+  width:100%;
+  max-height:62dvh;
+  object-fit:contain;
+  border-radius:12px;
+  background:#000;
+}
+.fc-champ-promote-actions-v1218 {
+  display:grid;
+  grid-template-columns:1.25fr 1fr 1fr;
+  gap:8px;
+}
+.fc-champ-promote-actions-v1218 button,
+.fc-champ-promote-close-v1218 {
+  min-height:46px;
+  border-radius:14px;
+  border:1px solid rgba(255,106,44,.34);
+  background:#17100d;
+  color:#fff;
+  font:700 13px/1.1 var(--font-dm,system-ui);
+}
+.fc-champ-promote-actions-v1218 .fc-champ-promote-primary-v1218 {
+  border:none;
+  background:linear-gradient(135deg,var(--ember),var(--coral));
+}
+.fc-champ-promote-close-v1218 {
+  width:100%;
+  color:var(--text-dim);
+  background:transparent;
+}
+@media(max-width:430px) {
+  .fc-champ-promote-actions-v1218 {
+    grid-template-columns:1fr 1fr;
+  }
+  .fc-champ-promote-actions-v1218 .fc-champ-promote-primary-v1218 {
+    grid-column:1 / -1;
+  }
+  .fc-champ-promote-img-v1218 {
+    max-height:58dvh;
+  }
+}
+
 </style>
 <style id="fc-legacy-walkthrough-feed-continuation-v1197">
 body.theme-light #feedContainer > .fcc-challenge-wrap:not(.champ-gold),
@@ -42625,6 +42843,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1217_VALIDATION={build:"v1217",publicChampionshipPromotion:true,signedInMembersAllowed:true,privateChampionshipBlocked:true,closedChampionshipBlocked:true,managementPermissionsUnchanged:true,pictureIconPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1218_VALIDATION={build:"v1218",championshipPromoteLabel:true,championshipShare:true,championshipSave:true,championshipCopyLink:true,championshipClose:true,publicChampionshipPromotionPreserved:true,managementPermissionsUnchanged:true,updateParserPreserved:true};</script>
 </body>
 </html>
