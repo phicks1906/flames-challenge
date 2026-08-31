@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1208 · championship-nav-touch-layer" name="fc-build"/>
+<meta content="v1209 · document-level-championship-nav" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Challenge detail now installs its own fixed navigation touch layer, so Home works directly without pressing X first." name="fc-whatsnew"/>
+<meta content="Championship navigation now intercepts taps at the document level, bypassing the challenge sheet stacking layer that kept swallowing Home presses." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -12473,6 +12473,89 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', fcWirePrimaryNavFromChallengeV1207, { once:true });
 } else {
   fcWirePrimaryNavFromChallengeV1207();
+}
+
+
+let fcChampNavPointerStartV1209 = null;
+
+function fcChallengeNavTargetFromPointV1209(clientX, clientY) {
+  const nav = document.getElementById('bottomNav');
+  if (!nav) return null;
+
+  const rect = nav.getBoundingClientRect();
+  const withinX = clientX >= rect.left && clientX <= rect.right;
+  const withinY = clientY >= rect.top && clientY <= rect.bottom;
+  if (!withinX || !withinY || rect.width <= 0) return null;
+
+  const ratio = Math.min(.9999, Math.max(0, (clientX - rect.left) / rect.width));
+  if (ratio < .20) return 'feed';
+  if (ratio < .40) return 'challenges';
+  if (ratio < .60) return 'create';
+  if (ratio < .80) return 'leaderboard';
+  return 'you';
+}
+
+function fcRunChallengeNavTargetV1209(target) {
+  if (!target) return;
+
+  if (target === 'feed') {
+    homeNavActionV1206();
+    return;
+  }
+
+  if (typeof closeChallengeDetail === 'function') closeChallengeDetail();
+
+  if (target === 'create') {
+    if (typeof openCreateSheet === 'function') openCreateSheet();
+    return;
+  }
+
+  if (typeof switchView === 'function') switchView(target);
+}
+
+function fcWireDocumentChallengeNavV1209() {
+  if (document.documentElement.dataset.fcChampNavV1209 === '1') return;
+  document.documentElement.dataset.fcChampNavV1209 = '1';
+
+  document.addEventListener('pointerdown', event => {
+    const challengeOpen =
+      document.getElementById('challengeDetailSheet')?.classList.contains('open') ||
+      !!state.currentChallenge;
+    if (!challengeOpen) {
+      fcChampNavPointerStartV1209 = null;
+      return;
+    }
+
+    const target = fcChallengeNavTargetFromPointV1209(event.clientX, event.clientY);
+    fcChampNavPointerStartV1209 = target
+      ? { target, x:event.clientX, y:event.clientY, pointerId:event.pointerId }
+      : null;
+  }, true);
+
+  document.addEventListener('pointerup', event => {
+    const start = fcChampNavPointerStartV1209;
+    fcChampNavPointerStartV1209 = null;
+    if (!start || start.pointerId !== event.pointerId) return;
+
+    const challengeOpen =
+      document.getElementById('challengeDetailSheet')?.classList.contains('open') ||
+      !!state.currentChallenge;
+    if (!challengeOpen) return;
+
+    const target = fcChallengeNavTargetFromPointV1209(event.clientX, event.clientY);
+    const moved = Math.hypot(event.clientX - start.x, event.clientY - start.y);
+    if (!target || target !== start.target || moved > 18) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    fcRunChallengeNavTargetV1209(target);
+  }, true);
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', fcWireDocumentChallengeNavV1209, { once:true });
+} else {
+  fcWireDocumentChallengeNavV1209();
 }
 
 function fcWireChallengeNavTouchLayerV1208() {
@@ -35976,15 +36059,8 @@ body.fc-challenge-detail-open-v1207 #challengeDetailSheet .cd-sheet-inner {
   display:none;
 }
 body.fc-challenge-detail-open-v1207 #fcChallengeNavTouchLayerV1208.active {
-  position:fixed!important;
-  left:0!important;
-  right:0!important;
-  bottom:0!important;
-  height:var(--fc-bottom-nav-bar-h)!important;
-  display:grid!important;
-  grid-template-columns:repeat(5,1fr)!important;
-  z-index:2147483000!important;
-  pointer-events:auto!important;
+  display:none!important;
+  pointer-events:none!important;
 }
 #fcChallengeNavTouchLayerV1208 button {
   appearance:none;
@@ -42047,6 +42123,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1208_VALIDATION={build:"v1208",challengeNavTouchLayer:true,homeDirectFromChampionship:true,requiresCloseFirst:false,homeRefreshPreserved:true,primaryNavTouchTargets:5,stateMatrixGuardrailsPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1209_VALIDATION={build:"v1209",documentLevelNavInterceptor:true,stackingContextIndependent:true,homeDirectFromChampionship:true,requiresCloseFirst:false,tapMovementGuard:18,homeRefreshPreserved:true,stateMatrixGuardrailsPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
