@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1216 · replace-picture-emoji-icons" name="fc-build"/>
+<meta content="v1217 · public-championship-promotion" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Replaced every picture-frame emoji used by flyer and media controls with one consistent FlamesChallenge line icon." name="fc-whatsnew"/>
+<meta content="Any signed-in member can now promote an active public Championship, while challenge management remains restricted to authorized users." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -15133,7 +15133,20 @@ async function _drawWantedFlyer(ctx, W, H, opts) {
 
    The admin preview below calls that same function with dry_run, so what you
    see is the real output, not a lookalike. */
+
+function fcCanPromoteChampionshipV1217(ch) {
+  if (!state.profile || !ch) return false;
+  const status = String(computeChallengeStatus(ch) || '').toLowerCase();
+  return ch.is_public !== false && !['closed','voided','cancelled'].includes(status);
+}
+
 async function previewChampFlyer(chId) {
+  const chV1217 = (state.challenges || []).find(c => String(c.id) === String(chId));
+  if (!fcCanPromoteChampionshipV1217(chV1217)) {
+    if (typeof toast === 'function') toast('This Championship is not available to promote.');
+    return;
+  }
+
   toast('Rendering flyer…');
   try {
     // Admin's own session token — the cron secret is never shipped to the client.
@@ -23320,7 +23333,7 @@ function renderChampionshipHero(ch, status, countdownTarget) {
     <div class="champ-arena flow">
       <div class="champ-arena-topbar">
         <span class="champ-arena-status ${status}"><span class="dot"></span>${status === 'submitting' ? 'CONTENDERS ENTERING' : isVotingPhase(status) ? 'VOTING' : status === 'closed' ? 'DECIDED' : ''}</span>
-        ${state.profile?.is_admin ? `<button class="cd-delete-btn fc-icon-label-v1216" onclick="previewChampFlyer('${ch.id}')">${fcPictureIconV1216('fc-picture-icon-v1216')}<span>Flyer</span></button>` : ''}
+        ${fcCanPromoteChampionshipV1217(ch) ? `<button class="cd-delete-btn fc-icon-label-v1216" onclick="previewChampFlyer('${ch.id}')">${fcPictureIconV1216('fc-picture-icon-v1216')}<span>Flyer</span></button>` : ''}
         ${canDelete ? `<button class="cd-delete-btn" id="cdDeleteBtn">🗑 Delete</button>` : ''}
       </div>
       <div class="champ-arena-crown">👑</div>
@@ -42612,6 +42625,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1216_VALIDATION={build:"v1216",pictureEmojiRemoved:true,sharedPictureIcon:true,championshipFlyerIconFixed:true,promoteMediaIconFixed:true,flyerStatementPreserved:true,homeFlyerArtworkPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1217_VALIDATION={build:"v1217",publicChampionshipPromotion:true,signedInMembersAllowed:true,privateChampionshipBlocked:true,closedChampionshipBlocked:true,managementPermissionsUnchanged:true,pictureIconPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
