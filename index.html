@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1207 · championship-home-navigation" name="fc-build"/>
+<meta content="v1208 · championship-nav-touch-layer" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Home now reliably exits championship challenge detail, returns to the top of the feed, and refreshes even when the championship sheet is open." name="fc-whatsnew"/>
+<meta content="Challenge detail now installs its own fixed navigation touch layer, so Home works directly without pressing X first." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -8697,6 +8697,14 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
 </main>
 <!-- v736 — footer removed: leftover landing-page brand+links block. Inside the app it floated as a tiny orphaned logo under the content (dup of the nav bar). -->
 </div><!-- /#appView -->
+
+<div id="fcChallengeNavTouchLayerV1208" aria-hidden="true">
+  <button type="button" data-fc-challenge-nav-v1208="feed" aria-label="Home"></button>
+  <button type="button" data-fc-challenge-nav-v1208="challenges" aria-label="Compete"></button>
+  <button type="button" data-fc-challenge-nav-v1208="create" aria-label="Create"></button>
+  <button type="button" data-fc-challenge-nav-v1208="leaderboard" aria-label="Titles"></button>
+  <button type="button" data-fc-challenge-nav-v1208="you" aria-label="You"></button>
+</div>
 <nav aria-label="Primary navigation" class="bottom-nav" id="bottomNav">
 <button aria-label="Home" class="bnav-btn active" data-view="feed" onclick="homeNavActionV1206()">
 <span aria-hidden="true" class="bnav-icon"><svg viewbox="0 0 24 24"><path d="M3.5 10.8 12 3.8l8.5 7v9.4h-5.3v-6.1H8.8v6.1H3.5z"></path></svg></span>
@@ -12465,6 +12473,58 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', fcWirePrimaryNavFromChallengeV1207, { once:true });
 } else {
   fcWirePrimaryNavFromChallengeV1207();
+}
+
+function fcWireChallengeNavTouchLayerV1208() {
+  const layer = document.getElementById('fcChallengeNavTouchLayerV1208');
+  if (!layer || layer.dataset.wired === '1') return;
+  layer.dataset.wired = '1';
+
+  layer.addEventListener('click', event => {
+    const button = event.target.closest('[data-fc-challenge-nav-v1208]');
+    if (!button) return;
+
+    const target = button.dataset.fcChallengeNavV1208;
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (target === 'feed') {
+      homeNavActionV1206();
+      return;
+    }
+
+    if (typeof closeChallengeDetail === 'function') closeChallengeDetail();
+
+    if (target === 'create') {
+      if (typeof openCreateSheet === 'function') openCreateSheet();
+      return;
+    }
+
+    if (target === 'you') {
+      if (typeof switchView === 'function') switchView('you');
+      return;
+    }
+
+    if (typeof switchView === 'function') switchView(target);
+  });
+}
+
+function fcSyncChallengeNavTouchLayerV1208() {
+  const layer = document.getElementById('fcChallengeNavTouchLayerV1208');
+  if (!layer) return;
+  const open = document.getElementById('challengeDetailSheet')?.classList.contains('open');
+  layer.classList.toggle('active', !!open);
+  layer.setAttribute('aria-hidden', open ? 'false' : 'true');
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    fcWireChallengeNavTouchLayerV1208();
+    fcSyncChallengeNavTouchLayerV1208();
+  }, { once:true });
+} else {
+  fcWireChallengeNavTouchLayerV1208();
+  fcSyncChallengeNavTouchLayerV1208();
 }
 
 /* ---------- VIEW SWITCHER ---------- */
@@ -22724,6 +22784,7 @@ async function openChallenge(ch) {
   document.getElementById('challengeDetailSheet').classList.add('open');
   document.body.classList.add('fc-challenge-detail-open-v1207');
   document.body.style.overflow = 'hidden';
+  fcSyncChallengeNavTouchLayerV1208();
   try {
     await loadChallengeDetail(ch.id);
   } catch (err) {
@@ -22742,6 +22803,7 @@ function closeChallengeDetail() {
   cdSheet.classList.remove('open');
   document.body.classList.remove('fc-challenge-detail-open-v1207');
   document.body.style.overflow = '';
+  fcSyncChallengeNavTouchLayerV1208();
   state.currentChallenge = null;
   state.currentEntries = [];
   state.currentVotes = [];
@@ -35908,6 +35970,34 @@ body.fc-challenge-detail-open-v1207 #challengeDetailSheet .cd-sheet-inner {
   padding-bottom:24px!important;
 }
 
+
+/* v1208 — dedicated touch layer above challenge detail for primary nav. */
+#fcChallengeNavTouchLayerV1208 {
+  display:none;
+}
+body.fc-challenge-detail-open-v1207 #fcChallengeNavTouchLayerV1208.active {
+  position:fixed!important;
+  left:0!important;
+  right:0!important;
+  bottom:0!important;
+  height:var(--fc-bottom-nav-bar-h)!important;
+  display:grid!important;
+  grid-template-columns:repeat(5,1fr)!important;
+  z-index:2147483000!important;
+  pointer-events:auto!important;
+}
+#fcChallengeNavTouchLayerV1208 button {
+  appearance:none;
+  border:0;
+  padding:0;
+  margin:0;
+  background:transparent;
+  min-width:0;
+  min-height:0;
+  pointer-events:auto;
+  -webkit-tap-highlight-color:transparent;
+}
+
 </style>
 <style id="fc-legacy-walkthrough-feed-continuation-v1197">
 body.theme-light #feedContainer > .fcc-challenge-wrap:not(.champ-gold),
@@ -41957,6 +42047,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1207_VALIDATION={build:"v1207",championshipHomeEscape:true,challengeDetailPrimaryNavAvailable:true,challengeDetailStopsAboveNav:true,capturePhaseHomeBridge:true,homeScrollTop:true,homeRefresh:true,immersiveControllerPreservedForPlayback:true,stateMatrixGuardrailsPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1208_VALIDATION={build:"v1208",challengeNavTouchLayer:true,homeDirectFromChampionship:true,requiresCloseFirst:false,homeRefreshPreserved:true,primaryNavTouchTargets:5,stateMatrixGuardrailsPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
