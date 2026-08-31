@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1215 · flyer-statement-and-home-art" name="fc-build"/>
+<meta content="v1216 · replace-picture-emoji-icons" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Classic flyers now display the creator’s personal statement, and Home challenge previews reuse the same category artwork used by flyers instead of generic icons." name="fc-whatsnew"/>
+<meta content="Replaced every picture-frame emoji used by flyer and media controls with one consistent FlamesChallenge line icon." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -15727,7 +15727,7 @@ async function openPromote(type, item) {
   // this sheet, so build it immediately and let style taps re-bake.
   document.getElementById('promotePreview').innerHTML = `
     <div class="promote-flyer-empty" style="padding:40px 24px;text-align:center;color:var(--text-muted)">
-      <div style="font-size:34px;margin-bottom:10px">🖼️</div>
+      <div class="fc-promote-picture-icon-v1216">${fcPictureIconV1216('fc-picture-icon-v1216')}</div>
       <div style="font-size:14px;margin-bottom:16px;line-height:1.5">Building your flyer…</div>
       <button onclick="userGeneratePromoteFlyer()" style="background:linear-gradient(135deg,var(--ember),var(--flame));color:#fff;border:none;border-radius:24px;padding:11px 22px;font-weight:700;font-size:14px;cursor:pointer">🎨 Generate flyer</button>
     </div>`;
@@ -16110,9 +16110,10 @@ function updatePromoteMediaButtons() {
         : 'natural creator media';
 
   if (addBtn) {
-    addBtn.textContent = has
-      ? `🔁 Replace ${sourceNoun}`
-      : `🖼 Use a different ${sourceNoun}`;
+    addBtn.innerHTML = has
+      ? `<span class="fc-replace-icon-v1216" aria-hidden="true">↻</span><span>Replace ${escapeHtml(sourceNoun)}</span>`
+      : `${fcPictureIconV1216('fc-picture-icon-v1216')}<span>Use a different ${escapeHtml(sourceNoun)}</span>`;
+    addBtn.classList.add('fc-icon-label-v1216');
     addBtn.title = `Current treatment: ${styleLabel}`;
   }
   if (remBtn) {
@@ -17584,7 +17585,7 @@ function renderLeaderboard() {
       ? `<div class="fc-title-admin-v1113"><span>Admin action</span><button class="lb-champ-launch-btn" data-launch-cat="${escapeHtml(cat)}">Launch ${escapeHtml(cat)} Championship</button></div>` : '';
     // v795.1 — the temporary "Flyer test" button lived here. It existed only to
     // verify the championship flyer artwork before a live launch existed; that
-    // is done. The 🖼 Flyer button in the championship arena topbar remains as
+    // is done. The Flyer button in the championship arena topbar remains as
     // the permanent admin preview.
     pastWrap.innerHTML = adminLaunch + renderPastChampsSection(cat);
     pastWrap.querySelectorAll('[data-lbc-toggle]').forEach(row => {
@@ -20336,6 +20337,16 @@ async function sharePoll(poll) {
 }
 
 /* ---------- HELPERS ---------- */
+
+function fcPictureIconV1216(className = '') {
+  const cls = className ? ` class="${escapeHtml(className)}"` : '';
+  return `<svg${cls} viewBox="0 0 24 24" aria-hidden="true">
+    <rect x="3.5" y="4.5" width="17" height="15" rx="2"></rect>
+    <circle cx="8.5" cy="9" r="1.5"></circle>
+    <path d="m5.5 17 4.2-4.2 2.8 2.8 2.2-2.2 3.8 3.6"></path>
+  </svg>`;
+}
+
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 
 // Returns true if the "+ follow hint" badge should show next to this user's name.
@@ -23309,7 +23320,7 @@ function renderChampionshipHero(ch, status, countdownTarget) {
     <div class="champ-arena flow">
       <div class="champ-arena-topbar">
         <span class="champ-arena-status ${status}"><span class="dot"></span>${status === 'submitting' ? 'CONTENDERS ENTERING' : isVotingPhase(status) ? 'VOTING' : status === 'closed' ? 'DECIDED' : ''}</span>
-        ${state.profile?.is_admin ? `<button class="cd-delete-btn" onclick="previewChampFlyer('${ch.id}')">🖼 Flyer</button>` : ''}
+        ${state.profile?.is_admin ? `<button class="cd-delete-btn fc-icon-label-v1216" onclick="previewChampFlyer('${ch.id}')">${fcPictureIconV1216('fc-picture-icon-v1216')}<span>Flyer</span></button>` : ''}
         ${canDelete ? `<button class="cd-delete-btn" id="cdDeleteBtn">🗑 Delete</button>` : ''}
       </div>
       <div class="champ-arena-crown">👑</div>
@@ -36510,6 +36521,48 @@ body.fc-challenge-rules-open-v1213 #challengeRulesSheetV1212 .fc-challenge-rules
   display:block;
 }
 
+
+/* v1216 — one non-emoji picture icon across flyer/media controls. */
+.fc-picture-icon-v1216 {
+  width:18px;
+  height:18px;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:1.8;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+  flex:0 0 auto;
+}
+.fc-icon-label-v1216 {
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:7px!important;
+}
+.fc-promote-picture-icon-v1216 {
+  width:42px;
+  height:42px;
+  margin:0 auto 10px;
+  display:grid;
+  place-items:center;
+  border-radius:12px;
+  background:rgba(255,92,31,.10);
+  color:var(--ember);
+}
+.fc-promote-picture-icon-v1216 .fc-picture-icon-v1216 {
+  width:24px;
+  height:24px;
+}
+.fc-replace-icon-v1216 {
+  display:inline-grid;
+  place-items:center;
+  width:18px;
+  height:18px;
+  font-size:20px;
+  line-height:1;
+  color:currentColor;
+}
+
 </style>
 <style id="fc-legacy-walkthrough-feed-continuation-v1197">
 body.theme-light #feedContainer > .fcc-challenge-wrap:not(.champ-gold),
@@ -42559,6 +42612,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1215_VALIDATION={build:"v1215",classicPersonalStatement:true,statementStateSynchronized:true,homeUsesFlyerCategoryArtwork:true,genericMusicNoteRemovedFromHomeFallback:true,entryInsightsStillRemoved:true,rulesModalCentered:true,updateParserPreserved:true};</script>
+<script>window.FC_V1216_VALIDATION={build:"v1216",pictureEmojiRemoved:true,sharedPictureIcon:true,championshipFlyerIconFixed:true,promoteMediaIconFixed:true,flyerStatementPreserved:true,homeFlyerArtworkPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
