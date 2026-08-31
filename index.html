@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1212 · compact-challenge-rules" name="fc-build"/>
+<meta content="v1213 · centered-rules-and-scroll-fix" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Challenges with custom rules now show one compact Rules row, and entrants must acknowledge those rules before submitting." name="fc-whatsnew"/>
+<meta content="Challenge Rules now opens as a vertically centered modal with reliable internal scrolling and no bottom-navigation overlap." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -22861,11 +22861,17 @@ function openChallengeRulesV1212(ch = state.currentChallenge) {
   if (!sheet || !body) return;
   body.innerHTML = fcRenderChallengeRulesV1212(text);
   sheet.classList.add('open');
+  document.body.classList.add('fc-challenge-rules-open-v1213');
   document.body.style.overflow = 'hidden';
+  requestAnimationFrame(() => {
+    const modal = sheet.querySelector('.fc-challenge-rules-modal-v1212');
+    if (modal) modal.scrollTop = 0;
+  });
 }
 
 function closeChallengeRulesV1212() {
   document.getElementById('challengeRulesSheetV1212')?.classList.remove('open');
+  document.body.classList.remove('fc-challenge-rules-open-v1213');
   const submitOpen = document.getElementById('submitEntrySheet')?.classList.contains('open');
   const challengeOpen = document.getElementById('challengeDetailSheet')?.classList.contains('open');
   if (!submitOpen && !challengeOpen) document.body.style.overflow = '';
@@ -36305,16 +36311,31 @@ html[data-theme="light"] body #pollsViewSection .fc-polls-close-v1210 {
 .fc-challenge-rules-copy-v1212 small { font-size:11px;color:var(--text-muted); }
 .fc-challenge-rules-chevron-v1212 { font-size:26px;line-height:1;color:var(--text-muted); }
 
-.fc-challenge-rules-sheet-v1212.open { display:flex!important;align-items:flex-end!important; }
+.fc-challenge-rules-sheet-v1212.open {
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  padding:
+    calc(env(safe-area-inset-top,0px) + 20px)
+    18px
+    calc(env(safe-area-inset-bottom,0px) + 20px)!important;
+  box-sizing:border-box!important;
+  overflow:hidden!important;
+}
 .fc-challenge-rules-modal-v1212 {
-  width:100%!important;
+  width:min(100%,680px)!important;
   max-width:680px!important;
-  max-height:82dvh!important;
+  max-height:min(82dvh,760px)!important;
   overflow-y:auto!important;
-  border-radius:22px 22px 0 0!important;
+  overscroll-behavior:contain!important;
+  -webkit-overflow-scrolling:touch!important;
+  touch-action:pan-y!important;
+  border-radius:22px!important;
   padding:0 16px calc(18px + env(safe-area-inset-bottom,0px))!important;
   background:var(--bg)!important;
+  border:1px solid rgba(255,92,31,.32)!important;
   border-top:3px solid var(--ember)!important;
+  box-shadow:0 24px 80px rgba(0,0,0,.58),0 0 36px rgba(255,92,31,.14)!important;
 }
 .fc-challenge-rules-head-v1212 {
   position:sticky;top:0;z-index:3;
@@ -36362,6 +36383,35 @@ html[data-theme="light"] body #pollsViewSection .fc-polls-close-v1210 {
 .fc-entry-rules-ack-label-v1212 button {
   appearance:none;border:0;background:none;padding:0;
   color:var(--ember);font:inherit;font-weight:800;text-decoration:underline;cursor:pointer;
+}
+
+
+/* v1213 — centered rules modal and reliable nested scrolling. */
+body.fc-challenge-rules-open-v1213 #bottomNav,
+body.fc-challenge-rules-open-v1213 #fcGlobalAskEmberV1131,
+body.fc-challenge-rules-open-v1213 #globalEmberBtn,
+body.fc-challenge-rules-open-v1213 .ask-ember-global {
+  visibility:hidden!important;
+  opacity:0!important;
+  pointer-events:none!important;
+}
+body.fc-challenge-rules-open-v1213 #challengeRulesSheetV1212 {
+  z-index:2147482000!important;
+  touch-action:none!important;
+}
+body.fc-challenge-rules-open-v1213 #challengeRulesSheetV1212 .fc-challenge-rules-modal-v1212 {
+  touch-action:pan-y!important;
+  pointer-events:auto!important;
+}
+#challengeRulesSheetV1212 .fc-challenge-rules-body-v1212,
+#challengeRulesSheetV1212 .fc-challenge-rules-enforcement-v1212 {
+  touch-action:pan-y!important;
+}
+#challengeDetailSheet,
+#challengeDetailSheet .cd-sheet-inner {
+  overscroll-behavior-y:contain!important;
+  -webkit-overflow-scrolling:touch!important;
+  touch-action:pan-y!important;
 }
 
 </style>
@@ -42413,6 +42463,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1212_VALIDATION={build:"v1212",compactRulesRow:true,rulesHiddenWhenEmpty:true,rulesBottomSheet:true,entryRulesAcknowledgment:true,ackRequiredOnlyForCustomRules:true,enforcementCopy:true,inlineAudioPreserved:true,pollClosePreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1213_VALIDATION={build:"v1213",rulesModalCentered:true,rulesModalInternalScroll:true,rulesModalHidesBottomNav:true,challengeDetailScrollGuard:true,rulesAcknowledgmentPreserved:true,inlineAudioPreserved:true,pollClosePreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
