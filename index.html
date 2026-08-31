@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1204 · state-matrix-guardrails" name="fc-build"/>
+<meta content="v1205 · restore-distinct-scene" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Added a built-in state-matrix validation layer covering media types, challenge phases, viewers, navigation suppression, themes, safe areas, and update integrity." name="fc-whatsnew"/>
+<meta content="Restored Scene as its original flame-stage composition so it is visually and behaviorally distinct from Waveform." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -17380,14 +17380,14 @@ function _audioTileHtml(e, options = {}) {
     const cols = Array.from({length: NB}, (_, i) => `<div class="feqcol"><div class="feqb feqb-${i}"></div></div>`).join('');
     visual = `<img class="feq-fireimg" alt="" aria-hidden="true" loading="lazy" onerror="this.style.display='none'" src="${IMG_URL}"><div class="feq-bars">${cols}</div><div class="feq-segs" aria-hidden="true"></div>`;
   } else {
-    const SN = 61;
-    const sceneCols = Array.from({length: SN}, (_, i) =>
-      `<span class="fc-audio-scene-col-v1171"><i class="fc-audio-scene-bar-v1171" style="--fc-i:${i}"></i></span>`
+    const sceneFlamesV1205 = Array.from({length: NB}, (_, i) =>
+      `<div class="feqcol"><div class="feqb feqb-${i}" style="--scene-i:${i}"></div></div>`
     ).join('');
-    visual = `<div class="fc-audio-scene-v1171" aria-hidden="true">
-      <div class="fc-audio-landscape-v1171"></div>
-      <div class="fc-audio-scene-bars-v1171">${sceneCols}</div>
-      ${mainButton}
+    visual = `<div class="fc-audio-scene-live-v1167 fc-audio-scene-restored-v1205" aria-hidden="true">
+      <div class="feq-plot">
+        <div class="feq-bars">${sceneFlamesV1205}</div>
+        ${mainButton}
+      </div>
     </div>`;
     mainButtonOutside = '';
   }
@@ -17572,7 +17572,7 @@ function _feqStart(tile, a) {
     const bars = isWaveform
       ? tile.querySelectorAll('.fc-audio-wave-bar-v1171')
       : isScene
-        ? tile.querySelectorAll('.fc-audio-scene-bar-v1171')
+        ? tile.querySelectorAll('.fc-audio-scene-restored-v1205 .feqb')
         : tile.querySelectorAll('.feqb');
     const NB = bars.length;
     if (isVinyl) return;
@@ -17606,6 +17606,7 @@ function _feqStart(tile, a) {
           const raw = freq[bin] / 255; energy += raw;
           const v = norm(i, raw);
           if (isFlame) bars[i].style.height = (85 - v * 70) + '%';
+          else if (isScene) bars[i].style.height = (18 + v * 78) + '%';
           else bars[i].style.setProperty('--fc-live-h', (8 + v * 84) + '%');
         }
       }
@@ -17625,7 +17626,7 @@ function _feqStart(tile, a) {
           for (let i = 0; i < NB; i++) {
             const envelope = 0.30 + 0.70 * Math.sin(Math.PI * i / Math.max(1, NB - 1));
             const pulse = Math.abs(Math.sin(i * 0.71 + t * 3.8) * .62 + Math.sin(i * .23 - t * 1.9) * .28);
-            bars[i].style.setProperty('--fc-live-h', (8 + envelope * pulse * 82) + '%');
+            bars[i].style.height = (18 + envelope * pulse * 76) + '%';
           }
         } else {
           bars.forEach(b => { b.style.height = ''; });
@@ -17646,7 +17647,8 @@ function _feqStop(tile) {
   if (tile._feqFakeRaf) { cancelAnimationFrame(tile._feqFakeRaf); tile._feqFakeRaf = null; } // v738
   tile.classList.remove('feq-fallback');
   tile.querySelectorAll('.feqb').forEach(b => { b.style.height = ''; });
-  tile.querySelectorAll('.fc-audio-scene-bar-v1171,.fc-audio-wave-bar-v1171').forEach(b => b.style.removeProperty('--fc-live-h'));
+  tile.querySelectorAll('.fc-audio-wave-bar-v1171').forEach(b => b.style.removeProperty('--fc-live-h'));
+  tile.querySelectorAll('.fc-audio-scene-restored-v1205 .feqb').forEach(b => { b.style.height = ''; });
   const p = tile.querySelector('.feq-path'); // v737 — curve back to its idle shape
   if (p && p.dataset.idle) {
     p.setAttribute('d', p.dataset.idle);
@@ -35679,6 +35681,73 @@ video[data-fc-deliberate-video-v1200="1"] {
   line-height:1.4;
 }
 
+
+/* v1205 — Scene is a flame-stage composition, not a second waveform. */
+.fc-audio-scene-restored-v1205 {
+  position:relative!important;
+  width:100%!important;
+  height:auto!important;
+  aspect-ratio:1174/767!important;
+  flex:0 1 auto!important;
+  overflow:hidden!important;
+  background:
+    #050302
+    url("https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/Assets/9E5A42E2-C68E-40DA-8CDD-03A7663211FF.png")
+    center/100% 100% no-repeat!important;
+}
+.fc-audio-scene-restored-v1205 .feq-plot {
+  display:block!important;
+  position:absolute!important;
+  left:10%!important;
+  right:7%!important;
+  top:33.5%!important;
+  bottom:15%!important;
+  overflow:hidden!important;
+  background:#000!important;
+}
+.fc-audio-scene-restored-v1205 .feq-bars {
+  display:flex!important;
+  position:absolute!important;
+  inset:0!important;
+  align-items:flex-end!important;
+  padding:0 2px!important;
+  gap:0!important;
+  z-index:2!important;
+}
+.fc-audio-scene-restored-v1205 .feqcol {
+  flex:1!important;
+  position:relative!important;
+  height:100%!important;
+  display:flex!important;
+  align-items:flex-end!important;
+  padding:0 4px!important;
+}
+.fc-audio-scene-restored-v1205 .feqb {
+  display:block!important;
+  width:100%!important;
+  height:46%;
+  min-height:8%!important;
+  max-height:96%!important;
+  background:
+    url("https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/Assets/tongue2.png")
+    center bottom/100% 100% no-repeat!important;
+  filter:drop-shadow(0 0 10px rgba(255,140,40,.55))!important;
+  -webkit-box-reflect:below 2px linear-gradient(to bottom,rgba(0,0,0,.35),transparent 55%);
+  transition:height .08s linear!important;
+}
+.fc-audio-scene-restored-v1205 .fcc-audio-btn {
+  position:absolute!important;
+  top:50%!important;
+  left:50%!important;
+  transform:translate(-50%,-50%)!important;
+  z-index:6!important;
+}
+.fc-audio-layout-compact-v1201 .fc-audio-scene-restored-v1205,
+.fc-audio-layout-viewer-v1201 .fc-audio-scene-restored-v1205,
+.fc-audio-layout-full-v1201 .fc-audio-scene-restored-v1205 {
+  max-height:calc(100% - 44px)!important;
+}
+
 </style>
 <style id="fc-legacy-walkthrough-feed-continuation-v1197">
 body.theme-light #feedContainer > .fcc-challenge-wrap:not(.champ-gold),
@@ -41728,6 +41797,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1204_VALIDATION={build:"v1204",phase:"audit-state-matrix",visualChange:false,runtimeGuard:true,mediaTypes:["photo","video","audio","text","flyer"],challengeStates:["submitting","voting","closed","processing","rejected","missing-media"],surfaces:["feed","compete","challenge-viewer","entry-viewer","results","post-viewer"],themes:["dark","light"],safeAreas:true,navigationDepth:true,updateIntegrity:true,authoritativeWinnersPreserved:true,canonicalFeedStagePreserved:true,audioLayoutsPreserved:true,videoUnificationPreserved:true};</script>
+<script>window.FC_V1205_VALIDATION={build:"v1205",sceneDistinctFromWaveform:true,sceneRenderer:"flame-stage",waveformRenderer:"time-domain-wave",sceneFrequencyAnimation:true,waveformTimeDomainAnimation:true,audioLayoutsPreserved:true,stateMatrixGuardrailsPreserved:true,videoPreviewPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
