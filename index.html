@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1205 · restore-distinct-scene" name="fc-build"/>
+<meta content="v1206 · home-refresh-action" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Restored Scene as its original flame-stage composition so it is visually and behaviorally distinct from Waveform." name="fc-whatsnew"/>
+<meta content="Pressing Home now closes any open feed detail, returns to the top, and reloads the latest challenges and feed activity." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -8698,7 +8698,7 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
 <!-- v736 — footer removed: leftover landing-page brand+links block. Inside the app it floated as a tiny orphaned logo under the content (dup of the nav bar). -->
 </div><!-- /#appView -->
 <nav aria-label="Primary navigation" class="bottom-nav" id="bottomNav">
-<button aria-label="Home" class="bnav-btn active" data-view="feed" onclick="switchView('feed')">
+<button aria-label="Home" class="bnav-btn active" data-view="feed" onclick="homeNavActionV1206()">
 <span aria-hidden="true" class="bnav-icon"><svg viewbox="0 0 24 24"><path d="M3.5 10.8 12 3.8l8.5 7v9.4h-5.3v-6.1H8.8v6.1H3.5z"></path></svg></span>
 <span class="bnav-label">Home</span>
 </button>
@@ -12340,6 +12340,99 @@ function showApp() {
   }, 150);
   renderProfileChip();
   // Heat check is rendered by loadAppData() once real data is loaded — no empty pre-render
+}
+
+
+let fcHomeRefreshPromiseV1206 = null;
+
+function fcCloseFeedSurfacesV1206() {
+  const challengeSheet = document.getElementById('challengeDetailSheet');
+  if (challengeSheet?.classList.contains('open') && typeof closeChallengeDetail === 'function') {
+    closeChallengeDetail();
+  }
+
+  const feedViewer = document.getElementById('feedViewerSheet');
+  if (feedViewer?.classList.contains('open') && typeof closeFeedViewer === 'function') {
+    closeFeedViewer();
+  }
+
+  const entryViewer = document.getElementById('entryViewerSheet');
+  if (entryViewer?.classList.contains('open') && typeof closeEntryViewer === 'function') {
+    closeEntryViewer();
+  }
+
+  const postSheet = document.getElementById('postSheet');
+  if (postSheet?.classList.contains('open') && typeof closePostView === 'function') {
+    closePostView();
+  }
+}
+
+async function homeNavActionV1206() {
+  // Home is both navigation and refresh: close any drilled-in feed surface,
+  // return to the feed, jump to the top immediately, then load fresh data.
+  fcCloseFeedSurfacesV1206();
+
+  if (typeof window.switchView === 'function') {
+    window.switchView('feed');
+  } else if (typeof switchView === 'function') {
+    switchView('feed');
+  }
+
+  try {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  } catch (_) {
+    window.scrollTo(0, 0);
+  }
+
+  const feedView = document.getElementById('feedView');
+  if (feedView && typeof feedView.scrollTo === 'function') {
+    try { feedView.scrollTo({ top: 0, left: 0, behavior: 'auto' }); } catch (_) {}
+  }
+
+  if (fcHomeRefreshPromiseV1206) return fcHomeRefreshPromiseV1206;
+
+  const homeBtn = document.querySelector('.bnav-btn[data-view="feed"]');
+  homeBtn?.classList.add('fc-home-refreshing-v1206');
+  homeBtn?.setAttribute('aria-busy', 'true');
+
+  fcHomeRefreshPromiseV1206 = (async () => {
+    try {
+      await Promise.all([
+        typeof loadChallenges === 'function'
+          ? loadChallenges({ throwOnError: true })
+          : Promise.resolve(),
+        typeof loadFeedActivity === 'function'
+          ? loadFeedActivity({ throwOnError: true })
+          : Promise.resolve(),
+      ]);
+
+      state._fcDirtyViewsV1118 = state._fcDirtyViewsV1118 || {};
+      state._fcDirtyViewsV1118.feed = false;
+      state._fcDirtyViewsV1118.challenges = true;
+
+      if (typeof renderFeedHello === 'function') renderFeedHello();
+      if (typeof renderHeatCheck === 'function') renderHeatCheck();
+      if (typeof renderFeed === 'function') renderFeed();
+      if (typeof wireWinnerReveals === 'function') {
+        requestAnimationFrame(() => setTimeout(() => wireWinnerReveals(), 100));
+      }
+
+      try {
+        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      } catch (_) {
+        window.scrollTo(0, 0);
+      }
+    } catch (error) {
+      console.error('Home refresh failed', error);
+      if (typeof toast === 'function') toast('Couldn’t refresh Home. Pull down or try again.');
+    } finally {
+      homeBtn?.classList.remove('fc-home-refreshing-v1206');
+      homeBtn?.removeAttribute('aria-busy');
+      fcHomeRefreshPromiseV1206 = null;
+    }
+  })();
+
+  return fcHomeRefreshPromiseV1206;
 }
 
 /* ---------- VIEW SWITCHER ---------- */
@@ -35748,6 +35841,16 @@ video[data-fc-deliberate-video-v1200="1"] {
   max-height:calc(100% - 44px)!important;
 }
 
+
+/* v1206 — Home retap refresh feedback. */
+.bnav-btn.fc-home-refreshing-v1206 .bnav-icon {
+  animation:fcHomeRefreshPulseV1206 .8s ease-in-out infinite alternate;
+}
+@keyframes fcHomeRefreshPulseV1206 {
+  from { transform:translateY(0); opacity:.72; }
+  to { transform:translateY(-2px); opacity:1; }
+}
+
 </style>
 <style id="fc-legacy-walkthrough-feed-continuation-v1197">
 body.theme-light #feedContainer > .fcc-challenge-wrap:not(.champ-gold),
@@ -41797,6 +41900,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1205_VALIDATION={build:"v1205",sceneDistinctFromWaveform:true,sceneRenderer:"flame-stage",waveformRenderer:"time-domain-wave",sceneFrequencyAnimation:true,waveformTimeDomainAnimation:true,audioLayoutsPreserved:true,stateMatrixGuardrailsPreserved:true,videoPreviewPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1206_VALIDATION={build:"v1206",homeRetapScrollTop:true,homeRefreshChallenges:true,homeRefreshFeedActivity:true,homeClosesChallengeDetail:true,homeClosesFeedViewer:true,duplicateRefreshGuard:true,sceneDistinctPreserved:true,stateMatrixGuardrailsPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
