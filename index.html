@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1209 · document-level-championship-nav" name="fc-build"/>
+<meta content="v1210 · polls-exit-and-clear-results-copy" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Championship navigation now intercepts taps at the document level, bypassing the challenge sheet stacking layer that kept swallowing Home presses." name="fc-whatsnew"/>
+<meta content="Clarified the official-results explanation and added a persistent close button to the Polls page so members can always return to Home." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -8607,6 +8607,7 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
 </section>
 <!-- POLLS VIEW -->
 <section class="app-section" id="pollsViewSection" style="display:none">
+<button id="fcPollsCloseV1210" class="fc-polls-close-v1210" type="button" aria-label="Close polls and return Home" onclick="closePollsPageV1210()">×</button>
 <div class="section">
 <div class="section-head">
 <div>
@@ -16895,6 +16896,13 @@ async function saveProfileEdits() {
   } finally {
     btn.disabled = false; btn.textContent = orig;
   }
+}
+
+
+function closePollsPageV1210() {
+  if (typeof switchView === 'function') switchView('feed');
+  try { window.scrollTo({ top: 0, left: 0, behavior: 'auto' }); }
+  catch (_) { window.scrollTo(0, 0); }
 }
 
 /* ---------- POLLS ---------- */
@@ -36074,6 +36082,41 @@ body.fc-challenge-detail-open-v1207 #fcChallengeNavTouchLayerV1208.active {
   -webkit-tap-highlight-color:transparent;
 }
 
+
+/* v1210 — Polls is a page, so provide a persistent page-level exit. */
+#pollsViewSection {
+  position:relative!important;
+}
+#pollsViewSection .fc-polls-close-v1210 {
+  position:sticky!important;
+  top:calc(env(safe-area-inset-top,0px) + 12px)!important;
+  z-index:1200!important;
+  float:right!important;
+  margin:12px 16px -56px 0!important;
+  width:46px!important;
+  height:46px!important;
+  min-width:46px!important;
+  min-height:46px!important;
+  display:grid!important;
+  place-items:center!important;
+  border-radius:50%!important;
+  border:1px solid rgba(255,255,255,.17)!important;
+  background:rgba(18,14,12,.92)!important;
+  color:#fff!important;
+  font:700 29px/1 var(--font-dm,system-ui)!important;
+  box-shadow:0 8px 24px rgba(0,0,0,.34)!important;
+  backdrop-filter:blur(16px)!important;
+  -webkit-backdrop-filter:blur(16px)!important;
+  cursor:pointer!important;
+  -webkit-tap-highlight-color:transparent!important;
+}
+body.theme-light #pollsViewSection .fc-polls-close-v1210,
+html[data-theme="light"] body #pollsViewSection .fc-polls-close-v1210 {
+  background:rgba(255,252,248,.94)!important;
+  color:#1a1512!important;
+  border-color:rgba(90,58,42,.18)!important;
+}
+
 </style>
 <style id="fc-legacy-walkthrough-feed-continuation-v1197">
 body.theme-light #feedContainer > .fcc-challenge-wrap:not(.champ-gold),
@@ -40067,7 +40110,7 @@ html[data-theme="light"] body .nav-icon-btn:active{
       'Create: the host publishes the prompt, format, audience, and deadlines.',
       'Enter: eligible members submit one entry for the active round.',
       'Vote: each member has one recorded ballot and may change it until voting closes.',
-      'Result: the server settles the final eligible round and stores the durable winner or co-winners.',
+      'Result: Once all eligible votes are counted, the winner (or tied winners) is officially recorded.',
       'Advance: eligible public results add Championship Score and can qualify competitors for monthly Championships.'
     ]},
     {id:'eligibility',label:'Eligibility',title:'Eligible competitors and entries',intro:RULES.eligibility.validContest,bullets:[RULES.eligibility.oneEntry,RULES.eligibility.format,RULES.eligibility.bannedAccounts,RULES.entry.moderation],enforced:true},
@@ -42123,6 +42166,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1209_VALIDATION={build:"v1209",documentLevelNavInterceptor:true,stackingContextIndependent:true,homeDirectFromChampionship:true,requiresCloseFirst:false,tapMovementGuard:18,homeRefreshPreserved:true,stateMatrixGuardrailsPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1210_VALIDATION={build:"v1210",resultsCopyClarified:true,pollsPageClose:true,pollsCloseSticky:true,pollsCloseSafeArea:true,championshipNavPreserved:true,stateMatrixGuardrailsPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
