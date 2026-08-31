@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1211 · inline-audio-and-vinyl-fit" name="fc-build"/>
+<meta content="v1212 · compact-challenge-rules" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Vinyl artwork now fits completely inside audio viewers, and audio play controls work inline without opening the full entry viewer." name="fc-whatsnew"/>
+<meta content="Challenges with custom rules now show one compact Rules row, and entrants must acknowledge those rules before submitting." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -9810,6 +9810,12 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
   <button class="fc-entry-upload-cancel-v1135" id="fcEntryUploadCancelV1135" type="button" onclick="cancelEntryUploadV1135()">Cancel upload</button>
 </div>
 <div id="seSlowTip" style="display:none;background:var(--surface-2);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--gold);line-height:1.5;">⏳ Taking a while? Try stronger Wi‑Fi, or set <strong>Camera → Formats → Most Compatible</strong> for faster uploads. Keep this screen open.</div>
+<div class="fc-entry-rules-ack-v1212" id="seRulesAckWrapV1212" style="display:none">
+  <label class="fc-entry-rules-ack-label-v1212">
+    <input id="seRulesAckV1212" type="checkbox">
+    <span>I’ve read and followed this challenge’s <button type="button" onclick="openChallengeRulesV1212(state.currentChallenge)">rules</button>.</span>
+  </label>
+</div>
 <div class="cc-submit-area">
 <button class="btn btn-primary" style="width:100%" type="submit">🔥 Submit entry</button>
 <div style="text-align:center;margin-top:10px;font-size:11px;color:var(--text-muted)">By entering you agree to our <a onclick="openGuidelines()" style="color:var(--ember);cursor:pointer;text-decoration:underline">Community Guidelines</a> and <a onclick="openCompetitionRules('entering')" style="color:var(--ember);cursor:pointer;text-decoration:underline">Competition Rules</a></div>
@@ -9817,6 +9823,24 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
 </form>
 </div>
 </div>
+
+<!-- CHALLENGE RULES SHEET — v1212 -->
+<div class="modal-backdrop fc-challenge-rules-sheet-v1212" id="challengeRulesSheetV1212" onclick="if(event.target===this)closeChallengeRulesV1212()">
+  <div class="modal fc-challenge-rules-modal-v1212" role="dialog" aria-modal="true" aria-labelledby="challengeRulesTitleV1212">
+    <div class="fc-challenge-rules-head-v1212">
+      <div>
+        <div class="fc-challenge-rules-kicker-v1212">CHALLENGE</div>
+        <h2 id="challengeRulesTitleV1212">Challenge Rules</h2>
+      </div>
+      <button type="button" class="fc-challenge-rules-close-v1212" aria-label="Close challenge rules" onclick="closeChallengeRulesV1212()">×</button>
+    </div>
+    <div class="fc-challenge-rules-body-v1212" id="challengeRulesBodyV1212"></div>
+    <div class="fc-challenge-rules-enforcement-v1212">
+      Entries that do not follow these rules may be removed or disqualified. If voting has already ended, the official result may be updated.
+    </div>
+  </div>
+</div>
+
 <!-- PROFILE SETTINGS SHEET -->
 <div class="modal-backdrop" id="profileModal" onclick="if(event.target===this)closeModals()">
   <div class="modal fc-settings-sheet-v1117" role="dialog" aria-modal="true" aria-labelledby="fcSettingsTitleV1117">
@@ -22809,6 +22833,54 @@ function renderChallenges() {
    Phase 3 — CHALLENGE DETAIL, ENTRIES, VOTING
 ========================================================= */
 
+
+function fcChallengeRulesTextV1212(ch) {
+  return String(ch?.rules || '').trim();
+}
+
+function fcRenderChallengeRulesV1212(text) {
+  const clean = String(text || '').trim();
+  if (!clean) return '<p>No custom rules were provided.</p>';
+
+  const lines = clean
+    .split(/\n+/)
+    .map(line => line.trim().replace(/^[-•*\d.)\s]+/, '').trim())
+    .filter(Boolean);
+
+  if (lines.length > 1) {
+    return `<ul>${lines.map(line => `<li>${escapeHtml(line)}</li>`).join('')}</ul>`;
+  }
+  return `<p>${escapeHtml(clean)}</p>`;
+}
+
+function openChallengeRulesV1212(ch = state.currentChallenge) {
+  const text = fcChallengeRulesTextV1212(ch);
+  if (!text) return;
+  const sheet = document.getElementById('challengeRulesSheetV1212');
+  const body = document.getElementById('challengeRulesBodyV1212');
+  if (!sheet || !body) return;
+  body.innerHTML = fcRenderChallengeRulesV1212(text);
+  sheet.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeChallengeRulesV1212() {
+  document.getElementById('challengeRulesSheetV1212')?.classList.remove('open');
+  const submitOpen = document.getElementById('submitEntrySheet')?.classList.contains('open');
+  const challengeOpen = document.getElementById('challengeDetailSheet')?.classList.contains('open');
+  if (!submitOpen && !challengeOpen) document.body.style.overflow = '';
+}
+
+function fcSyncEntryRulesAckV1212(ch = state.currentChallenge) {
+  const wrap = document.getElementById('seRulesAckWrapV1212');
+  const checkbox = document.getElementById('seRulesAckV1212');
+  if (!wrap || !checkbox) return;
+  const hasRules = !!fcChallengeRulesTextV1212(ch);
+  wrap.style.display = hasRules ? 'block' : 'none';
+  checkbox.checked = false;
+  checkbox.required = hasRules;
+}
+
 state.currentChallenge = null;
 state.currentEntries = [];
 state.currentVotes = [];
@@ -23238,7 +23310,13 @@ function renderChallengeDetail() {
       <span>by ${escapeHtml(ch.creator?.name || 'Unknown')}${needsFollowPlus(ch.creator?.id) ? ' <span class="user-plus">+</span>' : ''}</span>
     </div>
     ${emberJourneyHTML(ch, status, 'fvj-detail')}
-    ${ch.rules ? `<div class="cd-rules"><strong>Rules:</strong> ${escapeHtml(ch.rules)}</div>` : ''}
+    ${ch.rules ? `<button type="button" class="fc-challenge-rules-row-v1212" onclick="openChallengeRulesV1212(state.currentChallenge)">
+      <span class="fc-challenge-rules-icon-v1212" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M6 3.5h12a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2Z"></path><path d="M8 8h8M8 12h8M8 16h5"></path></svg>
+      </span>
+      <span class="fc-challenge-rules-copy-v1212"><strong>Challenge Rules</strong><small>Review before entering</small></span>
+      <span class="fc-challenge-rules-chevron-v1212" aria-hidden="true">›</span>
+    </button>` : ''}
   `;
   }
   } catch (heroErr) {
@@ -23968,6 +24046,7 @@ function openSubmitEntry(entryToEdit = null) {
   document.getElementById('submitEntryForm').reset();
   clearSubmitEntryPreview();
   document.getElementById('seError').classList.remove('show');
+  fcSyncEntryRulesAckV1212(ch);
 
   const isText = ch.media_type === 'text';
   document.getElementById('seUploadField').style.display = isText ? 'none' : 'block';
@@ -24203,6 +24282,15 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
 
   const caption = document.getElementById('seCaption').value.trim();
   const textEntry = document.getElementById('seTextEntry').value.trim();
+  const hasCustomRulesV1212 = !!fcChallengeRulesTextV1212(ch);
+  const rulesAcceptedV1212 = !!document.getElementById('seRulesAckV1212')?.checked;
+
+  if (hasCustomRulesV1212 && !rulesAcceptedV1212) {
+    errBox.textContent = 'Confirm that you have read and followed the challenge rules.';
+    errBox.classList.add('show');
+    document.getElementById('seRulesAckWrapV1212')?.scrollIntoView({ behavior:'smooth', block:'center' });
+    return;
+  }
 
   if (ch.media_type === 'text' && !textEntry) {
     errBox.textContent = 'Write something.'; errBox.classList.add('show'); return;
@@ -36182,6 +36270,100 @@ html[data-theme="light"] body #pollsViewSection .fc-polls-close-v1210 {
   touch-action:manipulation;
 }
 
+
+/* v1212 — compact custom challenge rules. */
+.fc-challenge-rules-row-v1212 {
+  width:100%;
+  min-height:54px;
+  display:grid;
+  grid-template-columns:36px minmax(0,1fr) 20px;
+  align-items:center;
+  gap:10px;
+  margin-top:10px;
+  padding:9px 12px;
+  border:1px solid var(--border);
+  border-radius:14px;
+  background:var(--surface);
+  color:var(--text);
+  text-align:left;
+  cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+}
+.fc-challenge-rules-row-v1212:active { transform:scale(.99); }
+.fc-challenge-rules-icon-v1212 {
+  width:34px;height:34px;border-radius:10px;
+  display:grid;place-items:center;
+  background:rgba(255,92,31,.10);
+  color:var(--ember);
+}
+.fc-challenge-rules-icon-v1212 svg {
+  width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round;
+}
+.fc-challenge-rules-copy-v1212 { min-width:0;display:flex;flex-direction:column;gap:2px; }
+.fc-challenge-rules-copy-v1212 strong { font-size:13px;line-height:1.15; }
+.fc-challenge-rules-copy-v1212 small { font-size:11px;color:var(--text-muted); }
+.fc-challenge-rules-chevron-v1212 { font-size:26px;line-height:1;color:var(--text-muted); }
+
+.fc-challenge-rules-sheet-v1212.open { display:flex!important;align-items:flex-end!important; }
+.fc-challenge-rules-modal-v1212 {
+  width:100%!important;
+  max-width:680px!important;
+  max-height:82dvh!important;
+  overflow-y:auto!important;
+  border-radius:22px 22px 0 0!important;
+  padding:0 16px calc(18px + env(safe-area-inset-bottom,0px))!important;
+  background:var(--bg)!important;
+  border-top:3px solid var(--ember)!important;
+}
+.fc-challenge-rules-head-v1212 {
+  position:sticky;top:0;z-index:3;
+  min-height:72px;
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:calc(10px + env(safe-area-inset-top,0px)) 0 10px;
+  background:linear-gradient(180deg,var(--bg) 82%,transparent);
+}
+.fc-challenge-rules-kicker-v1212 {
+  color:var(--ember);font-size:9px;font-weight:800;letter-spacing:.16em;
+}
+.fc-challenge-rules-head-v1212 h2 { margin:3px 0 0;font-size:22px; }
+.fc-challenge-rules-close-v1212 {
+  width:44px;height:44px;border-radius:50%;
+  border:1px solid var(--border);background:var(--surface-2);color:var(--text);
+  font-size:28px;line-height:1;display:grid;place-items:center;cursor:pointer;
+}
+.fc-challenge-rules-body-v1212 {
+  padding:8px 2px 16px;color:var(--text);font-size:15px;line-height:1.55;
+}
+.fc-challenge-rules-body-v1212 p { margin:0;white-space:pre-wrap; }
+.fc-challenge-rules-body-v1212 ul { margin:0;padding-left:22px; }
+.fc-challenge-rules-body-v1212 li { margin:0 0 10px; }
+.fc-challenge-rules-enforcement-v1212 {
+  padding:12px 13px;border:1px solid rgba(255,92,31,.24);border-radius:12px;
+  background:rgba(255,92,31,.07);color:var(--text-dim);
+  font-size:12px;line-height:1.45;
+}
+
+.fc-entry-rules-ack-v1212 {
+  margin:4px 0 12px;
+  padding:12px;
+  border:1px solid var(--border);
+  border-radius:13px;
+  background:var(--surface);
+}
+.fc-entry-rules-ack-label-v1212 {
+  display:flex;align-items:flex-start;gap:10px;
+  color:var(--text);font-size:13px;line-height:1.4;cursor:pointer;
+}
+.fc-entry-rules-ack-label-v1212 input {
+  width:20px;height:20px;min-width:20px;margin-top:0;
+  accent-color:var(--ember);
+}
+.fc-entry-rules-ack-label-v1212 button {
+  appearance:none;border:0;background:none;padding:0;
+  color:var(--ember);font:inherit;font-weight:800;text-decoration:underline;cursor:pointer;
+}
+
 </style>
 <style id="fc-legacy-walkthrough-feed-continuation-v1197">
 body.theme-light #feedContainer > .fcc-challenge-wrap:not(.champ-gold),
@@ -42231,6 +42413,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1211_VALIDATION={build:"v1211",vinylFullyVisible:true,vinylControlsSeparateRow:true,inlineAudioPlayback:true,audioTapDoesNotOpenViewer:true,pollClosePreserved:true,championshipNavPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1212_VALIDATION={build:"v1212",compactRulesRow:true,rulesHiddenWhenEmpty:true,rulesBottomSheet:true,entryRulesAcknowledgment:true,ackRequiredOnlyForCustomRules:true,enforcementCopy:true,inlineAudioPreserved:true,pollClosePreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
