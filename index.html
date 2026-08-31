@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1218 · complete-championship-promotion" name="fc-build"/>
+<meta content="v1219 · championship-promotion-polish" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Championship promotion now includes Share, Save Flyer, Copy Link, and Close actions instead of a preview-only screen." name="fc-whatsnew"/>
+<meta content="Championship promotion now posts to the Feed, multi-entry challenges clearly show position without media arrows, and Delete uses the consistent line-icon system." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -8993,10 +8993,13 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
 <button class="count cd-count-btn" id="cdEntriesCount" onclick="openEntrantsSheet()">0 entries</button>
 </div>
 <div aria-live="polite" class="fc-v1024-vote-notice" id="cdVotingNotice" style="display:none"></div>
-<div aria-label="Entry navigation" class="cd-entry-nav" id="cdEntryNav" style="display:none">
-<button aria-label="Previous entry" class="cd-entry-nav-btn" id="cdEntryPrev" type="button">←</button>
-<div class="cd-entry-nav-status"><strong id="cdEntriesCounter">1 of 1</strong><span>Use arrows or swipe</span></div>
-<button aria-label="Next entry" class="cd-entry-nav-btn" id="cdEntryNext" type="button">→</button>
+<div aria-label="Entry position" class="cd-entry-nav fc-entry-position-v1219" id="cdEntryNav" style="display:none">
+<div class="cd-entry-nav-status">
+  <strong id="cdEntriesCounter">1 of 1</strong>
+  <span class="fc-swipe-hint-v1219" id="fcSwipeHintV1219">Swipe to view the next entry</span>
+</div>
+<button aria-hidden="true" class="cd-entry-nav-btn" id="cdEntryPrev" tabindex="-1" type="button">←</button>
+<button aria-hidden="true" class="cd-entry-nav-btn" id="cdEntryNext" tabindex="-1" type="button">→</button>
 </div>
 <div aria-label="Challenge entries" class="cd-entries-grid" id="cdEntriesGrid" tabindex="0"></div>
 <div class="cd-entries-dots" id="cdEntriesDots" style="display:none"></div>
@@ -15189,6 +15192,7 @@ async function previewChampFlyer(chId) {
         <div class="fc-champ-promote-meta-v1218">${escapeHtml((hit.variant||'').toUpperCase())} · ${escapeHtml((hit.roster||[]).join(' vs '))}</div>
         <img class="fc-champ-promote-img-v1218" src="${dataUrlV1218}" alt="${escapeHtml(titleV1218)} promotional flyer">
         <div class="fc-champ-promote-actions-v1218">
+          <button type="button" class="fc-champ-promote-feed-v1219" data-action="feed">Post to Feed</button>
           <button type="button" class="fc-champ-promote-primary-v1218" data-action="share">Share</button>
           <button type="button" data-action="save">Save Flyer</button>
           <button type="button" data-action="copy">Copy Link</button>
@@ -15204,6 +15208,63 @@ async function previewChampFlyer(chId) {
     ov.querySelector('.fc-champ-promote-x-v1218').onclick = closeV1218;
     ov.querySelector('[data-action="close"]').onclick = closeV1218;
     ov.addEventListener('click', e => { if (e.target === ov) closeV1218(); });
+
+    ov.querySelector('[data-action="feed"]').onclick = async event => {
+      const buttonV1219 = event.currentTarget;
+      const originalV1219 = buttonV1219.textContent;
+      buttonV1219.disabled = true;
+      buttonV1219.textContent = 'Posting…';
+      try {
+        const pathV1219 = `${state.profile.id}/championship-flyer-${chId}-${Date.now()}.png`;
+        const uploadV1219 = await db.storage
+          .from('challenge-media')
+          .upload(pathV1219, blobV1218, {
+            contentType:'image/png',
+            upsert:false,
+            cacheControl:'3600',
+          });
+        if (uploadV1219.error) throw uploadV1219.error;
+
+        const publicV1219 = db.storage.from('challenge-media').getPublicUrl(pathV1219);
+        const mediaUrlV1219 = publicV1219?.data?.publicUrl;
+        if (!mediaUrlV1219) throw new Error('Could not create flyer URL.');
+
+        const postV1219 = {
+          user_id:state.profile.id,
+          content:`👑 ${titleV1218} — ${chV1217?.title || 'Championship Night'}`,
+          media_url:mediaUrlV1219,
+          media_type:'photo',
+          post_type:'flyer',
+          challenge_id:chId,
+        };
+
+        let responseV1219 = await db.from('posts').insert(postV1219).select('id').single();
+        if (responseV1219.error &&
+            (responseV1219.error.message?.includes('post_type') ||
+             responseV1219.error.message?.includes('challenge_id'))) {
+          delete postV1219.post_type;
+          delete postV1219.challenge_id;
+          responseV1219 = await db.from('posts').insert(postV1219).select('id').single();
+        }
+        if (responseV1219.error) throw responseV1219.error;
+
+        toast('Championship posted to your feed');
+        closeV1218();
+        if (typeof closeChallengeDetail === 'function') closeChallengeDetail();
+        if (typeof loadPosts === 'function') await loadPosts();
+        if (typeof switchView === 'function') switchView('feed');
+        const postIdV1219 = responseV1219.data?.id;
+        if (postIdV1219 && typeof scrollToPost === 'function') {
+          requestAnimationFrame(() => scrollToPost(postIdV1219));
+        }
+      } catch (errorV1219) {
+        console.error('championship post to feed', errorV1219);
+        toast('Could not post Championship to Feed');
+      } finally {
+        buttonV1219.disabled = false;
+        buttonV1219.textContent = originalV1219;
+      }
+    };
 
     ov.querySelector('[data-action="share"]').onclick = async () => {
       try {
@@ -20458,6 +20519,17 @@ function fcPictureIconV1216(className = '') {
   </svg>`;
 }
 
+
+function fcTrashIconV1219(className = '') {
+  const cls = className ? ` class="${escapeHtml(className)}"` : '';
+  return `<svg${cls} viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M4 7h16"></path>
+    <path d="M9 7V4.5h6V7"></path>
+    <path d="M6.5 7 7.5 20h9l1-13"></path>
+    <path d="M10 10.5v6M14 10.5v6"></path>
+  </svg>`;
+}
+
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 
 // Returns true if the "+ follow hint" badge should show next to this user's name.
@@ -23432,7 +23504,7 @@ function renderChampionshipHero(ch, status, countdownTarget) {
       <div class="champ-arena-topbar">
         <span class="champ-arena-status ${status}"><span class="dot"></span>${status === 'submitting' ? 'CONTENDERS ENTERING' : isVotingPhase(status) ? 'VOTING' : status === 'closed' ? 'DECIDED' : ''}</span>
         ${fcCanPromoteChampionshipV1217(ch) ? `<button class="cd-delete-btn fc-icon-label-v1216" onclick="previewChampFlyer('${ch.id}')">${fcPictureIconV1216('fc-picture-icon-v1216')}<span>Promote</span></button>` : ''}
-        ${canDelete ? `<button class="cd-delete-btn" id="cdDeleteBtn">🗑 Delete</button>` : ''}
+        ${canDelete ? `<button class="cd-delete-btn fc-delete-action-v1219 fc-icon-label-v1216" id="cdDeleteBtn">${fcTrashIconV1219('fc-trash-icon-v1219')}<span>Delete</span></button>` : ''}
       </div>
       <div class="champ-arena-crown">👑</div>
       <div class="champ-arena-eyebrow">${monthLbl}${monthLbl ? ' · ' : ''}${escapeHtml((ch.category || '').toUpperCase())} CHAMPIONSHIP</div>
@@ -23490,7 +23562,7 @@ function renderChallengeDetail() {
           return `<button class="cd-share-btn" id="cdShareBtn">📣 Promote</button>`;
         })()}
         ${(ch.creator_id === state.profile?.id || ch.creator?.id === state.profile?.id) ? `<button class="cd-share-btn" type="button" onclick="event.stopPropagation();openCreatorInsightsV1048('${ch.id}')">↗ Insights</button>` : ''}
-        ${canDeleteChallenge(ch) ? `<button class="cd-share-btn" id="cdDeleteBtn">🗑 Delete</button>` : ''}
+        ${canDeleteChallenge(ch) ? `<button class="cd-share-btn fc-delete-action-v1219 fc-icon-label-v1216" id="cdDeleteBtn">${fcTrashIconV1219('fc-trash-icon-v1219')}<span>Delete</span></button>` : ''}
       </div>
     </div>
     <div class="ch-category">${escapeHtml(ch.category)}${(ch.is_public || ch.is_championship) ? '' : ' · 🔒 Private'}</div>
@@ -23819,7 +23891,7 @@ function renderChallengeDetail() {
     `;
   }).join('');
 
-  // Explicit entry navigation. Arrows are primary; a clearly horizontal swipe is optional.
+  // Entry position is explicit; swipe is the primary carousel interaction.
   const total = sortedEntries.length;
   if (navEl) navEl.style.display = total > 1 ? 'flex' : 'none';
   if (counterEl) counterEl.textContent = `1 of ${total}`;
@@ -23880,9 +23952,26 @@ function renderChallengeDetail() {
     if (e.key === 'ArrowRight') { e.preventDefault(); goToEntry(activeEntryIndex + 1); }
   });
   // v1125 — Challenge Detail uses the same tactile, finger-following swipe as
-  // Home and Compete while keeping arrows and dots as explicit controls.
+  // Home and Compete while keeping the counter and dots as persistent cues.
   syncEntryControls(0);
-  _wireTactileEntrySwipeV1125(grid, '.cd-entry', syncEntryControls);
+  _wireTactileEntrySwipeV1125(grid, '.cd-entry', index => {
+    syncEntryControls(index);
+    if (index > 0) {
+      try { localStorage.setItem('fc_seen_entry_swipe_v1219', '1'); } catch (_) {}
+      document.getElementById('fcSwipeHintV1219')?.classList.add('hidden');
+    }
+  });
+
+  const swipeHintV1219 = document.getElementById('fcSwipeHintV1219');
+  if (swipeHintV1219 && total > 1) {
+    let seenV1219 = false;
+    try { seenV1219 = localStorage.getItem('fc_seen_entry_swipe_v1219') === '1'; } catch (_) {}
+    swipeHintV1219.classList.toggle('hidden', seenV1219);
+    if (!seenV1219) {
+      setTimeout(() => swipeHintV1219.classList.add('visible'), 450);
+      setTimeout(() => swipeHintV1219.classList.remove('visible'), 4200);
+    }
+  }
 
   // Attach vote handlers
   grid.querySelectorAll('[data-vote-entry]').forEach(btn => {
@@ -36794,6 +36883,95 @@ body.fc-champ-promote-open-v1218 .ask-ember-global {
   }
 }
 
+
+/* v1219 — clean multi-entry cues without arrows on the media stage. */
+.fc-entry-position-v1219 {
+  display:flex!important;
+  justify-content:center!important;
+  min-height:66px!important;
+  padding:10px 12px!important;
+}
+.fc-entry-position-v1219 .cd-entry-nav-btn {
+  display:none!important;
+}
+.fc-entry-position-v1219 .cd-entry-nav-status {
+  width:100%!important;
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:4px!important;
+}
+.fc-entry-position-v1219 #cdEntriesCounter {
+  font-size:17px!important;
+  font-weight:800!important;
+  color:var(--text)!important;
+}
+.fc-swipe-hint-v1219 {
+  min-height:16px;
+  color:var(--text-muted);
+  font-size:11px;
+  opacity:0;
+  transform:translateY(2px);
+  transition:opacity .2s ease,transform .2s ease;
+}
+.fc-swipe-hint-v1219.visible {
+  opacity:1;
+  transform:translateY(0);
+}
+.fc-swipe-hint-v1219.hidden {
+  display:none!important;
+}
+.cd-entries-dots {
+  margin-top:10px!important;
+  margin-bottom:8px!important;
+}
+
+/* v1219 — management action is secondary and uses the shared line icon. */
+.fc-trash-icon-v1219 {
+  width:17px;
+  height:17px;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:1.8;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+  flex:0 0 auto;
+}
+.champ-arena-topbar {
+  gap:7px!important;
+}
+.champ-arena-topbar .fc-delete-action-v1219 {
+  width:auto!important;
+  min-width:0!important;
+  padding:6px 10px!important;
+  white-space:nowrap!important;
+  color:#ff7968!important;
+  border-color:rgba(255,90,60,.38)!important;
+  background:rgba(255,70,50,.04)!important;
+}
+.champ-arena-topbar .fc-delete-action-v1219 span {
+  white-space:nowrap!important;
+}
+.champ-arena-topbar .fc-icon-label-v1216 {
+  flex-shrink:0!important;
+}
+
+/* v1219 — Feed is the primary in-app Championship promotion destination. */
+.fc-champ-promote-actions-v1218 {
+  grid-template-columns:1fr 1fr!important;
+}
+.fc-champ-promote-actions-v1218 .fc-champ-promote-feed-v1219 {
+  grid-column:1 / -1!important;
+  min-height:54px!important;
+  border:none!important;
+  background:linear-gradient(135deg,var(--ember),#ff3152)!important;
+  font-size:15px!important;
+}
+.fc-champ-promote-actions-v1218 .fc-champ-promote-primary-v1218 {
+  grid-column:1 / -1!important;
+}
+
 </style>
 <style id="fc-legacy-walkthrough-feed-continuation-v1197">
 body.theme-light #feedContainer > .fcc-challenge-wrap:not(.champ-gold),
@@ -42843,6 +43021,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1218_VALIDATION={build:"v1218",championshipPromoteLabel:true,championshipShare:true,championshipSave:true,championshipCopyLink:true,championshipClose:true,publicChampionshipPromotionPreserved:true,managementPermissionsUnchanged:true,updateParserPreserved:true};</script>
+<script>window.FC_V1219_VALIDATION={build:"v1219",entryCounterProminent:true,entryDotsPreserved:true,entryArrowsHidden:true,oneTimeSwipeHint:true,championshipPostToFeed:true,championshipSharePreserved:true,deleteLineIcon:true,deleteSingleLine:true,updateParserPreserved:true};</script>
 </body>
 </html>
