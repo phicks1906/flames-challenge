@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1213 · centered-rules-and-scroll-fix" name="fc-build"/>
+<meta content="v1215 · flyer-statement-and-home-art" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Challenge Rules now opens as a vertically centered modal with reliable internal scrolling and no bottom-navigation overlap." name="fc-whatsnew"/>
+<meta content="Classic flyers now display the creator’s personal statement, and Home challenge previews reuse the same category artwork used by flyers instead of generic icons." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -9716,7 +9716,7 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
 </div>
 </div>
 <div style="margin-top:10px">
-<input id="promoteHype" maxlength="60" oninput="document.getElementById('promoteHypeCount').textContent = (60 - this.value.length)" placeholder="Personal statement for the flyer (optional)" style="width:100%;box-sizing:border-box;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg-2);color:var(--text);font-size:14px" type="text"/>
+<input id="promoteHype" maxlength="60" oninput="document.getElementById('promoteHypeCount').textContent = (60 - this.value.length); if(promoteState) promoteState.hype=this.value.trim()" placeholder="Personal statement for the flyer (optional)" style="width:100%;box-sizing:border-box;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg-2);color:var(--text);font-size:14px" type="text"/>
 <div style="display:flex;justify-content:space-between;margin-top:4px">
 <span style="font-size:11px;color:var(--text-muted)">Shown prominently on the flyer. Leave blank for a clean poster.</span>
 <span style="font-size:11px;color:var(--text-muted)"><span id="promoteHypeCount">60</span> left</span>
@@ -15509,6 +15509,68 @@ async function _drawClassicFlyer(ctx, W, H, opts) {
   } else {
     ctx.fillText(tLines[0], pl.cx, pl.cy - tp * 0.14);
     ctx.fillText(tLines[1], pl.cx, pl.cy + tp * 0.86);
+  }
+
+  // v1215 — the creator's optional personal statement belongs on Classic too.
+  // Keep it concise and unlabeled, using the reserved space between the title
+  // plaque and byline capsule.
+  {
+    const statement = String(opts.hype || '').trim();
+    if (statement) {
+      const quote = `“${statement}”`;
+      const sx = W * 0.15;
+      const sy = H * 0.730;
+      const sw = W * 0.70;
+      const maxLines = 2;
+      const family = '"DM Sans", system-ui, sans-serif';
+      let px = 26;
+      const minPx = 18;
+      let lines = [];
+
+      const wrap = () => {
+        ctx.font = `600 italic ${px}px ${family}`;
+        const words = quote.split(/\s+/);
+        const built = [];
+        let line = '';
+        for (const word of words) {
+          const test = line ? `${line} ${word}` : word;
+          if (ctx.measureText(test).width > sw && line) {
+            built.push(line);
+            line = word;
+          } else {
+            line = test;
+          }
+        }
+        if (line) built.push(line);
+        return built;
+      };
+
+      lines = wrap();
+      while (lines.length > maxLines && px > minPx) {
+        px -= 1;
+        lines = wrap();
+      }
+      if (lines.length > maxLines) {
+        lines = lines.slice(0, maxLines);
+        let last = lines[maxLines - 1];
+        ctx.font = `600 italic ${px}px ${family}`;
+        while (ctx.measureText(`${last}…`).width > sw && last.length > 4) {
+          last = last.slice(0, -1).trimEnd();
+        }
+        lines[maxLines - 1] = `${last}…`;
+      }
+
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#f3c9aa';
+      ctx.globalAlpha = .96;
+      ctx.font = `600 italic ${px}px ${family}`;
+      const lineH = px * 1.20;
+      const startY = sy - ((lines.length - 1) * lineH) / 2;
+      lines.forEach((line, i) => ctx.fillText(line, W / 2, startY + i * lineH));
+      ctx.restore();
+    }
   }
 
   // byline capsule — creator and deadline together, ellipsised before overrun
@@ -32540,6 +32602,14 @@ document.addEventListener('click', async (e) => {
     if(cat==='art'||cat==='style') return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4a8 8 0 1 0 0 16h1.2a1.8 1.8 0 0 0 0-3.6h-1a1.7 1.7 0 0 1 0-3.4H20A8 8 0 0 0 12 4Z"/><circle cx="8" cy="9" r=".8"/><circle cx="12" cy="7" r=".8"/><circle cx="16" cy="9" r=".8"/></svg>';
     return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18"/></svg>';
   }
+  function fcFlyerDefaultArtV1215(ch) {
+    const cat = typeof _flyerCatKey === 'function'
+      ? _flyerCatKey(ch?.category || ch?.media_type || 'challenge')
+      : fcNorm(ch?.category || ch?.media_type || 'challenge');
+    const url = `${FLYER_ASSET_BASE}flyer-classic-${PAPER_TPL_VER}-${cat}.webp`;
+    return `<div class="fc-home-flyer-default-v1215" style="background-image:url('${escapeHtml(url)}')" role="img" aria-label="${escapeHtml(ch?.category || 'Challenge')} artwork"></div>`;
+  }
+
   function fcMedia(ch){
     const source=[...(state.feedEntries||[]),...(state.currentEntries||[]),...(state.entries||[]),...(state.myEntries||[])];
     const e=source.find(item=>String(item?.challenge_id)===String(ch?.id) && (item?.thumbnail_url||item?.poster_url||item?.media_url||item?.file_url));
@@ -32549,9 +32619,8 @@ document.addEventListener('click', async (e) => {
     if(url){
       if(['image','photo','photography','picture'].includes(type) || /\.(?:jpe?g|png|webp|gif)(?:\?|$)/i.test(url)) return `<img src="${escapeHtml(url)}" alt="" loading="lazy">`;
       if(type==='video') return `<video src="${escapeHtml(url)}#t=0.1" muted playsinline preload="metadata"></video>`;
-      if(type==='audio') return fcCategoryFallback({...ch,category:'music'});
     }
-    return fcCategoryFallback(ch);
+    return fcFlyerDefaultArtV1215(ch);
   }
   function fcHomeCandidates(){
     const interests=new Set((state.profile?.interests||[]).map(fcNorm));
@@ -36414,6 +36483,33 @@ body.fc-challenge-rules-open-v1213 #challengeRulesSheetV1212 .fc-challenge-rules
   touch-action:pan-y!important;
 }
 
+
+/* v1214 — live-entry actions reserve space for only useful controls. */
+.fc-entry-action-row-v1214,
+.cd-entry-actions,
+.cd-owner-actions,
+.fc-owner-entry-actions {
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+}
+
+
+/* v1215 — Home fallbacks use the same baked category art as Classic flyers. */
+.fc-home-flyer-default-v1215 {
+  width:100%;
+  height:100%;
+  min-width:100%;
+  min-height:100%;
+  background-repeat:no-repeat;
+  background-size:auto 286%;
+  background-position:center 35%;
+  background-color:#120b08;
+  border-radius:inherit;
+  box-shadow:inset 0 0 0 1px rgba(255,128,57,.14);
+}
+.fc-home-live-media .fc-home-flyer-default-v1215 {
+  display:block;
+}
+
 </style>
 <style id="fc-legacy-walkthrough-feed-continuation-v1197">
 body.theme-light #feedContainer > .fcc-challenge-wrap:not(.champ-gold),
@@ -37005,7 +37101,7 @@ body.theme-light .fc-score-metric-v1032,body.theme-light .fc-score-cutoff-v1032,
     if(status==='submitting'&&ch.is_public!==false&&!ch.is_championship){const approved=(state.currentEntries||[]).filter(e=>!e.moderation_status||e.moderation_status==='clear'||e.moderation_status==='approved');const mine=approved.some(e=>e.user_id===state.profile?.id);const ids=[...new Set(approved.map(e=>e.user_id).filter(id=>id&&(!mine||id!==state.profile?.id)))];const value=ids.reduce((n,id)=>n+Number(getLadderStatus(id)?.points||0),0);d.p+=` Current field value: ${value} Opponent Point${value===1?'':'s'} before turnout.`;}
     let primary='';if(d.primary==='edit')primary='<button class="primary" data-v1054-action="edit">Edit entry</button>';else if(d.primary==='enter')primary='<button class="primary" data-v1054-action="enter">Enter challenge</button>';else if(d.primary==='results')primary='<button class="primary" data-v1054-action="results">View results</button>';
     const pendingReview=d.k==='Getting your entry ready';
-    const insights=(!pendingReview&&(ch.creator_id===state.profile?.id||ch.creator?.id===state.profile?.id))?'<button data-v1054-action="insights">Insights</button>':'';
+    const insights=(!pendingReview&&(ch.creator_id===state.profile?.id||ch.creator?.id===state.profile?.id))?'':'';
     box.innerHTML=`<div class="fc-challenge-brief-top-v1054"><div><div class="fc-challenge-brief-state-v1054">${esc(d.k)}</div><strong>${esc(d.h)}</strong></div><div class="fc-challenge-brief-time-v1054">${esc(d.t)}</div></div><p>${esc(d.p)}</p><div class="fc-challenge-actions-v1054">${primary}${insights}<button class="help" data-v1054-action="ember">Ask Ember</button></div>`;
     hero.insertAdjacentElement('afterend',box);
     box.querySelector('[data-v1054-action="edit"]')?.addEventListener('click',()=>openSubmitEntry(d.mine));
@@ -42463,6 +42559,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1213_VALIDATION={build:"v1213",rulesModalCentered:true,rulesModalInternalScroll:true,rulesModalHidesBottomNav:true,challengeDetailScrollGuard:true,rulesAcknowledgmentPreserved:true,inlineAudioPreserved:true,pollClosePreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1215_VALIDATION={build:"v1215",classicPersonalStatement:true,statementStateSynchronized:true,homeUsesFlyerCategoryArtwork:true,genericMusicNoteRemovedFromHomeFallback:true,entryInsightsStillRemoved:true,rulesModalCentered:true,updateParserPreserved:true};</script>
 </body>
 </html>
