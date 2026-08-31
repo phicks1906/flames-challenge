@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1219 · championship-promotion-polish" name="fc-build"/>
+<meta content="v1220 · deadline-and-action-hierarchy-polish" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Championship promotion now posts to the Feed, multi-entry challenges clearly show position without media arrows, and Delete uses the consistent line-icon system." name="fc-whatsnew"/>
+<meta content="Reduced promotion-button overload, compressed the voting notice, and made Championship qualification and voting deadlines explicit in Eastern Time." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -15193,7 +15193,7 @@ async function previewChampFlyer(chId) {
         <img class="fc-champ-promote-img-v1218" src="${dataUrlV1218}" alt="${escapeHtml(titleV1218)} promotional flyer">
         <div class="fc-champ-promote-actions-v1218">
           <button type="button" class="fc-champ-promote-feed-v1219" data-action="feed">Post to Feed</button>
-          <button type="button" class="fc-champ-promote-primary-v1218" data-action="share">Share</button>
+          <button type="button" class="fc-champ-promote-secondary-v1220" data-action="share">Share</button>
           <button type="button" data-action="save">Save Flyer</button>
           <button type="button" data-action="copy">Copy Link</button>
         </div>
@@ -27751,7 +27751,7 @@ const FC_COMPETITION_RULES_V1047 = Object.freeze({
     qualifyingDistinctLevels: 3,
     tiesAtCutoffAdvance: true,
     eligibility: 'Championship Score is awarded only for a decisive eligible public challenge win with at least two eligible competitors. Private challenges, Championships, no-contests, and unresolved ties do not add monthly Score.',
-    qualification: 'At calendar month-end, the top three distinct Championship Score levels in each category qualify. Everyone tied at the cutoff Score advances.'
+    qualification: 'At 11:59 PM ET on the final day of each calendar month, the top three distinct Championship Score levels in each category qualify. Everyone tied at the cutoff Score advances.'
   }),
   championships: Object.freeze({
     monthlyByCategory: true,
@@ -27876,7 +27876,7 @@ function fcEmberLocalAnswerV1046(question){
   }
 
   if(qualifyWords){
-    let lead=`At month-end, the top three distinct Championship Score levels in each category qualify. Everyone tied at a qualifying cutoff Score advances.`;
+    let lead=`At 11:59 PM ET on the final day of each calendar month, the top three distinct Championship Score levels in each category qualify. Everyone tied at a qualifying cutoff Score advances.`;
     if(uid&&cat){
       const x=fcEmberQualificationV1046(cat,uid);
       if(x.open>0){lead+=` In ${cat}, ${x.open===3?'all three qualifying Score levels are':x.open+' qualifying Score level'+(x.open===1?' is':'s are')} currently open. Your current ${cat} Score is ${x.score}.`;}
@@ -33226,7 +33226,7 @@ window.fcPublicFeedDiagnostics = function(){
   function showError(msg){showCcError(msg); byId('ccError')?.scrollIntoView({behavior: fcMotionBehaviorV1100(),block:'center'});}
   function clearError(){byId('ccError')?.classList.remove('show')}
   function selectedHours(id,fallback){const el=byId(id); return parseInt(el?.dataset.hours,10)||fallback}
-  function formatDate(value){if(!value)return 'Not set';const d=new Date(value);return isNaN(d)?'Not set':d.toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}
+  function formatDate(value){if(!value)return 'Not set';const d=new Date(value);return isNaN(d)?'Not set':`${d.toLocaleString('en-US',{timeZone:'America/New_York',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})} ET`}
   function syncEntryChoice(){
     const active=ccState.competeSelf!==false;
     document.querySelectorAll('[data-cc-self]').forEach(b=>b.classList.toggle('active',(b.dataset.ccSelf==='yes')===active));
@@ -33534,17 +33534,24 @@ window.fcPublicFeedDiagnostics = function(){
     if(!raw)return 'Voting deadline not set';
     const d=new Date(raw); if(isNaN(d))return 'Voting deadline not set';
     const left=typeof formatCountdown==='function'?formatCountdown(raw):'';
-    const exact=d.toLocaleString([], {weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
-    return left?`${left} left · ${exact}`:`Closes ${exact}`;
+    const exact=d.toLocaleString('en-US', {
+      timeZone:'America/New_York',
+      weekday:'short',
+      month:'short',
+      day:'numeric',
+      hour:'numeric',
+      minute:'2-digit'
+    });
+    return left?`${left} left · ${exact} ET`:`Closes ${exact} ET`;
   }
   function noticeHtml(ch,status,myVote,total){
     if(status==='sd_submitting')return `<div class="row"><div class="icon">⚡</div><div><strong>Sudden-death entry round</strong><span>Only the tied entrants are submitting new work. Their entries reveal together when runoff voting opens.</span><small>${ch?.sd_submit_end&&typeof formatCountdown==='function'?formatCountdown(ch.sd_submit_end)+' left':''}</small></div></div>`;
     if(!isVotingPhase(status))return '';
     const recorded=!!myVote;
-    const title=recorded?'Vote recorded':'1 vote in this challenge';
-    const copy=recorded?'Your ballot is private; live totals update as the race changes. Choose another entry to change it.':'Choose one entry. Live totals update, and you can change your vote until voting closes.';
+    const title=recorded?'Vote recorded':'1 vote available';
+    const copy=recorded?'Your ballot is private. Choose another entry to change it before voting closes.':'Choose one entry. You can change your vote until voting closes.';
     const ballots=Number(total)||0;
-    return `<div class="row"><div class="icon">${recorded?'✓':'1'}</div><div><strong>${title}</strong><span>${copy}</span><small>${deadlineText(ch,status)}${ballots?` · ${ballots} ballot${ballots===1?'':'s'} cast`:''}</small></div></div>`;
+    return `<div class="row fc-vote-notice-row-v1220"><div class="icon">${recorded?'✓':''}</div><div><strong>${title}</strong><span>${copy}</span><small>${deadlineText(ch,status)}${ballots?` · ${ballots} ballot${ballots===1?'':'s'} cast`:''}</small></div></div>`;
   }
   window.renderChallengeVotingNoticeV1024=function(ch,status){
     const el=byId('cdVotingNotice');if(!el)return;
@@ -36972,6 +36979,60 @@ body.fc-champ-promote-open-v1218 .ask-ember-global {
   grid-column:1 / -1!important;
 }
 
+
+/* v1220 — one clear primary action in Championship promotion. */
+.fc-champ-promote-actions-v1218 .fc-champ-promote-secondary-v1220,
+.fc-champ-promote-actions-v1218 [data-action="save"],
+.fc-champ-promote-actions-v1218 [data-action="copy"] {
+  border:1px solid rgba(255,106,44,.34)!important;
+  background:#17100d!important;
+  color:#fff!important;
+}
+.fc-champ-promote-actions-v1218 .fc-champ-promote-secondary-v1220 {
+  grid-column:1 / -1!important;
+}
+.fc-champ-promote-actions-v1218 .fc-champ-promote-primary-v1218 {
+  background:#17100d!important;
+  border:1px solid rgba(255,106,44,.34)!important;
+}
+
+/* v1220 — compact voting notice. */
+.fc-v1024-vote-notice {
+  padding:10px 12px!important;
+  margin:7px 0 10px!important;
+  border-radius:14px!important;
+}
+.fc-v1024-vote-notice .fc-vote-notice-row-v1220 {
+  gap:0!important;
+}
+.fc-v1024-vote-notice .fc-vote-notice-row-v1220 .icon:empty {
+  display:none!important;
+}
+.fc-v1024-vote-notice .fc-vote-notice-row-v1220 > div:last-child {
+  width:100%!important;
+}
+.fc-v1024-vote-notice strong {
+  margin-bottom:2px!important;
+  font-size:13px!important;
+}
+.fc-v1024-vote-notice span {
+  font-size:11.5px!important;
+  line-height:1.35!important;
+}
+.fc-v1024-vote-notice small {
+  margin-top:5px!important;
+  font-size:10.5px!important;
+}
+.fc-v1047-vote-rule-row {
+  display:inline-flex!important;
+  float:right!important;
+  margin:-18px 0 0 10px!important;
+}
+.fc-v1047-vote-rule-row .fc-rule-link-v1047 {
+  font-size:10.5px!important;
+  white-space:nowrap!important;
+}
+
 </style>
 <style id="fc-legacy-walkthrough-feed-continuation-v1197">
 body.theme-light #feedContainer > .fcc-challenge-wrap:not(.champ-gold),
@@ -37241,7 +37302,7 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
       authoritativeRules:{
         scorePeriod:'calendar month',
         scoreFormula:'Opponent Points + Turnout Points from eligible public wins in that category',
-        qualification:'top three distinct Championship Score levels at month-end; everyone tied at the cutoff advances',
+        qualification:'at 11:59 PM ET on the final day of each calendar month, the top three distinct Championship Score levels qualify; everyone tied at the cutoff advances',
         opponentPoints:{Spark:1,Flame:2,Blaze:4,Inferno:6,Legend:10,Icon:14,Immortal:18,'G.O.A.T.':24},
         turnoutPoints:{under10:0,'10-24':3,'25-49':6,'50-99':10,'100-249':15,'250+':22},
         turnoutBasis:'total unique valid ballots across all entries in the final voting round',
@@ -40938,7 +40999,7 @@ html[data-theme="light"] body .nav-icon-btn:active{
       decisive:'A decisive eligible public regular-challenge winner receives points for every eligible opponent defeated plus the final-round turnout tier.',
       coWinner:'Competitive co-winners with valid ballots receive Turnout Points plus Opponent Points only for eligible finalists they clearly finished ahead of. Co-winners do not receive Opponent Points for each other.',
       exclusions:'No-submission co-winners, no-ballot co-winners, private challenges, Championship rounds, no-contests, and unresolved ties do not add monthly Championship Score.',
-      qualification:'At calendar month-end, the top three distinct Championship Score levels in each category qualify. Everyone tied at the cutoff Score advances.',
+      qualification:'At 11:59 PM ET on the final day of each calendar month, the top three distinct Championship Score levels in each category qualify. Everyone tied at the cutoff Score advances.',
       opponent:'Opponent Points use each defeated competitor’s visible level at the time the result is resolved.',
       turnout:'Turnout Points use total unique valid ballots across all eligible entries in the final voting round.'
     }),
@@ -42196,8 +42257,8 @@ body.fc-settings-open-v1117 #bottomNav{visibility:hidden!important;pointer-event
     const status = computeChallengeStatus(ch);
     const mine = myOpenEntry();
     const pending = mine && ['pending','flagged','escalated'].includes(String(mine.moderation_status || '').toLowerCase());
-    const submissionsClose = ch.submission_deadline ? new Date(ch.submission_deadline).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : null;
-    const votingEnds = ch.voting_end ? new Date(ch.voting_end).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : null;
+    const submissionsClose = ch.submission_deadline ? new Date(ch.submission_deadline).toLocaleString('en-US', {timeZone:'America/New_York',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) + ' ET' : null;
+    const votingEnds = ch.voting_end ? new Date(ch.voting_end).toLocaleString('en-US', {timeZone:'America/New_York',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) + ' ET' : null;
     if (/why.*(review|pending)|under review|video review|moderation/.test(q)) {
       if (!mine) return 'I do not see an entry from your account in this challenge.';
       if (!pending) return `Your entry is currently ${mine.moderation_status || 'clear'}.`;
@@ -43021,6 +43082,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1219_VALIDATION={build:"v1219",entryCounterProminent:true,entryDotsPreserved:true,entryArrowsHidden:true,oneTimeSwipeHint:true,championshipPostToFeed:true,championshipSharePreserved:true,deleteLineIcon:true,deleteSingleLine:true,updateParserPreserved:true};</script>
+<script>window.FC_V1220_VALIDATION={build:"v1220",postToFeedOnlyOrangePrimary:true,shareSecondary:true,voteNoticeCompact:true,redundantVoteNumberRemoved:true,votingDeadlineEasternTime:true,qualificationCutoff1159PmEt:true,entryCarouselPolishPreserved:true,deleteIconPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
