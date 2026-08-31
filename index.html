@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1206 · home-refresh-action" name="fc-build"/>
+<meta content="v1207 · championship-home-navigation" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Pressing Home now closes any open feed detail, returns to the top, and reloads the latest challenges and feed activity." name="fc-whatsnew"/>
+<meta content="Home now reliably exits championship challenge detail, returns to the top of the feed, and refreshes even when the championship sheet is open." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -12347,7 +12347,8 @@ let fcHomeRefreshPromiseV1206 = null;
 
 function fcCloseFeedSurfacesV1206() {
   const challengeSheet = document.getElementById('challengeDetailSheet');
-  if (challengeSheet?.classList.contains('open') && typeof closeChallengeDetail === 'function') {
+  if ((challengeSheet?.classList.contains('open') || state.currentChallenge) &&
+      typeof closeChallengeDetail === 'function') {
     closeChallengeDetail();
   }
 
@@ -12433,6 +12434,37 @@ async function homeNavActionV1206() {
   })();
 
   return fcHomeRefreshPromiseV1206;
+}
+
+function fcWirePrimaryNavFromChallengeV1207() {
+  const nav = document.getElementById('bottomNav');
+  if (!nav || nav.dataset.fcChallengeNavV1207 === '1') return;
+  nav.dataset.fcChallengeNavV1207 = '1';
+
+  nav.addEventListener('click', event => {
+    const button = event.target.closest('.bnav-btn[data-view]');
+    if (!button) return;
+
+    const challengeSheet = document.getElementById('challengeDetailSheet');
+    const challengeOpen = challengeSheet?.classList.contains('open') || !!state.currentChallenge;
+    if (!challengeOpen) return;
+
+    const targetView = button.dataset.view;
+    if (targetView === 'feed') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      homeNavActionV1206();
+      return;
+    }
+
+    if (typeof closeChallengeDetail === 'function') closeChallengeDetail();
+  }, true);
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', fcWirePrimaryNavFromChallengeV1207, { once:true });
+} else {
+  fcWirePrimaryNavFromChallengeV1207();
 }
 
 /* ---------- VIEW SWITCHER ---------- */
@@ -19360,7 +19392,7 @@ function fcRunStateMatrixV1204() {
 
   // Viewer surfaces
   add('viewer', 'feed challenge viewer', !!document.getElementById('feedViewerSheet'));
-  add('viewer', 'challenge detail', !!document.getElementById('challengeDetailSheet'));
+  add('viewer', 'challenge detail', !!document.getElementById('challengeDetailSheet'), 'primary nav remains available');
   add('viewer', 'entry viewer', !!document.getElementById('entryViewerSheet'));
   add('viewer', 'post viewer', !!document.getElementById('postSheet'));
   add('viewer', 'promote', !!document.getElementById('promoteModal'));
@@ -22690,7 +22722,8 @@ async function openChallenge(ch) {
   document.getElementById('cdHeaderTitle').textContent = ch.title;
   document.getElementById('cdEntriesGrid').innerHTML = '<div class="cd-entries-pager-empty">Loading…</div>';
   document.getElementById('challengeDetailSheet').classList.add('open');
-  fcOpenImmersiveViewerV1198('challenge-detail');
+  document.body.classList.add('fc-challenge-detail-open-v1207');
+  document.body.style.overflow = 'hidden';
   try {
     await loadChallengeDetail(ch.id);
   } catch (err) {
@@ -22707,7 +22740,8 @@ function closeChallengeDetail() {
   const cdSheet = document.getElementById('challengeDetailSheet');
   cdSheet.querySelectorAll('video, audio').forEach(m => { try { m.pause(); m.currentTime = 0; } catch(_) {} });
   cdSheet.classList.remove('open');
-  fcCloseImmersiveViewerV1198('challenge-detail');
+  document.body.classList.remove('fc-challenge-detail-open-v1207');
+  document.body.style.overflow = '';
   state.currentChallenge = null;
   state.currentEntries = [];
   state.currentVotes = [];
@@ -35851,6 +35885,29 @@ video[data-fc-deliberate-video-v1200="1"] {
   to { transform:translateY(-2px); opacity:1; }
 }
 
+
+/* v1207 — challenge detail keeps primary navigation usable. */
+body.fc-challenge-detail-open-v1207 #bottomNav {
+  display:flex!important;
+  visibility:visible!important;
+  opacity:1!important;
+  pointer-events:auto!important;
+}
+body.fc-challenge-detail-open-v1207 #fcGlobalAskEmberV1131,
+body.fc-challenge-detail-open-v1207 #globalEmberBtn,
+body.fc-challenge-detail-open-v1207 .ask-ember-global {
+  visibility:hidden!important;
+  pointer-events:none!important;
+}
+body.fc-challenge-detail-open-v1207 #challengeDetailSheet {
+  bottom:var(--fc-bottom-nav-bar-h)!important;
+  height:auto!important;
+  padding-bottom:0!important;
+}
+body.fc-challenge-detail-open-v1207 #challengeDetailSheet .cd-sheet-inner {
+  padding-bottom:24px!important;
+}
+
 </style>
 <style id="fc-legacy-walkthrough-feed-continuation-v1197">
 body.theme-light #feedContainer > .fcc-challenge-wrap:not(.champ-gold),
@@ -41900,6 +41957,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1206_VALIDATION={build:"v1206",homeRetapScrollTop:true,homeRefreshChallenges:true,homeRefreshFeedActivity:true,homeClosesChallengeDetail:true,homeClosesFeedViewer:true,duplicateRefreshGuard:true,sceneDistinctPreserved:true,stateMatrixGuardrailsPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1207_VALIDATION={build:"v1207",championshipHomeEscape:true,challengeDetailPrimaryNavAvailable:true,challengeDetailStopsAboveNav:true,capturePhaseHomeBridge:true,homeScrollTop:true,homeRefresh:true,immersiveControllerPreservedForPlayback:true,stateMatrixGuardrailsPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
