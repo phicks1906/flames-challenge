@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1234 · championship-experience-redesign" name="fc-build"/>
+<meta content="v1235 · canonical-championship-system" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Rebuilt the Championship challenge as a focused event dashboard and upgraded the Feed flyer into a bolder, more atmospheric matchup poster matching the approved mock." name="fc-whatsnew"/>
+<meta content="Consolidated Championship rendering into one canonical detail renderer and one shared Feed/Compete poster renderer, removing the competing late-version scripts and styles that were blocking approved changes." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -22985,65 +22985,7 @@ function renderChallenges() {
         const _statusLine = ch.computedStatus === 'submitting'
           ? `🎬 ENTRIES DUE · ${formatCountdown(countdownTarget)}`
           : `🔒 SEALED VOTING · ENDS ${formatCountdown(countdownTarget).toUpperCase()}`;
-        return `<div class="fight-card" data-cid="${ch.id}" onclick="openChallenge((state.challenges||[]).find(c=>c.id==='${ch.id}'))">
-          <div class="fight-inner">
-            <div class="fc-champ-crest-feed-v1233"><svg class="fc-champ-crest-svg-v1233" viewBox="0 0 180 110" aria-hidden="true" focusable="false">
-  <defs>
-    <linearGradient id="fcCrownGoldV1233" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#fff8ca"/>
-      <stop offset=".28" stop-color="#f2d06a"/>
-      <stop offset=".64" stop-color="#bd7f18"/>
-      <stop offset="1" stop-color="#643b06"/>
-    </linearGradient>
-    <linearGradient id="fcLaurelGoldV1233" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#f4d878"/>
-      <stop offset=".58" stop-color="#c18620"/>
-      <stop offset="1" stop-color="#714507"/>
-    </linearGradient>
-    <filter id="fcCrestGlowV1233" x="-35%" y="-35%" width="170%" height="170%">
-      <feGaussianBlur stdDeviation="3.2" result="blur"/>
-      <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0.88  0 1 0 0 0.62  0 0 1 0 0.14  0 0 0 .46 0"/>
-      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-  </defs>
-  <g filter="url(#fcCrestGlowV1233)">
-    <g fill="none" stroke="url(#fcLaurelGoldV1233)" stroke-width="5" stroke-linecap="round">
-      <path d="M58 85C37 76 24 58 22 36"/>
-      <path d="M122 85c21-9 34-27 36-49"/>
-    </g>
-    <g fill="url(#fcLaurelGoldV1233)">
-      <ellipse cx="29" cy="42" rx="5" ry="11" transform="rotate(-42 29 42)"/>
-      <ellipse cx="34" cy="57" rx="5" ry="11" transform="rotate(-52 34 57)"/>
-      <ellipse cx="43" cy="70" rx="5" ry="11" transform="rotate(-61 43 70)"/>
-      <ellipse cx="151" cy="42" rx="5" ry="11" transform="rotate(42 151 42)"/>
-      <ellipse cx="146" cy="57" rx="5" ry="11" transform="rotate(52 146 57)"/>
-      <ellipse cx="137" cy="70" rx="5" ry="11" transform="rotate(61 137 70)"/>
-    </g>
-    <path fill="url(#fcCrownGoldV1233)" stroke="#f7dc83" stroke-width="2"
-      d="M59 69h62l-4 20H63l-4-20Zm4-8 9-28 18 19 18-19 9 28H63Z"/>
-    <circle cx="72" cy="31" r="4.5" fill="#fff3b1"/>
-    <circle cx="90" cy="20" r="5" fill="#fff7ca"/>
-    <circle cx="108" cy="31" r="4.5" fill="#fff3b1"/>
-    <rect x="63" y="89" width="54" height="8" rx="3" fill="url(#fcCrownGoldV1233)" stroke="#f7dc83" stroke-width="1.5"/>
-    <path d="M79 70h22" stroke="#fff4b5" stroke-width="2.2" stroke-linecap="round" opacity=".75"/>
-    <path d="M90 101l4 4-4 4-4-4 4-4Z" fill="#efc85f"/>
-  </g>
-</svg></div>
-            <div class="fight-eyebrow">${_monthLbl}${_monthLbl ? ' · ' : ''}${escapeHtml((ch.category || '').toUpperCase())}</div>
-            <div class="fight-title">CHAMPIONSHIP<br>NIGHT</div>
-            <div class="fight-sub">${_subTitle}</div>
-            <div class="fight-roster">${_fightersHtml}</div>
-            <div class="fight-tape">
-              ${emberFace(30, 'think')}
-              <div>
-                <h5>EMBER'S TALE OF THE TAPE</h5>
-                <p>${escapeHtml(emberTapeLine(ch, _fighters))}</p>
-              </div>
-            </div>
-            <div class="fight-status">${_statusLine}</div>
-            <button class="fight-cta">SEE THE MATCHUP →</button>
-          </div>
-        </div>`;
+        return fcRenderChampionshipFightCardV1235(ch, _fighters, _monthLbl, _subTitle, _statusLine);
       }
     }
     // v1000-alpha1 — Compete is a list of compact competition cards, not a compact card
@@ -25740,65 +25682,7 @@ function renderFeed() {
           const statusLine = status === 'submitting'
             ? `🎬 ENTRIES DUE · ${countdown}`
             : `🔒 SEALED VOTING · ENDS ${countdown.toUpperCase()}`;
-          return `<div class="fight-card" data-cid="${ch.id}" onclick="openChallenge((state.challenges||[]).find(c=>c.id==='${ch.id}'))">
-            <div class="fight-inner">
-              <div class="fc-champ-crest-feed-v1233"><svg class="fc-champ-crest-svg-v1233" viewBox="0 0 180 110" aria-hidden="true" focusable="false">
-  <defs>
-    <linearGradient id="fcCrownGoldV1233" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#fff8ca"/>
-      <stop offset=".28" stop-color="#f2d06a"/>
-      <stop offset=".64" stop-color="#bd7f18"/>
-      <stop offset="1" stop-color="#643b06"/>
-    </linearGradient>
-    <linearGradient id="fcLaurelGoldV1233" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#f4d878"/>
-      <stop offset=".58" stop-color="#c18620"/>
-      <stop offset="1" stop-color="#714507"/>
-    </linearGradient>
-    <filter id="fcCrestGlowV1233" x="-35%" y="-35%" width="170%" height="170%">
-      <feGaussianBlur stdDeviation="3.2" result="blur"/>
-      <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0.88  0 1 0 0 0.62  0 0 1 0 0.14  0 0 0 .46 0"/>
-      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-  </defs>
-  <g filter="url(#fcCrestGlowV1233)">
-    <g fill="none" stroke="url(#fcLaurelGoldV1233)" stroke-width="5" stroke-linecap="round">
-      <path d="M58 85C37 76 24 58 22 36"/>
-      <path d="M122 85c21-9 34-27 36-49"/>
-    </g>
-    <g fill="url(#fcLaurelGoldV1233)">
-      <ellipse cx="29" cy="42" rx="5" ry="11" transform="rotate(-42 29 42)"/>
-      <ellipse cx="34" cy="57" rx="5" ry="11" transform="rotate(-52 34 57)"/>
-      <ellipse cx="43" cy="70" rx="5" ry="11" transform="rotate(-61 43 70)"/>
-      <ellipse cx="151" cy="42" rx="5" ry="11" transform="rotate(42 151 42)"/>
-      <ellipse cx="146" cy="57" rx="5" ry="11" transform="rotate(52 146 57)"/>
-      <ellipse cx="137" cy="70" rx="5" ry="11" transform="rotate(61 137 70)"/>
-    </g>
-    <path fill="url(#fcCrownGoldV1233)" stroke="#f7dc83" stroke-width="2"
-      d="M59 69h62l-4 20H63l-4-20Zm4-8 9-28 18 19 18-19 9 28H63Z"/>
-    <circle cx="72" cy="31" r="4.5" fill="#fff3b1"/>
-    <circle cx="90" cy="20" r="5" fill="#fff7ca"/>
-    <circle cx="108" cy="31" r="4.5" fill="#fff3b1"/>
-    <rect x="63" y="89" width="54" height="8" rx="3" fill="url(#fcCrownGoldV1233)" stroke="#f7dc83" stroke-width="1.5"/>
-    <path d="M79 70h22" stroke="#fff4b5" stroke-width="2.2" stroke-linecap="round" opacity=".75"/>
-    <path d="M90 101l4 4-4 4-4-4 4-4Z" fill="#efc85f"/>
-  </g>
-</svg></div>
-              <div class="fight-eyebrow">${monthLbl}${monthLbl ? ' · ' : ''}${escapeHtml((ch.category || '').toUpperCase())}</div>
-              <div class="fight-title">CHAMPIONSHIP<br>NIGHT</div>
-              <div class="fight-sub">${_subTitle}</div>
-              <div class="fight-roster">${fightersHtml}</div>
-              <div class="fight-tape">
-                ${emberFace(30, 'think')}
-                <div>
-                  <h5>EMBER'S TALE OF THE TAPE</h5>
-                  <p>${escapeHtml(emberTapeLine(ch, fighters))}</p>
-                </div>
-              </div>
-              <div class="fight-status">${statusLine}</div>
-              <button class="fight-cta">SEE THE MATCHUP →</button>
-            </div>
-          </div>`;
+          return fcRenderChampionshipFightCardV1235(ch, fighters, monthLbl, _subTitle, statusLine);
         }
 
         // Fallback: fighters not loaded — keep the simple pinned card (gold-treated)
@@ -44497,312 +44381,17 @@ body:has(.entrants-backdrop.open) #fcGlobalAskEmberV1131{
 }
 </style>
 
-<style id="fc-v1230-authoritative-championship-final-css">
-/* This is intentionally the final stylesheet in the document. */
-body.fc-championship-view-v1226 {
-  --fc-champ-gold-dark:#5d3907;
-  --fc-champ-gold-mid:#ad761a;
-  --fc-champ-gold-light:#fff0a1;
-  --fc-champ-gold-warm:#d9a637;
-}
-
-body.fc-championship-view-v1226 .fc-metallic-gold-v1230,
-.fc-championship-card .fc-metallic-gold-v1230,
-[data-championship="true"] .fc-metallic-gold-v1230 {
-  position:relative!important;
-  overflow:hidden!important;
-  border:1px solid rgba(255,233,157,.46)!important;
-  background:
-    linear-gradient(180deg,rgba(255,255,255,.32),rgba(255,255,255,0) 34%),
-    linear-gradient(135deg,
-      var(--fc-champ-gold-dark) 0%,
-      var(--fc-champ-gold-mid) 20%,
-      var(--fc-champ-gold-light) 50%,
-      var(--fc-champ-gold-warm) 69%,
-      #70450a 100%)!important;
-  color:#171004!important;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.52),
-    inset 0 -2px 7px rgba(58,31,1,.31),
-    0 7px 21px rgba(174,116,17,.19)!important;
-  text-shadow:none!important;
-}
-
-body.fc-championship-view-v1226 .fc-gold-outline-v1230 {
-  border-color:rgba(225,177,63,.48)!important;
-  background:linear-gradient(180deg,rgba(230,181,67,.055),rgba(230,181,67,.01)),#0d0904!important;
-  color:#e8bd51!important;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.035)!important;
-}
-
-/* Ensure the actual rendered edit action and center navigation control cannot stay orange. */
-body.fc-championship-view-v1226 #challengeDetailSheet button[id*="Edit"],
-body.fc-championship-view-v1226 #challengeDetailSheet button[class*="edit"],
-body.fc-championship-view-v1226 #challengeDetailSheet button[class*="primary"],
-body.fc-championship-view-v1226 #bottomNav button:nth-child(3),
-body.fc-championship-view-v1226 #bottomNav a:nth-child(3) {
-  border:1px solid rgba(255,233,157,.46)!important;
-  background:
-    linear-gradient(180deg,rgba(255,255,255,.32),rgba(255,255,255,0) 34%),
-    linear-gradient(135deg,#5d3907,#ad761a 20%,#fff0a1 50%,#d9a637 69%,#70450a)!important;
-  color:#171004!important;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.52),
-    inset 0 -2px 7px rgba(58,31,1,.31),
-    0 7px 21px rgba(174,116,17,.19)!important;
-}
-
-/* Flyer-inspired challenge hero. */
-body.fc-championship-view-v1226 .fc-champ-gold-hero-v1226 {
-  border-color:rgba(228,179,61,.54)!important;
-  background:
-    radial-gradient(ellipse at 50% 22%,rgba(255,224,122,.19),transparent 27%),
-    radial-gradient(circle at 15% 18%,rgba(155,57,12,.15),transparent 34%),
-    radial-gradient(circle at 85% 14%,rgba(223,157,35,.13),transparent 30%),
-    linear-gradient(118deg,transparent 25%,rgba(255,232,151,.045) 48%,transparent 70%),
-    linear-gradient(180deg,#120c05,#060402 82%)!important;
-  box-shadow:
-    inset 0 1px 0 rgba(255,244,198,.09),
-    inset 0 0 50px rgba(203,139,28,.052),
-    0 18px 45px rgba(0,0,0,.47),
-    0 0 28px rgba(177,108,10,.11)!important;
-}
-
-body.fc-championship-view-v1226 .fc-champ-gold-title-v1226 {
-  font-family:Georgia,"Times New Roman",serif!important;
-  font-weight:700!important;
-  color:transparent!important;
-  background:linear-gradient(180deg,#fff8c8,#f2d16d 29%,#c58a1e 64%,#704308)!important;
-  -webkit-background-clip:text!important;
-  background-clip:text!important;
-  text-shadow:none!important;
-  filter:drop-shadow(0 2px 0 rgba(62,34,1,.57)) drop-shadow(0 0 14px rgba(236,184,59,.15))!important;
-}
-
-/* Existing server flyer artwork is visually corrected in Feed without waiting for regeneration. */
-.fc-champ-poster-wrap-v1230 {
-  position:relative!important;
-  display:block!important;
-  overflow:hidden!important;
-}
-.fc-champ-poster-wrap-v1230 > img {
-  display:block!important;
-  width:100%!important;
-  height:auto!important;
-}
-.fc-champ-poster-gold-cta-v1230 {
-  position:absolute;
-  left:4.3%;
-  right:4.3%;
-  bottom:3.1%;
-  height:9.2%;
-  z-index:4;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  border:1px solid rgba(255,234,162,.72);
-  border-radius:clamp(12px,3vw,22px);
-  background:
-    linear-gradient(180deg,rgba(255,255,255,.34),rgba(255,255,255,0) 35%),
-    linear-gradient(135deg,#5d3907,#ad761a 20%,#fff0a1 50%,#d9a637 69%,#70450a);
-  color:#171004;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -3px 7px rgba(58,31,1,.30),0 5px 18px rgba(177,119,20,.20);
-  font:900 clamp(13px,3.5vw,22px)/1 var(--font-display);
-  letter-spacing:.03em;
-  pointer-events:none;
-}
-.fc-champ-poster-gold-badge-v1230 {
-  position:absolute;
-  z-index:4;
-  top:4.3%;
-  left:50%;
-  width:10.5%;
-  aspect-ratio:1;
-  transform:translateX(-50%);
-  display:grid;
-  place-items:center;
-  border:1px solid rgba(255,230,145,.62);
-  border-radius:50%;
-  background:radial-gradient(circle at 38% 28%,#fff0a1,#c68b20 55%,#684006);
-  color:#171004;
-  box-shadow:0 0 20px rgba(226,177,62,.23);
-  font-size:clamp(18px,5vw,34px);
-  pointer-events:none;
-}
-</style>
-
-<style id="fc-v1231-final-championship-fixes">
-/* Real Feed/Compete Championship card CTA — this is HTML, not an image. */
-.fight-card .fight-cta {
-  position:relative!important;
-  overflow:hidden!important;
-  border:1px solid rgba(255,234,160,.62)!important;
-  background:
-    linear-gradient(180deg,rgba(255,255,255,.34),rgba(255,255,255,0) 34%),
-    linear-gradient(135deg,#5d3907 0%,#a96f16 20%,#fff1a6 50%,#d7a437 69%,#71460a 100%)!important;
-  color:#171004!important;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.58),
-    inset 0 -3px 7px rgba(58,31,1,.31),
-    0 7px 20px rgba(176,118,18,.18)!important;
-  text-shadow:none!important;
-}
-
-.fight-card .fight-cta::after {
-  content:"";
-  position:absolute;
-  inset:3px 8% auto;
-  height:36%;
-  border-radius:999px;
-  background:linear-gradient(180deg,rgba(255,255,255,.32),rgba(255,255,255,0));
-  pointer-events:none;
-}
-
-.fight-card .fc-gold-crown-mark-v1231 {
-  width:72px!important;
-  height:72px!important;
-  margin:0 auto 10px!important;
-  display:grid!important;
-  place-items:center!important;
-  border:1px solid rgba(255,231,148,.48)!important;
-  border-radius:50%!important;
-  background:
-    radial-gradient(circle at 38% 28%,#fff2aa 0%,#d4a035 50%,#6d4208 100%)!important;
-  color:#171004!important;
-  font-family:Georgia,"Times New Roman",serif!important;
-  font-size:38px!important;
-  line-height:1!important;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.48),
-    0 0 24px rgba(221,168,49,.20)!important;
-}
-
-/* Actual loaded contender photos and names. */
-body.fc-championship-view-v1226 .fc-champ-gold-avatar-v1226 img {
-  display:block!important;
-  width:100%!important;
-  height:100%!important;
-  object-fit:cover!important;
-  opacity:1!important;
-}
-
-/* Remove the accidental square behind the bottom-center plus from v1230. */
-body.fc-championship-view-v1226 #bottomNav button:nth-child(3),
-body.fc-championship-view-v1226 #bottomNav a:nth-child(3) {
+<style id="fc-v1235-canonical-championship-css">
+/* One active Championship visual system. */
+body.fc-championship-view-v1226 #challengeDetailSheet #cdHero.fc-champ-host-v1235 {
+  padding:0!important;
+  margin:0 0 10px!important;
   border:0!important;
   background:transparent!important;
   box-shadow:none!important;
-  color:inherit!important;
-}
-body.fc-championship-view-v1226 #bottomNav .create-btn,
-body.fc-championship-view-v1226 #bottomNav .center-add,
-body.fc-championship-view-v1226 #bottomNav .plus-btn {
-  border:1px solid rgba(255,234,160,.45)!important;
-  background:
-    linear-gradient(180deg,rgba(255,255,255,.31),rgba(255,255,255,0) 34%),
-    linear-gradient(135deg,#5d3907,#a96f16 20%,#fff1a6 50%,#d7a437 69%,#71460a)!important;
-  color:#171004!important;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.52),
-    inset 0 -2px 7px rgba(58,31,1,.30),
-    0 7px 20px rgba(176,118,18,.18)!important;
 }
 
-/* Keep the hero operational actions dark and gold-outline. */
-body.fc-championship-view-v1226 .fc-champ-gold-promote-v1226,
-body.fc-championship-view-v1226 .fc-champ-gold-promote-secondary-v1226,
-body.fc-championship-view-v1226 .fc-champ-gold-delete-v1226 {
-  background:linear-gradient(180deg,rgba(229,180,65,.055),rgba(229,180,65,.01)),#0c0804!important;
-  border-color:rgba(226,177,62,.48)!important;
-  color:#e8bd51!important;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.035)!important;
-}
-</style>
-
-<style id="fc-v1233-championship-svg-crest-final">
-.fc-champ-crest-svg-v1233 {
-  display:block;
-  width:100%;
-  height:100%;
-  overflow:visible;
-}
-
-.fc-champ-crest-feed-v1233 {
-  width:82px;
-  height:50px;
-  margin:4px auto 12px;
-  filter:drop-shadow(0 0 16px rgba(226,177,62,.20));
-}
-
-body.fc-championship-view-v1226 .fc-champ-crest-hero-v1233 {
-  position:absolute!important;
-  top:8px!important;
-  left:50%!important;
-  width:48px!important;
-  height:30px!important;
-  margin:0!important;
-  transform:translateX(-50%)!important;
-  z-index:5!important;
-  filter:drop-shadow(0 0 10px rgba(226,177,62,.16))!important;
-}
-
-body.fc-championship-view-v1226 .fc-champ-gold-top-v1226 {
-  min-height:42px!important;
-  position:relative!important;
-}
-
-body.fc-championship-view-v1226 .fc-champ-gold-admin-v1226 {
-  margin-left:auto!important;
-  position:relative!important;
-  z-index:6!important;
-}
-
-body.fc-championship-view-v1226 .fc-champ-gold-copy-v1226 {
-  margin-top:10px!important;
-}
-
-/* Restore the real profile avatar button exactly as a photo circle. */
-.nav-avatar-btn {
-  overflow:hidden!important;
-  border-radius:50%!important;
-  background:transparent!important;
-}
-.nav-avatar-btn .avatar,
-.nav-avatar-btn img {
-  display:block!important;
-  width:100%!important;
-  height:100%!important;
-  object-fit:cover!important;
-  border-radius:50%!important;
-  background:transparent!important;
-  opacity:1!important;
-  filter:none!important;
-}
-
-/* Keep the shared Championship CTA metallic gold. */
-.fight-card .fight-cta,
-body.fc-championship-view-v1226 #challengeDetailSheet button[id*="Edit"],
-body.fc-championship-view-v1226 #challengeDetailSheet button[class*="edit"] {
-  border:1px solid rgba(255,234,160,.62)!important;
-  background:
-    linear-gradient(180deg,rgba(255,255,255,.34),rgba(255,255,255,0) 34%),
-    linear-gradient(135deg,#5d3907 0%,#a96f16 20%,#fff1a6 50%,#d7a437 69%,#71460a 100%)!important;
-  color:#171004!important;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.58),
-    inset 0 -3px 7px rgba(58,31,1,.31),
-    0 7px 20px rgba(176,118,18,.18)!important;
-  text-shadow:none!important;
-}
-</style>
-
-<style id="fc-v1234-championship-experience-final">
-/* ---------- Challenge: premium event dashboard ---------- */
-body.fc-championship-view-v1226 #challengeDetailSheet #cdHero {
-  margin-bottom:10px!important;
-}
-
-.fc-champ-dashboard-v1234 {
+.fc-champ-dashboard-v1235 {
   position:relative;
   overflow:hidden;
   padding:14px 16px 15px;
@@ -44813,55 +44402,43 @@ body.fc-championship-view-v1226 #challengeDetailSheet #cdHero {
     radial-gradient(circle at 8% 12%,rgba(147,52,10,.14),transparent 31%),
     radial-gradient(circle at 92% 10%,rgba(208,143,28,.10),transparent 30%),
     linear-gradient(180deg,#100b04 0%,#070402 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255,244,195,.07),
-    inset 0 0 45px rgba(194,127,20,.04),
-    0 18px 44px rgba(0,0,0,.42);
+  box-shadow:inset 0 1px 0 rgba(255,244,195,.07),0 18px 44px rgba(0,0,0,.42);
 }
 
-.fc-champ-dashboard-v1234::before {
+.fc-champ-dashboard-v1235::before {
   content:"";
   position:absolute;
   inset:-40% -50%;
   background:linear-gradient(108deg,transparent 42%,rgba(255,235,158,.075) 49%,transparent 57%);
   transform:translateX(-38%);
-  animation:fcChampDashboardSweepV1234 11s ease-in-out infinite;
+  animation:fcChampSweepV1235 12s ease-in-out infinite;
   pointer-events:none;
 }
 
-@keyframes fcChampDashboardSweepV1234 {
-  0%,20% { transform:translateX(-38%); opacity:.2; }
-  50% { opacity:.62; }
-  80%,100% { transform:translateX(38%); opacity:.18; }
+@keyframes fcChampSweepV1235 {
+  0%,20%{transform:translateX(-38%);opacity:.18}
+  50%{opacity:.58}
+  80%,100%{transform:translateX(38%);opacity:.16}
 }
 
-.fc-champ-dashboard-tools-v1234 {
-  position:relative;
-  z-index:2;
+.fc-champ-tools-v1235,
+.fc-champ-heading-v1235,
+.fc-champ-matchup-v1235,
+.fc-champ-status-v1235,
+.fc-champ-actions-v1235 { position:relative; z-index:2; }
+
+.fc-champ-tools-v1235 {
   display:flex;
   align-items:center;
   justify-content:space-between;
   min-height:48px;
 }
 
-.fc-champ-dashboard-crest-v1234 {
-  width:56px;
-  height:35px;
-  filter:drop-shadow(0 0 14px rgba(226,177,62,.18));
-}
+.fc-champ-crest-slot-v1235 { width:58px; height:45px; }
+.fc-champ-crest-v1235 { width:100%; height:100%; display:block; overflow:visible; }
 
-.fc-champ-dashboard-crest-v1234 svg {
-  width:100%;
-  height:100%;
-}
-
-.fc-champ-dashboard-toolrow-v1234 {
-  display:flex;
-  gap:8px;
-  margin-left:auto;
-}
-
-.fc-champ-outline-v1234 {
+.fc-champ-tool-actions-v1235 { display:flex; gap:8px; margin-left:auto; }
+.fc-champ-outline-v1235 {
   min-height:38px;
   padding:0 13px;
   border:1px solid rgba(225,176,59,.43);
@@ -44872,22 +44449,15 @@ body.fc-championship-view-v1226 #challengeDetailSheet #cdHero {
   font-weight:800;
 }
 
-.fc-champ-dashboard-title-v1234 {
-  position:relative;
-  z-index:2;
-  margin-top:4px;
-  text-align:center;
-}
-
-.fc-champ-dashboard-title-v1234 small {
+.fc-champ-heading-v1235 { margin-top:3px; text-align:center; }
+.fc-champ-heading-v1235 small {
   display:block;
   color:#e9bd52;
   font:700 12px/1 Georgia,"Times New Roman",serif;
   letter-spacing:.24em;
   text-transform:uppercase;
 }
-
-.fc-champ-dashboard-title-v1234 strong {
+.fc-champ-heading-v1235 strong {
   display:block;
   margin-top:7px;
   color:transparent;
@@ -44897,10 +44467,9 @@ body.fc-championship-view-v1226 #challengeDetailSheet #cdHero {
   background:linear-gradient(180deg,#fff7c1,#f0cf68 30%,#c58a1d 67%,#6d4107);
   -webkit-background-clip:text;
   background-clip:text;
-  filter:drop-shadow(0 2px 0 rgba(58,31,1,.58)) drop-shadow(0 0 12px rgba(230,178,52,.14));
+  filter:drop-shadow(0 2px 0 rgba(58,31,1,.58));
 }
-
-.fc-champ-dashboard-title-v1234 span {
+.fc-champ-heading-v1235 span {
   display:block;
   margin-top:8px;
   color:#f2ebdf;
@@ -44910,24 +44479,17 @@ body.fc-championship-view-v1226 #challengeDetailSheet #cdHero {
   text-transform:uppercase;
 }
 
-.fc-champ-dashboard-matchup-v1234 {
-  position:relative;
-  z-index:2;
+.fc-champ-matchup-v1235 {
   display:grid;
   grid-template-columns:minmax(0,1fr) 54px minmax(0,1fr);
   align-items:center;
   gap:12px;
   margin-top:16px;
 }
-
-.fc-champ-dashboard-fighter-v1234 {
-  min-width:0;
-  text-align:center;
-}
-
-.fc-champ-dashboard-avatar-v1234 {
-  width:86px;
-  height:86px;
+.fc-champ-fighter-v1235 { min-width:0; text-align:center; }
+.fc-champ-avatar-v1235 {
+  width:88px;
+  height:88px;
   margin:0 auto 8px;
   display:grid;
   place-items:center;
@@ -44937,20 +44499,9 @@ body.fc-championship-view-v1226 #challengeDetailSheet #cdHero {
   background:#140e05;
   box-shadow:0 0 0 3px rgba(255,226,137,.07),0 0 20px rgba(220,158,34,.16);
 }
-
-.fc-champ-dashboard-avatar-v1234 img {
-  width:100%;
-  height:100%;
-  object-fit:cover;
-}
-
-.fc-champ-dashboard-avatar-v1234 span {
-  color:#efca63;
-  font-size:28px;
-  font-weight:900;
-}
-
-.fc-champ-dashboard-fighter-v1234 b {
+.fc-champ-avatar-v1235 img { width:100%; height:100%; object-fit:cover; }
+.fc-champ-avatar-v1235 span { color:#efca63; font-size:28px; font-weight:900; }
+.fc-champ-fighter-v1235 b {
   display:block;
   overflow:hidden;
   color:#efc55e;
@@ -44959,16 +44510,14 @@ body.fc-championship-view-v1226 #challengeDetailSheet #cdHero {
   text-transform:uppercase;
   white-space:nowrap;
 }
-
-.fc-champ-dashboard-fighter-v1234 em {
+.fc-champ-fighter-v1235 em {
   display:block;
   margin-top:5px;
   color:#ddd5c6;
   font-size:11px;
   font-style:normal;
 }
-
-.fc-champ-dashboard-vs-v1234 {
+.fc-champ-vs-v1235 {
   width:50px;
   height:50px;
   display:grid;
@@ -44978,12 +44527,9 @@ body.fc-championship-view-v1226 #challengeDetailSheet #cdHero {
   background:rgba(225,176,59,.035);
   color:#efc45b;
   font:900 18px/1 var(--font-display);
-  box-shadow:0 0 18px rgba(225,176,59,.07);
 }
 
-.fc-champ-dashboard-status-v1234 {
-  position:relative;
-  z-index:2;
+.fc-champ-status-v1235 {
   display:flex;
   align-items:center;
   justify-content:center;
@@ -44993,24 +44539,16 @@ body.fc-championship-view-v1226 #challengeDetailSheet #cdHero {
   padding:11px 0 3px;
   border-top:1px solid rgba(225,176,59,.17);
 }
-
-.fc-champ-dashboard-live-v1234,
-.fc-champ-dashboard-time-v1234 {
+.fc-champ-live-v1235,
+.fc-champ-time-v1235 {
   color:#e8bd50;
   font-size:11px;
   font-weight:800;
   letter-spacing:.08em;
   text-transform:uppercase;
 }
-
-.fc-champ-dashboard-live-v1234 {
-  display:inline-flex;
-  align-items:center;
-  gap:7px;
-  color:#9fd263;
-}
-
-.fc-champ-dashboard-live-v1234 i {
+.fc-champ-live-v1235 { display:inline-flex; align-items:center; gap:7px; color:#9fd263; }
+.fc-champ-live-v1235 i {
   width:8px;
   height:8px;
   border-radius:50%;
@@ -45018,30 +44556,25 @@ body.fc-championship-view-v1226 #challengeDetailSheet #cdHero {
   box-shadow:0 0 10px rgba(134,202,80,.35);
 }
 
-.fc-champ-dashboard-actions-v1234 {
-  position:relative;
-  z-index:2;
+.fc-champ-actions-v1235 {
   display:grid;
   grid-template-columns:minmax(0,1fr) auto;
   align-items:center;
   gap:14px;
   margin-top:12px;
 }
-
-.fc-champ-primary-v1234 {
-  min-height:50px;
+.fc-champ-primary-v1235,
+.fc-fight-cta-v1235 {
   border:1px solid rgba(255,234,160,.64);
-  border-radius:15px;
   background:
-    linear-gradient(180deg,rgba(255,255,255,.32),rgba(255,255,255,0) 34%),
+    linear-gradient(180deg,rgba(255,255,255,.30),rgba(255,255,255,0) 34%),
     linear-gradient(135deg,#5d3907,#a96f16 20%,#fff1a6 50%,#d7a437 69%,#71460a);
   color:#171004;
-  font-size:14px;
-  font-weight:900;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -3px 7px rgba(58,31,1,.31);
+  font-weight:900;
 }
-
-.fc-champ-textaction-v1234 {
+.fc-champ-primary-v1235 { min-height:50px; border-radius:15px; font-size:14px; }
+.fc-champ-text-v1235 {
   min-height:44px;
   padding:0 4px;
   border:0;
@@ -45051,17 +44584,10 @@ body.fc-championship-view-v1226 #challengeDetailSheet #cdHero {
   font-weight:850;
 }
 
-/* Operational card below: quieter so the event hero remains the focus. */
-body.fc-championship-view-v1226 #challengeDetailSheet .fc-champ-entry-state-v1078,
-body.fc-championship-view-v1226 #challengeDetailSheet .fc-v1078-entry-card {
-  border-color:rgba(225,176,59,.22)!important;
-  background:linear-gradient(180deg,#100b07,#090604)!important;
-  box-shadow:0 10px 26px rgba(0,0,0,.22)!important;
-}
-
-/* ---------- Feed: shareable event poster ---------- */
-.fight-card {
-  border:1px solid rgba(225,176,59,.50)!important;
+/* Shared Feed and Compete poster. */
+.fc-fight-card-v1235 {
+  overflow:hidden;
+  border:1px solid rgba(225,176,59,.52)!important;
   border-radius:22px!important;
   background:
     radial-gradient(ellipse at 50% 8%,rgba(255,220,110,.14),transparent 25%),
@@ -45070,103 +44596,117 @@ body.fc-championship-view-v1226 #challengeDetailSheet .fc-v1078-entry-card {
     linear-gradient(180deg,#100b04,#060402)!important;
   box-shadow:0 20px 50px rgba(0,0,0,.46),0 0 28px rgba(176,108,10,.08)!important;
 }
-
-.fight-card .fight-inner {
-  padding:22px 18px 18px!important;
+.fc-fight-inner-v1235 { padding:22px 18px 18px; text-align:center; }
+.fc-fight-crest-v1235 { width:110px; height:84px; margin:0 auto 8px; }
+.fc-fight-eyebrow-v1235 {
+  color:#e8bc53;
+  font:700 12px/1 Georgia,"Times New Roman",serif;
+  letter-spacing:.22em;
+  text-transform:uppercase;
 }
-
-.fight-card .fc-champ-crest-feed-v1233 {
-  width:96px!important;
-  height:58px!important;
-  margin:0 auto 12px!important;
-}
-
-.fight-card .fight-eyebrow {
-  color:#e8bc53!important;
-  font-family:Georgia,"Times New Roman",serif!important;
-  font-size:12px!important;
-  letter-spacing:.22em!important;
-}
-
-.fight-card .fight-title {
-  margin-top:8px!important;
-  color:transparent!important;
-  font-family:Georgia,"Times New Roman",serif!important;
-  font-size:clamp(38px,10vw,52px)!important;
-  font-weight:700!important;
-  line-height:.86!important;
-  letter-spacing:-.035em!important;
-  background:linear-gradient(180deg,#fff7c1,#f0cf68 29%,#c58a1d 66%,#6d4107)!important;
-  -webkit-background-clip:text!important;
-  background-clip:text!important;
+.fc-fight-title-v1235 {
+  margin-top:8px;
+  color:transparent;
+  font:700 clamp(38px,10vw,52px)/.86 Georgia,"Times New Roman",serif;
+  letter-spacing:-.035em;
+  text-transform:uppercase;
+  background:linear-gradient(180deg,#fff7c1,#f0cf68 29%,#c58a1d 66%,#6d4107);
+  -webkit-background-clip:text;
+  background-clip:text;
   filter:drop-shadow(0 2px 0 rgba(58,31,1,.58));
 }
-
-.fight-card .fight-sub {
-  margin-top:12px!important;
-  color:#f0e8d9!important;
-  font-size:10px!important;
-  letter-spacing:.22em!important;
+.fc-fight-title-v1235 span { display:block; }
+.fc-fight-sub-v1235 {
+  margin-top:12px;
+  color:#f0e8d9;
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.22em;
+  text-transform:uppercase;
+}
+.fc-fight-roster-v1235 {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 44px minmax(0,1fr);
+  align-items:center;
+  gap:14px;
+  margin-top:18px;
+}
+.fc-fight-person-v1235 { min-width:0; }
+.fc-fight-avatar-v1235 {
+  width:112px;
+  height:112px;
+  margin:0 auto 9px;
+  display:grid;
+  place-items:center;
+  overflow:hidden;
+  border:3px solid #c98b1c;
+  border-radius:50%;
+  background:#140e05;
+  box-shadow:0 0 0 3px rgba(255,226,137,.07),0 0 22px rgba(220,158,34,.18);
+}
+.fc-fight-avatar-v1235 img { width:100%; height:100%; object-fit:cover; }
+.fc-fight-avatar-v1235 span { color:#efca63; font-size:32px; font-weight:900; }
+.fc-fight-person-v1235 b {
+  display:block;
+  color:#f0c75e;
+  font:800 18px/1 var(--font-display);
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.fc-fight-person-v1235 em {
+  display:block;
+  margin-top:5px;
+  color:#e4dccd;
+  font-size:11px;
+  font-style:normal;
+}
+.fc-fight-person-v1235 small { display:block; margin-top:5px; color:#bfb5a5; font-size:11px; }
+.fc-fight-vs-v1235 {
+  color:#efc45b;
+  font:900 23px/1 var(--font-display);
+  text-shadow:0 0 14px rgba(225,176,59,.14);
+}
+.fc-fight-status-v1235 {
+  margin:20px auto 0;
+  padding:14px 16px;
+  border:1px solid rgba(225,176,59,.28);
+  border-radius:14px;
+  background:rgba(225,176,59,.025);
+  color:#efc45b;
+  font-size:13px;
+  font-weight:850;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+.fc-fight-cta-v1235 {
+  width:100%;
+  min-height:58px;
+  margin-top:14px;
+  border-radius:15px;
+  font-size:16px;
 }
 
-.fight-card .fight-roster {
-  margin-top:18px!important;
-  gap:16px!important;
+/* Quiet operational section beneath the event dashboard. */
+body.fc-championship-view-v1226 #challengeDetailSheet .fc-champ-entry-state-v1078,
+body.fc-championship-view-v1226 #challengeDetailSheet .fc-v1078-entry-card {
+  border-color:rgba(225,176,59,.22)!important;
+  background:linear-gradient(180deg,#100b07,#090604)!important;
+  box-shadow:0 10px 26px rgba(0,0,0,.22)!important;
 }
 
-.fight-card .fighter-av {
-  width:110px!important;
-  height:110px!important;
-  border:3px solid #c98b1c!important;
-  box-shadow:0 0 0 3px rgba(255,226,137,.07),0 0 22px rgba(220,158,34,.18)!important;
+/* No Championship orange leakage; normal screens remain untouched. */
+body.fc-championship-view-v1226 #challengeDetailSheet .fc-champ-primary-v1235,
+body.fc-championship-view-v1226 #challengeDetailSheet button[id*="Edit"],
+body.fc-championship-view-v1226 #challengeDetailSheet button[class*="edit"] {
+  border-color:rgba(255,234,160,.64)!important;
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.30),rgba(255,255,255,0) 34%),
+    linear-gradient(135deg,#5d3907,#a96f16 20%,#fff1a6 50%,#d7a437 69%,#71460a)!important;
+  color:#171004!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -3px 7px rgba(58,31,1,.31)!important;
 }
 
-.fight-card .fighter-name {
-  margin-top:9px!important;
-  color:#f0c75e!important;
-  font-size:18px!important;
-}
-
-.fight-card .fighter-sub {
-  color:#e4dccd!important;
-  font-size:11px!important;
-}
-
-.fight-card .fighter-rec {
-  color:#bfb5a5!important;
-  font-size:11px!important;
-}
-
-.fight-card .fight-vs {
-  color:#efc45b!important;
-  font-size:23px!important;
-  text-shadow:0 0 14px rgba(225,176,59,.14)!important;
-}
-
-.fight-card .fight-tape {
-  display:none!important;
-}
-
-.fight-card .fight-status {
-  margin:20px auto 0!important;
-  padding:14px 16px!important;
-  border:1px solid rgba(225,176,59,.28)!important;
-  border-radius:14px!important;
-  background:rgba(225,176,59,.025)!important;
-  color:#efc45b!important;
-  font-size:13px!important;
-  letter-spacing:.08em!important;
-}
-
-.fight-card .fight-cta {
-  min-height:58px!important;
-  margin-top:14px!important;
-  border-radius:15px!important;
-  font-size:16px!important;
-  font-weight:900!important;
-}
-
-/* Prevent unrelated profile/avatar regressions. */
 .nav-avatar-btn,
 .nav-avatar-btn .avatar,
 .nav-avatar-btn img {
@@ -45174,242 +44714,242 @@ body.fc-championship-view-v1226 #challengeDetailSheet .fc-v1078-entry-card {
   filter:none!important;
   opacity:1!important;
 }
+
+@media(max-width:390px) {
+  .fc-champ-avatar-v1235 { width:78px; height:78px; }
+  .fc-fight-avatar-v1235 { width:96px; height:96px; }
+  .fc-fight-title-v1235 { font-size:37px; }
+}
 </style>
 
 
-
-<script id="fc-v1230-authoritative-championship-js">
-(function initAuthoritativeChampionshipV1230(){
+<script id="fc-v1235-canonical-championship-js">
+(function initCanonicalChampionshipV1235(){
   'use strict';
 
-  const GOLD_CLASS = 'fc-metallic-gold-v1230';
-
-  function normalizeTextV1230(node) {
-    return String(node?.textContent || '').replace(/\s+/g,' ').trim().toLowerCase();
+  function fcChampCrestV1235(sizeClass='') {
+    return `<svg class="fc-champ-crest-v1235 ${sizeClass}" viewBox="0 0 220 170" aria-hidden="true" focusable="false">
+      <defs>
+        <linearGradient id="fcGoldMainV1235" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#fff7bf"/>
+          <stop offset=".24" stop-color="#f0ca5e"/>
+          <stop offset=".63" stop-color="#b77712"/>
+          <stop offset="1" stop-color="#5b3505"/>
+        </linearGradient>
+        <linearGradient id="fcGoldEdgeV1235" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#f6dc7d"/>
+          <stop offset=".58" stop-color="#bd7d18"/>
+          <stop offset="1" stop-color="#6f4308"/>
+        </linearGradient>
+        <filter id="fcCrestShadowV1235" x="-35%" y="-35%" width="170%" height="170%">
+          <feGaussianBlur stdDeviation="3.5" result="b"/>
+          <feColorMatrix in="b" type="matrix" values="1 0 0 0 .78 0 1 0 0 .49 0 0 1 0 .08 0 0 0 .45 0"/>
+          <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+      <g filter="url(#fcCrestShadowV1235)">
+        <path d="M54 135C25 119 14 91 18 58" fill="none" stroke="url(#fcGoldEdgeV1235)" stroke-width="6" stroke-linecap="round"/>
+        <path d="M166 135c29-16 40-44 36-77" fill="none" stroke="url(#fcGoldEdgeV1235)" stroke-width="6" stroke-linecap="round"/>
+        <g fill="url(#fcGoldEdgeV1235)">
+          <ellipse cx="26" cy="67" rx="6" ry="13" transform="rotate(-39 26 67)"/>
+          <ellipse cx="30" cy="88" rx="6" ry="13" transform="rotate(-50 30 88)"/>
+          <ellipse cx="41" cy="108" rx="6" ry="13" transform="rotate(-61 41 108)"/>
+          <ellipse cx="194" cy="67" rx="6" ry="13" transform="rotate(39 194 67)"/>
+          <ellipse cx="190" cy="88" rx="6" ry="13" transform="rotate(50 190 88)"/>
+          <ellipse cx="179" cy="108" rx="6" ry="13" transform="rotate(61 179 108)"/>
+        </g>
+        <path d="M74 37l14 16 22-27 22 27 14-16 7 36H67l7-36Z" fill="url(#fcGoldMainV1235)" stroke="#f6dc7d" stroke-width="2"/>
+        <circle cx="74" cy="34" r="5" fill="#fff3ad"/>
+        <circle cx="110" cy="20" r="6" fill="#fff7c6"/>
+        <circle cx="146" cy="34" r="5" fill="#fff3ad"/>
+        <path d="M67 76h86v61H67Z" fill="none" stroke="url(#fcGoldMainV1235)" stroke-width="7"/>
+        <path d="M79 88v37M141 88v37M79 88h25M79 106h20M116 88h25M116 106h20" fill="none" stroke="url(#fcGoldMainV1235)" stroke-width="5" stroke-linecap="round"/>
+        <path d="M102 88v37" stroke="url(#fcGoldMainV1235)" stroke-width="5"/>
+        <path d="M110 142l6 7-6 7-6-7 6-7Z" fill="#efc759"/>
+      </g>
+    </svg>`;
   }
 
-  function markChampionshipActionsV1230(root=document) {
-    if (!document.body.classList.contains('fc-championship-view-v1226')) return;
+  function fcChampNameV1235(entry) {
+    return entry?.submitter?.name ||
+      entry?.submitter?.display_name ||
+      entry?.submitter?.username ||
+      entry?.profile?.display_name ||
+      entry?.profile?.username ||
+      entry?.user?.display_name ||
+      entry?.user?.username ||
+      entry?.display_name ||
+      entry?.username ||
+      entry?.name ||
+      'Contender';
+  }
 
-    const sheet = document.getElementById('challengeDetailSheet');
-    if (sheet) {
-      sheet.querySelectorAll('button,[role="button"]').forEach(button => {
-        const text = normalizeTextV1230(button);
-        const primary =
-          text === 'edit entry' ||
-          text.includes('vote for this entry') ||
-          text === 'vote & details' ||
-          text === 'enter challenge' ||
-          text === 'submit entry' ||
-          text === 'view poster';
+  function fcChampAvatarV1235(entry) {
+    const url = entry?.submitter?.avatar ||
+      entry?.submitter?.avatar_url ||
+      entry?.profile?.avatar_url ||
+      entry?.user?.avatar_url ||
+      entry?.avatar_url ||
+      entry?.avatar;
+    if (url && /^https?:|^data:|^blob:/.test(String(url))) {
+      return `<img src="${escapeHtml(url)}" alt="">`;
+    }
+    const name = fcChampNameV1235(entry);
+    return `<span>${escapeHtml(name.slice(0,1).toUpperCase())}</span>`;
+  }
 
-        const secondary =
-          text === 'ask ember' ||
-          text === 'promote' ||
-          text === 'delete' ||
-          text === 'close';
+  function fcChampRosterV1235(ch) {
+    const roster = [];
+    (state.currentEntries || []).forEach(entry => {
+      const name = fcChampNameV1235(entry);
+      if (!roster.some(row => row.name === name)) roster.push({name,entry});
+    });
 
-        if (primary) button.classList.add(GOLD_CLASS);
-        if (secondary) button.classList.add('fc-gold-outline-v1230');
+    if (!roster.length && Array.isArray(ch?.championship_roster)) {
+      ch.championship_roster.forEach(person => {
+        const name = fcChampNameV1235(person);
+        if (name && !roster.some(row => row.name === name)) roster.push({name,entry:person});
       });
     }
 
-    const bottomNav = document.getElementById('bottomNav');
-    if (bottomNav) {
-      [...bottomNav.querySelectorAll('button,a,[role="button"]')].forEach(item => {
-        const text = normalizeTextV1230(item);
-        if (text === '+' || item.classList.contains('create-btn') ||
-            item.classList.contains('center-add') || item.classList.contains('plus-btn')) {
-          item.classList.add(GOLD_CLASS);
-        }
-      });
-    }
+    if (!roster.length) roster.push({name:'Contender',entry:null});
+    if (roster.length === 1) roster.push({name:'Awaiting contender',entry:null});
+    return roster.slice(0,2);
   }
 
-  function wrapChampionshipPosterV1230(card) {
-    if (!card || card.querySelector('.fc-champ-poster-wrap-v1230')) return;
-    const image = [...card.querySelectorAll('img')].find(img => {
-      const alt = String(img.alt || '');
-      return /championship|flyer|matchup/i.test(alt) ||
-        (img.clientWidth > 240 && img.clientHeight > 300);
-    });
-    if (!image || !image.parentNode) return;
-
-    const wrap = document.createElement('div');
-    wrap.className = 'fc-champ-poster-wrap-v1230';
-    image.parentNode.insertBefore(wrap, image);
-    wrap.appendChild(image);
-
-    const cta = document.createElement('div');
-    cta.className = 'fc-champ-poster-gold-cta-v1230';
-    cta.textContent = 'SEE THE MATCHUP →';
-    wrap.appendChild(cta);
-
-    const badge = document.createElement('div');
-    badge.className = 'fc-champ-poster-gold-badge-v1230';
-    badge.textContent = '♛';
-    wrap.appendChild(badge);
+  function fcChampTimeV1235(target) {
+    const ms = Date.parse(target || '') - Date.now();
+    if (!Number.isFinite(ms) || ms <= 0) return '';
+    const mins = Math.max(1, Math.floor(ms / 60000));
+    const days = Math.floor(mins / 1440);
+    const hours = Math.floor((mins % 1440) / 60);
+    if (days > 0) return `${days}d ${hours}h remaining`;
+    if (hours > 0) return `${hours}h ${mins % 60}m remaining`;
+    return `${mins}m remaining`;
   }
 
-  function markChampionshipFeedCardsV1230(root=document) {
-    root.querySelectorAll?.('.fc-championship-card,[data-championship="true"]').forEach(card => {
-      wrapChampionshipPosterV1230(card);
-      card.querySelectorAll('button,a.button,[role="button"]').forEach(button => {
-        const text = normalizeTextV1230(button);
-        if (/see the matchup|view championship|open championship/.test(text)) {
-          button.classList.add(GOLD_CLASS);
-        }
-      });
-    });
+  function fcChampStateV1235(status) {
+    if (status === 'submitting') return 'ENTRIES OPEN';
+    if (status === 'sd_submitting') return 'SUDDEN DEATH ENTRIES';
+    if (status === 'voting') return 'VOTING OPEN';
+    if (status === 'sudden_death') return 'SUDDEN DEATH VOTING';
+    if (status === 'closed') return 'CHAMPIONSHIP DECIDED';
+    return 'CHAMPIONSHIP ROUND';
   }
 
-  async function goldifyFlyerDataUrlV1230(dataUrl) {
-    return await new Promise(resolve => {
-      const img = new Image();
-      img.onload = () => {
-        try {
-          const canvas = document.createElement('canvas');
-          canvas.width = img.naturalWidth;
-          canvas.height = img.naturalHeight;
-          const ctx = canvas.getContext('2d', {willReadFrequently:true});
-          ctx.drawImage(img,0,0);
-          const imageData = ctx.getImageData(0,0,canvas.width,canvas.height);
-          const d = imageData.data;
+  window.renderChampionshipHero = function renderChampionshipHeroV1235(ch,status,countdownTarget) {
+    const host = document.getElementById('cdHero');
+    if (!host) return;
 
-          for (let i=0;i<d.length;i+=4) {
-            const r=d[i], g=d[i+1], b=d[i+2];
-            const orange = r > 130 && g > 25 && g < 185 && b < 125 && r > g * 1.12;
-            if (!orange) continue;
-            const luminance = Math.max(.18, Math.min(1, (r+g+b)/510));
-            d[i]   = Math.min(255, 112 + 135*luminance);
-            d[i+1] = Math.min(255, 72  + 150*luminance);
-            d[i+2] = Math.min(255, 10  + 70*luminance);
-          }
-          ctx.putImageData(imageData,0,0);
+    const roster = fcChampRosterV1235(ch);
+    const canDelete = typeof canDeleteChallenge === 'function' && canDeleteChallenge(ch);
+    const canPromote = typeof fcCanPromoteChampionshipV1217 === 'function' && fcCanPromoteChampionshipV1217(ch);
+    const time = fcChampTimeV1235(countdownTarget);
+    const phase = fcChampStateV1235(status);
+    const category = escapeHtml(ch?.category || 'Championship');
 
-          // Rebuild the embedded CTA as polished gold with dark text.
-          const x = canvas.width * .075;
-          const y = canvas.height * .845;
-          const w = canvas.width * .85;
-          const h = canvas.height * .095;
-          const radius = Math.max(18, canvas.width * .025);
-          const roundRect = (x,y,w,h,r) => {
-            ctx.beginPath();
-            ctx.moveTo(x+r,y);
-            ctx.arcTo(x+w,y,x+w,y+h,r);
-            ctx.arcTo(x+w,y+h,x,y+h,r);
-            ctx.arcTo(x,y+h,x,y,r);
-            ctx.arcTo(x,y,x+w,y,r);
-            ctx.closePath();
-          };
-          const grad = ctx.createLinearGradient(x,y,x+w,y+h);
-          grad.addColorStop(0,'#6a430d');
-          grad.addColorStop(.22,'#b07a1e');
-          grad.addColorStop(.5,'#fff0a2');
-          grad.addColorStop(.68,'#dbaa3a');
-          grad.addColorStop(1,'#74480c');
-          roundRect(x,y,w,h,radius);
-          ctx.fillStyle=grad;
-          ctx.fill();
-          ctx.strokeStyle='rgba(255,235,160,.8)';
-          ctx.lineWidth=Math.max(2,canvas.width*.002);
-          ctx.stroke();
+    host.classList.add('fc-champ-host-v1235');
+    host.innerHTML = `
+      <section class="fc-champ-dashboard-v1235" data-fc-champ-renderer="v1235">
+        <div class="fc-champ-tools-v1235">
+          <div class="fc-champ-crest-slot-v1235">${fcChampCrestV1235('fc-champ-crest-small-v1235')}</div>
+          <div class="fc-champ-tool-actions-v1235">
+            ${canPromote ? `<button type="button" class="fc-champ-outline-v1235" onclick="previewChampFlyer('${ch.id}')">📣 Promote</button>` : ''}
+            ${canDelete ? `<button type="button" class="fc-champ-outline-v1235" id="cdDeleteBtn">🗑 Delete</button>` : ''}
+          </div>
+        </div>
 
-          const shine=ctx.createLinearGradient(0,y,0,y+h*.55);
-          shine.addColorStop(0,'rgba(255,255,255,.38)');
-          shine.addColorStop(1,'rgba(255,255,255,0)');
-          roundRect(x+3,y+3,w-6,h*.5,radius*.8);
-          ctx.fillStyle=shine;
-          ctx.fill();
+        <div class="fc-champ-heading-v1235">
+          <small>${category}</small>
+          <strong>Championship</strong>
+          <span>Championship Night</span>
+        </div>
 
-          ctx.fillStyle='#171004';
-          ctx.textAlign='center';
-          ctx.textBaseline='middle';
-          ctx.font=`800 ${Math.round(canvas.width*.042)}px Arial, sans-serif`;
-          ctx.fillText('SEE THE MATCHUP →',canvas.width/2,y+h/2);
+        <div class="fc-champ-matchup-v1235">
+          <div class="fc-champ-fighter-v1235">
+            <div class="fc-champ-avatar-v1235">${fcChampAvatarV1235(roster[0]?.entry)}</div>
+            <b>${escapeHtml(roster[0]?.name || 'Contender')}</b>
+            <em>First Final</em>
+          </div>
+          <div class="fc-champ-vs-v1235">VS</div>
+          <div class="fc-champ-fighter-v1235">
+            <div class="fc-champ-avatar-v1235">${fcChampAvatarV1235(roster[1]?.entry)}</div>
+            <b>${escapeHtml(roster[1]?.name || 'Awaiting contender')}</b>
+            <em>First Final</em>
+          </div>
+        </div>
 
-          resolve(canvas.toDataURL('image/png'));
-        } catch (error) {
-          console.warn('goldify flyer',error);
-          resolve(dataUrl);
-        }
-      };
-      img.onerror=()=>resolve(dataUrl);
-      img.src=dataUrl;
-    });
-  }
+        <div class="fc-champ-status-v1235">
+          <span class="fc-champ-live-v1235"><i></i>${escapeHtml(phase)}</span>
+          ${time ? `<span class="fc-champ-time-v1235">◷ ${escapeHtml(time)}</span>` : ''}
+        </div>
 
-  // Transform preview/post flyer output before the promotion UI uses it.
-  const basePreviewChampFlyerV1230 = window.previewChampFlyer;
-  if (typeof basePreviewChampFlyerV1230 === 'function') {
-    window.previewChampFlyer = async function previewChampFlyerV1230(chId) {
-      const originalFetch = window.fetch;
-      window.fetch = async function fetchGoldChampFlyerV1230() {
-        const response = await originalFetch.apply(this, arguments);
-        try {
-          const clone = response.clone();
-          const json = await clone.json();
-          const hit = (json.results || [])[0];
-          if (hit?.png_base64) {
-            const raw = `data:image/png;base64,${hit.png_base64}`;
-            const gold = await goldifyFlyerDataUrlV1230(raw);
-            hit.png_base64 = gold.split(',')[1] || hit.png_base64;
-            return new Response(JSON.stringify(json), {
-              status:response.status,
-              statusText:response.statusText,
-              headers:{'Content-Type':'application/json'}
-            });
-          }
-        } catch (_) {}
-        return response;
-      };
-      try {
-        return await basePreviewChampFlyerV1230.apply(this, arguments);
-      } finally {
-        window.fetch = originalFetch;
-      }
-    };
-  }
+        <div class="fc-champ-actions-v1235">
+          <button type="button" class="fc-champ-primary-v1235" onclick="previewChampFlyer('${ch.id}')">▧ View Poster</button>
+          ${canPromote ? `<button type="button" class="fc-champ-text-v1235" onclick="previewChampFlyer('${ch.id}')">Promote ›</button>` : ''}
+        </div>
+      </section>
+    `;
+  };
 
-  // Once entries arrive, rerender the hero so actual contenders replace placeholders.
-  const baseRenderEntriesV1230 = window.renderChallengeEntries;
-  if (typeof baseRenderEntriesV1230 === 'function') {
-    window.renderChallengeEntries = function renderChallengeEntriesV1230() {
-      const result = baseRenderEntriesV1230.apply(this, arguments);
-      const ch = state?.currentChallenge;
-      if (ch?.is_championship && typeof window.renderChampionshipHero === 'function') {
-        const status = typeof computeChallengeStatus === 'function'
-          ? computeChallengeStatus(ch)
+  window.fcRenderChampionshipFightCardV1235 = function fcRenderChampionshipFightCardV1235(ch,fighters,monthLabel,subtitle,statusLine) {
+    const rows = Array.isArray(fighters) ? fighters.slice(0,2) : [];
+    while (rows.length < 2) rows.push({name:rows.length ? 'Awaiting contender' : 'Contender'});
+
+    const fighterHtml = rows.map((fighter,index) => {
+      const avatar = fighter?.avatar && /^https?:|^data:|^blob:/.test(String(fighter.avatar))
+        ? `<img src="${escapeHtml(fighter.avatar)}" alt="">`
+        : `<span>${escapeHtml(String(fighter?.name || 'C').slice(0,1).toUpperCase())}</span>`;
+      const record = (() => {
+        const user = (state.leaderboardData?.users || []).find(row => row.id === fighter?.id);
+        return user && (user.monthly || user.monthlyLosses)
+          ? `<small>${user.monthly || 0}–${user.monthlyLosses || 0} this month</small>`
           : '';
-        const target = status === 'submitting' ? ch.submission_deadline :
-          ['voting','sudden_death'].includes(status) ? ch.voting_end : null;
-        requestAnimationFrame(() => {
-          window.renderChampionshipHero(ch,status,target);
-          markChampionshipActionsV1230();
-        });
-      }
-      return result;
-    };
-  }
+      })();
+      return `
+        <div class="fc-fight-person-v1235">
+          <div class="fc-fight-avatar-v1235">${avatar}</div>
+          <b>${escapeHtml(String(fighter?.name || 'Contender').toUpperCase())}</b>
+          <em>${escapeHtml(typeof champTitleLine === 'function' ? champTitleLine(fighter?.id) : 'First Final')}</em>
+          ${record}
+        </div>
+        ${index === 0 ? `<div class="fc-fight-vs-v1235">VS</div>` : ''}
+      `;
+    }).join('');
 
-  const observer = new MutationObserver(mutations => {
-    markChampionshipActionsV1230();
-    mutations.forEach(m => m.addedNodes.forEach(node => {
-      if (node.nodeType === 1) markChampionshipFeedCardsV1230(node);
-    }));
+    return `<div class="fight-card fc-fight-card-v1235" data-cid="${ch.id}" data-fc-champ-renderer="v1235"
+      onclick="openChallenge((state.challenges||[]).find(c=>c.id==='${ch.id}'))">
+      <div class="fc-fight-inner-v1235">
+        <div class="fc-fight-crest-v1235">${fcChampCrestV1235('fc-champ-crest-large-v1235')}</div>
+        <div class="fc-fight-eyebrow-v1235">${escapeHtml(monthLabel || '')}${monthLabel ? ' · ' : ''}${escapeHtml((ch.category || '').toUpperCase())}</div>
+        <div class="fc-fight-title-v1235">Championship <span>Night</span></div>
+        <div class="fc-fight-sub-v1235">${escapeHtml(subtitle || 'HEAD TO HEAD · ONE IS CROWNED')}</div>
+        <div class="fc-fight-roster-v1235">${fighterHtml}</div>
+        <div class="fc-fight-status-v1235">${escapeHtml(statusLine || '')}</div>
+        <button type="button" class="fc-fight-cta-v1235">See the Matchup →</button>
+      </div>
+    </div>`;
+  };
+
+  // Runtime assertion: the canonical renderer must own every open Championship.
+  window.fcAssertChampionshipRendererV1235 = function fcAssertChampionshipRendererV1235() {
+    const ch = state?.currentChallenge;
+    if (!ch?.is_championship) return true;
+    const mounted = document.querySelector('#cdHero [data-fc-champ-renderer="v1235"]');
+    if (!mounted) console.error('[v1235] Canonical Championship renderer is not mounted.');
+    return !!mounted;
+  };
+
+  document.addEventListener('click', event => {
+    if (event.target.closest('#challengeDetailSheet')) {
+      requestAnimationFrame(window.fcAssertChampionshipRendererV1235);
+    }
   });
 
-  const start = () => {
-    observer.observe(document.body,{subtree:true,childList:true});
-    markChampionshipActionsV1230();
-    markChampionshipFeedCardsV1230();
-  };
-  if (document.body) start();
-  else document.addEventListener('DOMContentLoaded',start,{once:true});
-
-  window.FC_GOLDIFY_CHAMP_FLYER_V1230 = goldifyFlyerDataUrlV1230;
+  window.FC_CHAMPIONSHIP_CANONICAL_V1235 = true;
 })();
 </script>
+
 
 <script id="fc-v1132-validation-js">
 (function initQualificationCopyV1132(){
@@ -45892,455 +45432,6 @@ document.addEventListener('pointerdown', function(event) {
 </script>
 
 
-<script id="fc-v1226-championship-gold-identity-js">
-(function initChampionshipGoldIdentityV1226(){
-  'use strict';
-
-  function fcChampEntryNameV1226(entry) {
-    return entry?.submitter?.name ||
-      entry?.submitter?.display_name ||
-      entry?.submitter?.username ||
-      entry?.profile?.display_name ||
-      entry?.profile?.username ||
-      entry?.user?.display_name ||
-      entry?.user?.username ||
-      entry?.display_name ||
-      entry?.username ||
-      'Contender';
-  }
-
-  function fcChampAvatarV1226(entry) {
-    const url = entry?.submitter?.avatar ||
-      entry?.submitter?.avatar_url ||
-      entry?.profile?.avatar_url ||
-      entry?.user?.avatar_url ||
-      entry?.avatar_url;
-    if (url) return `<img src="${escapeHtml(url)}" alt="">`;
-    const name = fcChampEntryNameV1226(entry);
-    return `<span>${escapeHtml(name.slice(0,1).toUpperCase())}</span>`;
-  }
-
-  function fcChampRosterV1226(ch) {
-    const entries = (state.currentEntries || []).filter(Boolean);
-    const seen = [];
-    entries.forEach(entry => {
-      const name = fcChampEntryNameV1226(entry);
-      if (name && !seen.some(item => item.name === name)) {
-        seen.push({name, entry});
-      }
-    });
-
-    if (!seen.length && Array.isArray(ch?.championship_roster)) {
-      ch.championship_roster.forEach(person => {
-        const name = person?.display_name || person?.username || person?.name;
-        if (name && !seen.some(item => item.name === name)) {
-          seen.push({name, entry:person});
-        }
-      });
-    }
-
-    if (!seen.length) {
-      return [
-        {name:'Contender 1', entry:null},
-        {name:'Contender 2', entry:null}
-      ];
-    }
-
-    if (seen.length === 1) seen.push({name:'Awaiting contender', entry:null});
-    return seen.slice(0,3);
-  }
-
-  function fcChampTimeLeftV1226(target) {
-    const ms = Date.parse(target || '') - Date.now();
-    if (!Number.isFinite(ms) || ms <= 0) return '';
-    const mins = Math.max(1, Math.floor(ms / 60000));
-    const days = Math.floor(mins / 1440);
-    const hours = Math.floor((mins % 1440) / 60);
-    if (days > 0) return `${days}d ${hours}h left`;
-    if (hours > 0) return `${hours}h ${mins % 60}m left`;
-    return `${mins}m left`;
-  }
-
-  function fcChampPhaseLabelV1226(status) {
-    if (status === 'submitting') return 'Entries Open';
-    if (status === 'sd_submitting') return 'Sudden Death Entries';
-    if (status === 'voting') return 'Voting';
-    if (status === 'sudden_death') return 'Sudden Death Voting';
-    if (status === 'closed') return 'Championship Decided';
-    return 'Championship Round';
-  }
-
-  function fcChampPhaseVerbV1226(status) {
-    if (status === 'submitting' || status === 'sd_submitting') return 'ENTRIES CLOSE IN';
-    if (status === 'voting' || status === 'sudden_death') return 'VOTING CLOSES IN';
-    if (status === 'closed') return 'CHAMPIONSHIP DECIDED';
-    return 'CHAMPIONSHIP ROUND';
-  }
-
-  function fcChampHeroRosterV1226(roster) {
-    if (roster.length <= 2) {
-      return `
-        <div class="fc-champ-gold-matchup-v1226">
-          <div class="fc-champ-gold-fighter-v1226">
-            <div class="fc-champ-gold-avatar-v1226">${fcChampAvatarV1226(roster[0]?.entry)}</div>
-            <strong>${escapeHtml(roster[0]?.name || 'Contender')}</strong>
-            <small>First Final</small>
-          </div>
-          <div class="fc-champ-gold-vs-v1226">VS</div>
-          <div class="fc-champ-gold-fighter-v1226">
-            <div class="fc-champ-gold-avatar-v1226">${fcChampAvatarV1226(roster[1]?.entry)}</div>
-            <strong>${escapeHtml(roster[1]?.name || 'Contender')}</strong>
-            <small>First Final</small>
-          </div>
-        </div>`;
-    }
-
-    return `<div class="fc-champ-gold-three-v1226">${roster.map((person,index)=>`
-      <div class="fc-champ-gold-fighter-v1226">
-        <div class="fc-champ-gold-avatar-v1226">${fcChampAvatarV1226(person.entry)}</div>
-        <strong>${escapeHtml(person.name)}</strong>
-        <small>${index === 0 ? 'Finalist' : 'Contender'}</small>
-      </div>`).join('')}</div>`;
-  }
-
-  window.renderChampionshipHero = function renderChampionshipHeroV1226(ch, status, countdownTarget) {
-    const el = document.getElementById('cdHero');
-    if (!el) return;
-
-    const canDelete = typeof canDeleteChallenge === 'function' && canDeleteChallenge(ch);
-    const promote = typeof fcCanPromoteChampionshipV1217 === 'function' && fcCanPromoteChampionshipV1217(ch);
-    const roster = fcChampRosterV1226(ch);
-    const time = fcChampTimeLeftV1226(countdownTarget);
-    const phase = fcChampPhaseLabelV1226(status);
-    const phaseVerb = fcChampPhaseVerbV1226(status);
-    const category = escapeHtml(ch?.category || 'Championship');
-
-    el.innerHTML = `
-      <section class="fc-champ-gold-hero-v1226">
-        <div class="fc-champ-gold-top-v1226">
-          <div class="fc-champ-gold-crown-v1226 fc-champ-crest-hero-v1233"><svg class="fc-champ-crest-svg-v1233" viewBox="0 0 180 110" aria-hidden="true" focusable="false">
-  <defs>
-    <linearGradient id="fcCrownGoldV1233" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#fff8ca"/>
-      <stop offset=".28" stop-color="#f2d06a"/>
-      <stop offset=".64" stop-color="#bd7f18"/>
-      <stop offset="1" stop-color="#643b06"/>
-    </linearGradient>
-    <linearGradient id="fcLaurelGoldV1233" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#f4d878"/>
-      <stop offset=".58" stop-color="#c18620"/>
-      <stop offset="1" stop-color="#714507"/>
-    </linearGradient>
-    <filter id="fcCrestGlowV1233" x="-35%" y="-35%" width="170%" height="170%">
-      <feGaussianBlur stdDeviation="3.2" result="blur"/>
-      <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0.88  0 1 0 0 0.62  0 0 1 0 0.14  0 0 0 .46 0"/>
-      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-  </defs>
-  <g filter="url(#fcCrestGlowV1233)">
-    <g fill="none" stroke="url(#fcLaurelGoldV1233)" stroke-width="5" stroke-linecap="round">
-      <path d="M58 85C37 76 24 58 22 36"/>
-      <path d="M122 85c21-9 34-27 36-49"/>
-    </g>
-    <g fill="url(#fcLaurelGoldV1233)">
-      <ellipse cx="29" cy="42" rx="5" ry="11" transform="rotate(-42 29 42)"/>
-      <ellipse cx="34" cy="57" rx="5" ry="11" transform="rotate(-52 34 57)"/>
-      <ellipse cx="43" cy="70" rx="5" ry="11" transform="rotate(-61 43 70)"/>
-      <ellipse cx="151" cy="42" rx="5" ry="11" transform="rotate(42 151 42)"/>
-      <ellipse cx="146" cy="57" rx="5" ry="11" transform="rotate(52 146 57)"/>
-      <ellipse cx="137" cy="70" rx="5" ry="11" transform="rotate(61 137 70)"/>
-    </g>
-    <path fill="url(#fcCrownGoldV1233)" stroke="#f7dc83" stroke-width="2"
-      d="M59 69h62l-4 20H63l-4-20Zm4-8 9-28 18 19 18-19 9 28H63Z"/>
-    <circle cx="72" cy="31" r="4.5" fill="#fff3b1"/>
-    <circle cx="90" cy="20" r="5" fill="#fff7ca"/>
-    <circle cx="108" cy="31" r="4.5" fill="#fff3b1"/>
-    <rect x="63" y="89" width="54" height="8" rx="3" fill="url(#fcCrownGoldV1233)" stroke="#f7dc83" stroke-width="1.5"/>
-    <path d="M79 70h22" stroke="#fff4b5" stroke-width="2.2" stroke-linecap="round" opacity=".75"/>
-    <path d="M90 101l4 4-4 4-4-4 4-4Z" fill="#efc85f"/>
-  </g>
-</svg></div>
-          <div class="fc-champ-gold-admin-v1226">
-            ${promote ? `<button type="button" class="fc-champ-gold-promote-v1226 fc-icon-label-v1216" onclick="previewChampFlyer('${ch.id}')">${fcPictureIconV1216('fc-picture-icon-v1216')}<span>Promote</span></button>` : ''}
-            ${canDelete ? `<button type="button" class="fc-champ-gold-delete-v1226 fc-icon-label-v1216" id="cdDeleteBtn">${fcTrashIconV1219('fc-trash-icon-v1219')}<span>Delete</span></button>` : ''}
-          </div>
-        </div>
-
-        <div class="fc-champ-gold-copy-v1226">
-          <div class="fc-champ-gold-kicker-v1226">${category}</div>
-          <div class="fc-champ-gold-title-v1226">Championship</div>
-          <div class="fc-champ-gold-night-v1226">Championship Night</div>
-        </div>
-
-        ${fcChampHeroRosterV1226(roster)}
-
-        <div class="fc-champ-gold-deadline-v1226">
-          <span class="fc-champ-gold-clock-v1226">◷</span>
-          <strong>${escapeHtml(phaseVerb)}</strong>
-          ${time ? `<span>${escapeHtml(time)}</span>` : ''}
-        </div>
-
-        <div class="fc-champ-gold-actions-v1226">
-          <button type="button" class="fc-champ-gold-poster-v1226" onclick="previewChampFlyer('${ch.id}')">
-            ${fcPictureIconV1216('fc-picture-icon-v1216')}
-            <span>View Poster</span>
-          </button>
-          ${promote ? `<button type="button" class="fc-champ-gold-promote-secondary-v1226" onclick="previewChampFlyer('${ch.id}')">Promote</button>` : ''}
-        </div>
-
-        <div class="fc-champ-gold-phase-v1226">${escapeHtml(phase)}</div>
-      </section>
-    `;
-  };
-
-  const baseRenderChallengeDetailV1226 = window.renderChallengeDetail;
-  if (typeof baseRenderChallengeDetailV1226 === 'function') {
-    window.renderChallengeDetail = function renderChallengeDetailV1226() {
-      const result = baseRenderChallengeDetailV1226.apply(this, arguments);
-      const ch = state?.currentChallenge;
-      if (ch?.is_championship) {
-        document.body.classList.add('fc-championship-view-v1226');
-        const hero = document.getElementById('cdHero');
-        hero?.classList.add('fc-champ-gold-host-v1226');
-
-        const counter = document.getElementById('cdEntriesCounter');
-        const count = (state.currentEntries || []).length;
-        if (counter && count > 0) {
-          const active = Math.max(1, Number(counter.textContent.match(/(\d+)\s*of\s*(\d+)/i)?.[1] || 1));
-          counter.textContent = `${count} ${count === 1 ? 'entry' : 'entries'} · ${active} of ${count}`;
-        }
-      } else {
-        document.body.classList.remove('fc-championship-view-v1226');
-      }
-      return result;
-    };
-  }
-
-  const baseCloseChallengeDetailV1226 = window.closeChallengeDetail;
-  if (typeof baseCloseChallengeDetailV1226 === 'function') {
-    window.closeChallengeDetail = function closeChallengeDetailV1226() {
-      document.body.classList.remove('fc-championship-view-v1226');
-      return baseCloseChallengeDetailV1226.apply(this, arguments);
-    };
-  }
-
-  window.FC_CHAMPIONSHIP_PAGE_MODE_V1226 = 'gold-event-identity';
-})();
-</script>
-
-
-<script id="fc-v1227-championship-card-theme-js">
-(function initChampionshipCardThemeV1227(){
-  'use strict';
-
-  function markChampionshipCardsV1227(root=document) {
-    const candidates = root.querySelectorAll(
-      '[data-challenge-id], .challenge-card, .feed-post, .fc-feed-card, .post-card'
-    );
-    candidates.forEach(card => {
-      const id = card.getAttribute('data-challenge-id') ||
-        card.dataset?.challengeId ||
-        card.querySelector('[data-challenge-id]')?.getAttribute('data-challenge-id');
-      const challenge = (state?.challenges || []).find(ch => String(ch?.id) === String(id));
-      const text = String(card.textContent || '');
-      const looksChampionship = challenge?.is_championship === true ||
-        /\bchampionship\b/i.test(text);
-
-      if (looksChampionship) {
-        card.classList.add('fc-championship-card');
-        card.setAttribute('data-championship','true');
-      }
-    });
-  }
-
-  const observer = new MutationObserver(mutations => {
-    mutations.forEach(mutation => {
-      mutation.addedNodes.forEach(node => {
-        if (node.nodeType === 1) markChampionshipCardsV1227(node);
-      });
-    });
-  });
-
-  if (document.body) {
-    observer.observe(document.body,{subtree:true,childList:true});
-    markChampionshipCardsV1227();
-  } else {
-    document.addEventListener('DOMContentLoaded',()=>{
-      observer.observe(document.body,{subtree:true,childList:true});
-      markChampionshipCardsV1227();
-    },{once:true});
-  }
-
-  window.FC_MARK_CHAMPIONSHIP_CARDS_V1227 = markChampionshipCardsV1227;
-})();
-</script>
-
-
-<script id="fc-v1234-championship-experience-redesign-js">
-(function initChampionshipExperienceV1234(){
-  'use strict';
-
-  const CREST_V1234 = `<svg class="fc-champ-crest-svg-v1233" viewBox="0 0 180 110" aria-hidden="true" focusable="false">
-  <defs>
-    <linearGradient id="fcCrownGoldV1233" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#fff8ca"/>
-      <stop offset=".28" stop-color="#f2d06a"/>
-      <stop offset=".64" stop-color="#bd7f18"/>
-      <stop offset="1" stop-color="#643b06"/>
-    </linearGradient>
-    <linearGradient id="fcLaurelGoldV1233" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#f4d878"/>
-      <stop offset=".58" stop-color="#c18620"/>
-      <stop offset="1" stop-color="#714507"/>
-    </linearGradient>
-    <filter id="fcCrestGlowV1233" x="-35%" y="-35%" width="170%" height="170%">
-      <feGaussianBlur stdDeviation="3.2" result="blur"/>
-      <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0.88  0 1 0 0 0.62  0 0 1 0 0.14  0 0 0 .46 0"/>
-      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-  </defs>
-  <g filter="url(#fcCrestGlowV1233)">
-    <g fill="none" stroke="url(#fcLaurelGoldV1233)" stroke-width="5" stroke-linecap="round">
-      <path d="M58 85C37 76 24 58 22 36"/>
-      <path d="M122 85c21-9 34-27 36-49"/>
-    </g>
-    <g fill="url(#fcLaurelGoldV1233)">
-      <ellipse cx="29" cy="42" rx="5" ry="11" transform="rotate(-42 29 42)"/>
-      <ellipse cx="34" cy="57" rx="5" ry="11" transform="rotate(-52 34 57)"/>
-      <ellipse cx="43" cy="70" rx="5" ry="11" transform="rotate(-61 43 70)"/>
-      <ellipse cx="151" cy="42" rx="5" ry="11" transform="rotate(42 151 42)"/>
-      <ellipse cx="146" cy="57" rx="5" ry="11" transform="rotate(52 146 57)"/>
-      <ellipse cx="137" cy="70" rx="5" ry="11" transform="rotate(61 137 70)"/>
-    </g>
-    <path fill="url(#fcCrownGoldV1233)" stroke="#f7dc83" stroke-width="2"
-      d="M59 69h62l-4 20H63l-4-20Zm4-8 9-28 18 19 18-19 9 28H63Z"/>
-    <circle cx="72" cy="31" r="4.5" fill="#fff3b1"/>
-    <circle cx="90" cy="20" r="5" fill="#fff7ca"/>
-    <circle cx="108" cy="31" r="4.5" fill="#fff3b1"/>
-    <rect x="63" y="89" width="54" height="8" rx="3" fill="url(#fcCrownGoldV1233)" stroke="#f7dc83" stroke-width="1.5"/>
-    <path d="M79 70h22" stroke="#fff4b5" stroke-width="2.2" stroke-linecap="round" opacity=".75"/>
-    <path d="M90 101l4 4-4 4-4-4 4-4Z" fill="#efc85f"/>
-  </g>
-</svg>`;
-
-  function nameV1234(entry) {
-    return entry?.submitter?.name ||
-      entry?.submitter?.display_name ||
-      entry?.submitter?.username ||
-      entry?.profile?.display_name ||
-      entry?.profile?.username ||
-      entry?.user?.display_name ||
-      entry?.user?.username ||
-      entry?.display_name ||
-      entry?.username ||
-      'Contender';
-  }
-
-  function avatarV1234(entry) {
-    const url = entry?.submitter?.avatar ||
-      entry?.submitter?.avatar_url ||
-      entry?.profile?.avatar_url ||
-      entry?.user?.avatar_url ||
-      entry?.avatar_url;
-    if (url) return `<img src="${escapeHtml(url)}" alt="">`;
-    return `<span>${escapeHtml(nameV1234(entry).slice(0,1).toUpperCase())}</span>`;
-  }
-
-  function rosterV1234(ch) {
-    const rows = [];
-    (state.currentEntries || []).forEach(entry => {
-      const name = nameV1234(entry);
-      if (!rows.some(row => row.name === name)) rows.push({name,entry});
-    });
-    if (!rows.length && Array.isArray(ch?.championship_roster)) {
-      ch.championship_roster.forEach(person => {
-        const name = person?.display_name || person?.username || person?.name;
-        if (name && !rows.some(row => row.name === name)) rows.push({name,entry:person});
-      });
-    }
-    if (!rows.length) rows.push({name:'Contender',entry:null});
-    if (rows.length === 1) rows.push({name:'Awaiting contender',entry:null});
-    return rows.slice(0,2);
-  }
-
-  function timeLeftV1234(target) {
-    const ms = Date.parse(target || '') - Date.now();
-    if (!Number.isFinite(ms) || ms <= 0) return '';
-    const mins = Math.max(1,Math.floor(ms/60000));
-    const days = Math.floor(mins/1440);
-    const hours = Math.floor((mins%1440)/60);
-    if (days > 0) return `${days}d ${hours}h remaining`;
-    if (hours > 0) return `${hours}h ${mins%60}m remaining`;
-    return `${mins}m remaining`;
-  }
-
-  function statusV1234(status) {
-    if (status === 'submitting') return 'ENTRIES OPEN';
-    if (status === 'sd_submitting') return 'SUDDEN DEATH ENTRIES';
-    if (status === 'voting') return 'VOTING OPEN';
-    if (status === 'sudden_death') return 'SUDDEN DEATH VOTING';
-    if (status === 'closed') return 'CHAMPIONSHIP DECIDED';
-    return 'CHAMPIONSHIP ROUND';
-  }
-
-  window.renderChampionshipHero = function renderChampionshipHeroV1234(ch,status,countdownTarget) {
-    const el = document.getElementById('cdHero');
-    if (!el) return;
-
-    const people = rosterV1234(ch);
-    const canDelete = typeof canDeleteChallenge === 'function' && canDeleteChallenge(ch);
-    const promote = typeof fcCanPromoteChampionshipV1217 === 'function' && fcCanPromoteChampionshipV1217(ch);
-    const category = escapeHtml(ch?.category || 'Championship');
-    const time = timeLeftV1234(countdownTarget);
-    const stateLabel = statusV1234(status);
-
-    el.innerHTML = `
-      <section class="fc-champ-dashboard-v1234">
-        <div class="fc-champ-dashboard-tools-v1234">
-          <div class="fc-champ-dashboard-crest-v1234">${CREST_V1234}</div>
-          <div class="fc-champ-dashboard-toolrow-v1234">
-            ${promote ? `<button type="button" class="fc-champ-outline-v1234" onclick="previewChampFlyer('${ch.id}')">📣 Promote</button>` : ''}
-            ${canDelete ? `<button type="button" class="fc-champ-outline-v1234" id="cdDeleteBtn">🗑 Delete</button>` : ''}
-          </div>
-        </div>
-
-        <div class="fc-champ-dashboard-title-v1234">
-          <small>${category}</small>
-          <strong>Championship</strong>
-          <span>Championship Night</span>
-        </div>
-
-        <div class="fc-champ-dashboard-matchup-v1234">
-          <div class="fc-champ-dashboard-fighter-v1234">
-            <div class="fc-champ-dashboard-avatar-v1234">${avatarV1234(people[0]?.entry)}</div>
-            <b>${escapeHtml(people[0]?.name || 'Contender')}</b>
-            <em>First Final</em>
-          </div>
-          <div class="fc-champ-dashboard-vs-v1234">VS</div>
-          <div class="fc-champ-dashboard-fighter-v1234">
-            <div class="fc-champ-dashboard-avatar-v1234">${avatarV1234(people[1]?.entry)}</div>
-            <b>${escapeHtml(people[1]?.name || 'Awaiting contender')}</b>
-            <em>First Final</em>
-          </div>
-        </div>
-
-        <div class="fc-champ-dashboard-status-v1234">
-          <span class="fc-champ-dashboard-live-v1234"><i></i>${escapeHtml(stateLabel)}</span>
-          ${time ? `<span class="fc-champ-dashboard-time-v1234">◷ ${escapeHtml(time)}</span>` : ''}
-        </div>
-
-        <div class="fc-champ-dashboard-actions-v1234">
-          <button type="button" class="fc-champ-primary-v1234" onclick="previewChampFlyer('${ch.id}')">▧ View Poster</button>
-          ${promote ? `<button type="button" class="fc-champ-textaction-v1234" onclick="previewChampFlyer('${ch.id}')">Promote ›</button>` : ''}
-        </div>
-      </section>
-    `;
-  };
-
-  window.FC_CHAMPIONSHIP_EXPERIENCE_V1234 = true;
-})();
-</script>
-
-<script>window.FC_V1234_VALIDATION={build:"v1234",challengeEventDashboard:true,matchupIsHero:true,focusedFourZoneHierarchy:true,feedPosterAtmosphere:true,biggerFeedMatchup:true,secondaryPromoteReduced:true,approvedCrestPreserved:true,realContendersPreserved:true,goldOnlyChampionshipActions:true,updateParserPreserved:true};</script>
+<script>window.FC_V1235_VALIDATION={build:"v1235",oneCanonicalDetailRenderer:true,oneSharedFeedCompeteRenderer:true,competingLateScriptsRemoved:true,competingLateStylesRemoved:true,runtimeMountAssertion:true,approvedDashboardHierarchy:true,approvedFeedPosterHierarchy:true,realContendersPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
