@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1230 · authoritative-championship-rendering" name="fc-build"/>
+<meta content="v1231 · real-championship-data-and-feed-gold" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Moved Championship styling to the true final cascade, goldified generated flyers, covered legacy orange flyer CTAs, and refreshed the hero after contender data loads." name="fc-whatsnew"/>
+<meta content="Championship heroes now read the actual loaded submitter names and avatars, the real Feed fight-card CTA is metallic gold, and the orange arena emblem is replaced with a gold crown mark." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -22987,7 +22987,7 @@ function renderChallenges() {
           : `🔒 SEALED VOTING · ENDS ${formatCountdown(countdownTarget).toUpperCase()}`;
         return `<div class="fight-card" data-cid="${ch.id}" onclick="openChallenge((state.challenges||[]).find(c=>c.id==='${ch.id}'))">
           <div class="fight-inner">
-            <img class="fight-arena-mark" src="data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20128%20128%22%20role%3D%22img%22%20aria-label%3D%22FlamesChallenge%20Arena%20Mark%22%3E%0A%3Cdefs%3E%0A%20%20%3ClinearGradient%20id%3D%22left%22%20x1%3D%2212%22%20y1%3D%22100%22%20x2%3D%2258%22%20y2%3D%2218%22%20gradientUnits%3D%22userSpaceOnUse%22%3E%3Cstop%20stop-color%3D%22%23ff321f%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23ff8a19%22%2F%3E%3C%2FlinearGradient%3E%0A%20%20%3ClinearGradient%20id%3D%22right%22%20x1%3D%2272%22%20y1%3D%22110%22%20x2%3D%22116%22%20y2%3D%2218%22%20gradientUnits%3D%22userSpaceOnUse%22%3E%3Cstop%20stop-color%3D%22%23f7a914%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23ffd46a%22%2F%3E%3C%2FlinearGradient%3E%0A%3C%2Fdefs%3E%0A%3Cpath%20fill%3D%22url%28%23left%29%22%20fill-rule%3D%22evenodd%22%20d%3D%22M10%2030%2052%208l12%2014-30%2017v50l30%2017-12%2014-42-22V30Zm14%2010v48l24%2013%205-6-20-11V44l20-11-5-6-24%2013Z%22%2F%3E%0A%3Cpath%20fill%3D%22url%28%23right%29%22%20fill-rule%3D%22evenodd%22%20d%3D%22m118%2030-42-22-12%2014%2030%2017v50l-30%2017%2012%2014%2042-22V30Zm-14%2010v48l-24%2013-5-6%2020-11V44L75%2033l5-6%2024%2013Z%22%2F%3E%0A%3C%2Fsvg%3E" alt="">
+            <div class="fight-arena-mark fc-gold-crown-mark-v1231" aria-hidden="true">♛</div>
             <div class="fight-eyebrow">${_monthLbl}${_monthLbl ? ' · ' : ''}${escapeHtml((ch.category || '').toUpperCase())}</div>
             <div class="fight-title">CHAMPIONSHIP<br>NIGHT</div>
             <div class="fight-sub">${_subTitle}</div>
@@ -23238,6 +23238,12 @@ async function openChallenge(ch) {
     return;
   }
   renderChallengeDetail();
+  if (ch?.is_championship && typeof window.renderChampionshipHero === 'function') {
+    const _fcStatusV1231 = typeof computeChallengeStatus === 'function' ? computeChallengeStatus(ch) : '';
+    const _fcTargetV1231 = _fcStatusV1231 === 'submitting' ? ch.submission_deadline :
+      (_fcStatusV1231 === 'voting' || _fcStatusV1231 === 'sudden_death') ? ch.voting_end : null;
+    window.renderChampionshipHero(ch, _fcStatusV1231, _fcTargetV1231);
+  }
   renderChallengeResults();
 }
 
@@ -25695,7 +25701,7 @@ function renderFeed() {
             : `🔒 SEALED VOTING · ENDS ${countdown.toUpperCase()}`;
           return `<div class="fight-card" data-cid="${ch.id}" onclick="openChallenge((state.challenges||[]).find(c=>c.id==='${ch.id}'))">
             <div class="fight-inner">
-              <img class="fight-arena-mark" src="data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20128%20128%22%20role%3D%22img%22%20aria-label%3D%22FlamesChallenge%20Arena%20Mark%22%3E%0A%3Cdefs%3E%0A%20%20%3ClinearGradient%20id%3D%22left%22%20x1%3D%2212%22%20y1%3D%22100%22%20x2%3D%2258%22%20y2%3D%2218%22%20gradientUnits%3D%22userSpaceOnUse%22%3E%3Cstop%20stop-color%3D%22%23ff321f%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23ff8a19%22%2F%3E%3C%2FlinearGradient%3E%0A%20%20%3ClinearGradient%20id%3D%22right%22%20x1%3D%2272%22%20y1%3D%22110%22%20x2%3D%22116%22%20y2%3D%2218%22%20gradientUnits%3D%22userSpaceOnUse%22%3E%3Cstop%20stop-color%3D%22%23f7a914%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23ffd46a%22%2F%3E%3C%2FlinearGradient%3E%0A%3C%2Fdefs%3E%0A%3Cpath%20fill%3D%22url%28%23left%29%22%20fill-rule%3D%22evenodd%22%20d%3D%22M10%2030%2052%208l12%2014-30%2017v50l30%2017-12%2014-42-22V30Zm14%2010v48l24%2013%205-6-20-11V44l20-11-5-6-24%2013Z%22%2F%3E%0A%3Cpath%20fill%3D%22url%28%23right%29%22%20fill-rule%3D%22evenodd%22%20d%3D%22m118%2030-42-22-12%2014%2030%2017v50l-30%2017%2012%2014%2042-22V30Zm-14%2010v48l-24%2013-5-6%2020-11V44L75%2033l5-6%2024%2013Z%22%2F%3E%0A%3C%2Fsvg%3E" alt="">
+              <div class="fight-arena-mark fc-gold-crown-mark-v1231" aria-hidden="true">♛</div>
               <div class="fight-eyebrow">${monthLbl}${monthLbl ? ' · ' : ''}${escapeHtml((ch.category || '').toUpperCase())}</div>
               <div class="fight-title">CHAMPIONSHIP<br>NIGHT</div>
               <div class="fight-sub">${_subTitle}</div>
@@ -44543,6 +44549,95 @@ body.fc-championship-view-v1226 .fc-champ-gold-title-v1226 {
 }
 </style>
 
+<style id="fc-v1231-final-championship-fixes">
+/* Real Feed/Compete Championship card CTA — this is HTML, not an image. */
+.fight-card .fight-cta {
+  position:relative!important;
+  overflow:hidden!important;
+  border:1px solid rgba(255,234,160,.62)!important;
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.34),rgba(255,255,255,0) 34%),
+    linear-gradient(135deg,#5d3907 0%,#a96f16 20%,#fff1a6 50%,#d7a437 69%,#71460a 100%)!important;
+  color:#171004!important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.58),
+    inset 0 -3px 7px rgba(58,31,1,.31),
+    0 7px 20px rgba(176,118,18,.18)!important;
+  text-shadow:none!important;
+}
+
+.fight-card .fight-cta::after {
+  content:"";
+  position:absolute;
+  inset:3px 8% auto;
+  height:36%;
+  border-radius:999px;
+  background:linear-gradient(180deg,rgba(255,255,255,.32),rgba(255,255,255,0));
+  pointer-events:none;
+}
+
+.fight-card .fc-gold-crown-mark-v1231 {
+  width:72px!important;
+  height:72px!important;
+  margin:0 auto 10px!important;
+  display:grid!important;
+  place-items:center!important;
+  border:1px solid rgba(255,231,148,.48)!important;
+  border-radius:50%!important;
+  background:
+    radial-gradient(circle at 38% 28%,#fff2aa 0%,#d4a035 50%,#6d4208 100%)!important;
+  color:#171004!important;
+  font-family:Georgia,"Times New Roman",serif!important;
+  font-size:38px!important;
+  line-height:1!important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.48),
+    0 0 24px rgba(221,168,49,.20)!important;
+}
+
+/* Actual loaded contender photos and names. */
+body.fc-championship-view-v1226 .fc-champ-gold-avatar-v1226 img {
+  display:block!important;
+  width:100%!important;
+  height:100%!important;
+  object-fit:cover!important;
+  opacity:1!important;
+}
+
+/* Remove the accidental square behind the bottom-center plus from v1230. */
+body.fc-championship-view-v1226 #bottomNav button:nth-child(3),
+body.fc-championship-view-v1226 #bottomNav a:nth-child(3) {
+  border:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  color:inherit!important;
+}
+body.fc-championship-view-v1226 #bottomNav .create-btn,
+body.fc-championship-view-v1226 #bottomNav .center-add,
+body.fc-championship-view-v1226 #bottomNav .plus-btn {
+  border:1px solid rgba(255,234,160,.45)!important;
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.31),rgba(255,255,255,0) 34%),
+    linear-gradient(135deg,#5d3907,#a96f16 20%,#fff1a6 50%,#d7a437 69%,#71460a)!important;
+  color:#171004!important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.52),
+    inset 0 -2px 7px rgba(58,31,1,.30),
+    0 7px 20px rgba(176,118,18,.18)!important;
+}
+
+/* Keep the hero operational actions dark and gold-outline. */
+body.fc-championship-view-v1226 .fc-champ-gold-promote-v1226,
+body.fc-championship-view-v1226 .fc-champ-gold-promote-secondary-v1226,
+body.fc-championship-view-v1226 .fc-champ-gold-delete-v1226 {
+  background:linear-gradient(180deg,rgba(229,180,65,.055),rgba(229,180,65,.01)),#0c0804!important;
+  border-color:rgba(226,177,62,.48)!important;
+  color:#e8bd51!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035)!important;
+}
+</style>
+
+
 
 <script id="fc-v1230-authoritative-championship-js">
 (function initAuthoritativeChampionshipV1230(){
@@ -45263,7 +45358,10 @@ document.addEventListener('pointerdown', function(event) {
   'use strict';
 
   function fcChampEntryNameV1226(entry) {
-    return entry?.profile?.display_name ||
+    return entry?.submitter?.name ||
+      entry?.submitter?.display_name ||
+      entry?.submitter?.username ||
+      entry?.profile?.display_name ||
       entry?.profile?.username ||
       entry?.user?.display_name ||
       entry?.user?.username ||
@@ -45273,7 +45371,11 @@ document.addEventListener('pointerdown', function(event) {
   }
 
   function fcChampAvatarV1226(entry) {
-    const url = entry?.profile?.avatar_url || entry?.user?.avatar_url || entry?.avatar_url;
+    const url = entry?.submitter?.avatar ||
+      entry?.submitter?.avatar_url ||
+      entry?.profile?.avatar_url ||
+      entry?.user?.avatar_url ||
+      entry?.avatar_url;
     if (url) return `<img src="${escapeHtml(url)}" alt="">`;
     const name = fcChampEntryNameV1226(entry);
     return `<span>${escapeHtml(name.slice(0,1).toUpperCase())}</span>`;
@@ -45493,6 +45595,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1230_VALIDATION={build:"v1230",finalCascadeAuthoritative:true,generatedFlyerGoldified:true,legacyFlyerCtaCovered:true,actualEditButtonGold:true,bottomCenterGold:true,heroRefreshesAfterEntries:true,actualContendersPreferred:true,noOrangeChampionshipActions:true,updateParserPreserved:true};</script>
+<script>window.FC_V1231_VALIDATION={build:"v1231",submitterNamesAndAvatarsUsed:true,feedFightCtaActuallyGold:true,orangeArenaMarkRemoved:true,heroRerenderAfterLoad:true,bottomPlusSquareRemoved:true,noOrangeChampionshipActions:true,updateParserPreserved:true};</script>
 </body>
 </html>
