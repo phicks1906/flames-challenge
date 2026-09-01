@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1237 · championship-crest-and-gold-action-fix" name="fc-build"/>
+<meta content="v1238 · unified-video-playback" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Replaced the weak generated crest with a polished Championship mark built around the approved FlamesChallenge logo and permanently forced live Championship entry actions to metallic gold." name="fc-whatsnew"/>
+<meta content="Unified Home and Compete video-entry behavior, enabled audible first-tap playback, removed the persistent play overlay after playback begins, and routed both surfaces through the same full-size viewer." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -20081,8 +20081,15 @@ function fcInitDeliberateVideoV1200(video, options = {}) {
 
   video.controls = true;
   video.playsInline = true;
+  video.setAttribute('playsinline','');
   video.preload = options.preload || 'metadata';
   video.autoplay = autoplay;
+
+  // v1238 — previews are muted, deliberate playback is not. Remove both the
+  // property and content attribute because iOS can preserve the muted default
+  // from a cloned/reused preview even after video.muted = false.
+  video.removeAttribute('muted');
+  video.defaultMuted = false;
   video.muted = false;
   video.volume = 1;
   if (className) video.className = className;
@@ -23076,12 +23083,14 @@ function renderChallenges() {
     });
   });
 
-  // Wire entry card taps → entry viewer
+  // v1238 — Home and Compete now use one video/entry viewer contract.
+  // This removes the old split where Compete opened Entry Viewer while Home
+  // opened Feed Viewer, producing different sizing, sound, and overlay behavior.
   grid.querySelectorAll('[data-entry-open]').forEach(card => {
     card.addEventListener('click', e => {
-      if (e.target.closest('[data-fcc-vote],.fcc-vote-btn,[data-show-likes],.fcc-fire-eq,audio')) return;
+      if (e.target.closest('[data-fcc-vote],.fcc-vote-btn,[data-show-likes],.fcc-fire-eq,audio[controls]')) return;
       e.stopPropagation();
-      openEntryViewer(card.dataset.entryId, card.dataset.entryOpen);
+      openFeedViewer(card.dataset.entryOpen, card.dataset.entryId || null);
     });
   });
 
@@ -26408,11 +26417,12 @@ function fcEntryCardMediaV1060(e, ch) {
     // v1184 — challenge-entry cards now use the established three-second muted
     // preview controller. A failed preview.webp must not collapse into a broken
     // image icon; the video itself can still supply the short feed preview.
-    return `<div class="fcc-entry-media fcc-video-thumb fc-entry-stage-v1060 fc-entry-video-v1079">
+    return `<div class="fcc-entry-media fcc-video-thumb fc-entry-stage-v1060 fc-entry-video-v1079 fc-video-unified-v1238"
+      data-video-entry-v1238="true" aria-label="Open ${escapeHtml(label)}'s video">
       <video data-src="${escapeHtml(e.media_url || '')}" ${_videoPosterAttr(e.media_url || '', e.poster_url || '')}
-        muted playsinline preload="none" data-lazy-video
-        aria-label="${escapeHtml(label)}'s three-second video preview"></video>
-      <span class="fcc-play-overlay" aria-hidden="true">▶</span>
+        muted playsinline preload="none" data-lazy-video tabindex="-1"
+        aria-hidden="true"></video>
+      <span class="fcc-play-overlay fc-card-play-overlay-v1238" aria-hidden="true">▶</span>
     </div>`;
   }
   return `<div class="fcc-entry-media fc-entry-stage-v1060"><img class="fc-entry-blur-v1060" src="${escapeHtml(url)}" alt="" aria-hidden="true" loading="lazy"><img class="fc-entry-contain-v1060" src="${escapeHtml(url)}" alt="${escapeHtml(label)}'s entry" loading="lazy"></div>`;
@@ -28709,10 +28719,44 @@ async function openFeedViewer(chId, startEntryId = null) {
           });
         }
       }, { once: true });
+      const fvPlayOverlayV1238 = document.createElement('button');
+      fvPlayOverlayV1238.type = 'button';
+      fvPlayOverlayV1238.className = 'fc-video-play-overlay-v1238';
+      fvPlayOverlayV1238.setAttribute('aria-label','Play video with sound');
+      fvPlayOverlayV1238.innerHTML = '<span>▶</span>';
+      fvPlayOverlayV1238.addEventListener('click', (overlayEvent) => {
+        overlayEvent.preventDefault();
+        overlayEvent.stopPropagation();
+        newVid.removeAttribute('muted');
+        newVid.defaultMuted = false;
+        newVid.muted = false;
+        newVid.volume = 1;
+        newVid.play().catch(() => {});
+      });
+
+      const hidePlayOverlayV1238 = () => {
+        fvPlayOverlayV1238.classList.add('is-hidden');
+        window.setTimeout(() => {
+          if (fvPlayOverlayV1238.isConnected) fvPlayOverlayV1238.remove();
+        }, 260);
+      };
+      newVid.addEventListener('playing', hidePlayOverlayV1238, { once:true });
+      newVid.addEventListener('play', hidePlayOverlayV1238, { once:true });
+
       fvStage.appendChild(fvBlur);
       fvStage.appendChild(newVid);
+      fvStage.appendChild(fvPlayOverlayV1238);
       target.replaceWith(fvStage);
-      newVid.play().catch(() => {});      // synchronous within the gesture
+
+      // Must remain inside the original member gesture for audible iOS playback.
+      newVid.removeAttribute('muted');
+      newVid.defaultMuted = false;
+      newVid.muted = false;
+      newVid.volume = 1;
+      newVid.play().then(hidePlayOverlayV1238).catch(() => {
+        // The custom overlay remains available if iOS requires a second direct
+        // tap, but unlike the previous native icon it disappears once playing.
+      });
     }, { once: false });
     } // end once-only fvPlayWired guard
 
@@ -44884,6 +44928,82 @@ body.fc-championship-view-v1226 #challengeDetailSheet [data-fc-champ-primary-v12
 }
 </style>
 
+<style id="fc-v1238-unified-video-final">
+/* Card previews stay compact and muted, but the entire tile opens the same
+   full-size viewer from Home and Compete. */
+.fc-video-unified-v1238,
+.fc-video-unified-v1238 video {
+  cursor:pointer!important;
+}
+.fc-video-unified-v1238 video {
+  pointer-events:none!important;
+}
+.fc-card-play-overlay-v1238 {
+  transition:opacity .22s ease, transform .22s ease!important;
+}
+
+/* Full-size deliberate player overlay. */
+.fv-stage {
+  position:relative!important;
+}
+.fc-video-play-overlay-v1238 {
+  position:absolute;
+  inset:0;
+  z-index:5;
+  display:grid;
+  place-items:center;
+  border:0;
+  background:transparent;
+  color:#fff;
+  cursor:pointer;
+  opacity:1;
+  transition:opacity .22s ease;
+  -webkit-tap-highlight-color:transparent;
+}
+.fc-video-play-overlay-v1238 span {
+  width:68px;
+  height:68px;
+  display:grid;
+  place-items:center;
+  padding-left:4px;
+  border-radius:50%;
+  background:rgba(19,22,25,.68);
+  border:1px solid rgba(255,255,255,.18);
+  box-shadow:0 10px 28px rgba(0,0,0,.34);
+  font-size:29px;
+  line-height:1;
+  backdrop-filter:blur(8px);
+}
+.fc-video-play-overlay-v1238.is-hidden {
+  opacity:0;
+  pointer-events:none;
+}
+
+/* Once real playback starts, native controls remain but no permanent custom
+   center icon remains over the content. */
+.fv-stage video[data-fc-deliberate-video-v1200="1"] {
+  background:#0000!important;
+}
+
+/* The unified Feed Viewer should evaluate video at useful size on both routes. */
+#feedViewerSheet .fv-stage {
+  width:100%!important;
+  max-width:none!important;
+  margin:0 auto!important;
+}
+#feedViewerSheet .fv-stage video {
+  width:100%!important;
+  height:100%!important;
+  object-fit:contain!important;
+}
+
+/* Avoid the old Entry Viewer being used as an accidental video route. */
+.fc-entry-video-v1079 .fcc-play-overlay {
+  pointer-events:none!important;
+}
+</style>
+
+
 
 
 
@@ -45598,6 +45718,6 @@ document.addEventListener('pointerdown', function(event) {
 </script>
 
 
-<script>window.FC_V1237_VALIDATION={build:"v1237",approvedLogoBasedCrest:true,noGeneratedFcSvgCrest:true,operationalGoldLock:true,editEntryCannotRemainOrange:true,oneCanonicalDetailRenderer:true,oneSharedFeedCompeteRenderer:true,updateParserPreserved:true};</script>
+<script>window.FC_V1238_VALIDATION={build:"v1238",homeCompeteVideoUnified:true,audibleFirstTapPlayback:true,playOverlayFades:true,bothRoutesUseFeedViewer:true,cardPreviewRemainsMuted:true,singlePlaybackPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
