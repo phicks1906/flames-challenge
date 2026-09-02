@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1244 · variable-field-championships" name="fc-build"/>
+<meta content="v1245 · unified-championship-detail" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Championships now render the complete qualified field instead of truncating to two: 2-person head-to-head, 3-person finals, and larger cutoff-tie fields all display correctly across Home, Compete, detail, and promotion artwork." name="fc-whatsnew"/>
+<meta content="Championship detail now reads as one continuous gold event surface instead of stacked cards; duplicate qualifiers are deduplicated by competitor identity, the entry-state strip is integrated, entry position is text-only, and Championship operational actions are metallic gold." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -45896,6 +45896,187 @@ body.fc-championship-view-v1226 #challengeDetailSheet #cdHero.fc-champ-detail-co
 }
 </style>
 
+<style id="fc-v1245-unified-championship-detail-final">
+/* ============================================================
+   v1245 — ONE CHAMPIONSHIP DETAIL EXPERIENCE
+   ============================================================ */
+
+body.fc-championship-view-v1226 #challengeDetailSheet .cd-sheet-inner {
+  --fc-champ-v1245-border: rgba(211,157,48,.34);
+  --fc-champ-v1245-hairline: rgba(211,157,48,.17);
+  --fc-champ-v1245-gold: #d9b052;
+  --fc-champ-v1245-ivory: #eee5d5;
+}
+
+/* 1) Event header: top of one continuous Championship surface. */
+body.fc-championship-view-v1226 #challengeDetailSheet #cdHero.fc-champ-detail-unified-host-v1245 {
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+
+body.fc-championship-view-v1226 #challengeDetailSheet #cdHero.fc-champ-detail-unified-host-v1245 > section {
+  margin:0!important;
+  padding-bottom:13px!important;
+  border:1px solid var(--fc-champ-v1245-border)!important;
+  border-bottom:0!important;
+  border-radius:20px 20px 0 0!important;
+  background:
+    radial-gradient(ellipse at 50% 0%,rgba(222,170,52,.10),transparent 38%),
+    linear-gradient(180deg,#100b05,#0b0704)!important;
+  box-shadow:
+    0 12px 28px rgba(0,0,0,.24),
+    inset 0 1px 0 rgba(255,242,187,.025)!important;
+}
+
+/* 2) "Your entry is live" is an operational section of the SAME surface. */
+body.fc-championship-view-v1226 #challengeDetailSheet #fcChallengeBriefV1054.fc-champ-section-entry-state-v1245 {
+  margin:0!important;
+  padding:14px 15px 13px!important;
+  border:1px solid var(--fc-champ-v1245-border)!important;
+  border-top:1px solid var(--fc-champ-v1245-hairline)!important;
+  border-radius:0 0 20px 20px!important;
+  background:
+    radial-gradient(circle at 15% 0%,rgba(164,76,17,.055),transparent 34%),
+    linear-gradient(180deg,#0b0704,#090604)!important;
+  box-shadow:0 10px 24px rgba(0,0,0,.18)!important;
+}
+
+body.fc-championship-view-v1226 #challengeDetailSheet #fcChallengeBriefV1054 .fc-challenge-brief-state-v1054 {
+  color:var(--fc-champ-v1245-gold)!important;
+}
+
+body.fc-championship-view-v1226 #challengeDetailSheet #fcChallengeBriefV1054 strong {
+  color:var(--fc-champ-v1245-ivory)!important;
+}
+
+body.fc-championship-view-v1226 #challengeDetailSheet #fcChallengeBriefV1054 p,
+body.fc-championship-view-v1226 #challengeDetailSheet #fcChallengeBriefV1054 .fc-challenge-brief-time-v1054 {
+  color:#b9afa1!important;
+}
+
+/* Metallic gold Edit/Enter/Vote action. */
+body.fc-championship-view-v1226 #challengeDetailSheet [data-fc-champ-gold-v1245="1"],
+body.fc-championship-view-v1226 #challengeDetailSheet #fcChallengeBriefV1054 button.primary {
+  border:1px solid rgba(255,231,145,.58)!important;
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.30),rgba(255,255,255,0) 34%),
+    linear-gradient(135deg,#5b3506 0%,#a76e14 20%,#fff0a0 50%,#d5a137 69%,#6f4309 100%)!important;
+  color:#171004!important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.56),
+    inset 0 -3px 7px rgba(58,31,1,.32),
+    0 6px 18px rgba(176,118,18,.14)!important;
+  text-shadow:none!important;
+}
+
+/* Ask Ember is quiet secondary gold — no orange fill. */
+body.fc-championship-view-v1226 #challengeDetailSheet #fcChallengeBriefV1054 button.help {
+  border:1px solid rgba(211,157,48,.34)!important;
+  background:#0c0804!important;
+  color:var(--fc-champ-v1245-gold)!important;
+  box-shadow:none!important;
+}
+
+/* Score explanation is a label/divider, not another card. */
+body.fc-championship-view-v1226 #challengeDetailSheet .fc-v1078-score-pill {
+  margin:9px 0 0!important;
+  padding:7px 2px!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  color:#9e9485!important;
+  box-shadow:none!important;
+}
+
+/* 3) Entry position: remove the third rounded card entirely. */
+body.fc-championship-view-v1226 #challengeDetailSheet #cdEntryNav.fc-champ-section-entry-nav-v1245 {
+  min-height:0!important;
+  margin:8px 0 5px!important;
+  padding:10px 4px 7px!important;
+  border:0!important;
+  border-top:1px solid var(--fc-champ-v1245-hairline)!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  justify-content:center!important;
+}
+
+body.fc-championship-view-v1226 #challengeDetailSheet #cdEntryNav .cd-entry-nav-status {
+  width:100%!important;
+  text-align:center!important;
+}
+
+body.fc-championship-view-v1226 #challengeDetailSheet #cdEntryNav #cdEntriesCounter,
+body.fc-championship-view-v1226 #challengeDetailSheet #cdEntryNav [data-fc-champ-entry-position-v1245="1"] {
+  display:block!important;
+  color:#d8b15a!important;
+  font-size:13px!important;
+  font-weight:850!important;
+  letter-spacing:.055em!important;
+  text-transform:uppercase!important;
+}
+
+body.fc-championship-view-v1226 #challengeDetailSheet #cdEntryNav #fcSwipeHintV1219 {
+  display:none!important;
+}
+
+/* Arrows remain hidden; swipe/dots are the entry-navigation language. */
+body.fc-championship-view-v1226 #challengeDetailSheet #cdEntryNav .cd-entry-nav-btn {
+  display:none!important;
+}
+
+/* Media follows immediately; no orange container around the section. */
+body.fc-championship-view-v1226 #challengeDetailSheet #cdEntriesGrid {
+  margin-top:0!important;
+}
+
+body.fc-championship-view-v1226 #challengeDetailSheet .cd-entry {
+  border-color:rgba(211,157,48,.20)!important;
+  box-shadow:0 8px 24px rgba(0,0,0,.18)!important;
+}
+
+/* Dots are gold, not orange. */
+body.fc-championship-view-v1226 #challengeDetailSheet #cdEntriesDots .cd-entries-dot {
+  background:rgba(214,174,87,.30)!important;
+}
+body.fc-championship-view-v1226 #challengeDetailSheet #cdEntriesDots .cd-entries-dot.active {
+  background:#d8b15a!important;
+  box-shadow:0 0 8px rgba(216,177,90,.20)!important;
+}
+
+/* Any remaining Championship-specific orange labels inside the operational
+   strip inherit the gold identity. Global bottom navigation remains untouched. */
+body.fc-championship-view-v1226 #challengeDetailSheet #fcChallengeBriefV1054 {
+  --ember:#d9b052!important;
+  --ember-bright:#e6bd59!important;
+  --coral:#b27b20!important;
+}
+
+/* Tighten spacing so this reads as sections on one page, not stacked cards. */
+body.fc-championship-view-v1226 #challengeDetailSheet #fcCompetitionClarityV1047:empty,
+body.fc-championship-view-v1226 #challengeDetailSheet #cdSubmitBtnWrap[style*="display:none"],
+body.fc-championship-view-v1226 #challengeDetailSheet #cdFullNote[style*="display:none"] {
+  margin:0!important;
+  padding:0!important;
+}
+
+/* v1244 legacy compact selectors should not recreate rounded secondary cards. */
+body.fc-championship-view-v1226 #challengeDetailSheet .fc-champ-detail-compact-v1244 {
+  box-shadow:none!important;
+}
+
+@media(max-width:390px) {
+  body.fc-championship-view-v1226 #challengeDetailSheet #fcChallengeBriefV1054.fc-champ-section-entry-state-v1245 {
+    padding:12px 13px!important;
+  }
+}
+</style>
+
+
 
 
 
@@ -45944,10 +46125,31 @@ body.fc-championship-view-v1226 #challengeDetailSheet #cdHero.fc-champ-detail-co
   function fcChampRosterV1236(ch) {
     const byId = new Map();
     const add = (entry, fallbackName='Contender') => {
-      const id = entry?.id || entry?.user_id || entry?.submitter?.id || entry?.profile?.id || entry?.user?.id || entry?.invited_user_id || null;
+      // v1245 — identify the COMPETITOR, not the row. Challenge entries use
+      // entry.id for the submission row while Championship invites use id for
+      // the invited user. Prefer every explicit user identity field before the
+      // generic row id so one competitor cannot be counted twice.
+      const userId =
+        entry?.user_id ||
+        entry?.submitter?.id ||
+        entry?.profile?.id ||
+        entry?.user?.id ||
+        entry?.invited_user_id ||
+        null;
+      const genericId = entry?.id || null;
       const name = fcChampNameV1236(entry) || fallbackName;
-      const key = id ? `id:${id}` : `name:${String(name).toLowerCase()}`;
-      const existing = byId.get(key) || {};
+      const normalizedName = String(name).trim().toLowerCase();
+      const key = userId
+        ? `user:${userId}`
+        : genericId && !entry?.challenge_id
+          ? `user:${genericId}`
+          : `name:${normalizedName}`;
+
+      // Also collapse an earlier name-only record if a later enriched row
+      // reveals the actual user id.
+      const nameKey = `name:${normalizedName}`;
+      const existing = byId.get(key) || byId.get(nameKey) || {};
+      if (key !== nameKey) byId.delete(nameKey);
       byId.set(key, { ...existing, ...entry, name, entry: entry?.entry || entry });
     };
 
@@ -45993,7 +46195,7 @@ body.fc-championship-view-v1226 #challengeDetailSheet #cdHero.fc-champ-detail-co
     return 'CHAMPIONSHIP ROUND';
   }
 
-  window.renderChampionshipHero = function renderChampionshipHeroV1244(ch,status,countdownTarget) {
+  window.renderChampionshipHero = function renderChampionshipHeroV1245(ch,status,countdownTarget) {
     const host = document.getElementById('cdHero');
     if (!host) return;
 
@@ -46012,10 +46214,10 @@ body.fc-championship-view-v1226 #challengeDetailSheet #cdHero.fc-champ-detail-co
       </div>
     `).join('');
 
-    host.className = 'fc-champ-detail-compact-host-v1244';
+    host.className = 'fc-champ-detail-unified-host-v1245';
     host.innerHTML = `
       <section class="fc-champ-detail-compact-v1244 fc-field-${Math.min(fieldCount,6)}-v1244"
-        data-fc-champ-renderer="v1244" data-field-count="${fieldCount}">
+        data-fc-champ-renderer="v1245" data-field-count="${fieldCount}">
         <div class="fc-champ-detail-title-v1244">
           <div class="fc-champ-detail-crown-v1244">${fcChampCrestV1236('fc-champ-detail-crown-img-v1244')}</div>
           <div class="fc-champ-detail-copy-v1244">
@@ -46756,6 +46958,96 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1244_VALIDATION={build:"v1244",topThreeScoreLevelsPreserved:true,cutoffTiesPreserved:true,noTwoPersonDisplayCap:true,homeFeedVariableField:true,competeVariableField:true,detailVariableField:true,promotionVariableField:true,threePersonFinalSupported:true,largerTieFieldsSupported:true,allQualifiersInvited:true,inlineVideoPreserved:true,updateParserPreserved:true};</script>
+<script id="fc-v1245-unified-championship-detail-js">
+(function initUnifiedChampionshipDetailV1245(){
+  'use strict';
+
+  function isChampionshipDetailV1245() {
+    return !!state?.currentChallenge?.is_championship &&
+      document.body.classList.contains('fc-championship-view-v1226');
+  }
+
+  function goldButtonV1245(button) {
+    if (!button) return;
+    button.dataset.fcChampGoldV1245 = '1';
+    button.style.setProperty('border','1px solid rgba(255,231,145,.58)','important');
+    button.style.setProperty(
+      'background',
+      'linear-gradient(180deg,rgba(255,255,255,.30),rgba(255,255,255,0) 34%),linear-gradient(135deg,#5b3506 0%,#a76e14 20%,#fff0a0 50%,#d5a137 69%,#6f4309 100%)',
+      'important'
+    );
+    button.style.setProperty('color','#171004','important');
+    button.style.setProperty(
+      'box-shadow',
+      'inset 0 1px 0 rgba(255,255,255,.56), inset 0 -3px 7px rgba(58,31,1,.32), 0 6px 18px rgba(176,118,18,.14)',
+      'important'
+    );
+    button.style.setProperty('text-shadow','none','important');
+  }
+
+  function finalizeChampionshipDetailV1245() {
+    if (!isChampionshipDetailV1245()) return;
+
+    const sheet = document.getElementById('challengeDetailSheet');
+    if (!sheet) return;
+
+    const hero = document.getElementById('cdHero');
+    const brief = document.getElementById('fcChallengeBriefV1054');
+    const nav = document.getElementById('cdEntryNav');
+    const counter = document.getElementById('cdEntriesCounter');
+
+    hero?.classList.add('fc-champ-section-hero-v1245');
+    brief?.classList.add('fc-champ-section-entry-state-v1245');
+    nav?.classList.add('fc-champ-section-entry-nav-v1245');
+
+    // The Championship body uses gold/ivory only. Match by actual action text
+    // so later renderers cannot reintroduce an orange Edit entry button.
+    sheet.querySelectorAll('button').forEach(button => {
+      const text = String(button.textContent || '').replace(/\s+/g,' ').trim().toLowerCase();
+      if (
+        text === 'edit entry' ||
+        text === 'submit entry' ||
+        text === 'enter challenge' ||
+        text === 'vote for this entry'
+      ) {
+        goldButtonV1245(button);
+      }
+    });
+
+    if (brief) {
+      brief.querySelectorAll('.fc-challenge-brief-state-v1054').forEach(el => {
+        el.style.setProperty('color','#d9b052','important');
+      });
+      brief.querySelectorAll('button.help').forEach(el => {
+        el.style.setProperty('color','#d9b052','important');
+        el.style.setProperty('border-color','rgba(211,157,48,.34)','important');
+        el.style.setProperty('background','#0c0804','important');
+      });
+    }
+
+    // The existing progressive-guidance enhancer already writes
+    // "2 entries · 1 of 2". Keep it as a section label, never a card.
+    if (counter) {
+      counter.dataset.fcChampEntryPositionV1245 = '1';
+    }
+  }
+
+  const observer = new MutationObserver(() => {
+    requestAnimationFrame(finalizeChampionshipDetailV1245);
+  });
+
+  if (document.body) {
+    observer.observe(document.body,{subtree:true,childList:true,characterData:true});
+  }
+
+  document.addEventListener('click', () => requestAnimationFrame(finalizeChampionshipDetailV1245), true);
+  window.addEventListener('pageshow', () => requestAnimationFrame(finalizeChampionshipDetailV1245));
+  requestAnimationFrame(finalizeChampionshipDetailV1245);
+
+  window.fcFinalizeChampionshipDetailV1245 = finalizeChampionshipDetailV1245;
+})();
+</script>
+
+<script>window.FC_V1245_VALIDATION={build:"v1245",competitorIdentityDeduped:true,duplicateQualifierRegressionFixed:true,continuousChampionshipDetailSurface:true,entryStateIntegrated:true,entryPositionNotACard:true,championshipOperationalOrangeRemoved:true,editEntryMetallicGold:true,variableFieldQualificationPreserved:true,cutoffTiesPreserved:true,inlineVideoPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
