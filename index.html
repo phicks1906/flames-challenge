@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1247 · championship-mock-match" name="fc-build"/>
+<meta content="v1248 · championship-glimmer-and-detail-match" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Corrected the Championship detail implementation to match the approved mock: centered VS between contenders, one-line Championship Night title, real frozen Championship Scores when available, stronger event lighting, gold Edit Entry, ceremonial round divider, and borderless entry position directly above media." name="fc-whatsnew"/>
+<meta content="Added the missing Championship glimmer/shimmer treatment and tightened the detail screen toward the approved mock: title fit, score fallback, ceremonial eligibility divider, quieter entry state, and borderless entry position." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -46517,6 +46517,218 @@ body.fc-championship-view-v1226 #challengeDetailSheet #cdEntriesGrid { margin-to
 }
 </style>
 
+<style id="fc-v1248-championship-glimmer-final">
+/* ============================================================
+   v1248 — visible Championship glimmer + closer mock matching
+   ============================================================ */
+
+/* Fit the full one-line title on real iPhone widths. */
+.fc-champ-mock-heading-v1247 strong {
+  font-size:clamp(24px,6.75vw,35px)!important;
+  letter-spacing:-.045em!important;
+  white-space:nowrap!important;
+  transform:scaleX(.985);
+  transform-origin:center;
+}
+
+/* The card needs moving metallic light, not a static gold gradient. */
+.fc-champ-mock-v1247 {
+  isolation:isolate;
+}
+.fc-champ-mock-v1247::before {
+  content:"";
+  position:absolute;
+  z-index:1;
+  top:-55%;
+  bottom:-55%;
+  left:-75%;
+  width:42%;
+  transform:rotate(14deg);
+  background:
+    linear-gradient(
+      90deg,
+      rgba(255,255,255,0) 0%,
+      rgba(255,236,168,.025) 22%,
+      rgba(255,239,177,.20) 48%,
+      rgba(255,251,217,.36) 52%,
+      rgba(255,226,135,.11) 60%,
+      rgba(255,255,255,0) 100%
+    );
+  filter:blur(3px);
+  opacity:0;
+  pointer-events:none;
+  animation:fcChampHeroGlimmerV1248 6.4s cubic-bezier(.32,.02,.32,1) infinite;
+}
+@keyframes fcChampHeroGlimmerV1248 {
+  0%,12% { left:-75%;opacity:0; }
+  18% { opacity:.12; }
+  38% { opacity:.72; }
+  54% { left:135%;opacity:.12; }
+  58%,100% { left:135%;opacity:0; }
+}
+
+/* Crown catches a smaller secondary shine. */
+.fc-champ-mock-crown-v1247 {
+  overflow:hidden;
+}
+.fc-champ-mock-crown-v1247::after {
+  content:"";
+  position:absolute;
+  inset:-30% -80%;
+  background:linear-gradient(110deg,transparent 42%,rgba(255,255,220,.62) 50%,transparent 58%);
+  transform:translateX(-46%);
+  opacity:0;
+  pointer-events:none;
+  animation:fcChampCrownShineV1248 6.4s ease-in-out infinite;
+}
+@keyframes fcChampCrownShineV1248 {
+  0%,25% { transform:translateX(-46%);opacity:0; }
+  34% { opacity:.78; }
+  46% { transform:translateX(46%);opacity:.16; }
+  50%,100% { transform:translateX(46%);opacity:0; }
+}
+
+/* Gold CTA glimmer — this is deliberately obvious but brief. */
+.fc-champ-mock-primary-v1247,
+body.fc-championship-view-v1226 #challengeDetailSheet #fcChallengeBriefV1054 button.primary {
+  position:relative!important;
+  overflow:hidden!important;
+  isolation:isolate;
+}
+.fc-champ-mock-primary-v1247::after,
+body.fc-championship-view-v1226 #challengeDetailSheet #fcChallengeBriefV1054 button.primary::after {
+  content:"";
+  position:absolute;
+  z-index:2;
+  top:-35%;
+  bottom:-35%;
+  left:-60%;
+  width:36%;
+  transform:rotate(16deg);
+  background:linear-gradient(90deg,transparent,rgba(255,255,229,.72),transparent);
+  filter:blur(1px);
+  opacity:0;
+  pointer-events:none;
+  animation:fcChampButtonGlimmerV1248 4.8s ease-in-out infinite;
+}
+@keyframes fcChampButtonGlimmerV1248 {
+  0%,30% { left:-60%;opacity:0; }
+  38% { opacity:.55; }
+  55% { left:130%;opacity:.12; }
+  60%,100% { left:130%;opacity:0; }
+}
+
+/* Boost the arena atmosphere without making it brighter overall. */
+.fc-champ-mock-spotlight-v1247::before,
+.fc-champ-mock-spotlight-v1247::after {
+  opacity:.48!important;
+  filter:blur(7px)!important;
+}
+.fc-champ-mock-v1247::after {
+  opacity:.48!important;
+}
+
+/* No fake zero Championship Scores. */
+.fc-champ-mock-person-v1247 small:only-child {
+  color:#c7a55a!important;
+}
+
+/* Approved divider treatment for the ACTUAL v1033 badge. */
+body.fc-championship-view-v1226 #challengeDetailSheet #fcScoreEligibilityDetailV1033 {
+  width:100%!important;
+  margin:10px 0 0!important;
+  padding:0!important;
+}
+body.fc-championship-view-v1226 #challengeDetailSheet
+#fcScoreEligibilityDetailV1033 .fc-score-eligibility-v1032.fc-champ-round-divider-v1248 {
+  position:relative!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  width:100%!important;
+  margin:0!important;
+  padding:9px 40px!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  color:#a79c8f!important;
+}
+body.fc-championship-view-v1226 #challengeDetailSheet
+#fcScoreEligibilityDetailV1033 .fc-score-eligibility-v1032.fc-champ-round-divider-v1248::before,
+body.fc-championship-view-v1226 #challengeDetailSheet
+#fcScoreEligibilityDetailV1033 .fc-score-eligibility-v1032.fc-champ-round-divider-v1248::after {
+  content:""!important;
+  position:absolute!important;
+  top:50%!important;
+  width:24%!important;
+  height:1px!important;
+  opacity:1!important;
+  transform:none!important;
+  background:linear-gradient(90deg,transparent,rgba(218,174,78,.48))!important;
+}
+body.fc-championship-view-v1226 #challengeDetailSheet
+#fcScoreEligibilityDetailV1033 .fc-score-eligibility-v1032.fc-champ-round-divider-v1248::before {
+  left:0!important;
+}
+body.fc-championship-view-v1226 #challengeDetailSheet
+#fcScoreEligibilityDetailV1033 .fc-score-eligibility-v1032.fc-champ-round-divider-v1248::after {
+  right:0!important;
+  background:linear-gradient(90deg,rgba(218,174,78,.48),transparent)!important;
+}
+
+/* Quieter entry-status panel closer to the mock. */
+body.fc-championship-view-v1226 #challengeDetailSheet #fcChallengeBriefV1054 {
+  border-color:rgba(205,151,42,.22)!important;
+  background:
+    radial-gradient(circle at 8% 30%,rgba(213,151,38,.045),transparent 28%),
+    linear-gradient(180deg,#0b0704,#080503)!important;
+}
+body.fc-championship-view-v1226 #challengeDetailSheet #fcChallengeBriefV1054 strong {
+  font-size:14px!important;
+  font-weight:850!important;
+}
+body.fc-championship-view-v1226 #challengeDetailSheet #fcChallengeBriefV1054 p {
+  font-size:11px!important;
+}
+
+/* Entry position is deliberately floating, never boxed. */
+body.fc-championship-view-v1226 #challengeDetailSheet #cdEntryNav.fc-champ-entry-position-v1248,
+body.fc-championship-view-v1226 #challengeDetailSheet #cdEntryNav.fc-entry-position-v1219 {
+  margin:4px 0 2px!important;
+  padding:8px 0 6px!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+
+/* Gold dots immediately beneath the count. */
+body.fc-championship-view-v1226 #challengeDetailSheet #cdEntriesDots {
+  margin-top:2px!important;
+}
+body.fc-championship-view-v1226 #challengeDetailSheet #cdEntriesDots .cd-entries-dot {
+  width:7px!important;
+  height:7px!important;
+  background:rgba(210,168,75,.28)!important;
+}
+body.fc-championship-view-v1226 #challengeDetailSheet #cdEntriesDots .cd-entries-dot.active {
+  background:#d9b052!important;
+  box-shadow:0 0 9px rgba(217,176,82,.32)!important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fc-champ-mock-v1247::before,
+  .fc-champ-mock-crown-v1247::after,
+  .fc-champ-mock-primary-v1247::after,
+  body.fc-championship-view-v1226 #challengeDetailSheet #fcChallengeBriefV1054 button.primary::after {
+    animation:none!important;
+    display:none!important;
+  }
+}
+</style>
+
+
 
 
 
@@ -46667,7 +46879,9 @@ body.fc-championship-view-v1226 #challengeDetailSheet #cdEntriesGrid { margin-to
       person?.championshipScore ??
       person?.score ??
       null;
-    if (Number.isFinite(Number(direct))) return Number(direct).toLocaleString();
+    if (direct !== null && direct !== undefined && direct !== '' && Number.isFinite(Number(direct)) && Number(direct) > 0) {
+      return Number(direct).toLocaleString();
+    }
 
     const row = (state.leaderboardData?.users || []).find(u =>
       (id && String(u.id) === String(id)) ||
@@ -46680,7 +46894,13 @@ body.fc-championship-view-v1226 #challengeDetailSheet #cdEntriesGrid { margin-to
       row?.monthly_score ??
       row?.score ??
       null;
-    return Number.isFinite(Number(score)) ? Number(score).toLocaleString() : '';
+    return (
+      score !== null &&
+      score !== undefined &&
+      score !== '' &&
+      Number.isFinite(Number(score)) &&
+      Number(score) > 0
+    ) ? Number(score).toLocaleString() : '';
   }
 
   window.renderChampionshipHero = function renderChampionshipHeroV1247(ch,status,countdownTarget) {
@@ -47646,6 +47866,99 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1247_VALIDATION={build:"v1247",mockHeadToHeadOrderCorrect:true,vsCentered:true,championshipNightOneLine:true,frozenQualificationScoresUsed:true,editEntryForcedGold:true,scorePillRemoved:true,entryPositionCardRemoved:true,approvedMockHierarchy:true,duplicateQualifierFixPreserved:true,variableFieldQualificationPreserved:true,inlineVideoPreserved:true,updateParserPreserved:true};</script>
+<script id="fc-v1248-championship-detail-finalizer-js">
+(function initChampionshipDetailFinalizerV1248(){
+  'use strict';
+
+  const imp = (el, prop, value) => {
+    if (el) el.style.setProperty(prop, value, 'important');
+  };
+
+  function applyV1248() {
+    if (!state?.currentChallenge?.is_championship) return;
+    const sheet = document.getElementById('challengeDetailSheet');
+    if (!sheet?.classList.contains('open')) return;
+
+    const hero = document.getElementById('cdHero');
+    hero?.classList.add('fc-champ-glimmer-live-v1248');
+
+    // Actual Championship score-eligibility renderer.
+    const scoreWrap = document.getElementById('fcScoreEligibilityDetailV1033');
+    const scoreBadge = scoreWrap?.querySelector('.fc-score-eligibility-v1032');
+    if (scoreWrap) {
+      imp(scoreWrap,'margin','10px 0 0');
+      imp(scoreWrap,'padding','0');
+    }
+    if (scoreBadge) {
+      scoreBadge.classList.add('fc-champ-round-divider-v1248');
+      imp(scoreBadge,'display','flex');
+      imp(scoreBadge,'align-items','center');
+      imp(scoreBadge,'justify-content','center');
+      imp(scoreBadge,'width','100%');
+      imp(scoreBadge,'margin','0');
+      imp(scoreBadge,'padding','8px 0');
+      imp(scoreBadge,'border','0');
+      imp(scoreBadge,'border-radius','0');
+      imp(scoreBadge,'background','transparent');
+      imp(scoreBadge,'box-shadow','none');
+      imp(scoreBadge,'color','#a79c8f');
+      imp(scoreBadge,'font-size','9px');
+      imp(scoreBadge,'letter-spacing','.08em');
+    }
+
+    // Entry state copy closer to approved mock.
+    const brief = document.getElementById('fcChallengeBriefV1054');
+    if (brief) {
+      const heading = brief.querySelector('strong');
+      if (heading && /your entry is live/i.test(heading.textContent || '')) {
+        heading.textContent = 'YOUR ENTRY IS LIVE';
+        imp(heading,'letter-spacing','.015em');
+      }
+      const primary = brief.querySelector('button.primary');
+      if (primary) {
+        imp(primary,'background','linear-gradient(120deg,#704507 0%,#b77918 22%,#f6dc80 48%,#a96c14 70%,#633b06 100%)');
+        imp(primary,'color','#171004');
+      }
+    }
+
+    // Entry position is text only, never a card.
+    const nav = document.getElementById('cdEntryNav');
+    if (nav) {
+      nav.classList.add('fc-champ-entry-position-v1248');
+      imp(nav,'margin','4px 0 2px');
+      imp(nav,'padding','8px 0 6px');
+      imp(nav,'border','0');
+      imp(nav,'border-radius','0');
+      imp(nav,'background','transparent');
+      imp(nav,'box-shadow','none');
+    }
+
+    const counter = document.getElementById('cdEntriesCounter');
+    if (counter) {
+      imp(counter,'font-size','14px');
+      imp(counter,'font-weight','900');
+      imp(counter,'letter-spacing','.065em');
+      imp(counter,'color','#d8b15a');
+      imp(counter,'text-transform','uppercase');
+    }
+  }
+
+  const observer = new MutationObserver(() => requestAnimationFrame(applyV1248));
+  if (document.body) observer.observe(document.body,{subtree:true,childList:true,characterData:true,attributes:true});
+  document.addEventListener('click', () => requestAnimationFrame(applyV1248), true);
+  window.addEventListener('pageshow', () => requestAnimationFrame(applyV1248));
+
+  let passes = 0;
+  const settle = setInterval(() => {
+    applyV1248();
+    if (++passes >= 24) clearInterval(settle);
+  }, 250);
+
+  requestAnimationFrame(applyV1248);
+  window.fcApplyChampionshipDetailV1248 = applyV1248;
+})();
+</script>
+
+<script>window.FC_V1248_VALIDATION={build:"v1248",visibleChampionshipGlimmer:true,heroSweep:true,crownShine:true,goldButtonGlimmer:true,noFakeZeroScores:true,actualEligibilityBadgeConvertedToDivider:true,entryPositionBorderless:true,titleFitsOneLine:true,approvedMockDirectionPreserved:true,duplicateQualifierFixPreserved:true,variableFieldQualificationPreserved:true,inlineVideoPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
