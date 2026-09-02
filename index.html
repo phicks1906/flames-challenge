@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1242 · championship-avatar-orientation-fix" name="fc-build"/>
+<meta content="v1243 · championship-detail-and-flyer-repair" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Championship flyer previews now re-render contender avatars in the browser before display/share/posting, normalizing iPhone EXIF orientation so profile photos cannot appear upside down." name="fc-whatsnew"/>
+<meta content="Removed the duplicate Championship-card detail experience and repaired flyer orientation without redrawing contender photos over the poster. Championship detail is now a compact operational header; the poster remains the authoritative artwork." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -15163,88 +15163,121 @@ function fcCanPromoteChampionshipV1217(ch) {
 }
 
 
-async function fcNormalizeChampFlyerAvatarsV1242(pngBase64, chId) {
+
+async function fcReadJpegOrientationV1243(src) {
+  try {
+    if (!src || !/^https?:|^blob:/.test(String(src))) return 1;
+    const response = await fetch(src, { mode:'cors', cache:'force-cache' });
+    if (!response.ok) return 1;
+    const buffer = await response.arrayBuffer();
+    const view = new DataView(buffer);
+    if (view.byteLength < 4 || view.getUint16(0, false) !== 0xFFD8) return 1;
+    let offset = 2;
+    while (offset + 4 < view.byteLength) {
+      const marker = view.getUint16(offset, false);
+      offset += 2;
+      if ((marker & 0xFF00) !== 0xFF00) break;
+      if (marker === 0xFFE1) {
+        const length = view.getUint16(offset, false);
+        if (offset + length > view.byteLength) break;
+        if (view.getUint32(offset + 2, false) !== 0x45786966) return 1; // "Exif"
+        const tiff = offset + 8;
+        const little = view.getUint16(tiff, false) === 0x4949;
+        const firstIFD = view.getUint32(tiff + 4, little);
+        let dir = tiff + firstIFD;
+        if (dir + 2 > view.byteLength) return 1;
+        const entries = view.getUint16(dir, little);
+        dir += 2;
+        for (let i = 0; i < entries; i++) {
+          const e = dir + i * 12;
+          if (e + 12 > view.byteLength) break;
+          if (view.getUint16(e, little) === 0x0112) {
+            return view.getUint16(e + 8, little) || 1;
+          }
+        }
+        return 1;
+      }
+      if (offset + 2 > view.byteLength) break;
+      const length = view.getUint16(offset, false);
+      if (length < 2) break;
+      offset += length;
+    }
+  } catch (err) {
+    console.warn('champ flyer EXIF read', err);
+  }
+  return 1;
+}
+
+async function fcRepairChampFlyerOrientationV1243(pngBase64, chId) {
   try {
     const fighters = ((state.champFighters || {})[chId] || []).slice(0, 2);
     if (!pngBase64 || !fighters.length) return pngBase64;
 
-    const loadImageV1242 = (src) => new Promise((resolve, reject) => {
+    const orientations = await Promise.all(
+      fighters.map(f => fcReadJpegOrientationV1243(f?.avatar))
+    );
+    if (!orientations.some(o => [3,6,8].includes(o))) return pngBase64;
+
+    const loadImage = src => new Promise((resolve, reject) => {
       const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.decoding = 'async';
       img.onload = () => resolve(img);
       img.onerror = reject;
       img.src = src;
     });
 
-    const flyerImg = await loadImageV1242(`data:image/png;base64,${pngBase64}`);
+    const flyer = await loadImage(`data:image/png;base64,${pngBase64}`);
     const canvas = document.createElement('canvas');
-    canvas.width = flyerImg.naturalWidth || flyerImg.width;
-    canvas.height = flyerImg.naturalHeight || flyerImg.height;
+    canvas.width = flyer.naturalWidth || flyer.width;
+    canvas.height = flyer.naturalHeight || flyer.height;
     const ctx = canvas.getContext('2d');
     if (!ctx) return pngBase64;
-    ctx.drawImage(flyerImg, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(flyer, 0, 0);
 
-    // Measured from the production Championship poster template.
-    // We redraw INSIDE the existing gold rings, leaving the poster frame intact.
+    // Production poster positions. We rotate the EXISTING rendered circle,
+    // including its frame, rather than painting a second avatar on top.
     const slots = [
-      { cx: 0.326, cy: 0.566, r: 0.104 },
-      { cx: 0.674, cy: 0.566, r: 0.104 },
+      { x:0.326, y:0.566, r:0.128 },
+      { x:0.674, y:0.566, r:0.128 },
     ];
 
-    const drawCoverCircleV1242 = (img, slot) => {
-      const cx = canvas.width * slot.cx;
-      const cy = canvas.height * slot.cy;
+    orientations.forEach((orientation, i) => {
+      if (![3,6,8].includes(orientation) || !slots[i]) return;
+      const slot = slots[i];
+      const cx = canvas.width * slot.x;
+      const cy = canvas.height * slot.y;
       const r = Math.min(canvas.width, canvas.height) * slot.r;
+      const side = Math.ceil(r * 2.12);
 
-      const sw = img.naturalWidth || img.width;
-      const sh = img.naturalHeight || img.height;
-      if (!sw || !sh) return;
+      const tmp = document.createElement('canvas');
+      tmp.width = side;
+      tmp.height = side;
+      const tctx = tmp.getContext('2d');
+      if (!tctx) return;
 
-      const scale = Math.max((r * 2) / sw, (r * 2) / sh);
-      const dw = sw * scale;
-      const dh = sh * scale;
-      const dx = cx - dw / 2;
-      const dy = cy - dh / 2;
+      tctx.drawImage(
+        canvas,
+        cx - side/2, cy - side/2, side, side,
+        0, 0, side, side
+      );
 
       ctx.save();
       ctx.beginPath();
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.clip();
-      ctx.drawImage(img, dx, dy, dw, dh);
-      ctx.restore();
+      ctx.translate(cx, cy);
 
-      // Restore a clean metallic ring over the normalized image.
-      ctx.save();
-      const ring = ctx.createLinearGradient(cx-r, cy-r, cx+r, cy+r);
-      ring.addColorStop(0, '#6f4308');
-      ring.addColorStop(.28, '#d9a633');
-      ring.addColorStop(.50, '#fff0a3');
-      ring.addColorStop(.72, '#c18419');
-      ring.addColorStop(1, '#5b3405');
-      ctx.strokeStyle = ring;
-      ctx.lineWidth = Math.max(5, canvas.width * 0.006);
-      ctx.beginPath();
-      ctx.arc(cx, cy, r + ctx.lineWidth * 0.15, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-    };
+      const radians = orientation === 3 ? Math.PI :
+                      orientation === 6 ? Math.PI / 2 :
+                      -Math.PI / 2;
+      ctx.rotate(radians);
 
-    for (let i = 0; i < Math.min(fighters.length, slots.length); i++) {
-      const src = fighters[i]?.avatar;
-      if (!src || !/^https?:|^data:|^blob:/.test(String(src))) continue;
-      try {
-        // Browser image decode honors EXIF orientation from iPhone images.
-        const normalizedImg = await loadImageV1242(src);
-        drawCoverCircleV1242(normalizedImg, slots[i]);
-      } catch (avatarErrV1242) {
-        console.warn('champ flyer avatar normalization', avatarErrV1242);
-      }
-    }
+      ctx.drawImage(tmp, -side/2, -side/2, side, side);
+      ctx.restore();
+    });
 
     return canvas.toDataURL('image/png').split(',')[1] || pngBase64;
-  } catch (errV1242) {
-    console.warn('champ flyer orientation normalization failed', errV1242);
+  } catch (err) {
+    console.warn('champ flyer orientation repair', err);
     return pngBase64;
   }
 }
@@ -15272,12 +15305,12 @@ async function previewChampFlyer(chId) {
       console.warn('champ flyer preview', j);
       return;
     }
-    // v1242 — normalize contender photos through the browser before this
-    // flyer is previewed, posted, shared, or saved. This fixes iPhone EXIF
-    // orientation differences in the server renderer without changing poster art.
-    const normalizedBase64V1242 = await fcNormalizeChampFlyerAvatarsV1242(hit.png_base64, chId);
-    const dataUrlV1218 = `data:image/png;base64,${normalizedBase64V1242}`;
-    const byteStringV1218 = atob(normalizedBase64V1242);
+    // v1243 — preserve the authoritative server poster. If a source JPEG
+    // carries EXIF orientation that the server ignored, rotate that EXISTING
+    // poster circle only. Never redraw an avatar on top of the flyer.
+    const repairedBase64V1243 = await fcRepairChampFlyerOrientationV1243(hit.png_base64, chId);
+    const dataUrlV1218 = `data:image/png;base64,${repairedBase64V1243}`;
+    const byteStringV1218 = atob(repairedBase64V1243);
     const bytesV1218 = new Uint8Array(byteStringV1218.length);
     for (let i = 0; i < byteStringV1218.length; i++) bytesV1218[i] = byteStringV1218.charCodeAt(i);
     const blobV1218 = new Blob([bytesV1218], { type:'image/png' });
@@ -45345,6 +45378,181 @@ body.fc-championship-view-v1226 #challengeDetailSheet button[class*="edit"] {
 }
 </style>
 
+<style id="fc-v1243-championship-detail-flyer-repair-final">
+/* Championship detail is operational, not a second promotional card. */
+body.fc-championship-view-v1226 #challengeDetailSheet #cdHero.fc-champ-detail-compact-host-v1243 {
+  padding:0!important;
+  margin:0 0 10px!important;
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+}
+
+.fc-champ-detail-compact-v1243 {
+  position:relative;
+  padding:14px 15px 13px;
+  border:1px solid rgba(210,151,37,.42);
+  border-radius:20px;
+  background:
+    radial-gradient(ellipse at 50% 0%,rgba(222,170,52,.10),transparent 40%),
+    linear-gradient(180deg,#100b05,#090604);
+  box-shadow:0 12px 32px rgba(0,0,0,.28);
+}
+
+.fc-champ-detail-title-v1243 {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:9px;
+  text-align:left;
+}
+.fc-champ-detail-crown-v1243 {
+  width:34px;
+  height:24px;
+  flex:0 0 auto;
+}
+.fc-champ-detail-crown-v1243 img {
+  width:100%!important;
+  height:100%!important;
+  object-fit:contain!important;
+}
+.fc-champ-detail-copy-v1243 small {
+  display:block;
+  color:#e7bd57;
+  font:700 10px/1.1 Georgia,"Times New Roman",serif;
+  letter-spacing:.15em;
+  text-transform:uppercase;
+}
+.fc-champ-detail-copy-v1243 strong {
+  display:block;
+  margin-top:3px;
+  color:#f2e7ce;
+  font-size:17px;
+  line-height:1.1;
+  font-weight:850;
+}
+
+.fc-champ-detail-match-v1243 {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 30px minmax(0,1fr);
+  align-items:center;
+  gap:8px;
+  margin-top:12px;
+}
+.fc-champ-detail-person-v1243 {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  min-width:0;
+}
+.fc-champ-detail-avatar-v1243 {
+  width:38px;
+  height:38px;
+  display:grid;
+  place-items:center;
+  overflow:hidden;
+  flex:0 0 auto;
+  border:2px solid #b77a17;
+  border-radius:50%;
+  background:#120c05;
+}
+.fc-champ-detail-avatar-v1243 img {
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+.fc-champ-detail-avatar-v1243 span {
+  color:#ebc35d;
+  font-weight:900;
+}
+.fc-champ-detail-person-v1243 > span {
+  overflow:hidden;
+  color:#f0c45b;
+  font-size:12px;
+  font-weight:800;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.fc-champ-detail-match-v1243 > b {
+  color:#d9a439;
+  font-size:13px;
+  text-align:center;
+}
+
+.fc-champ-detail-phase-v1243 {
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:12px;
+  margin-top:11px;
+  padding-top:10px;
+  border-top:1px solid rgba(216,164,54,.14);
+  color:#d9b453;
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.05em;
+  text-transform:uppercase;
+}
+.fc-champ-detail-live-v1243 {
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  color:#8ecf59;
+}
+.fc-champ-detail-live-v1243 i {
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  background:#83ca4e;
+}
+
+.fc-champ-detail-actions-v1243 {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto auto;
+  gap:8px;
+  margin-top:11px;
+}
+.fc-champ-detail-actions-v1243 button {
+  min-height:42px;
+  border-radius:12px;
+  font-size:12px;
+  font-weight:850;
+}
+.fc-champ-detail-poster-v1243 {
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  gap:8px;
+  border:1px solid rgba(255,231,145,.55);
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.24),rgba(255,255,255,0) 35%),
+    linear-gradient(135deg,#5b3506,#a76e14 20%,#f6df87 50%,#c58c25 70%,#6f4309);
+  color:#171004;
+}
+.fc-champ-detail-secondary-v1243 {
+  padding:0 11px;
+  border:1px solid rgba(210,151,37,.32);
+  background:#0c0804;
+  color:#ddb34d;
+}
+
+/* The live-entry card is the primary operational card beneath this compact header. */
+body.fc-championship-view-v1226 #challengeDetailSheet .fc-champ-entry-state-v1078,
+body.fc-championship-view-v1226 #challengeDetailSheet .fc-v1078-entry-card {
+  margin-top:0!important;
+}
+
+/* Prevent any legacy full hero/card styling from leaking into the compact header. */
+.fc-champ-detail-compact-host-v1243 .fc-champ-card-v1236,
+.fc-champ-detail-compact-host-v1243 .champ-arena,
+.fc-champ-detail-compact-host-v1243 .arena-apron {
+  display:none!important;
+}
+</style>
+
+
 
 
 
@@ -45425,7 +45633,7 @@ body.fc-championship-view-v1226 #challengeDetailSheet button[class*="edit"] {
     return 'CHAMPIONSHIP ROUND';
   }
 
-  window.renderChampionshipHero = function renderChampionshipHeroV1236(ch,status,countdownTarget) {
+  window.renderChampionshipHero = function renderChampionshipHeroV1243(ch,status,countdownTarget) {
     const host = document.getElementById('cdHero');
     if (!host) return;
 
@@ -45436,47 +45644,40 @@ body.fc-championship-view-v1226 #challengeDetailSheet button[class*="edit"] {
     const phase = fcChampPhaseV1236(status);
     const category = escapeHtml(ch?.category || 'Championship');
 
-    host.className = 'fc-champ-host-v1236';
+    host.className = 'fc-champ-detail-compact-host-v1243';
     host.innerHTML = `
-      <section class="fc-champ-card-v1236" data-fc-champ-renderer="v1236">
-        <div class="fc-champ-card-tools-v1236">
-          <div class="fc-champ-card-spacer-v1236"></div>
-          <div class="fc-champ-card-toolrow-v1236">
-            ${canPromote ? `<button type="button" class="fc-champ-outline-v1236" onclick="previewChampFlyer('${ch.id}')">${fcPictureIconV1216('fc-picture-icon-v1216')}<span>Promote</span></button>` : ''}
-            ${canDelete ? `<button type="button" class="fc-champ-outline-v1236" id="cdDeleteBtn">${fcTrashIconV1219('fc-trash-icon-v1219')}<span>Delete</span></button>` : ''}
+      <section class="fc-champ-detail-compact-v1243" data-fc-champ-renderer="v1243">
+        <div class="fc-champ-detail-title-v1243">
+          <div class="fc-champ-detail-crown-v1243">${fcChampCrestV1236('fc-champ-detail-crown-img-v1243')}</div>
+          <div class="fc-champ-detail-copy-v1243">
+            <small>${category} Championship</small>
+            <strong>Championship Night</strong>
           </div>
         </div>
 
-        <div class="fc-champ-card-crest-v1236">${fcChampCrestV1236('fc-champ-crest-small-v1236')}</div>
-
-        <div class="fc-champ-card-title-v1236">
-          <small>${category}</small>
-          <strong>Championship</strong>
-          <span>Championship Night</span>
-        </div>
-
-        <div class="fc-champ-card-matchup-v1236">
-          <div class="fc-champ-card-fighter-v1236">
-            <div class="fc-champ-card-avatar-v1236">${fcChampAvatarV1236(roster[0]?.entry)}</div>
-            <b>${escapeHtml(roster[0]?.name || 'Contender')}</b>
-            <em>First Final</em>
+        <div class="fc-champ-detail-match-v1243">
+          <div class="fc-champ-detail-person-v1243">
+            <div class="fc-champ-detail-avatar-v1243">${fcChampAvatarV1236(roster[0]?.entry)}</div>
+            <span>${escapeHtml(roster[0]?.name || 'Contender')}</span>
           </div>
-          <div class="fc-champ-card-vs-v1236">VS</div>
-          <div class="fc-champ-card-fighter-v1236">
-            <div class="fc-champ-card-avatar-v1236">${fcChampAvatarV1236(roster[1]?.entry)}</div>
-            <b>${escapeHtml(roster[1]?.name || 'Awaiting contender')}</b>
-            <em>First Final</em>
+          <b>VS</b>
+          <div class="fc-champ-detail-person-v1243">
+            <div class="fc-champ-detail-avatar-v1243">${fcChampAvatarV1236(roster[1]?.entry)}</div>
+            <span>${escapeHtml(roster[1]?.name || 'Awaiting contender')}</span>
           </div>
         </div>
 
-        <div class="fc-champ-card-status-v1236">
-          <span class="fc-champ-card-live-v1236"><i></i>${escapeHtml(phase)}</span>
-          ${time ? `<span class="fc-champ-card-time-v1236">◷ ${escapeHtml(time)}</span>` : ''}
+        <div class="fc-champ-detail-phase-v1243">
+          <span class="fc-champ-detail-live-v1243"><i></i>${escapeHtml(phase)}</span>
+          ${time ? `<span>◷ ${escapeHtml(time)}</span>` : ''}
         </div>
 
-        <div class="fc-champ-card-actions-v1236">
-          <button type="button" class="fc-champ-card-primary-v1236" onclick="previewChampFlyer('${ch.id}')">${fcPictureIconV1216('fc-picture-icon-v1216')}<span>View Poster</span></button>
-          ${canPromote ? `<button type="button" class="fc-champ-card-text-v1236" onclick="previewChampFlyer('${ch.id}')">Promote ›</button>` : ''}
+        <div class="fc-champ-detail-actions-v1243">
+          <button type="button" class="fc-champ-detail-poster-v1243" onclick="previewChampFlyer('${ch.id}')">
+            ${fcPictureIconV1216('fc-picture-icon-v1216')}<span>View Poster</span>
+          </button>
+          ${canPromote ? `<button type="button" class="fc-champ-detail-secondary-v1243" onclick="previewChampFlyer('${ch.id}')">Promote</button>` : ''}
+          ${canDelete ? `<button type="button" class="fc-champ-detail-secondary-v1243 fc-delete-action-v1219" id="cdDeleteBtn">Delete</button>` : ''}
         </div>
       </section>
     `;
@@ -46179,6 +46380,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1242_VALIDATION={build:"v1242",championshipAvatarOrientationNormalized:true,browserExifDecodeUsed:true,previewUsesCorrectedFlyer:true,postShareSaveUseCorrectedFlyer:true,posterDesignPreserved:true,exactPosterCrownPreserved:true,inlineVideoPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1243_VALIDATION={build:"v1243",duplicateChampionshipDetailCardRemoved:true,compactOperationalChampionshipHeader:true,flyerAvatarRedrawRemoved:true,exifAwarePosterRotationOnly:true,authoritativePosterArtworkPreserved:true,exactPosterCrownPreserved:true,inlineVideoPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
