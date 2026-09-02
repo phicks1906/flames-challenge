@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1253 · championship-lighting-and-height" name="fc-build"/>
+<meta content="v1254 · championship-entry-gate-and-lighting" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Refined Championship stage lighting to soft lamp bloom without visible beam geometry, reduced Championship action-button height, and shortened the hero while preserving v1252 composition and glimmer." name="fc-whatsnew"/>
+<meta content="Fixed Championship entry gating so only accepted qualified competitors can submit, removed the generic Enter challenge action for Championship rounds, added a hard submit-sheet guard, fixed the Community Guidelines Agree button safe area, and corrected the actual Championship spotlight selectors." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -24591,6 +24591,14 @@ function openSubmitEntry(entryToEdit = null) {
   const ch = state.currentChallenge;
   if (!ch) return;
 
+  // v1254 — Championship entry is invitation-only. A generic challenge-entry
+  // surface must never open a NEW Championship submission for an unqualified
+  // viewer. Accepted invite status is the single eligibility source.
+  if (ch.is_championship && !entryToEdit && !canEnterChampionship(ch)) {
+    toast('Championship entry is limited to qualified competitors.');
+    return;
+  }
+
   // Context guard (v618): never carry an entry from a DIFFERENT challenge into
   // this sheet — the feed submit buttons set currentChallenge without reloading
   // currentEntries, so both the passed entry and the auto-edit lookup must be
@@ -39278,6 +39286,10 @@ body.theme-light .fc-score-metric-v1032,body.theme-light .fc-score-cutoff-v1032,
     if(status==='submitting'){
       if(pending)return {k:'Getting your entry ready',t:left(ch.submission_deadline),h:'Private for a moment',p:'Your upload is complete. We’re finishing a quick safety check and will publish it automatically when ready. You can still edit or withdraw before entries close.',primary:'edit',mine};
       if(mine)return {k:'Entries open',t:left(ch.submission_deadline),h:'Your entry is live',p:'You can edit or withdraw it until entries close.',primary:'edit',mine};
+      if(ch.is_championship){
+        if(canEnterChampionship(ch)) return {k:'Championship round',t:left(ch.submission_deadline),h:'Your Championship spot is confirmed',p:'Submit your Championship entry before entries close.',primary:'champ_submit'};
+        return {k:'Championship round',t:left(ch.submission_deadline),h:'The Championship field is set',p:'Only qualified competitors with an accepted Championship invitation can submit an entry.',primary:null};
+      }
       return {k:'Entries open',t:left(ch.submission_deadline),h:'Submit before the deadline',p:`${entries.length} approved entr${entries.length===1?'y':'ies'} so far. Voting begins after entries close.`,primary:'enter'};
     }
     if(status==='voting'||status==='sudden_death')return {k:status==='sudden_death'?'Sudden-death voting':'Voting is open',t:left(ch.voting_end),h:'Choose the strongest entry',p:'Swipe the entries below and vote directly on the card. You can change it until voting closes.'};
@@ -39290,12 +39302,13 @@ body.theme-light .fc-score-metric-v1032,body.theme-light .fc-score-cutoff-v1032,
     document.getElementById('fcChallengeBriefV1054')?.remove();
     const status=computeChallengeStatus(ch),d=statusCopy(ch,status),box=document.createElement('section');box.id='fcChallengeBriefV1054';box.className='fc-challenge-brief-v1054';
     if(status==='submitting'&&ch.is_public!==false&&!ch.is_championship){const approved=(state.currentEntries||[]).filter(e=>!e.moderation_status||e.moderation_status==='clear'||e.moderation_status==='approved');const mine=approved.some(e=>e.user_id===state.profile?.id);const ids=[...new Set(approved.map(e=>e.user_id).filter(id=>id&&(!mine||id!==state.profile?.id)))];const value=ids.reduce((n,id)=>n+Number(getLadderStatus(id)?.points||0),0);d.p+=` Current field value: ${value} Opponent Point${value===1?'':'s'} before turnout.`;}
-    let primary='';if(d.primary==='edit')primary='<button class="primary" data-v1054-action="edit">Edit entry</button>';else if(d.primary==='enter')primary='<button class="primary" data-v1054-action="enter">Enter challenge</button>';else if(d.primary==='results')primary='<button class="primary" data-v1054-action="results">View results</button>';
+    let primary='';if(d.primary==='edit')primary='<button class="primary" data-v1054-action="edit">Edit entry</button>';else if(d.primary==='champ_submit')primary='<button class="primary" data-v1054-action="champ-submit">Submit entry</button>';else if(d.primary==='enter')primary='<button class="primary" data-v1054-action="enter">Enter challenge</button>';else if(d.primary==='results')primary='<button class="primary" data-v1054-action="results">View results</button>';
     const pendingReview=d.k==='Getting your entry ready';
     const insights=(!pendingReview&&(ch.creator_id===state.profile?.id||ch.creator?.id===state.profile?.id))?'':'';
     box.innerHTML=`<div class="fc-challenge-brief-top-v1054"><div><div class="fc-challenge-brief-state-v1054">${esc(d.k)}</div><strong>${esc(d.h)}</strong></div><div class="fc-challenge-brief-time-v1054">${esc(d.t)}</div></div><p>${esc(d.p)}</p><div class="fc-challenge-actions-v1054">${primary}${insights}<button class="help" data-v1054-action="ember">Ask Ember</button></div>`;
     hero.insertAdjacentElement('afterend',box);
     box.querySelector('[data-v1054-action="edit"]')?.addEventListener('click',()=>openSubmitEntry(d.mine));
+    box.querySelector('[data-v1054-action="champ-submit"]')?.addEventListener('click',()=>{ if(canEnterChampionship(ch)) openSubmitEntry(); });
     box.querySelector('[data-v1054-action="enter"]')?.addEventListener('click',()=>openSubmitEntry());
     box.querySelector('[data-v1054-action="results"]')?.addEventListener('click',()=>document.getElementById('cdResultsPanel')?.scrollIntoView({behavior: fcMotionBehaviorV1100(),block:'start'}));
     box.querySelector('[data-v1054-action="insights"]')?.addEventListener('click',()=>openCreatorInsightsV1048(ch.id));
@@ -46572,6 +46585,104 @@ body.fc-championship-view-v1226 #challengeDetailSheet #cdEntriesGrid{margin-top:
 }
 </style>
 
+<style id="fc-v1254-championship-entry-gate-lighting">
+/* ============================================================
+   v1254 — correct the ACTUAL measured spotlight elements.
+   v1253 targeted legacy selector names that are not in the v1251 DOM.
+   ============================================================ */
+
+/* Hot sources: small, bright, but not floating dots. */
+.fc1251-lamp{
+  top:5px!important;
+  width:10px!important;
+  height:6px!important;
+  opacity:.82!important;
+  filter:blur(.35px)!important;
+  background:radial-gradient(
+    ellipse at center,
+    rgba(255,253,226,1) 0%,
+    rgba(255,235,156,.94) 22%,
+    rgba(240,186,77,.58) 43%,
+    rgba(209,137,27,.16) 64%,
+    transparent 78%
+  )!important;
+  box-shadow:
+    0 0 7px rgba(255,238,170,.70),
+    0 0 16px rgba(227,163,51,.27)!important;
+}
+.fc1251-lamp.left{left:9.5%!important;transform:rotate(-9deg)!important}
+.fc1251-lamp.right{right:7%!important;left:auto!important;transform:rotate(9deg)!important}
+
+/* Soft light volumes: wide blurred illumination, no readable cone edges. */
+.fc1251-beam{
+  top:2px!important;
+  width:132px!important;
+  height:172px!important;
+  opacity:.105!important;
+  filter:blur(20px)!important;
+  border-radius:50% 50% 62% 62%!important;
+  clip-path:none!important;
+  -webkit-clip-path:none!important;
+  mix-blend-mode:screen!important;
+  background:
+    radial-gradient(
+      ellipse at 50% 0%,
+      rgba(255,245,202,.58) 0%,
+      rgba(245,210,132,.29) 24%,
+      rgba(222,159,55,.11) 49%,
+      rgba(180,111,21,.035) 66%,
+      transparent 82%
+    )!important;
+}
+.fc1251-beam.left{
+  left:-22px!important;
+  transform:rotate(-15deg) scaleX(.72)!important;
+  transform-origin:38% 0%!important;
+}
+.fc1251-beam.right{
+  right:-22px!important;
+  left:auto!important;
+  transform:rotate(15deg) scaleX(.72)!important;
+  transform-origin:62% 0%!important;
+}
+
+/* Remove v1253's extra pseudo-lamp duplicates. The real .fc1251-lamp elements
+   above are now the only visible light sources. */
+.fc1251-hero::before,
+.fc1251-heading::before{
+  content:none!important;
+  display:none!important;
+}
+
+/* Championship brief must never present a generic public-entry treatment. */
+body.fc-championship-view-v1226 #challengeDetailSheet
+#fcChallengeBriefV1054 [data-v1054-action="enter"]{
+  display:none!important;
+}
+
+/* Community Guidelines: make the final Agree control reachable above the
+   persistent iPhone bottom navigation and home indicator. */
+#guidelinesModal{
+  padding-bottom:calc(96px + env(safe-area-inset-bottom))!important;
+}
+#guidelinesModal > .modal{
+  max-height:calc(100dvh - 130px - env(safe-area-inset-bottom))!important;
+  padding-bottom:24px!important;
+  scroll-padding-bottom:88px!important;
+}
+#guidelinesModal > .modal > button.btn.btn-primary:last-child{
+  position:sticky!important;
+  bottom:0!important;
+  z-index:4!important;
+  margin-top:18px!important;
+  margin-bottom:4px!important;
+  box-shadow:
+    0 -12px 24px rgba(10,5,2,.72),
+    0 7px 18px rgba(255,83,38,.18)!important;
+}
+</style>
+
+
 
 
 
@@ -47626,6 +47737,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1253_VALIDATION={build:"v1253",v1252CompositionPreserved:true,spotlightConesRemoved:true,softLampBloom:true,actionRowReduced:true,heroShortened:true,v1252GlimmerPreserved:true,qualificationPreserved:true,competitorDedupePreserved:true,inlineVideoPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1254_VALIDATION={build:"v1254",championshipNewEntryRequiresAcceptedInvite:true,genericChampionshipEnterActionRemoved:true,qualifiedAcceptedUserGetsSubmitEntry:true,pendingOrUnqualifiedGetsNoEntryCTA:true,submitSheetHardGuard:true,actualSpotlightSelectorsFixed:true,guidelinesAgreeSafeAreaFixed:true,qualificationPreserved:true,competitorDedupePreserved:true,inlineVideoPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
