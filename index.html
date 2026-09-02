@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1241 · exact-poster-crown" name="fc-build"/>
+<meta content="v1242 · championship-avatar-orientation-fix" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="The Championship cards now use the exact rendered crown extracted from the approved promotion poster rather than a recreated SVG. The same crown asset is shared by challenge and Feed surfaces." name="fc-whatsnew"/>
+<meta content="Championship flyer previews now re-render contender avatars in the browser before display/share/posting, normalizing iPhone EXIF orientation so profile photos cannot appear upside down." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -15162,6 +15162,93 @@ function fcCanPromoteChampionshipV1217(ch) {
   return ch.is_public !== false && !['closed','voided','cancelled'].includes(status);
 }
 
+
+async function fcNormalizeChampFlyerAvatarsV1242(pngBase64, chId) {
+  try {
+    const fighters = ((state.champFighters || {})[chId] || []).slice(0, 2);
+    if (!pngBase64 || !fighters.length) return pngBase64;
+
+    const loadImageV1242 = (src) => new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.decoding = 'async';
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = src;
+    });
+
+    const flyerImg = await loadImageV1242(`data:image/png;base64,${pngBase64}`);
+    const canvas = document.createElement('canvas');
+    canvas.width = flyerImg.naturalWidth || flyerImg.width;
+    canvas.height = flyerImg.naturalHeight || flyerImg.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return pngBase64;
+    ctx.drawImage(flyerImg, 0, 0, canvas.width, canvas.height);
+
+    // Measured from the production Championship poster template.
+    // We redraw INSIDE the existing gold rings, leaving the poster frame intact.
+    const slots = [
+      { cx: 0.326, cy: 0.566, r: 0.104 },
+      { cx: 0.674, cy: 0.566, r: 0.104 },
+    ];
+
+    const drawCoverCircleV1242 = (img, slot) => {
+      const cx = canvas.width * slot.cx;
+      const cy = canvas.height * slot.cy;
+      const r = Math.min(canvas.width, canvas.height) * slot.r;
+
+      const sw = img.naturalWidth || img.width;
+      const sh = img.naturalHeight || img.height;
+      if (!sw || !sh) return;
+
+      const scale = Math.max((r * 2) / sw, (r * 2) / sh);
+      const dw = sw * scale;
+      const dh = sh * scale;
+      const dx = cx - dw / 2;
+      const dy = cy - dh / 2;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(img, dx, dy, dw, dh);
+      ctx.restore();
+
+      // Restore a clean metallic ring over the normalized image.
+      ctx.save();
+      const ring = ctx.createLinearGradient(cx-r, cy-r, cx+r, cy+r);
+      ring.addColorStop(0, '#6f4308');
+      ring.addColorStop(.28, '#d9a633');
+      ring.addColorStop(.50, '#fff0a3');
+      ring.addColorStop(.72, '#c18419');
+      ring.addColorStop(1, '#5b3405');
+      ctx.strokeStyle = ring;
+      ctx.lineWidth = Math.max(5, canvas.width * 0.006);
+      ctx.beginPath();
+      ctx.arc(cx, cy, r + ctx.lineWidth * 0.15, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    };
+
+    for (let i = 0; i < Math.min(fighters.length, slots.length); i++) {
+      const src = fighters[i]?.avatar;
+      if (!src || !/^https?:|^data:|^blob:/.test(String(src))) continue;
+      try {
+        // Browser image decode honors EXIF orientation from iPhone images.
+        const normalizedImg = await loadImageV1242(src);
+        drawCoverCircleV1242(normalizedImg, slots[i]);
+      } catch (avatarErrV1242) {
+        console.warn('champ flyer avatar normalization', avatarErrV1242);
+      }
+    }
+
+    return canvas.toDataURL('image/png').split(',')[1] || pngBase64;
+  } catch (errV1242) {
+    console.warn('champ flyer orientation normalization failed', errV1242);
+    return pngBase64;
+  }
+}
+
 async function previewChampFlyer(chId) {
   const chV1217 = (state.challenges || []).find(c => String(c.id) === String(chId));
   if (!fcCanPromoteChampionshipV1217(chV1217)) {
@@ -15185,8 +15272,12 @@ async function previewChampFlyer(chId) {
       console.warn('champ flyer preview', j);
       return;
     }
-    const dataUrlV1218 = `data:image/png;base64,${hit.png_base64}`;
-    const byteStringV1218 = atob(hit.png_base64);
+    // v1242 — normalize contender photos through the browser before this
+    // flyer is previewed, posted, shared, or saved. This fixes iPhone EXIF
+    // orientation differences in the server renderer without changing poster art.
+    const normalizedBase64V1242 = await fcNormalizeChampFlyerAvatarsV1242(hit.png_base64, chId);
+    const dataUrlV1218 = `data:image/png;base64,${normalizedBase64V1242}`;
+    const byteStringV1218 = atob(normalizedBase64V1242);
     const bytesV1218 = new Uint8Array(byteStringV1218.length);
     for (let i = 0; i < byteStringV1218.length; i++) bytesV1218[i] = byteStringV1218.charCodeAt(i);
     const blobV1218 = new Blob([bytesV1218], { type:'image/png' });
@@ -46088,6 +46179,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1241_VALIDATION={build:"v1241",exactPosterCrownAsset:true,sameCrownPixelsFeedAndChallenge:true,noGeneratedCrownSvg:true,noFcMonogramNoLaurels:true,championshipPostToFeedGold:true,inlineVideoPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1242_VALIDATION={build:"v1242",championshipAvatarOrientationNormalized:true,browserExifDecodeUsed:true,previewUsesCorrectedFlyer:true,postShareSaveUseCorrectedFlyer:true,posterDesignPreserved:true,exactPosterCrownPreserved:true,inlineVideoPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
