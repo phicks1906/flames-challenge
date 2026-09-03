@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1263 · inline-feed-video-and-click-reliability" name="fc-build"/>
+<meta content="v1264 · direct-feed-video-play" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Feed videos now play inline with sound instead of opening details, standalone video posts use the same player contract as challenge videos, deliberate playback is no longer stopped by the 3-second preview cap, and card click handlers no longer swallow media/control taps." name="fc-whatsnew"/>
+<meta content="Feed video play is now a real full-surface button that intercepts before card navigation, winner videos use the same inline player, and every feed card route ignores video/control taps." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -13513,7 +13513,7 @@ function wireDoubleTapLike(container) {
         return;
       }
 
-      const directControl = e.target?.closest?.('button,input,a,[role="button"],[role="slider"],video[controls],.fc-video-unified-v1238,.fc-inline-video-expand-v1239');
+      const directControl = e.target?.closest?.('button,input,a,[role="button"],[role="slider"],video[controls],.fc-video-unified-v1238,.fc-inline-video-play-v1264,.fc-inline-video-expand-v1239');
       if (directControl) {
         handledTouchV1190 = false;
         lastTap = 0;
@@ -13552,7 +13552,7 @@ function wireDoubleTapLike(container) {
 
     // Mouse/trackpad and keyboard do not need the double-tap delay.
     el.addEventListener('click', e => {
-      const directControl = e.target?.closest?.('button,input,a,[role="button"],[role="slider"],video[controls],.fc-video-unified-v1238,.fc-inline-video-expand-v1239');
+      const directControl = e.target?.closest?.('button,input,a,[role="button"],[role="slider"],video[controls],.fc-video-unified-v1238,.fc-inline-video-play-v1264,.fc-inline-video-expand-v1239');
       if (directControl) {
         handledTouchV1190 = false;
         return;
@@ -23402,7 +23402,7 @@ function renderChallenges() {
   // opened Feed Viewer, producing different sizing, sound, and overlay behavior.
   grid.querySelectorAll('[data-entry-open]').forEach(card => {
     card.addEventListener('click', e => {
-      if (e.target.closest('[data-fcc-vote],.fcc-vote-btn,[data-show-likes],.fcc-fire-eq,audio[controls],.fc-video-unified-v1238,.fc-inline-video-expand-v1239,video')) return;
+      if (e.target.closest('[data-fcc-vote],.fcc-vote-btn,[data-show-likes],.fcc-fire-eq,audio[controls],.fc-video-unified-v1238,.fc-inline-video-play-v1264,.fc-inline-video-expand-v1239,video')) return;
       e.stopPropagation();
       openFeedViewer(card.dataset.entryOpen, card.dataset.entryId || null);
     });
@@ -26234,7 +26234,7 @@ function renderFeed() {
   // Wire entry card taps → open feed viewer (stays on feed)
   c.querySelectorAll('[data-entry-open]').forEach(card => {
     card.addEventListener('click', e => {
-      if (e.target.closest('[data-fcc-vote],.fcc-vote-btn,[data-show-likes],.fcc-fire-eq,audio')) return;
+      if (e.target.closest('[data-fcc-vote],.fcc-vote-btn,[data-show-likes],.fcc-fire-eq,audio,video,.fc-video-unified-v1238,.fc-inline-video-play-v1264,.fc-inline-video-expand-v1239')) return;
       e.stopPropagation();
       openFeedViewer(card.dataset.entryOpen, card.dataset.entryId || null);
     });
@@ -26344,7 +26344,7 @@ function renderFeed() {
     // Wire entry card taps → open challenge detail
     drawer.querySelectorAll('[data-entry-open]').forEach(card => {
       card.addEventListener('click', e => {
-        if (e.target.closest('[data-fcc-vote],.fcc-vote-btn,[data-show-likes],.fcc-fire-eq,audio,.fc-video-unified-v1238,.fc-inline-video-expand-v1239,video')) return;
+        if (e.target.closest('[data-fcc-vote],.fcc-vote-btn,[data-show-likes],.fcc-fire-eq,audio,.fc-video-unified-v1238,.fc-inline-video-play-v1264,.fc-inline-video-expand-v1239,video')) return;
         e.stopPropagation();
         openEntryViewer(card.dataset.entryId, card.dataset.entryOpen);
       });
@@ -26461,7 +26461,8 @@ function renderFeed() {
 
   // Wire up activity card clicks (entry / winner events → open the challenge)
   c.querySelectorAll('.feed-activity-card').forEach(card => {
-    card.addEventListener('click', () => {
+    card.addEventListener('click', e => {
+      if (e.target.closest('button,input,a,[role="button"],audio,video,.fc-video-unified-v1238,.fc-inline-video-play-v1264,.fc-inline-video-expand-v1239')) return;
       const id = card.dataset.cid;
       if (id) openFeedViewer(id);
     });
@@ -26489,7 +26490,7 @@ function renderPostCard(p, options = {}) {
     if (p.media_type === 'video') {
       mediaHtml = expandedPostViewV1189
         ? `<div class="post-card-media fc-post-media-expanded-v1190"><video src="${escapeHtml(p.media_url)}#t=0.1" controls playsinline preload="metadata" aria-label="Video post"></video></div>`
-        : `<div class="post-card-media post-card-media-video-v1180 fc-video-unified-v1238 fc-post-video-inline-v1263" data-post-video-inline-v1263="${escapeHtml(p.id)}" role="group" aria-label="Video post"><video data-src="${escapeHtml(p.media_url)}" ${_videoPosterAttr(p.media_url,p.poster_url||'')} muted playsinline preload="none" data-lazy-video tabindex="-1" aria-label="Video post"></video><span class="fcc-play-overlay fc-card-play-overlay-v1238" aria-hidden="true">▶</span><button type="button" class="fc-inline-video-expand-v1239" data-post-video-expand-v1263="${escapeHtml(p.id)}" aria-label="Open video post full size">⛶</button></div>`;
+        : `<div class="post-card-media post-card-media-video-v1180 fc-video-unified-v1238 fc-post-video-inline-v1263" data-post-video-inline-v1263="${escapeHtml(p.id)}" role="group" aria-label="Video post"><video data-src="${escapeHtml(p.media_url)}" ${_videoPosterAttr(p.media_url,p.poster_url||'')} muted playsinline preload="none" data-lazy-video tabindex="-1" aria-label="Video post"></video><button type="button" class="fcc-play-overlay fc-card-play-overlay-v1238 fc-inline-video-play-v1264" aria-label="Play video">▶</button><button type="button" class="fc-inline-video-expand-v1239" data-post-video-expand-v1263="${escapeHtml(p.id)}" aria-label="Open video post full size">⛶</button></div>`;
     } else if (p.media_type === 'audio') {
       // v739 — audio posts get the SAME fire EQ tile as challenge entries (all
       // four styles, analyser-driven) instead of the plain grey iOS player.
@@ -26744,7 +26745,7 @@ function fcEntryCardMediaV1060(e, ch) {
       <video data-src="${escapeHtml(e.media_url || '')}" ${_videoPosterAttr(e.media_url || '', e.poster_url || '')}
         muted playsinline preload="none" data-lazy-video tabindex="-1"
         aria-hidden="true"></video>
-      <span class="fcc-play-overlay fc-card-play-overlay-v1238" aria-hidden="true">▶</span>
+      <button type="button" class="fcc-play-overlay fc-card-play-overlay-v1238 fc-inline-video-play-v1264" aria-label="Play video">▶</button>
       <button type="button" class="fc-inline-video-expand-v1239" aria-label="Open full-size video">⛶</button>
     </div>`;
   }
@@ -27275,7 +27276,7 @@ function renderFeedWinnerCard({ challenge, entry }) {
   if(entry.media_type==='photo'&&entry.media_url){
     mediaHtml=`<img src="${escapeHtml(entry.media_url)}" alt="Winning entry" loading="lazy" data-entry-open="${challenge.id}" data-entry-id="${entry.id}">`;
   }else if(entry.media_type==='video'&&entry.media_url){
-    mediaHtml=`<div class="fc-winner-video-v1058" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><video data-src="${escapeHtml(entry.media_url)}" ${_videoPosterAttr(entry.media_url,entry.poster_url)} muted playsinline preload="none" data-lazy-video></video><span aria-hidden="true">▶</span></div>`;
+    mediaHtml=`<div class="fc-winner-video-v1058 fc-video-unified-v1238" data-entry-open="${challenge.id}" data-entry-id="${entry.id}" aria-label="Winning video"><video data-src="${escapeHtml(entry.media_url)}" ${_videoPosterAttr(entry.media_url,entry.poster_url)} muted playsinline preload="none" data-lazy-video tabindex="-1" aria-label="Winning video"></video><button type="button" class="fcc-play-overlay fc-card-play-overlay-v1238 fc-inline-video-play-v1264" aria-label="Play winning video">▶</button><button type="button" class="fc-inline-video-expand-v1239" aria-label="Open full-size video">⛶</button></div>`;
   }else if(entry.media_type==='audio'&&entry.media_url){
     mediaHtml=`<div class="fc-winner-audio-v1123" data-entry-open="${challenge.id}" data-entry-id="${entry.id}">${_audioTileHtml(entry,{mode:'winner',controls:false})}</div>`;
   }else{
@@ -47708,7 +47709,7 @@ document.addEventListener('pointerdown', function(event) {
     }
   }
 
-  document.addEventListener('click', event => {
+  window.addEventListener('click', event => {
     const expand = event.target.closest('.fc-inline-video-expand-v1239');
     if (expand) {
       event.preventDefault();
@@ -47733,7 +47734,6 @@ document.addEventListener('pointerdown', function(event) {
 
     // Controls must remain usable after inline playback starts.
     if (event.target.closest('video[controls]') && media.classList.contains('is-playing-v1239')) {
-      event.stopPropagation();
       return;
     }
 
@@ -47909,6 +47909,43 @@ main{padding-bottom:calc(126px + env(safe-area-inset-bottom,0px))!important}
 }
 </style>
 
+<style id="fc-v1264-direct-feed-video-play">
+/* A real button owns the entire initial video surface. This makes iOS dispatch
+   the tap to playback instead of to the surrounding card/detail route. */
+#feedContainer .fc-inline-video-play-v1264,
+#challengesGrid .fc-inline-video-play-v1264{
+  pointer-events:auto!important;
+  cursor:pointer!important;
+  border:0!important;
+  padding:0!important;
+  margin:0!important;
+  appearance:none!important;
+  -webkit-appearance:none!important;
+  -webkit-tap-highlight-color:transparent!important;
+}
+
+#feedContainer .fc-inline-video-play-v1264.is-hidden-v1239,
+#challengesGrid .fc-inline-video-play-v1264.is-hidden-v1239,
+.fc-video-unified-v1238.is-playing-v1239 .fc-inline-video-play-v1264{
+  pointer-events:none!important;
+}
+
+/* Winner videos now share the same feed-video stage contract. */
+.fc-winner-video-v1058.fc-video-unified-v1238{
+  position:relative!important;
+  overflow:hidden!important;
+  background:#000!important;
+}
+.fc-winner-video-v1058.fc-video-unified-v1238 video{
+  width:100%!important;
+  height:100%!important;
+  display:block!important;
+  object-fit:contain!important;
+}
+</style>
+
+
 <script>window.FC_V1263_VALIDATION={build:"v1263",standaloneFeedVideoInline:true,challengeVideoInlinePreserved:true,videoExpandSeparate:true,threeSecondCapBypassedOnUserPlay:true,doubleTapControlGuardFixed:true,cardMediaClickGuardsHardened:true,audioBehaviorPreserved:true,championshipEntryGatePreserved:true,posterAvatarFixPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1264_VALIDATION={build:"v1264",realFeedVideoPlayButton:true,windowCaptureVideoInterceptor:true,winnerVideoInline:true,allFeedNavigationGuardsVideo:true,nativeControlsPreserved:true,threeSecondCapFixPreserved:true,audioPreserved:true,championshipEntryGatePreserved:true,posterAvatarFixPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
