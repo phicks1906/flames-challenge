@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1264 · direct-feed-video-play" name="fc-build"/>
+<meta content="v1265 · respect-user-video-pause" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Feed video play is now a real full-surface button that intercepts before card navigation, winner videos use the same inline player, and every feed card route ignores video/control taps." name="fc-whatsnew"/>
+<meta content="Pausing an inline feed video now stays paused. The passive 3-second preview observer is permanently blocked from restarting a video once the member has deliberately started that video, until playback ends." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -18554,6 +18554,13 @@ function _bunnyPreviewUrl(src) {
 function _startPreview(vid) {
   if (_activePreview === vid) return;
   if (_userAudioActive) return;
+
+  // v1265 — once a member has deliberately started an inline video, the lazy
+  // preview system no longer owns it. This is intentionally checked BEFORE any
+  // source rewriting or play() call. Without this guard, pausing a still-visible
+  // feed video could immediately trigger _startPreview() again and restart it.
+  if (vid?.dataset?.fcInlineUserPlayV1263 === '1') return;
+
   const src = vid.dataset.src || vid.src || '';
 
   // v707 — MOVING PREVIEWS, SHARP THIS TIME. History in one breath: previews were
@@ -18694,7 +18701,9 @@ function wireLazyVideoThumbnails(container) {
       // Most visible candidate wins; everything else pauses
       let best = null, bestRatio = 0;
       entries.forEach(entry => {
-        if (entry.isIntersecting && entry.intersectionRatio > bestRatio) {
+        if (entry.isIntersecting &&
+            entry.target?.dataset?.fcInlineUserPlayV1263 !== '1' &&
+            entry.intersectionRatio > bestRatio) {
           best = entry.target; bestRatio = entry.intersectionRatio;
         }
         if (!entry.isIntersecting && entry.target === _activePreview) {
@@ -47746,6 +47755,7 @@ document.addEventListener('pointerdown', function(event) {
     const media = event.target?.closest?.('.fc-video-unified-v1238');
     if (!media || event.target.tagName !== 'VIDEO') return;
     pauseOtherMediaV1239(event.target);
+    media.classList.remove('is-user-paused-v1265');
     media.classList.add('is-playing-v1239');
     media.querySelector('.fc-card-play-overlay-v1238')?.classList.add('is-hidden-v1239');
   }, true);
@@ -47753,7 +47763,15 @@ document.addEventListener('pointerdown', function(event) {
   document.addEventListener('pause', event => {
     const media = event.target?.closest?.('.fc-video-unified-v1238');
     if (!media || event.target.tagName !== 'VIDEO') return;
+
     media.classList.remove('is-playing-v1239');
+
+    // v1265 — deliberate playback remains user-owned while paused. Do not clear
+    // fcInlineUserPlayV1263 here; clearing it would hand the still-visible video
+    // back to the autoplay preview observer and cause the immediate restart bug.
+    if (event.target.dataset.fcInlineUserPlayV1263 === '1') {
+      media.classList.add('is-user-paused-v1265');
+    }
   }, true);
 
   document.addEventListener('ended', event => {
@@ -47764,6 +47782,7 @@ document.addEventListener('pointerdown', function(event) {
     event.target.muted = true;
     event.target.defaultMuted = true;
     media.classList.remove('is-playing-v1239');
+    media.classList.remove('is-user-paused-v1265');
     media.classList.remove('has-played-v1239');
     media.querySelector('.fc-card-play-overlay-v1238')?.classList.remove('is-hidden-v1239');
   }, true);
@@ -47947,5 +47966,6 @@ main{padding-bottom:calc(126px + env(safe-area-inset-bottom,0px))!important}
 
 <script>window.FC_V1263_VALIDATION={build:"v1263",standaloneFeedVideoInline:true,challengeVideoInlinePreserved:true,videoExpandSeparate:true,threeSecondCapBypassedOnUserPlay:true,doubleTapControlGuardFixed:true,cardMediaClickGuardsHardened:true,audioBehaviorPreserved:true,championshipEntryGatePreserved:true,posterAvatarFixPreserved:true,updateParserPreserved:true};</script>
 <script>window.FC_V1264_VALIDATION={build:"v1264",realFeedVideoPlayButton:true,windowCaptureVideoInterceptor:true,winnerVideoInline:true,allFeedNavigationGuardsVideo:true,nativeControlsPreserved:true,threeSecondCapFixPreserved:true,audioPreserved:true,championshipEntryGatePreserved:true,posterAvatarFixPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1265_VALIDATION={build:"v1265",manualPausePersists:true,previewStarterRejectsUserOwnedVideo:true,observerRejectsUserOwnedVideo:true,nativeResumePreserved:true,directFeedVideoPlayPreserved:true,winnerVideoInlinePreserved:true,audioPreserved:true,championshipEntryGatePreserved:true,posterAvatarFixPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
