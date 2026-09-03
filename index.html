@@ -21,7 +21,7 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1260 · simplified-score-language" name="fc-build"/>
+<meta content="v1261 · simplified-score-language" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
 <meta content="Simplified member-facing Championship Score language so Opponent Points and Turnout Points use the same clear definitions across Competition Rules and How FlamesChallenge Works, while preserving the public-challenge scoring distinction." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
@@ -15287,7 +15287,7 @@ async function fcBuildVariableChampPosterV1244(chId) {
   const ch = (state.challenges || []).find(c => String(c.id) === String(chId));
   const fighters = ((state.champFighters || {})[chId] || [])
     .filter(f => !['declined','no_show'].includes(f?.invite_status));
-  if (!ch || fighters.length < 3) return null;
+  if (!ch || fighters.length < 2) return null;
 
   const W = 1080, H = 1350;
   const canvas = document.createElement('canvas');
@@ -15427,12 +15427,17 @@ async function previewChampFlyer(chId) {
   try {
     // Admin's own session token — the cron secret is never shipped to the client.
     const { data: { session: sess } } = await db.auth.getSession();
-    const r = await fetch(`${SUPABASE_URL}/functions/v1/champ-flyer-post`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sess?.access_token || ''}` },
-      body: JSON.stringify({ dry_run: true, force: true, challenge_id: chId }),
-    });
-    const j = await r.json();
+    let j = {};
+    try {
+      const r = await fetch(`${SUPABASE_URL}/functions/v1/champ-flyer-post`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sess?.access_token || ''}` },
+        body: JSON.stringify({ dry_run: true, force: true, challenge_id: chId }),
+      });
+      j = await r.json();
+    } catch (serverPosterErrorV1261) {
+      console.warn('champ flyer server render unavailable; using local renderer', serverPosterErrorV1261);
+    }
     let hit = (j.results || [])[0];
     const expectedRosterV1244 = ((state.champFighters || {})[chId] || [])
       .filter(f => !['declined','no_show'].includes(f?.invite_status));
@@ -15447,9 +15452,13 @@ async function previewChampFlyer(chId) {
     }
 
     if (!hit || !hit.png_base64) {
-      toast(hit?.skipped || hit?.error || j.error || 'No flyer produced');
-      console.warn('champ flyer preview', j);
-      return;
+      const localPosterV1261 = await fcBuildVariableChampPosterV1244(chId);
+      if (localPosterV1261?.png_base64) hit = localPosterV1261;
+      else {
+        toast(hit?.skipped || hit?.error || j.error || 'No flyer produced');
+        console.warn('champ flyer preview', j);
+        return;
+      }
     }
 
     const repairedBase64V1243 = expectedRosterV1244.length <= 2
@@ -26544,7 +26553,7 @@ function renderFlyerCard(p) {
   const chStatus = ch ? computeChallengeStatus(ch) : null;
   const isOpen = chStatus === 'submitting';
   const isVoting = chStatus === 'voting';
-  const ctaText = isOpen ? '🔥 Enter this Challenge' : isVoting ? '🗳️ Vote Now' : ch ? '👀 View Challenge' : null;
+  const ctaText = ch && isChampionshipCh(ch) ? (isVoting ? '🗳️ Vote Now' : '👀 View Challenge') : isOpen ? '🔥 Enter this Challenge' : isVoting ? '🗳️ Vote Now' : ch ? '👀 View Challenge' : null;
   const countdown = ch && isOpen ? `⏱ ${formatCountdown(ch.submission_deadline)}` :
                     ch && isVoting ? `⏱ ${formatCountdown(ch.voting_end)}` : '';
 
@@ -26911,6 +26920,12 @@ function fcCardAction(ch, status) {
   const entered = fcCardHasEntered(ch);
   const voted = fcCardHasVoted(ch);
   if (status === 'submitting') {
+    if (ch.is_championship) {
+      if (entered) return { label:'Edit your entry', mode:'edit' };
+      if (canEnterChampionship(ch)) return { label:'Enter challenge', mode:'enter' };
+      if (isCreator) return { label:'Promote challenge', mode:'promote' };
+      return { label:'', mode:'view', hidden:true };
+    }
     if (isCreator) return { label:'Promote challenge', mode:'promote' };
     if (entered) return { label:'Edit your entry', mode:'edit' };
     return { label:'Enter challenge', mode:'enter' };
@@ -28847,7 +28862,10 @@ async function openFeedViewer(chId, startEntryId = null) {
 
     const total = _eligibleVisibleV1047.length;
     const userHasEntered = !!myLiveEntry(entries); // v715
-    if (status === 'submitting' && !userHasEntered) {
+    if (status === 'submitting' && !userHasEntered && ch.is_championship && !canEnterChampionship(ch)) {
+      btn.textContent = '📋 View Details';
+      btn.style.display = 'block';
+    } else if (status === 'submitting' && !userHasEntered) {
       btn.textContent = '🔥 Enter Challenge';
       btn.style.display = 'block';
     } else if (status === 'submitting' && userHasEntered) {
@@ -47813,5 +47831,12 @@ document.addEventListener('pointerdown', function(event) {
 </script>
 
 <script>window.FC_V1259_VALIDATION={build:"v1259",emberUsesEntryVoteSelectionMap:true,emberPollVoteLeakFixed:true,dailyEmberHydratesVotesBeforeRender:true,liveStandingUsesFeedVoteCounts:true,liveStandingDedupesEntries:true,behindByCopy:true,votingRulesOverlapFixed:true,championshipEntryGatePreserved:true,nonQualifierAskEmberPreserved:true,inlineVideoPreserved:true,updateParserPreserved:true};</script>
+
+<style id="fc-v1261-footer-clearance">
+/* v1261: fixed nav must never cover the final entry controls/content. */
+main{padding-bottom:calc(126px + env(safe-area-inset-bottom,0px))!important}
+#challengeDetailSheet .sheet-body,#challengeDetailSheet .cd-body,#challengeDetailSheet .challenge-detail-content{padding-bottom:calc(132px + env(safe-area-inset-bottom,0px))!important}
+#fvScrollRegion{padding-bottom:18px}
+</style>
 </body>
 </html>
