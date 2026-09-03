@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1265 · respect-user-video-pause" name="fc-build"/>
+<meta content="v1266 · championship-poster-single-avatar-path" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Pausing an inline feed video now stays paused. The passive 3-second preview observer is permanently blocked from restarting a video once the member has deliberately started that video, until playback ends." name="fc-whatsnew"/>
+<meta content="Championship promotion posters now render each contender avatar exactly once. Local fallback posters are no longer post-processed a second time, server-poster repair is aligned to the real avatar slots, and duplicate fighter rows are removed before local poster rendering." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -15221,10 +15221,17 @@ async function fcReadJpegOrientationV1243(src) {
   return 1;
 }
 
-async function fcRepairChampFlyerOrientationV1262(pngBase64, chId) {
+async function fcRepairChampFlyerOrientationV1266(pngBase64, chId) {
   try {
-    const fighters = ((state.champFighters || {})[chId] || []).slice(0, 2);
-    if (!pngBase64 || !fighters.length) return pngBase64;
+    const rawFighters = ((state.champFighters || {})[chId] || []).slice(0, 2);
+    if (!pngBase64 || !rawFighters.length) return pngBase64;
+
+    // Only repair an avatar when its source file actually carries a rotated
+    // JPEG orientation. Correctly rendered avatars are left completely alone.
+    const orientations = await Promise.all(
+      rawFighters.map(f => fcReadJpegOrientationV1243(f?.avatar))
+    );
+    if (!orientations.some(o => [3,6,8].includes(o))) return pngBase64;
 
     const loadImage = src => new Promise((resolve, reject) => {
       const img = new Image();
@@ -15242,32 +15249,36 @@ async function fcRepairChampFlyerOrientationV1262(pngBase64, chId) {
     if (!ctx) return pngBase64;
     ctx.drawImage(flyer, 0, 0);
 
+    // v1266 — measured against the production H2H artwork. The earlier .326/.674
+    // coordinates were too far inward and created the black/gold crescent visible
+    // behind each corrected avatar.
     const slots = [
-      { x:0.326, y:0.566, r:0.128 },
-      { x:0.674, y:0.566, r:0.128 },
+      { x:0.300, y:0.566, r:0.130 },
+      { x:0.700, y:0.566, r:0.130 },
     ];
 
-    for (let i = 0; i < Math.min(fighters.length, slots.length); i++) {
-      const fighter = fighters[i];
+    for (let i = 0; i < Math.min(rawFighters.length, slots.length); i++) {
+      const orientation = orientations[i];
+      if (![3,6,8].includes(orientation)) continue;
+
+      const fighter = rawFighters[i];
       const src = fighter?.avatar;
       if (!src || !/^https?:|^data:|^blob:/.test(String(src))) continue;
+
+      let avatar;
+      try { avatar = await loadImage(src); } catch (_) { continue; }
 
       const slot = slots[i];
       const cx = canvas.width * slot.x;
       const cy = canvas.height * slot.y;
       const r = Math.min(canvas.width, canvas.height) * slot.r;
 
-      let avatar;
-      try {
-        avatar = await loadImage(src);
-      } catch (_) {
-        continue;
-      }
-
-      const cleanR = r * 1.20;
-      const cleanup = ctx.createRadialGradient(cx, cy, r * .76, cx, cy, cleanR);
+      // Clear the existing rendered avatar/ring with a tight dark feather that
+      // matches the arena background, then paint ONE browser-decoded avatar.
+      const cleanR = r * 1.18;
+      const cleanup = ctx.createRadialGradient(cx, cy, r * .78, cx, cy, cleanR);
       cleanup.addColorStop(0, 'rgba(4,3,2,1)');
-      cleanup.addColorStop(.78, 'rgba(4,3,2,.96)');
+      cleanup.addColorStop(.82, 'rgba(4,3,2,.98)');
       cleanup.addColorStop(1, 'rgba(4,3,2,0)');
       ctx.save();
       ctx.fillStyle = cleanup;
@@ -15280,7 +15291,6 @@ async function fcRepairChampFlyerOrientationV1262(pngBase64, chId) {
       ctx.beginPath();
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.clip();
-
       ctx.fillStyle = '#090603';
       ctx.fillRect(cx-r, cy-r, r*2, r*2);
 
@@ -15309,7 +15319,7 @@ async function fcRepairChampFlyerOrientationV1262(pngBase64, chId) {
 
     return canvas.toDataURL('image/png').split(',')[1] || pngBase64;
   } catch (err) {
-    console.warn('champ flyer avatar cleanup', err);
+    console.warn('champ flyer orientation repair', err);
     return pngBase64;
   }
 }
@@ -15317,8 +15327,14 @@ async function fcRepairChampFlyerOrientationV1262(pngBase64, chId) {
 
 async function fcBuildVariableChampPosterV1244(chId) {
   const ch = (state.challenges || []).find(c => String(c.id) === String(chId));
-  const fighters = ((state.champFighters || {})[chId] || [])
-    .filter(f => !['declined','no_show'].includes(f?.invite_status));
+  const fighterMapV1266 = new Map();
+  ((state.champFighters || {})[chId] || [])
+    .filter(f => !['declined','no_show'].includes(f?.invite_status))
+    .forEach(f => {
+      const key = String(f?.id || f?.name || '').trim();
+      if (key && !fighterMapV1266.has(key)) fighterMapV1266.set(key, f);
+    });
+  const fighters = [...fighterMapV1266.values()];
   if (!ch || fighters.length < 2) return null;
 
   const W = 1080, H = 1350;
@@ -15444,7 +15460,8 @@ async function fcBuildVariableChampPosterV1244(chId) {
   return {
     png_base64: canvas.toDataURL('image/png').split(',')[1],
     roster: fighters.map(f=>f.name || 'Contender'),
-    variant: `${fighters.length}-way`
+    variant: `${fighters.length}-way`,
+    source_v1266: 'local'
   };
 }
 
@@ -15493,8 +15510,8 @@ async function previewChampFlyer(chId) {
       }
     }
 
-    const repairedBase64V1243 = expectedRosterV1244.length <= 2
-      ? await fcRepairChampFlyerOrientationV1262(hit.png_base64, chId)
+    const repairedBase64V1243 = expectedRosterV1244.length <= 2 && hit?.source_v1266 !== 'local'
+      ? await fcRepairChampFlyerOrientationV1266(hit.png_base64, chId)
       : hit.png_base64;
     const dataUrlV1218 = `data:image/png;base64,${repairedBase64V1243}`;
     const byteStringV1218 = atob(repairedBase64V1243);
@@ -47967,5 +47984,6 @@ main{padding-bottom:calc(126px + env(safe-area-inset-bottom,0px))!important}
 <script>window.FC_V1263_VALIDATION={build:"v1263",standaloneFeedVideoInline:true,challengeVideoInlinePreserved:true,videoExpandSeparate:true,threeSecondCapBypassedOnUserPlay:true,doubleTapControlGuardFixed:true,cardMediaClickGuardsHardened:true,audioBehaviorPreserved:true,championshipEntryGatePreserved:true,posterAvatarFixPreserved:true,updateParserPreserved:true};</script>
 <script>window.FC_V1264_VALIDATION={build:"v1264",realFeedVideoPlayButton:true,windowCaptureVideoInterceptor:true,winnerVideoInline:true,allFeedNavigationGuardsVideo:true,nativeControlsPreserved:true,threeSecondCapFixPreserved:true,audioPreserved:true,championshipEntryGatePreserved:true,posterAvatarFixPreserved:true,updateParserPreserved:true};</script>
 <script>window.FC_V1265_VALIDATION={build:"v1265",manualPausePersists:true,previewStarterRejectsUserOwnedVideo:true,observerRejectsUserOwnedVideo:true,nativeResumePreserved:true,directFeedVideoPlayPreserved:true,winnerVideoInlinePreserved:true,audioPreserved:true,championshipEntryGatePreserved:true,posterAvatarFixPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1266_VALIDATION={build:"v1266",serverPosterRepairOnlyWhenExifRotated:true,serverAvatarSlotsRealigned:true,localPosterSkipsSecondAvatarPass:true,localFightersDeduped:true,videoPauseFixPreserved:true,directFeedVideoPlayPreserved:true,championshipEntryGatePreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
