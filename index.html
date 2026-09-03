@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1258 · eligibility-language-cleanup" name="fc-build"/>
+<meta content="v1259 · unified-live-vote-state" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Simplified Championship eligibility language in scoring explanations and Ember poster copy." name="fc-whatsnew"/>
+<meta content="Unified Ember daily briefing with the live challenge voting state: existing ballots are recognized, live standing uses feed/current vote counts, behind-by copy is accurate, and Voting rules no longer overlaps ballot/deadline text." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -46686,6 +46686,33 @@ body.fc-championship-view-v1226 #challengeDetailSheet #fcChallengeBriefV1054 .fc
 body.fc-championship-view-v1226 #challengeDetailSheet #fcChallengeBriefV1054 .fc-challenge-actions-v1054.fc-challenge-actions-solo-v1255 [data-v1054-action="ember"]{width:100%!important;grid-column:1 / -1!important}
 </style>
 
+<style id="fc-v1259-voting-state-ui-fixes">
+/* v1259 — Voting rules gets its own row. It must never float over the
+   authoritative deadline / ballot-count line. */
+.fc-v1024-vote-notice .fc-v1047-vote-rule-row{
+  display:flex!important;
+  float:none!important;
+  clear:both!important;
+  width:100%!important;
+  justify-content:flex-end!important;
+  margin:6px 0 0!important;
+  padding:0!important;
+}
+.fc-v1024-vote-notice .fc-v1047-vote-rule-row .fc-rule-link-v1047{
+  display:inline-flex!important;
+  position:static!important;
+  margin:0!important;
+  font-size:10.5px!important;
+  line-height:1.2!important;
+  white-space:nowrap!important;
+}
+.fc-v1024-vote-notice .fc-vote-notice-row-v1220 small{
+  display:block!important;
+  padding-right:0!important;
+}
+</style>
+
+
 
 
 
@@ -47137,14 +47164,22 @@ document.addEventListener('pointerdown', function(event) {
   }
 
   function hasVotedV1221(ch) {
-    const votes = state?.myVotes;
-    if (!votes) return false;
-    if (votes[ch.id]) return true;
-    try {
-      return Object.values(votes).some(v => String(v?.challenge_id) === String(ch.id));
-    } catch (_) {
-      return false;
-    }
+    const key = String(ch?.id || '');
+    if (!key) return false;
+
+    // v1259 — entry_votes, not poll votes, are the source of truth here.
+    if (state?.entryVoteSelectionsV1083 instanceof Map &&
+        state.entryVoteSelectionsV1083.has(key) &&
+        state.entryVoteSelectionsV1083.get(key)) return true;
+
+    if (state?.emberVotedChallengeIds instanceof Set &&
+        state.emberVotedChallengeIds.has(key)) return true;
+
+    if (state?.currentChallenge &&
+        String(state.currentChallenge.id) === key &&
+        state?.myCurrentVote) return true;
+
+    return false;
   }
 
   function isMineV1221(ch) {
@@ -47202,19 +47237,22 @@ document.addEventListener('pointerdown', function(event) {
     const uid = state?.profile?.id;
     if (!uid) return null;
 
-    const entries = [
+    const rawEntries = [
       ...(state?.feedEntries || []),
       ...(state?.currentEntries || []),
       ...(state?.entries || []),
       ...(state?.myEntries || [])
     ];
 
-    const votes = Array.isArray(state?.currentVotes)
-      ? state.currentVotes
-      : Array.isArray(state?.votes)
-      ? state.votes
-      : [];
+    // Deduplicate entries so the same row appearing in feed/current caches
+    // cannot manufacture a tie or a duplicate contender.
+    const entryMap = new Map();
+    rawEntries.forEach(e => {
+      if (e?.id) entryMap.set(String(e.id), e);
+    });
+    const entries = [...entryMap.values()];
 
+    const currentBallots = Array.isArray(state?.currentVotes) ? state.currentVotes : [];
     const candidates = [];
 
     challenges.forEach(ch => {
@@ -47232,17 +47270,26 @@ document.addEventListener('pointerdown', function(event) {
 
       const counts = new Map();
       challengeEntries.forEach(e => counts.set(String(e.id), 0));
-      votes.forEach(v => {
-        if (String(v?.challenge_id || ch?.id) !== String(ch?.id)) return;
+
+      // Current detail ballots are authoritative when this challenge is open.
+      currentBallots.forEach(v => {
+        if (String(v?.challenge_id || '') !== String(ch?.id)) return;
         const key = String(v?.entry_id || '');
         if (counts.has(key)) counts.set(key, (counts.get(key) || 0) + 1);
       });
 
-      // Fall back to entry-level vote counts when the full ballot list is not loaded.
+      // Feed vote counts are the live app-wide tally used before opening detail.
       challengeEntries.forEach(e => {
         const key = String(e.id);
-        const fallback = Number(e?.vote_count ?? e?.votes_count ?? e?.votes ?? 0);
-        if ((counts.get(key) || 0) === 0 && fallback > 0) counts.set(key, fallback);
+        const feedCount = Number(state?.feedVoteCounts?.[e.id]);
+        const entryCount = Number(e?.vote_count ?? e?.votes_count ?? e?.votes);
+        const currentCount = Number(counts.get(key) || 0);
+
+        const candidates = [currentCount];
+        if (Number.isFinite(feedCount)) candidates.push(feedCount);
+        if (Number.isFinite(entryCount)) candidates.push(entryCount);
+
+        counts.set(key, Math.max(...candidates, 0));
       });
 
       const ordered = challengeEntries
@@ -47261,6 +47308,8 @@ document.addEventListener('pointerdown', function(event) {
       if (!mineRank || mineRank > 5) return;
 
       const myVotes = Number(counts.get(String(mine.id)) || 0);
+      const maxVotes = ordered.length ? Number(ordered[0].votes || 0) : 0;
+      const behindBy = Math.max(0, maxVotes - myVotes);
       const tied = ordered.filter(row => row.votes === myVotes).length > 1;
       const deadline = ch?.voting_end;
       const ms = Date.parse(deadline || '') - now();
@@ -47270,6 +47319,8 @@ document.addEventListener('pointerdown', function(event) {
         rank:mineRank,
         tied,
         votes:myVotes,
+        maxVotes,
+        behindBy,
         deadline,
         ms:Number.isFinite(ms) ? ms : Number.MAX_SAFE_INTEGER
       });
@@ -47284,11 +47335,17 @@ document.addEventListener('pointerdown', function(event) {
     );
 
     const best = candidates[0];
-    const title = best.rank === 1 && !best.tied
-      ? `You’re currently leading ${best.ch.title || 'a challenge'}`
-      : best.tied
-      ? `You’re tied for ${ordinalV1225(best.rank)} in ${best.ch.title || 'a challenge'}`
-      : `You’re in ${ordinalV1225(best.rank)} place in ${best.ch.title || 'a challenge'}`;
+    let title;
+
+    if (best.behindBy > 0) {
+      title = `You’re ${best.behindBy} vote${best.behindBy === 1 ? '' : 's'} behind in ${best.ch.title || 'a challenge'}`;
+    } else if (best.rank === 1 && best.tied) {
+      title = `You’re tied for 1st in ${best.ch.title || 'a challenge'}`;
+    } else if (best.rank === 1) {
+      title = `You’re currently leading ${best.ch.title || 'a challenge'}`;
+    } else {
+      title = `You’re in ${ordinalV1225(best.rank)} place in ${best.ch.title || 'a challenge'}`;
+    }
 
     const voteWord = best.votes === 1 ? 'vote' : 'votes';
     const remaining = best.deadline ? ` · ${timeLeftV1221(best.deadline)}` : '';
@@ -47426,9 +47483,17 @@ document.addEventListener('pointerdown', function(event) {
     return true;
   }
 
-  window.openDailyEmberV1221 = function openDailyEmberV1221(force = false) {
+  window.openDailyEmberV1221 = async function openDailyEmberV1221(force = false) {
     if (!state?.profile || state?.loading) return false;
     if (document.body.dataset.fcEmberGuidance === 'off') return false;
+
+    // v1259 — hydrate challenge ballot selections before Ember decides whether
+    // a vote is still available. This prevents poll-vote state from leaking into
+    // challenge guidance.
+    try {
+      if (typeof hydrateEntryVotesV1083 === 'function') await hydrateEntryVotesV1083();
+    } catch (_) {}
+
     const items = buildItemsV1221();
     if (!items.length) return false;
     if (!renderDailyEmberV1221(items)) return false;
@@ -47455,24 +47520,29 @@ document.addEventListener('pointerdown', function(event) {
     document.body.style.overflow = '';
   };
 
-  function maybeOpenDailyEmberV1221() {
+  async function maybeOpenDailyEmberV1221() {
     if (!state?.profile || state?.loading) return;
     if (document.body.dataset.fcEmberGuidance === 'off') return;
     const key = `fc_ember_daily_seen_v1221_${state.profile.id}_${easternDateKeyV1221()}`;
     try { if (localStorage.getItem(key) === '1') return; } catch (_) {}
+
+    try {
+      if (typeof hydrateEntryVotesV1083 === 'function') await hydrateEntryVotesV1083();
+    } catch (_) {}
+
     if (!buildItemsV1221().length) return;
-    openDailyEmberV1221(false);
+    await openDailyEmberV1221(false);
   }
 
   function wireHomeTileV1221() {
     const tile = byId('emberHomeCard');
     if (!tile || tile.dataset.fcDailyBriefingV1221 === '1') return;
     tile.dataset.fcDailyBriefingV1221 = '1';
-    tile.addEventListener('click', event => {
+    tile.addEventListener('click', async event => {
       if (!event.target.closest('#emberHomeCard')) return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      if (!openDailyEmberV1221(true)) {
+      if (!(await openDailyEmberV1221(true))) {
         const action = tile.querySelector('[data-ember-guidance-action]');
         if (action) action.click();
       }
@@ -47742,6 +47812,6 @@ document.addEventListener('pointerdown', function(event) {
 })();
 </script>
 
-<script>window.FC_V1258_VALIDATION={build:"v1258",decisiveScoringCopyUpdated:true,emberPosterCopyUpdated:true,competitionCopyPreserved:true,championshipEntryGatePreserved:true,lightingPreserved:true,inlineVideoPreserved:true,updateParserPreserved:true};</script>
+<script>window.FC_V1259_VALIDATION={build:"v1259",emberUsesEntryVoteSelectionMap:true,emberPollVoteLeakFixed:true,dailyEmberHydratesVotesBeforeRender:true,liveStandingUsesFeedVoteCounts:true,liveStandingDedupesEntries:true,behindByCopy:true,votingRulesOverlapFixed:true,championshipEntryGatePreserved:true,nonQualifierAskEmberPreserved:true,inlineVideoPreserved:true,updateParserPreserved:true};</script>
 </body>
 </html>
