@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1261 · simplified-score-language" name="fc-build"/>
+<meta content="v1262 · championship-poster-avatar-cleanup" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Simplified member-facing Championship Score language so Opponent Points and Turnout Points use the same clear definitions across Competition Rules and How FlamesChallenge Works, while preserving the public-challenge scoring distinction." name="fc-whatsnew"/>
+<meta content="Fixed the Championship promotion poster avatar stack by replacing the old rendered-circle rotation repair with a clean single-avatar redraw and a narrow background cleanup around the affected slot." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -15208,18 +15208,14 @@ async function fcReadJpegOrientationV1243(src) {
   return 1;
 }
 
-async function fcRepairChampFlyerOrientationV1243(pngBase64, chId) {
+async function fcRepairChampFlyerOrientationV1262(pngBase64, chId) {
   try {
     const fighters = ((state.champFighters || {})[chId] || []).slice(0, 2);
     if (!pngBase64 || !fighters.length) return pngBase64;
 
-    const orientations = await Promise.all(
-      fighters.map(f => fcReadJpegOrientationV1243(f?.avatar))
-    );
-    if (!orientations.some(o => [3,6,8].includes(o))) return pngBase64;
-
     const loadImage = src => new Promise((resolve, reject) => {
       const img = new Image();
+      img.crossOrigin = 'anonymous';
       img.onload = () => resolve(img);
       img.onerror = reject;
       img.src = src;
@@ -15233,51 +15229,74 @@ async function fcRepairChampFlyerOrientationV1243(pngBase64, chId) {
     if (!ctx) return pngBase64;
     ctx.drawImage(flyer, 0, 0);
 
-    // Production poster positions. We rotate the EXISTING rendered circle,
-    // including its frame, rather than painting a second avatar on top.
     const slots = [
       { x:0.326, y:0.566, r:0.128 },
       { x:0.674, y:0.566, r:0.128 },
     ];
 
-    orientations.forEach((orientation, i) => {
-      if (![3,6,8].includes(orientation) || !slots[i]) return;
+    for (let i = 0; i < Math.min(fighters.length, slots.length); i++) {
+      const fighter = fighters[i];
+      const src = fighter?.avatar;
+      if (!src || !/^https?:|^data:|^blob:/.test(String(src))) continue;
+
       const slot = slots[i];
       const cx = canvas.width * slot.x;
       const cy = canvas.height * slot.y;
       const r = Math.min(canvas.width, canvas.height) * slot.r;
-      const side = Math.ceil(r * 2.12);
 
-      const tmp = document.createElement('canvas');
-      tmp.width = side;
-      tmp.height = side;
-      const tctx = tmp.getContext('2d');
-      if (!tctx) return;
+      let avatar;
+      try {
+        avatar = await loadImage(src);
+      } catch (_) {
+        continue;
+      }
 
-      tctx.drawImage(
-        canvas,
-        cx - side/2, cy - side/2, side, side,
-        0, 0, side, side
-      );
+      const cleanR = r * 1.20;
+      const cleanup = ctx.createRadialGradient(cx, cy, r * .76, cx, cy, cleanR);
+      cleanup.addColorStop(0, 'rgba(4,3,2,1)');
+      cleanup.addColorStop(.78, 'rgba(4,3,2,.96)');
+      cleanup.addColorStop(1, 'rgba(4,3,2,0)');
+      ctx.save();
+      ctx.fillStyle = cleanup;
+      ctx.beginPath();
+      ctx.arc(cx, cy, cleanR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
 
       ctx.save();
       ctx.beginPath();
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.clip();
-      ctx.translate(cx, cy);
 
-      const radians = orientation === 3 ? Math.PI :
-                      orientation === 6 ? Math.PI / 2 :
-                      -Math.PI / 2;
-      ctx.rotate(radians);
+      ctx.fillStyle = '#090603';
+      ctx.fillRect(cx-r, cy-r, r*2, r*2);
 
-      ctx.drawImage(tmp, -side/2, -side/2, side, side);
+      const sw = avatar.naturalWidth || avatar.width;
+      const sh = avatar.naturalHeight || avatar.height;
+      if (sw && sh) {
+        const scale = Math.max((r*2)/sw, (r*2)/sh);
+        const dw = sw * scale;
+        const dh = sh * scale;
+        ctx.drawImage(avatar, cx-dw/2, cy-dh/2, dw, dh);
+      }
       ctx.restore();
-    });
+
+      const ring = ctx.createLinearGradient(cx-r, cy-r, cx+r, cy+r);
+      ring.addColorStop(0, '#754507');
+      ring.addColorStop(.32, '#dda63a');
+      ring.addColorStop(.50, '#fff0a0');
+      ring.addColorStop(.72, '#c58216');
+      ring.addColorStop(1, '#6a3f06');
+      ctx.strokeStyle = ring;
+      ctx.lineWidth = Math.max(5, r * .055);
+      ctx.beginPath();
+      ctx.arc(cx, cy, r + 1, 0, Math.PI * 2);
+      ctx.stroke();
+    }
 
     return canvas.toDataURL('image/png').split(',')[1] || pngBase64;
   } catch (err) {
-    console.warn('champ flyer orientation repair', err);
+    console.warn('champ flyer avatar cleanup', err);
     return pngBase64;
   }
 }
@@ -15462,7 +15481,7 @@ async function previewChampFlyer(chId) {
     }
 
     const repairedBase64V1243 = expectedRosterV1244.length <= 2
-      ? await fcRepairChampFlyerOrientationV1243(hit.png_base64, chId)
+      ? await fcRepairChampFlyerOrientationV1262(hit.png_base64, chId)
       : hit.png_base64;
     const dataUrlV1218 = `data:image/png;base64,${repairedBase64V1243}`;
     const byteStringV1218 = atob(repairedBase64V1243);
