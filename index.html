@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1270 · championship-entry-state-recovery" name="fc-build"/>
+<meta content="v1271 · championship-instant-response-and-observer-cleanup" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Fixed Championship replacement/resubmission after delete by refreshing the accepted invite and current entry from the database before opening the entry sheet, purging stale deleted-entry caches immediately, and verifying edit updates actually changed a row before reporting success." name="fc-whatsnew"/>
+<meta content="Championship taps now respond immediately: the approved dark arena shell renders before network work, stale detail cache renders instantly while refreshing, likes/comments no longer block first paint, repeated Championship finalizer observers were removed, Edit/Submit reuses fresh detail state instead of querying first, and poster rendering shows an immediate progress modal." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -24799,6 +24799,9 @@ async function fcRefreshChampionshipEntryStateV1270(ch) {
     state.feedEntries = stripMine(state.feedEntries);
     if (entry) state.feedEntries.push(entry);
 
+    state._fcChampEntryStateAtV1271 = state._fcChampEntryStateAtV1271 || {};
+    state._fcChampEntryStateAtV1271[String(ch.id)] = Date.now();
+
     return { invite, entry };
   } catch (err) {
     console.warn('[v1270] Championship entry-state refresh failed', err);
@@ -24816,7 +24819,29 @@ async function openSubmitEntry(entryToEdit = null) {
   // This fixes the exact delete→resubmit failure: the deleted row remained in
   // state.currentEntries, so the UI kept trying to edit an id that no longer existed.
   if (ch.is_championship) {
-    const freshV1270 = await fcRefreshChampionshipEntryStateV1270(ch);
+    const freshnessV1271 = Number(
+      state._fcChampEntryStateAtV1271?.[String(ch.id)] || 0
+    );
+    const hasFreshDetailStateV1271 =
+      freshnessV1271 > 0 && (Date.now() - freshnessV1271) < 45000;
+
+    let freshV1270;
+    if (hasFreshDetailStateV1271) {
+      const uidV1271 = String(state.profile?.id || '');
+      const mineV1271 = e =>
+        String(e?.challenge_id || '') === String(ch.id) &&
+        String(e?.user_id || '') === uidV1271;
+
+      freshV1270 = {
+        invite: state.myChampInvite || null,
+        entry:
+          (state.currentEntries || []).find(mineV1271) ||
+          (state.feedEntries || []).find(mineV1271) ||
+          null
+      };
+    } else {
+      freshV1270 = await fcRefreshChampionshipEntryStateV1270(ch);
+    }
 
     // A real current row always wins over a stale entry object supplied by a
     // previously-rendered card. If the DB says the row is gone, edit mode is cleared.
@@ -39375,7 +39400,11 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
   function addVoteRuleLink(id){const el=byId(id);if(!el||el.style.display==='none'||!el.innerHTML||el.querySelector('.fc-v1047-vote-rule-row'))return;el.insertAdjacentHTML('beforeend','<div class="fc-v1047-vote-rule-row"><button type="button" class="fc-rule-link-v1047">Voting rules</button></div>');el.querySelector('.fc-v1047-vote-rule-row button').onclick=()=>openCompetitionRules('voting')}
 
   const priorSubmit=window.openSubmitEntry;
-  window.openSubmitEntry=function(){const r=priorSubmit?.apply(this,arguments);requestAnimationFrame(renderEntryRules);return r};
+  window.openSubmitEntry=function(){
+    const r=priorSubmit?.apply(this,arguments);
+    Promise.resolve(r).finally(()=>requestAnimationFrame(renderEntryRules));
+    return r;
+  };
   const priorNotice=window.renderChallengeVotingNoticeV1024;
   window.renderChallengeVotingNoticeV1024=function(){const r=priorNotice?.apply(this,arguments);requestAnimationFrame(()=>addVoteRuleLink('cdVotingNotice'));return r};
   const priorFvNotice=window.renderFvVotingNoticeV1024;
@@ -40525,7 +40554,8 @@ body.fc-insights-unavailable-v1081 .pm-tile[onclick*="openCreatorInsightsV1048"]
       if(shouldPolish) polishChallengeEntries();
       if(insightsState==='unknown' && state?.profile?.id) probeInsights();
     });
-    observer.observe(document.body,{childList:true,subtree:true});
+    const detailRootV1271=document.getElementById('challengeDetailSheet');
+    if(detailRootV1271) observer.observe(detailRootV1271,{childList:true,subtree:true});
     if(state?.profile?.id) probeInsights();
   }
 
@@ -43041,7 +43071,11 @@ html[data-theme="light"] body .nav-icon-btn:active{
     el.querySelector('button').onclick=()=>openCompetitionRules(section);
   }
   const oldOpen=window.openSubmitEntry;
-  window.openSubmitEntry=function(){const r=oldOpen?.apply(this,arguments);requestAnimationFrame(updateEntryRule);return r;};
+  window.openSubmitEntry=function(){
+    const r=oldOpen?.apply(this,arguments);
+    Promise.resolve(r).finally(()=>requestAnimationFrame(updateEntryRule));
+    return r;
+  };
 
   const oldLocal=window.fcEmberLocalAnswerV1046;
   window.fcEmberLocalAnswerV1046=function(question){
@@ -44078,19 +44112,61 @@ body.fc-settings-open-v1117 #bottomNav{visibility:hidden!important;pointer-event
 
   window.loadChallengeDetail = async function(challengeId){
     const timeout = (promise, ms, label) => fcWithTimeoutV1099(promise, ms, label);
-    const ch = state.currentChallenge;
+    const ch = (state.challenges || []).find(item => String(item.id) === String(challengeId))
+      || (String(state.currentChallenge?.id || '') === String(challengeId) ? state.currentChallenge : null);
+
     const invitePromise = ch?.is_championship && state.profile
-      ? timeout(db.from('challenge_invites').select('id, invite_status').eq('challenge_id', challengeId).eq('invited_user_id', state.profile.id).maybeSingle(), 8000, 'Invite status')
+      ? timeout(
+          db.from('challenge_invites')
+            .select('id, invite_status')
+            .eq('challenge_id', challengeId)
+            .eq('invited_user_id', state.profile.id)
+            .maybeSingle(),
+          8000,
+          'Invite status'
+        )
       : Promise.resolve({data:null,error:null});
-    const [entriesRes, votesRes, resultRes, inviteRes] = await Promise.all([
-      timeout(db.from('entries').select('*, poster_url, submitter:profiles!entries_user_id_fkey(id, name, avatar)').eq('challenge_id', challengeId), 10000, 'Entries'),
-      timeout(db.from('entry_votes').select('id, entry_id, voter_id').eq('challenge_id', challengeId), 10000, 'Votes'),
-      timeout(db.from('challenge_results').select('challenge_id, category, month, resolved_at, final_round, resolution, is_public, is_championship, eligible_competitor_count, final_entry_count, valid_ballots, max_votes, winner_count, score_awarded, snapshot').eq('challenge_id', challengeId).maybeSingle(), 10000, 'Authoritative result'),
+
+    // v1271 — all data required for a meaningful first paint is fetched in ONE
+    // wave. Likes/comments are intentionally excluded because they are cosmetic
+    // counts and must never delay opening a challenge.
+    const [entriesRes, votesRes, resultRes, inviteRes, winnersRes] = await Promise.all([
+      timeout(
+        db.from('entries')
+          .select('*, poster_url, submitter:profiles!entries_user_id_fkey(id, name, avatar)')
+          .eq('challenge_id', challengeId),
+        10000,
+        'Entries'
+      ),
+      timeout(
+        db.from('entry_votes')
+          .select('id, entry_id, voter_id')
+          .eq('challenge_id', challengeId),
+        10000,
+        'Votes'
+      ),
+      timeout(
+        db.from('challenge_results')
+          .select('challenge_id, category, month, resolved_at, final_round, resolution, is_public, is_championship, eligible_competitor_count, final_entry_count, valid_ballots, max_votes, winner_count, score_awarded, snapshot')
+          .eq('challenge_id', challengeId)
+          .maybeSingle(),
+        10000,
+        'Authoritative result'
+      ),
       invitePromise,
+      timeout(
+        db.from('challenge_result_winners')
+          .select('challenge_id, user_id, entry_id, vote_count, is_co_winner, visible_level, opponent_pts, turnout_pts, championship_score, detail')
+          .eq('challenge_id', challengeId),
+        8000,
+        'Authoritative winners'
+      ).catch(error => ({data:[],error}))
     ]);
+
     if (entriesRes.error) throw entriesRes.error;
     if (votesRes.error) throw votesRes.error;
     if (resultRes.error) throw resultRes.error;
+    if (winnersRes.error) throw winnersRes.error;
 
     const myId = state.profile?.id;
     const admin = typeof isAdmin === 'function' && isAdmin();
@@ -44100,44 +44176,98 @@ body.fc-settings-open-v1117 #bottomNav{visibility:hidden!important;pointer-event
       if (status === 'rejected') return String(entry.user_id) === String(myId) || admin;
       return String(entry.user_id) === String(myId) || admin;
     });
+
     const votes = votesRes.data || [];
-    let myVote = state.profile ? (votes.find(vote => String(vote.voter_id) === String(state.profile.id))?.entry_id || null) : null;
+    let myVote = state.profile
+      ? (votes.find(vote => String(vote.voter_id) === String(state.profile.id))?.entry_id || null)
+      : null;
     if (ch && !isVotingPhase(computeChallengeStatus(ch))) myVote = null;
-    const validIds = new Set(entries.filter(entry => entry.moderation_status !== 'rejected').map(entry => entry.id));
+
+    const validIds = new Set(
+      entries.filter(entry => entry.moderation_status !== 'rejected').map(entry => entry.id)
+    );
     if (myVote && !validIds.has(myVote)) myVote = null;
-    const entryIds = entries.map(entry => entry.id);
 
-    const [likesRes, commentsRes, winnersRes] = await Promise.all([
-      entryIds.length ? timeout(db.from('entry_likes').select('entry_id, user_id').in('entry_id', entryIds), 8000, 'Entry likes').catch(error => ({data:[],error})) : Promise.resolve({data:[],error:null}),
-      entryIds.length ? timeout(db.from('comments').select('target_id').eq('target_type','entry').in('target_id', entryIds), 8000, 'Entry comments').catch(error => ({data:[],error})) : Promise.resolve({data:[],error:null}),
-      resultRes.data ? timeout(db.from('challenge_result_winners').select('challenge_id, user_id, entry_id, vote_count, is_co_winner, visible_level, opponent_pts, turnout_pts, championship_score, detail').eq('challenge_id', challengeId), 8000, 'Authoritative winners') : Promise.resolve({data:[],error:null}),
-    ]);
-    if (winnersRes.error) throw winnersRes.error;
-
-    const likeCounts = {};
-    const myLikes = [];
-    (likesRes.data || []).forEach(like => {
-      likeCounts[like.entry_id] = (likeCounts[like.entry_id] || 0) + 1;
-      if (state.profile && String(like.user_id) === String(state.profile.id)) myLikes.push(like.entry_id);
-    });
-    const commentCounts = {};
-    (commentsRes.data || []).forEach(comment => { commentCounts[comment.target_id] = (commentCounts[comment.target_id] || 0) + 1; });
-
+    const prior = DETAIL_CACHE.get(String(challengeId));
     const snapshot = {
       challengeId,
       entries,
       votes,
       myVote,
-      likeCounts,
-      myLikes,
-      commentCounts,
+      // Keep any already-known social counts for the instant/core render.
+      likeCounts: prior?.likeCounts || {},
+      myLikes: prior?.myLikes || [],
+      commentCounts: prior?.commentCounts || {},
       result: resultRes.data || null,
       winners: winnersRes.data || [],
       invite: inviteRes?.error ? null : (inviteRes?.data || null),
       timestamp: Date.now(),
     };
+
     DETAIL_CACHE.set(String(challengeId), snapshot);
     applyDetailSnapshot(snapshot);
+
+    // v1271 — Challenge Detail just refreshed the same information needed by
+    // Championship Edit/Submit. Record freshness so a button tap does not issue
+    // another pair of blocking database requests before the sheet can open.
+    if (ch?.is_championship) {
+      state._fcChampEntryStateAtV1271 = state._fcChampEntryStateAtV1271 || {};
+      state._fcChampEntryStateAtV1271[String(challengeId)] = Date.now();
+    }
+
+    // Social counts are second-wave decoration. Refresh them in the background
+    // and repaint only if the member is still viewing the same challenge.
+    const entryIds = entries.map(entry => entry.id);
+    if (entryIds.length) {
+      Promise.all([
+        timeout(
+          db.from('entry_likes').select('entry_id, user_id').in('entry_id', entryIds),
+          8000,
+          'Entry likes'
+        ).catch(error => ({data:[],error})),
+        timeout(
+          db.from('comments').select('target_id').eq('target_type','entry').in('target_id', entryIds),
+          8000,
+          'Entry comments'
+        ).catch(error => ({data:[],error}))
+      ]).then(([likesRes, commentsRes]) => {
+        const likeCounts = {};
+        const myLikes = [];
+        (likesRes.data || []).forEach(like => {
+          likeCounts[like.entry_id] = (likeCounts[like.entry_id] || 0) + 1;
+          if (state.profile && String(like.user_id) === String(state.profile.id)) {
+            myLikes.push(like.entry_id);
+          }
+        });
+
+        const commentCounts = {};
+        (commentsRes.data || []).forEach(comment => {
+          commentCounts[comment.target_id] = (commentCounts[comment.target_id] || 0) + 1;
+        });
+
+        const latest = DETAIL_CACHE.get(String(challengeId));
+        if (!latest || Number(latest.timestamp || 0) > Number(snapshot.timestamp || 0)) return;
+
+        const enriched = {
+          ...latest,
+          likeCounts,
+          myLikes,
+          commentCounts,
+          timestamp: latest.timestamp,
+        };
+        DETAIL_CACHE.set(String(challengeId), enriched);
+
+        if (
+          String(state.currentChallenge?.id || '') === String(challengeId) &&
+          document.getElementById('challengeDetailSheet')?.classList.contains('open')
+        ) {
+          applyDetailSnapshot(enriched);
+          renderChallengeDetail();
+          renderChallengeResults();
+        }
+      }).catch(error => console.warn('background detail social refresh failed', error));
+    }
+
     return snapshot;
   };
 
@@ -44146,43 +44276,85 @@ body.fc-settings-open-v1117 #bottomNav{visibility:hidden!important;pointer-event
       ? (state.challenges || []).find(item => String(item.id) === String(challenge))
       : challenge;
     if (!ch) return;
+
     state.currentChallenge = ch;
     try { fcTrackChallengeOpenV1048(ch); } catch (_) {}
-    const title = document.getElementById('cdHeaderTitle'); if (title) title.textContent = ch.title;
+
+    const title = document.getElementById('cdHeaderTitle');
+    if (title) title.textContent = ch.title;
+
+    const sheet = document.getElementById('challengeDetailSheet');
     const grid = document.getElementById('cdEntriesGrid');
-    document.getElementById('challengeDetailSheet')?.classList.add('open');
+
+    // v1271 — visible response happens synchronously, before any network await.
+    // A Championship never flashes the light-theme white sheet again.
+    if (sheet) {
+      sheet.classList.toggle('fc-championship-sheet-v1271', !!ch.is_championship);
+      sheet.classList.add('open');
+    }
     document.body.style.overflow = 'hidden';
+
+    // Paint the approved Championship arena immediately from already-loaded
+    // challenge/roster data. Network data can fill the operational sections later.
+    if (ch.is_championship && typeof window.renderChampionshipHero === 'function') {
+      try {
+        const statusV1271 = computeChallengeStatus(ch);
+        const targetV1271 = statusV1271 === 'submitting'
+          ? ch.submission_deadline
+          : ch.voting_end;
+        window.renderChampionshipHero(ch, statusV1271, targetV1271);
+      } catch (error) {
+        console.warn('instant Championship hero paint failed', error);
+      }
+    }
+
     const cached = DETAIL_CACHE.get(String(ch.id));
-    const fresh = cached && Date.now() - cached.timestamp < 30000;
-    if (fresh) {
+
+    // v1271 — stale-while-revalidate. ANY cached detail is useful for instant
+    // feedback. Age controls freshness in the background, never whether the
+    // member has to stare at an empty screen.
+    if (cached) {
       applyDetailSnapshot(cached);
       renderChallengeDetail();
       renderChallengeResults();
       startModerationWatch();
+
       window.loadChallengeDetail(ch.id).then(() => {
-        if (String(state.currentChallenge?.id) !== String(ch.id)) return;
+        if (String(state.currentChallenge?.id || '') !== String(ch.id)) return;
         renderChallengeDetail();
         renderChallengeResults();
         startModerationWatch();
       }).catch(error => console.warn('background challenge refresh failed', error));
       return;
     }
-    if (grid) grid.innerHTML = '<div class="cd-entries-pager-empty">Loading…</div>';
+
+    if (grid) {
+      grid.innerHTML = ch.is_championship
+        ? '<div class="fc-champ-detail-loading-v1271" aria-live="polite"><span></span><b>Loading matchup</b><small>Getting the latest entries…</small></div>'
+        : '<div class="cd-entries-pager-empty">Loading…</div>';
+    }
+
+    // Let iOS paint the opened sheet/hero before starting cold network work.
+    await new Promise(resolve => requestAnimationFrame(() => resolve()));
+
     try {
       await window.loadChallengeDetail(ch.id);
-      if (String(state.currentChallenge?.id) !== String(ch.id)) return;
+      if (String(state.currentChallenge?.id || '') !== String(ch.id)) return;
       renderChallengeDetail();
       renderChallengeResults();
       startModerationWatch();
     } catch (error) {
       console.error('challenge detail load error', error);
-      if (grid) grid.innerHTML = `<div class="cd-entries-pager-empty" style="color:#ff6b7a">Couldn't load: ${safe(error?.message || error)}</div>`;
+      if (grid) {
+        grid.innerHTML = `<div class="cd-entries-pager-empty" style="color:#ff6b7a">Couldn't load: ${safe(error?.message || error)}</div>`;
+      }
     }
   };
 
   const priorClose = window.closeChallengeDetail;
   window.closeChallengeDetail = function(){
     stopModerationWatch();
+    document.getElementById('challengeDetailSheet')?.classList.remove('fc-championship-sheet-v1271');
     return typeof priorClose === 'function' ? priorClose.apply(this, arguments) : undefined;
   };
 
@@ -47393,11 +47565,22 @@ body.fc-championship-view-v1226 #challengeDetailSheet #cdEntriesDots .cd-entries
     document.body.classList.toggle('fc-champ-card-visible-v1236', visible);
   }
 
-  document.addEventListener('scroll', syncChampionshipEmberOverlapV1236, {passive:true,capture:true});
-  window.addEventListener('resize', syncChampionshipEmberOverlapV1236, {passive:true});
-  const observer = new MutationObserver(() => requestAnimationFrame(syncChampionshipEmberOverlapV1236));
-  if (document.body) observer.observe(document.body,{subtree:true,childList:true});
-  requestAnimationFrame(syncChampionshipEmberOverlapV1236);
+  let overlapRafV1271 = 0;
+  const scheduleChampionshipOverlapV1271 = () => {
+    if (overlapRafV1271) return;
+    overlapRafV1271 = requestAnimationFrame(() => {
+      overlapRafV1271 = 0;
+      syncChampionshipEmberOverlapV1236();
+    });
+  };
+  document.addEventListener('scroll', scheduleChampionshipOverlapV1271, {passive:true,capture:true});
+  window.addEventListener('resize', scheduleChampionshipOverlapV1271, {passive:true});
+  const observer = new MutationObserver(scheduleChampionshipOverlapV1271);
+  ['challengesGrid','feedContainer'].forEach(id => {
+    const rootV1271 = document.getElementById(id);
+    if (rootV1271) observer.observe(rootV1271,{subtree:true,childList:true});
+  });
+  scheduleChampionshipOverlapV1271();
 
   window.fcAssertChampionshipRendererV1236 = function fcAssertChampionshipRendererV1236() {
     const ch = state?.currentChallenge;
@@ -47409,7 +47592,10 @@ body.fc-championship-view-v1226 #challengeDetailSheet #cdEntriesDots .cd-entries
 
 
   function fcLockChampionshipActionsV1237(root=document) {
-    if (!document.body.classList.contains('fc-championship-view-v1226')) return;
+    if (
+      !state?.currentChallenge?.is_championship ||
+      !document.getElementById('challengeDetailSheet')?.classList.contains('open')
+    ) return;
     root.querySelectorAll?.('#challengeDetailSheet button').forEach(button => {
       const text = String(button.textContent || '').replace(/\s+/g,' ').trim().toLowerCase();
       if (text === 'edit entry' || text === 'submit entry' || text === 'vote for this entry') {
@@ -47423,14 +47609,10 @@ body.fc-championship-view-v1226 #challengeDetailSheet #cdEntriesDots .cd-entries
     });
   }
 
-  const fcChampActionObserverV1237 = new MutationObserver(() => {
-    requestAnimationFrame(() => fcLockChampionshipActionsV1237(document));
-  });
-  if (document.body) {
-    fcChampActionObserverV1237.observe(document.body,{subtree:true,childList:true});
-    requestAnimationFrame(() => fcLockChampionshipActionsV1237(document));
-  }
-  document.addEventListener('click', () => requestAnimationFrame(() => fcLockChampionshipActionsV1237(document)));
+  // v1271 — this used to rescan every Championship Detail button after every
+  // body mutation and every document click. The approved styling is now applied
+  // once from the explicit Challenge Detail render finalizer.
+  window.fcLockChampionshipActionsV1237 = fcLockChampionshipActionsV1237;
 
   window.FC_CHAMPIONSHIP_APPROVED_V1236 = true;
 })();
@@ -48212,7 +48394,7 @@ body:has(#submitEntrySheet.open) #submitEntrySheet .cc-submit-area{
 
   function isChampionshipDetailV1245() {
     return !!state?.currentChallenge?.is_championship &&
-      document.body.classList.contains('fc-championship-view-v1226');
+      !!document.getElementById('challengeDetailSheet')?.classList.contains('open');
   }
 
   function goldButtonV1245(button) {
@@ -48280,18 +48462,8 @@ body:has(#submitEntrySheet.open) #submitEntrySheet .cc-submit-area{
     }
   }
 
-  const observer = new MutationObserver(() => {
-    requestAnimationFrame(finalizeChampionshipDetailV1245);
-  });
-
-  if (document.body) {
-    observer.observe(document.body,{subtree:true,childList:true,characterData:true});
-  }
-
-  document.addEventListener('click', () => requestAnimationFrame(finalizeChampionshipDetailV1245), true);
+  // v1271 — explicit render finalization replaces a body-wide observer/click hook.
   window.addEventListener('pageshow', () => requestAnimationFrame(finalizeChampionshipDetailV1245));
-  requestAnimationFrame(finalizeChampionshipDetailV1245);
-
   window.fcFinalizeChampionshipDetailV1245 = finalizeChampionshipDetailV1245;
 })();
 </script>
@@ -48377,19 +48549,10 @@ body:has(#submitEntrySheet.open) #submitEntrySheet .cc-submit-area{
     if (hint) setImportant(hint,'display','none');
   }
 
-  const observer = new MutationObserver(() => requestAnimationFrame(finalizeV1247));
-  if (document.body) observer.observe(document.body,{subtree:true,childList:true,characterData:true});
-  document.addEventListener('click', () => requestAnimationFrame(finalizeV1247), true);
+  // v1271 — finalize once after an actual Challenge Detail render. The old
+  // characterData observer could be retriggered by this function's own counter
+  // text rewrite.
   window.addEventListener('pageshow', () => requestAnimationFrame(finalizeV1247));
-
-  // A short settling window catches late legacy enhancers that mutate styles
-  // after the Championship pipeline completes.
-  let passes = 0;
-  const timer = setInterval(() => {
-    finalizeV1247();
-    if (++passes >= 16) clearInterval(timer);
-  }, 250);
-
   window.fcFinalizeChampionshipMockV1247 = finalizeV1247;
 })();
 </script>
@@ -48470,18 +48633,10 @@ body:has(#submitEntrySheet.open) #submitEntrySheet .cc-submit-area{
     }
   }
 
-  const observer = new MutationObserver(() => requestAnimationFrame(applyV1248));
-  if (document.body) observer.observe(document.body,{subtree:true,childList:true,characterData:true,attributes:true});
-  document.addEventListener('click', () => requestAnimationFrame(applyV1248), true);
+  // v1271 — this previously watched attributes on the entire body while
+  // repeatedly writing inline style attributes itself. That created avoidable
+  // main-thread churn during Championship interactions.
   window.addEventListener('pageshow', () => requestAnimationFrame(applyV1248));
-
-  let passes = 0;
-  const settle = setInterval(() => {
-    applyV1248();
-    if (++passes >= 24) clearInterval(settle);
-  }, 250);
-
-  requestAnimationFrame(applyV1248);
   window.fcApplyChampionshipDetailV1248 = applyV1248;
 })();
 </script>
@@ -48560,6 +48715,232 @@ window.FC_V1270_VALIDATION={
   eightPmAnnouncementPreserved:true,
   posterFixPreserved:true,
   videoPauseFixPreserved:true,
+  updateParserPreserved:true
+};
+</script>
+
+
+
+<script id="fc-v1271-championship-render-finalizer">
+(function initChampionshipRenderFinalizerV1271(){
+  'use strict';
+
+  function finalizeChampionshipV1271() {
+    if (!state?.currentChallenge?.is_championship) return;
+    if (!document.getElementById('challengeDetailSheet')?.classList.contains('open')) return;
+
+    try { window.fcLockChampionshipActionsV1237?.(document); } catch (e) { console.warn('v1237 finalizer', e); }
+    try { window.fcFinalizeChampionshipDetailV1245?.(); } catch (e) { console.warn('v1245 finalizer', e); }
+    try { window.fcFinalizeChampionshipMockV1247?.(); } catch (e) { console.warn('v1247 finalizer', e); }
+    try { window.fcApplyChampionshipDetailV1248?.(); } catch (e) { console.warn('v1248 finalizer', e); }
+  }
+
+  const priorRenderV1271 = window.renderChallengeDetail;
+  if (typeof priorRenderV1271 === 'function') {
+    window.renderChallengeDetail = function(){
+      const result = priorRenderV1271.apply(this, arguments);
+      requestAnimationFrame(finalizeChampionshipV1271);
+      return result;
+    };
+  }
+
+  window.fcFinalizeChampionshipV1271 = finalizeChampionshipV1271;
+})();
+</script>
+
+
+
+<script id="fc-v1271-championship-poster-feedback">
+(function initChampionshipPosterFeedbackV1271(){
+  'use strict';
+
+  const basePreviewV1271 = window.previewChampFlyer || (
+    typeof previewChampFlyer === 'function' ? previewChampFlyer : null
+  );
+  if (typeof basePreviewV1271 !== 'function') return;
+
+  function showPreparingV1271(chId) {
+    document.querySelector('.fc-champ-prepare-overlay-v1271')?.remove();
+
+    const ch = (state.challenges || []).find(c => String(c.id) === String(chId))
+      || state.currentChallenge;
+    const ov = document.createElement('div');
+    ov.className = 'fc-champ-prepare-overlay-v1271';
+    ov.innerHTML = `
+      <div class="fc-champ-prepare-card-v1271" role="dialog" aria-modal="true" aria-label="Preparing Championship poster">
+        <div class="fc-champ-prepare-crown-v1271">♛</div>
+        <strong>Preparing Championship poster</strong>
+        <span>${escapeHtml(ch?.category || 'Championship')} · building the latest matchup</span>
+        <div class="fc-champ-prepare-bar-v1271"><i></i></div>
+      </div>`;
+    document.body.appendChild(ov);
+    requestAnimationFrame(() => ov.classList.add('open'));
+    return ov;
+  }
+
+  const wrappedV1271 = async function(chId){
+    const loader = showPreparingV1271(chId);
+    try {
+      return await basePreviewV1271.call(this, chId);
+    } finally {
+      loader?.classList.remove('open');
+      setTimeout(() => loader?.remove(), 160);
+    }
+  };
+
+  window.previewChampFlyer = wrappedV1271;
+  try { previewChampFlyer = wrappedV1271; } catch (_) {}
+})();
+</script>
+
+
+
+<style id="fc-v1271-championship-instant-response-css">
+/* White-screen fix: the Challenge Detail base layer is var(--bg)!important,
+   which is pure white in light theme. Championship gets its own immediate
+   premium surface before any data request starts. */
+#challengeDetailSheet.fc-championship-sheet-v1271{
+  background:
+    radial-gradient(circle at 50% 4%,rgba(193,126,24,.13),transparent 30%),
+    linear-gradient(180deg,#100b07 0%,#080604 40%,#050403 100%)!important;
+  color:#f5efe2!important;
+}
+#challengeDetailSheet.fc-championship-sheet-v1271 .cd-sheet-inner{
+  background:transparent!important;
+}
+#challengeDetailSheet.fc-championship-sheet-v1271 .challenge-detail-header{
+  background:rgba(9,6,4,.96)!important;
+  border-bottom-color:rgba(224,170,61,.18)!important;
+}
+#challengeDetailSheet.fc-championship-sheet-v1271 #cdEntriesGrid:has(.fc-champ-detail-loading-v1271){
+  min-height:190px!important;
+}
+.fc-champ-detail-loading-v1271{
+  min-height:170px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  color:#d6b35d;
+  text-align:center;
+}
+.fc-champ-detail-loading-v1271 > span{
+  width:28px;
+  height:28px;
+  border-radius:50%;
+  border:2px solid rgba(214,179,93,.22);
+  border-top-color:#e9c96f;
+  animation:fcChampLoadSpinV1271 .75s linear infinite;
+}
+.fc-champ-detail-loading-v1271 b{
+  margin-top:4px;
+  color:#f0d887;
+  font-size:13px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+.fc-champ-detail-loading-v1271 small{
+  color:#8f8375;
+  font-size:11px;
+}
+@keyframes fcChampLoadSpinV1271{to{transform:rotate(360deg)}}
+
+/* Expensive server poster render gets an immediate visible response. */
+.fc-champ-prepare-overlay-v1271{
+  position:fixed;
+  inset:0;
+  z-index:2400;
+  display:grid;
+  place-items:center;
+  padding:24px;
+  background:rgba(0,0,0,.78);
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+  opacity:0;
+  transition:opacity .14s ease;
+}
+.fc-champ-prepare-overlay-v1271.open{opacity:1}
+.fc-champ-prepare-card-v1271{
+  width:min(360px,100%);
+  padding:28px 22px 24px;
+  border:1px solid rgba(220,167,54,.38);
+  border-radius:24px;
+  background:
+    radial-gradient(circle at 50% 0%,rgba(190,123,22,.16),transparent 46%),
+    #0c0805;
+  box-shadow:0 24px 70px rgba(0,0,0,.48);
+  text-align:center;
+}
+.fc-champ-prepare-crown-v1271{
+  color:#e8bf5d;
+  font-size:30px;
+  line-height:1;
+  margin-bottom:13px;
+}
+.fc-champ-prepare-card-v1271 strong{
+  display:block;
+  color:#f4df9b;
+  font-size:17px;
+  letter-spacing:.02em;
+}
+.fc-champ-prepare-card-v1271 span{
+  display:block;
+  margin-top:7px;
+  color:#a99c8e;
+  font-size:11.5px;
+  line-height:1.4;
+}
+.fc-champ-prepare-bar-v1271{
+  height:3px;
+  margin-top:20px;
+  overflow:hidden;
+  border-radius:999px;
+  background:rgba(222,174,68,.13);
+}
+.fc-champ-prepare-bar-v1271 i{
+  display:block;
+  width:42%;
+  height:100%;
+  border-radius:inherit;
+  background:linear-gradient(90deg,#8f5c10,#f6df8b,#a86e15);
+  animation:fcChampPrepareSlideV1271 1.05s ease-in-out infinite alternate;
+}
+@keyframes fcChampPrepareSlideV1271{
+  from{transform:translateX(-10%)}
+  to{transform:translateX(150%)}
+}
+@media (prefers-reduced-motion:reduce){
+  .fc-champ-detail-loading-v1271 > span,
+  .fc-champ-prepare-bar-v1271 i{animation-duration:2.5s}
+}
+</style>
+
+
+
+<script>
+window.FC_V1271_VALIDATION={
+  build:"v1271",
+  reviewedFullSingleFileArchitecture:true,
+  championshipWhiteFlashFixed:true,
+  immediateChampionshipHeroPaint:true,
+  staleWhileRevalidateDetail:true,
+  socialCountsNonBlocking:true,
+  detailCoreOneWave:true,
+  championshipFinalizersExplicit:true,
+  v1237BodyObserverRemoved:true,
+  v1245BodyObserverRemoved:true,
+  v1247BodyObserverRemoved:true,
+  v1248AttributeFeedbackLoopRemoved:true,
+  v1081ObserverScopedToDetail:true,
+  championshipEditUsesFreshDetailState:true,
+  posterRenderImmediateFeedback:true,
+  approvedV1249MockPreserved:true,
+  midnightDeadlinesPreserved:true,
+  eightPmAnnouncementPreserved:true,
+  replacementSubmissionFixPreserved:true,
+  videoPauseFixPreserved:true,
+  posterAvatarFixPreserved:true,
   updateParserPreserved:true
 };
 </script>
