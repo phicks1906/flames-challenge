@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1274 · entry-save-touch-and-submit-hardening" name="fc-build"/>
+<meta content="v1275 · home-card-interaction-stability" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Fixed the persistent Championship Save Changes dead-tap path by removing the document-level hidden-nav pointer interception, making the entry form use explicit in-app validation instead of silent browser validation, routing the Save button directly through requestSubmit, showing immediate save progress, and making Championship Post to Feed navigate immediately after a successful post." name="fc-whatsnew"/>
+<meta content="Fixed Home challenge cards freezing after repeat taps by removing the recursive Ember fallback click, stabilizing Home card event handlers across rerenders, cleaning standalone entry context on close, and enforcing qualified-only Championship entry actions on Home." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -23608,6 +23608,7 @@ let seState = {
   uploadCancelRequested: false,
   closeAfterCancel: false,
   submitInFlightV1274: false,
+  standaloneContextV1275: false,
 };
 
 function fcEntryUploadAbortErrorV1135() {
@@ -24861,6 +24862,12 @@ async function openSubmitEntry(entryToEdit = null) {
   const ch = state.currentChallenge;
   if (!ch) return;
 
+  // v1275 — Home/Compete can open the entry editor without opening Challenge
+  // Detail first. Remember that distinction so closing the editor cannot leave a
+  // stale currentChallenge behind and poison later Home interactions.
+  seState.standaloneContextV1275 =
+    !document.getElementById('challengeDetailSheet')?.classList.contains('open');
+
   // v1270 — Championship access and "do I already have an entry?" are refreshed
   // from the database BEFORE deciding whether this is a new submission or edit.
   // This fixes the exact delete→resubmit failure: the deleted row remained in
@@ -24896,6 +24903,7 @@ async function openSubmitEntry(entryToEdit = null) {
 
     if (!entryToEdit && !canEnterChampionship(ch)) {
       toast('Championship entry is limited to qualified competitors.');
+      if (seState.standaloneContextV1275) fcClearStandaloneEntryContextV1275(ch.id);
       return;
     }
   }
@@ -25033,16 +25041,33 @@ function removeCurrentEntryMedia() {
   toast('Video removed — choose a new file to save your entry.');
 }
 
-function closeSubmitEntry() {
+function fcClearStandaloneEntryContextV1275(challengeId) {
+  const detailOpen = !!document.getElementById('challengeDetailSheet')?.classList.contains('open');
+  if (detailOpen) return;
+  if (challengeId && String(state.currentChallenge?.id || '') !== String(challengeId)) return;
+  state.currentChallenge = null;
+  state.currentEntries = [];
+  state.currentVotes = [];
+  state.myCurrentVote = null;
+  try { updateComposerContext(null); } catch (_) {}
+}
+
+function closeSubmitEntry(preserveChallengeContextV1275 = false) {
   if (seState.uploadInProgress) {
     cancelEntryUploadV1135(true);
     return;
   }
   const seSheet = document.getElementById('submitEntrySheet');
+  const standaloneV1275 = !!seState.standaloneContextV1275;
+  const challengeIdV1275 = state.currentChallenge?.id || null;
   seSheet.querySelectorAll('video, audio').forEach(m => { try { m.pause(); } catch(_) {} });
   seSheet.classList.remove('open');
   clearSubmitEntryPreview();
   seState.editingEntry = null;
+  seState.standaloneContextV1275 = false;
+  if (standaloneV1275 && !preserveChallengeContextV1275) {
+    fcClearStandaloneEntryContextV1275(challengeIdV1275);
+  }
 }
 
 function clearSubmitEntryPreview() {
@@ -25500,14 +25525,19 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
     }
     entryWriteCommittedV1101 = true;
     uploadedEntryAssetV1101 = null;
-    closeSubmitEntry();
-    await loadChallengeDetail(ch.id);
-    renderChallengeDetail();
-    // Also refresh the main challenges list since entry counts changed
-    await loadChallenges();
-    // Refresh feed so the new entry shows without a manual reload
-    await loadFeedActivity();
-    if (state.currentView === 'feed') renderFeed();
+    const standaloneAfterSaveV1275 = !!seState.standaloneContextV1275;
+    closeSubmitEntry(true);
+    try {
+      await loadChallengeDetail(ch.id);
+      renderChallengeDetail();
+      // Also refresh the main challenges list since entry counts changed
+      await loadChallenges();
+      // Refresh feed so the new entry shows without a manual reload
+      await loadFeedActivity();
+      if (state.currentView === 'feed') renderFeed();
+    } finally {
+      if (standaloneAfterSaveV1275) fcClearStandaloneEntryContextV1275(ch.id);
+    }
   } catch (err) {
     const cancelledV1135 = err?.name === 'AbortError' || seState.uploadCancelRequested || /upload cancelled/i.test(err?.message || '');
     if (!cancelledV1135) console.error(err);
@@ -33366,6 +33396,17 @@ document.addEventListener('click', async (e) => {
     const myEntry = emberEntryFor(ch);
 
     if(status === 'submitting'){
+      // v1275 — Championship entry is invitation-only on Home too. The old
+      // Ember Home path predated canEnterChampionship() and could advertise a
+      // generic Enter challenge action to non-qualified viewers.
+      if(ch.is_championship){
+        if(entered) return { label:'Edit your entry', relation:'Your Championship entry is live and can still be changed.', run:()=>{ state.currentChallenge=ch; myEntry ? openSubmitEntry(myEntry) : openChallenge(ch); } };
+        if(typeof canEnterChampionship === 'function' && canEnterChampionship(ch)) {
+          return { label:'Submit your entry', relation:'Your Championship spot is confirmed.', run:()=>{ state.currentChallenge=ch; openSubmitEntry(); } };
+        }
+        if(creator) return { label:'Promote Championship', relation:'You created this Championship.', run:()=>openPromote('challenge', ch) };
+        return { label:'View Championship', relation:'Entry is limited to qualified competitors.', run:()=>openChallenge(ch) };
+      }
       if(creator) return { label:'Promote challenge', relation:'You created this challenge.', run:()=>openPromote('challenge', ch) };
       if(entered) return { label:'Edit your entry', relation:'You already entered and can still make changes.', run:()=>{ state.currentChallenge=ch; myEntry ? openSubmitEntry(myEntry) : openChallenge(ch); } };
       return { label:'Enter challenge', relation:(state.entryCounts[ch.id]||0)===1?'It needs a second entrant to produce a result.':'It is open for entries now.', run:()=>{ state.currentChallenge=ch; openSubmitEntry(); } };
@@ -33465,11 +33506,32 @@ document.addEventListener('click', async (e) => {
     if(url) return `<img src="${escapeHtml(url)}" alt="" loading="lazy">`;
     return `<div class="fc-home-ember-fill-v1057">${emberFace(92,pose)}</div>`;
   }
+  const emberGuidanceMovesV1275 = new WeakMap();
+  function wireGuidanceCardV1275(el){
+    if(!el || el.dataset.fcGuidanceTapV1275 === '1') return;
+    el.dataset.fcGuidanceTapV1275 = '1';
+    el.addEventListener('click', event => {
+      // The daily-briefing Home handler owns Home clicks in capture phase. This
+      // delegated listener remains the direct action path for Compete and for
+      // Home when the briefing intentionally falls through.
+      const move = emberGuidanceMovesV1275.get(el);
+      if(!move || typeof move.run !== 'function') return;
+      event.preventDefault();
+      move.run();
+    });
+  }
   function paintGuidance(el,move){
     if(!el||!move) return;
+    emberGuidanceMovesV1275.set(el, move);
+    // Expose only the current run callback for the v1221 daily-briefing fallback.
+    // Calling this directly avoids recursively synthetic-clicking the same tile.
+    el.__fcGuidanceRunV1275 = typeof move.run === 'function' ? move.run : null;
+    wireGuidanceCardV1275(el);
     el.classList.toggle('challenge-recommendation', !!move.challenge);
     el.classList.add('fc-home-next-module-v1057');
     el.style.display='block';
+
+    let markupV1275='';
     if(move.challenge){
       const action=String(move.action||'');
       const isVoting=/vote|voting/i.test(action);
@@ -33482,19 +33544,22 @@ document.addEventListener('click', async (e) => {
           : isPromote
             ? 'Challenge live'
             : (move.relation||move.task||'');
-      el.innerHTML=`<div class="fc-home-module-head-v1057"><div class="fc-home-module-kicker-v1057">YOUR NEXT MOVE</div></div><article class="fc-home-action-row-v1057"><div class="fc-home-action-media-v1057">${emberHomeThumbV1057(move.challenge,move.pose)}</div><div class="fc-home-action-copy-v1057"><div class="fc-home-action-type-v1057">${escapeHtml(move.category)} · ${escapeHtml(move.media)}</div><strong class="fc-home-action-title-v1057">${escapeHtml(move.displayTitle||'Untitled challenge')}</strong><div class="fc-home-action-meta-v1057">${escapeHtml(concise)}${move.meta?`<span> · ${escapeHtml(move.meta)}</span>`:''}</div><button type="button" class="fc-home-action-link-v1057" data-ember-guidance-action>${escapeHtml(move.action)} →</button></div></article>`;
-      const actionBtn=el.querySelector('[data-ember-guidance-action]');
-      if(actionBtn) actionBtn.onclick=(event)=>{event.stopPropagation();move.run();};
-      el.onclick=(event)=>{if(!event.target.closest('[data-ember-guidance-action]'))move.run();};
+      markupV1275=`<div class="fc-home-module-head-v1057"><div class="fc-home-module-kicker-v1057">YOUR NEXT MOVE</div></div><article class="fc-home-action-row-v1057"><div class="fc-home-action-media-v1057">${emberHomeThumbV1057(move.challenge,move.pose)}</div><div class="fc-home-action-copy-v1057"><div class="fc-home-action-type-v1057">${escapeHtml(move.category)} · ${escapeHtml(move.media)}</div><strong class="fc-home-action-title-v1057">${escapeHtml(move.displayTitle||'Untitled challenge')}</strong><div class="fc-home-action-meta-v1057">${escapeHtml(concise)}${move.meta?`<span> · ${escapeHtml(move.meta)}</span>`:''}</div><button type="button" class="fc-home-action-link-v1057" data-ember-guidance-action>${escapeHtml(move.action)} →</button></div></article>`;
     }else{
-      el.innerHTML=`<div class="fc-home-module-head-v1057"><div class="fc-home-module-kicker-v1057">YOUR NEXT MOVE</div></div><article class="fc-home-action-row-v1057"><div class="fc-home-action-media-v1057"><div class="fc-home-ember-fill-v1057">${emberFace(92,move.pose)}</div></div><div class="fc-home-action-copy-v1057"><strong class="fc-home-action-title-v1057">${escapeHtml(move.title)}</strong><div class="fc-home-action-meta-v1057">${escapeHtml(move.text)}</div><button type="button" class="fc-home-action-link-v1057" data-ember-guidance-action>${escapeHtml(move.action)} →</button></div></article>`;
-      const actionBtn=el.querySelector('[data-ember-guidance-action]');
-      if(actionBtn) actionBtn.onclick=(event)=>{event.stopPropagation();move.run();};
-      el.onclick=(event)=>{if(!event.target.closest('[data-ember-guidance-action]'))move.run();};
+      markupV1275=`<div class="fc-home-module-head-v1057"><div class="fc-home-module-kicker-v1057">YOUR NEXT MOVE</div></div><article class="fc-home-action-row-v1057"><div class="fc-home-action-media-v1057"><div class="fc-home-ember-fill-v1057">${emberFace(92,move.pose)}</div></div><div class="fc-home-action-copy-v1057"><strong class="fc-home-action-title-v1057">${escapeHtml(move.title)}</strong><div class="fc-home-action-meta-v1057">${escapeHtml(move.text)}</div><button type="button" class="fc-home-action-link-v1057" data-ember-guidance-action>${escapeHtml(move.action)} →</button></div></article>`;
+    }
+
+    // v1275 — repeated feed/Ember refreshes used to destroy and recreate the
+    // exact DOM node under an iPhone touch even when nothing changed.
+    if(el.__fcGuidanceMarkupV1275 !== markupV1275){
+      el.innerHTML=markupV1275;
+      el.__fcGuidanceMarkupV1275=markupV1275;
     }
   }
   let emberGuidanceHasPainted=false;
+  let emberGuidanceRenderSeqV1275=0;
   async function renderEmberGuidance(){
+    const renderSeqV1275=++emberGuidanceRenderSeqV1275;
     const home=document.getElementById('emberHomeCard');
     // Do not paint a temporary empty-state card while authentication/app data are
     // still hydrating. That early paint was later displaced by the completed Home
@@ -33504,6 +33569,7 @@ document.addEventListener('click', async (e) => {
       return;
     }
     await hydrateEmberVoteContext();
+    if(renderSeqV1275 !== emberGuidanceRenderSeqV1275 || !state.profile || state.loading) return;
     renderPurposeCard();
     const move=chooseEmberMove();
     window.__emberLastRecommendation = move.challenge ? { id:move.challenge.id, title:move.displayTitle || move.challenge.title, category:move.category, reason:move.reason, action:move.action } : null;
@@ -33599,6 +33665,17 @@ document.addEventListener('click', async (e) => {
     const mine=!!state.profile?.id && String(ch.creator_id || ch.creator?.id || ch.user_id)===String(state.profile.id);
     const entry=fcMyEntry(ch);
     if(status==='submitting'){
+      // v1275 — the Home shelf had its own older entry logic and bypassed the
+      // authoritative Championship invite gate. Keep regular challenge behavior,
+      // but never expose a generic Championship entry action to non-qualifiers.
+      if(ch.is_championship){
+        if(entry) return {label:'Edit your entry',run:()=>{state.currentChallenge=ch;openSubmitEntry(entry);}};
+        if(typeof canEnterChampionship==='function' && canEnterChampionship(ch)) {
+          return {label:'Submit your entry',run:()=>{state.currentChallenge=ch;openSubmitEntry();}};
+        }
+        if(mine) return {label:'Promote Championship',run:()=>openPromote('challenge',ch)};
+        return {label:'View Championship',run:()=>openChallenge(ch)};
+      }
       if(mine) return {label:'Promote challenge',run:()=>openPromote('challenge',ch)};
       if(entry) return {label:'Edit your entry',run:()=>{state.currentChallenge=ch;openSubmitEntry(entry);}};
       return {label:'Enter challenge',run:()=>{state.currentChallenge=ch;openSubmitEntry();}};
@@ -33651,7 +33728,7 @@ document.addEventListener('click', async (e) => {
       if(interests.has(cat)) score+=80;
       if(followed.has(ch.creator_id)) score+=18;
       if(s==='voting'&&!fcHasVoted(ch)) score+=35;
-      if(s==='submitting'&&!fcMyEntry(ch)&&ch.creator_id!==state.profile?.id) score+=28;
+      if(s==='submitting' && String(action.label||'')==='Enter challenge') score+=28;
       if(String(ch.creator_id || ch.creator?.id || ch.user_id)===String(state.profile?.id)) score+=12;
       if(ch.is_championship) score+=15;
       const end=s==='submitting'?ch.submission_deadline:ch.voting_end;
@@ -33662,17 +33739,40 @@ document.addEventListener('click', async (e) => {
     const diversified=recId ? rows.filter(row=>String(row.ch.id)!==String(recId)) : rows;
     return diversified.slice(0,2);
   }
+  function wireHomeLiveShelfV1275(list){
+    if(!list || list.dataset.fcHomeLiveTapV1275==='1') return;
+    list.dataset.fcHomeLiveTapV1275='1';
+    list.addEventListener('click', event=>{
+      const card=event.target.closest?.('[data-live-id]');
+      if(!card || !list.contains(card)) return;
+      const id=String(card.dataset.liveId||'');
+      const ch=(state.challenges||[]).find(item=>String(item?.id||'')===id);
+      if(!ch) {
+        renderHomeLiveShelf();
+        return;
+      }
+      event.preventDefault();
+      fcAction(ch,fcStatus(ch)).run();
+    });
+  }
+
   function renderHomeLiveShelf(){
     const shelf=document.getElementById('fcHomeLive'), list=document.getElementById('fcHomeLiveList');
     if(!shelf||!list||!state.profile) return;
+    wireHomeLiveShelfV1275(list);
     const rows=fcHomeCandidates();
-    if(!rows.length){shelf.style.display='none';return;}
+    if(!rows.length){
+      shelf.style.display='none';
+      list.__fcHomeLiveMarkupV1275='';
+      list.innerHTML='';
+      return;
+    }
     const shelfTitle=document.getElementById('fcHomeLiveTitle');
     const uid=state.profile?.id;
     const allOwned=!!uid && rows.every(({ch})=>String(ch.creator_id||ch.creator?.id||ch.user_id)===String(uid));
     if(shelfTitle) shelfTitle.textContent=allOwned?'Other challenges':'Enter or vote now';
     shelf.style.display='block';
-    list.innerHTML=rows.map(({ch,s,action})=>{
+    const markupV1275=rows.map(({ch,s,action})=>{
       const copy=fcSplitTitle(ch), count=fcEntryCount(ch);
       const end=s==='submitting'?ch.submission_deadline:ch.voting_end;
       const timing=end?fcCountdown(end):'';
@@ -33691,10 +33791,15 @@ document.addEventListener('click', async (e) => {
         </div>
       </article>`;
     }).join('');
-    rows.forEach(({ch,action})=>{
-      const el=list.querySelector(`[data-live-id="${CSS.escape(String(ch.id))}"]`);
-      if(el) el.onclick=()=>action.run();
-    });
+
+    // v1275 — v1000 and v1005 both schedule Home refreshes from renderFeed.
+    // Rebuilding identical cards on each pass could replace the element between
+    // touchstart and iOS's synthesized click. Preserve the live nodes unless the
+    // visible shelf actually changed.
+    if(list.__fcHomeLiveMarkupV1275!==markupV1275){
+      list.innerHTML=markupV1275;
+      list.__fcHomeLiveMarkupV1275=markupV1275;
+    }
   }
 
   window.fcRenderHomeLiveShelf=renderHomeLiveShelf;
@@ -48264,6 +48369,7 @@ document.addEventListener('pointerdown', function(event) {
     await openDailyEmberV1221(false);
   }
 
+  let homeTileOpeningV1275 = false;
   function wireHomeTileV1221() {
     const tile = byId('emberHomeCard');
     if (!tile || tile.dataset.fcDailyBriefingV1221 === '1') return;
@@ -48272,9 +48378,20 @@ document.addEventListener('pointerdown', function(event) {
       if (!event.target.closest('#emberHomeCard')) return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      if (!(await openDailyEmberV1221(true))) {
-        const action = tile.querySelector('[data-ember-guidance-action]');
-        if (action) action.click();
+
+      // v1275 root-cause fix: when there were no daily-briefing items, the old
+      // fallback called action.click(). That synthetic click re-entered THIS
+      // capture handler, failed again, clicked again, and created an unbounded
+      // async click loop that made the entire Home surface appear frozen.
+      if (homeTileOpeningV1275) return;
+      homeTileOpeningV1275 = true;
+      try {
+        if (!(await openDailyEmberV1221(true))) {
+          const run = tile.__fcGuidanceRunV1275;
+          if (typeof run === 'function') run();
+        }
+      } finally {
+        homeTileOpeningV1275 = false;
       }
     }, true);
   }
