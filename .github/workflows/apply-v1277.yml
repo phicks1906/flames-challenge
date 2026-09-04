@@ -1,0 +1,41 @@
+name: Apply v1277 audio mock
+on:
+  push:
+    branches: [main]
+    paths: ['.github/v1277-trigger.txt']
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Reconstruct and apply v1277
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .github/v1277_art_*.txt | tr -d '\n' > /tmp/v1277_art.b64
+          python - <<'PY'
+          from pathlib import Path
+          template = Path('.github/v1277.patch.template').read_text(encoding='utf-8')
+          art = Path('/tmp/v1277_art.b64').read_text(encoding='utf-8').strip()
+          if '__ART_B64__' not in template:
+              raise SystemExit('v1277 artwork placeholder missing')
+          Path('/tmp/v1277.patch').write_text(template.replace('__ART_B64__', art), encoding='utf-8')
+          PY
+          git apply --check /tmp/v1277.patch
+          git apply /tmp/v1277.patch
+          test "$(sha256sum index.html | awk '{print $1}')" = "e3396dad88a68cb4cece83376de571939e7de299ee39bc417cce6ce0f61a8984"
+          grep -q 'v1277 · approved-audio-mock-match' index.html
+      - name: Commit exact v1277 and remove temporary updater
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/v1277.patch.template .github/v1277_art_*.txt .github/v1277-trigger.txt .github/workflows/apply-v1277.yml
+          git config user.name "FlamesChallenge Build Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "Build v1277 approved audio mock"
+          git push origin HEAD:main
