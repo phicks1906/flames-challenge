@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1274 · championship-flyer-card-unification" name="fc-build"/>
+<meta content="v1274 · championship-edit-save-and-promotion-flow" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Championship flyer posts now use the same premium Championship Night matchup card as the pinned Championship card instead of displaying the older raw poster image. This removes the duplicate month label, aligns typography/avatars/status/CTA, and preserves the post author/social controls." name="fc-whatsnew"/>
+<meta content="Fixed Championship Edit Save on iPhone with a direct pointer-to-form submission path, restored the gold Championship editor treatment, removed the redundant generic entry-rules card from Championship edits, clarified replacement review wording, hardened Championship Ember wording, and made Post to Feed navigate immediately with rapid duplicate protection." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -9820,7 +9820,7 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
   </label>
 </div>
 <div class="cc-submit-area">
-<button class="btn btn-primary" style="width:100%" type="submit">🔥 Submit entry</button>
+<button class="btn btn-primary" id="seSubmitActionV1274" style="width:100%" type="submit">🔥 Submit entry</button>
 <div style="text-align:center;margin-top:10px;font-size:11px;color:var(--text-muted)">By entering you agree to our <a onclick="openGuidelines()" style="color:var(--ember);cursor:pointer;text-decoration:underline">Community Guidelines</a> and <a onclick="openCompetitionRules('entering')" style="color:var(--ember);cursor:pointer;text-decoration:underline">Competition Rules</a></div>
 </div>
 </form>
@@ -15637,25 +15637,57 @@ async function previewChampFlyer(chId) {
           challenge_id:chId,
         };
 
-        let responseV1219 = await db.from('posts').insert(postV1219).select('id').single();
-        if (responseV1219.error &&
-            (responseV1219.error.message?.includes('post_type') ||
-             responseV1219.error.message?.includes('challenge_id'))) {
-          delete postV1219.post_type;
-          delete postV1219.challenge_id;
-          responseV1219 = await db.from('posts').insert(postV1219).select('id').single();
-        }
-        if (responseV1219.error) throw responseV1219.error;
+        let recentV1274 = null;
+        try {
+          const recentResV1274 = await db.from('posts')
+            .select('id, created_at')
+            .eq('user_id', state.profile.id)
+            .eq('challenge_id', chId)
+            .eq('post_type', 'flyer')
+            .order('created_at', {ascending:false})
+            .limit(1)
+            .maybeSingle();
+          if (!recentResV1274.error && recentResV1274.data) {
+            const ageV1274 = Date.now() - new Date(recentResV1274.data.created_at).getTime();
+            if (Number.isFinite(ageV1274) && ageV1274 >= 0 && ageV1274 < 90000) {
+              recentV1274 = recentResV1274.data;
+            }
+          }
+        } catch (_) {}
 
-        toast('Championship posted to your feed');
+        let responseV1219;
+        if (recentV1274) {
+          responseV1219 = { data:{id:recentV1274.id}, error:null };
+        } else {
+          responseV1219 = await db.from('posts').insert(postV1219).select('id').single();
+          if (responseV1219.error &&
+              (responseV1219.error.message?.includes('post_type') ||
+               responseV1219.error.message?.includes('challenge_id'))) {
+            delete postV1219.post_type;
+            delete postV1219.challenge_id;
+            responseV1219 = await db.from('posts').insert(postV1219).select('id').single();
+          }
+          if (responseV1219.error) throw responseV1219.error;
+        }
+
+        const postIdV1219 = responseV1219.data?.id;
+        toast(recentV1274 ? 'Championship is already on your feed' : 'Championship posted to your feed');
         closeV1218();
         if (typeof closeChallengeDetail === 'function') closeChallengeDetail();
-        if (typeof loadPosts === 'function') await loadPosts();
+
+        // Move first; refresh second. A successful post must visibly leave the
+        // promotion surface instead of looking as if the button did nothing.
         if (typeof switchView === 'function') switchView('feed');
-        const postIdV1219 = responseV1219.data?.id;
-        if (postIdV1219 && typeof scrollToPost === 'function') {
-          requestAnimationFrame(() => scrollToPost(postIdV1219));
-        }
+
+        Promise.resolve(typeof loadPosts === 'function' ? loadPosts() : null)
+          .then(() => {
+            if (state?._fcDirtyViewsV1118) state._fcDirtyViewsV1118.feed = true;
+            if (state?.currentView === 'feed' && typeof renderFeed === 'function') renderFeed();
+            if (postIdV1219 && typeof scrollToPost === 'function') {
+              requestAnimationFrame(() => scrollToPost(postIdV1219));
+            }
+          })
+          .catch(error => console.warn('Championship feed refresh after post', error));
       } catch (errorV1219) {
         console.error('championship post to feed', errorV1219);
         toast('Could not post Championship to Feed');
@@ -24889,6 +24921,11 @@ async function openSubmitEntry(entryToEdit = null) {
 
   seState.editingEntry = entryToEdit;
 
+  const submitSheetV1274 = document.getElementById('submitEntrySheet');
+  if (submitSheetV1274) {
+    submitSheetV1274.classList.toggle('fc-champ-entry-editor-v1274', !!ch.is_championship);
+  }
+
   // Reset form
   document.getElementById('submitEntryForm').reset();
   clearSubmitEntryPreview();
@@ -25006,6 +25043,7 @@ function removeCurrentEntryMedia() {
 }
 
 function closeSubmitEntry() {
+  document.getElementById('submitEntrySheet')?.classList.remove('fc-champ-entry-editor-v1274');
   if (seState.uploadInProgress) {
     cancelEntryUploadV1135(true);
     return;
@@ -25182,7 +25220,9 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
   }
 
   const btn = e.target.querySelector('button[type="submit"]');
-  btn.disabled = true; const orig = btn.textContent;
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = seState.editingEntry ? 'Checking changes…' : 'Checking entry…';
   fcPauseEntryPreviewV1135();
   seState.uploadAbortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
   seState.uploadCancelRequested = false;
@@ -26837,49 +26877,6 @@ function renderPostCard(p, options = {}) {
 // empty black by design; v716 found the hero query was filtering to
 // media_type = image, so video challenges never got a hero — which removed the
 // only reason to shrink it.
-
-function fcChampionshipFlyerMatchupV1274(ch, monthLabel) {
-  if (!ch?.is_championship || typeof window.fcRenderChampionshipFightCardV1235 !== 'function') return '';
-
-  const fighters = ((state.champFighters || {})[ch.id] || [])
-    .filter(f => !['declined','no_show'].includes(String(f?.invite_status || '').toLowerCase()));
-
-  if (fighters.length < 2) return '';
-
-  const status = computeChallengeStatus(ch);
-  const target = status === 'submitting'
-    ? ch.submission_deadline
-    : status === 'championship_pending'
-      ? ch.championship_announce_at
-      : ch.voting_end;
-  const countdown = target ? formatCountdown(target) : '';
-
-  const reigning = reigningChampsByCat()[ch.category];
-  const defenderIn = reigning && fighters.some(f => f.id === reigning.userId);
-
-  const subtitle = defenderIn
-    ? 'DETHRONE THE CHAMPION'
-    : fighters.length > 2
-      ? `${fighters.length} CONTENDERS · ONE IS CROWNED`
-      : 'HEAD TO HEAD · ONE IS CROWNED';
-
-  const statusLine = status === 'submitting'
-    ? `🎬 ENTRIES DUE · ${countdown}`
-    : status === 'championship_pending'
-      ? `👑 CROWN DROPS · ${countdown.toUpperCase()}`
-      : isVotingPhase(status)
-        ? `🔒 SEALED VOTING · ENDS ${countdown.toUpperCase()}`
-        : '👑 CHAMPIONSHIP';
-
-  return window.fcRenderChampionshipFightCardV1235(
-    ch,
-    fighters,
-    monthLabel || '',
-    subtitle,
-    statusLine
-  );
-}
-
 function renderFlyerCard(p) {
   const author = p.author || { name: 'Unknown', avatar: '🔥', id: null };
   const isMine = p.user_id === state.profile?.id;
@@ -26919,18 +26916,11 @@ function renderFlyerCard(p) {
   const countdown = ch && isOpen ? `⏱ ${formatCountdown(ch.submission_deadline)}` :
                     ch && isVoting ? `⏱ ${formatCountdown(ch.voting_end)}` : '';
 
-  // v1274 — a Championship flyer post is a promoted Championship card, not a
-  // second visual system. Reuse the same matchup renderer shown in the pinned
-  // Championship card so typography, crown, roster, status and CTA stay aligned.
-  const champMatchupV1274 = isChampFlyerV1272
-    ? fcChampionshipFlyerMatchupV1274(ch, champMonthLabelV1272)
-    : '';
-
   return `
     <div class="post-card${isChampFlyerV1272 ? ' fc-champ-flyer-post-v1272' : ''}" data-pid="${p.id}" style="padding:0;overflow:hidden;border:1px solid var(--border);border-left:3px solid rgba(255,45,31,0.85);">
       <!-- Header row -->
       <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px;">
-        <span class="feed-poll-tag${isChampFlyerV1272 ? ' fc-champ-flyer-tag-v1274' : ''}" style="color:var(--flame);">${isChampFlyerV1272 ? '👑 CHAMPIONSHIP FLYER' : '📣 FLYER'}</span>
+        <span class="feed-poll-tag" style="color:var(--flame);">📣 FLYER</span>
         <span style="font-size:12px;color:var(--text-muted);">${timeAgo(p.created_at)}</span>
       </div>
 
@@ -26941,28 +26931,25 @@ function renderFlyerCard(p) {
         ${isMine ? `<button class="post-card-menu" data-pid="${p.id}" style="margin-left:auto;" aria-label="Delete post">⋯</button>` : `<button class="post-card-menu" data-report-type="post" data-report-id="${p.id}" data-report-text="${escapeHtml((p.content||'flyer').slice(0,200))}" style="margin-left:auto;" aria-label="Report post">🚩</button>`}
       </div>
 
-      <!-- Flyer hero + facts + CTA. Championship posts deliberately reuse
-           the pinned Championship Night card; regular flyers keep their own media. -->
-      ${ch ? (
-        isChampFlyerV1272 && champMatchupV1274
-          ? `<div class="fc-champ-flyer-matchup-v1274">${champMatchupV1274}</div>`
-          : `
-            <div class="flyer-stage" data-flyer-viewer="${ch.id}">
-              ${p.media_url && p.media_type !== 'video'
-                ? `<img src="${escapeHtml(p.media_url)}" class="flyer-stage-blur" aria-hidden="true" loading="lazy">
-                   <img src="${escapeHtml(p.media_url)}" alt="Challenge flyer" class="flyer-stage-fg" loading="lazy">`
-                : p.media_url
-                  ? `<video data-src="${escapeHtml(p.media_url)}" muted playsinline preload="none" data-lazy-video class="flyer-stage-fg" style="object-fit:cover!important"></video>
-                     <div style="position:absolute;inset:0;display:grid;place-items:center;font-size:34px;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.6);pointer-events:none">▶</div>`
-                  : `<div class="flyer-stage-fg" style="display:grid;place-items:center;font-size:40px;background:linear-gradient(160deg,#2a130a,#7a2d10)">🔥</div>`}
-            </div>
-            <div class="flyer-card-body">
-              <div class="flyer-preview-cat">${escapeHtml(ch.category || '')}</div>
-              <div class="flyer-card-title">${escapeHtml(ch.title)}</div>
-              ${countdown ? `<div class="flyer-preview-meta">${countdown}</div>` : ''}
-              <button class="btn btn-primary flyer-preview-cta" data-flyer-viewer="${ch.id}">${ctaText}</button>
-            </div>`
-      ) : `<div class="flyer-card-body">
+      <!-- Flyer hero + facts + CTA. See the note above renderFlyerCard. -->
+      ${ch ? `
+      <div class="flyer-stage" data-flyer-viewer="${ch.id}">
+        ${p.media_url && p.media_type !== 'video'
+          ? `<img src="${escapeHtml(p.media_url)}" class="flyer-stage-blur" aria-hidden="true" loading="lazy">
+             <img src="${escapeHtml(p.media_url)}" alt="Challenge flyer" class="flyer-stage-fg" loading="lazy">`
+          : p.media_url
+            ? `<video data-src="${escapeHtml(p.media_url)}" muted playsinline preload="none" data-lazy-video class="flyer-stage-fg" style="object-fit:cover!important"></video>
+               <div style="position:absolute;inset:0;display:grid;place-items:center;font-size:34px;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.6);pointer-events:none">▶</div>`
+            : `<div class="flyer-stage-fg" style="display:grid;place-items:center;font-size:40px;background:linear-gradient(160deg,#2a130a,#7a2d10)">🔥</div>`}
+        ${isChampFlyerV1272 && champMonthLabelV1272 ? `<div class="fc-champ-flyer-month-corrector-v1272">${escapeHtml(champMonthLabelV1272)} · ${escapeHtml(String(ch.category || '').toUpperCase())}</div>` : ''}
+      </div>
+      <div class="flyer-card-body">
+        <div class="flyer-preview-cat">${escapeHtml(ch.category || '')}</div>
+        <div class="flyer-card-title">${escapeHtml(ch.title)}</div>
+        ${countdown ? `<div class="flyer-preview-meta">${countdown}</div>` : ''}
+        <button class="btn btn-primary flyer-preview-cta${isChampFlyerV1272 ? ' fc-champ-flyer-cta-v1272' : ''}" data-flyer-viewer="${ch.id}">${ctaText}</button>
+      </div>`
+      : `<div class="flyer-card-body">
            <div class="flyer-card-title">Challenge unavailable</div>
            <div class="flyer-preview-meta">This flyer's challenge is no longer around.</div>
          </div>`}
@@ -43131,7 +43118,7 @@ html[data-theme="light"] body .nav-icon-btn:active{
     entry:Object.freeze({
       withdrawal:'You may edit or withdraw your own entry only while that round’s submission window is open. Once voting begins, self-service editing and withdrawal close.',
       hostDelete:'A host may delete a challenge only while entries are open and before another member has entered. Administrators may remove a challenge for safety or integrity reasons.',
-      moderation:'Only clear or approved entries compete publicly. Replacing rejected or flagged work sends the replacement through the applicable review path.',
+      moderation:'Photo replacements are checked before they go live. Video replacements return to automated review.',
       noContest:'If fewer than two competitors remain when the result is settled, the challenge is a no-contest. No winner and no Championship Score are awarded.'
     }),
     voting:Object.freeze({
@@ -44847,7 +44834,7 @@ body.theme-light .fc-preparing-media-v1120,html[data-theme="light"] body .fc-pre
     return entriesFor(challenge).find(entry=>String(entry?.user_id||'')===String(uid))||null;
   }
   function scoreRead(challenge){
-    if(challenge?.is_championship)return 'Championship rounds do not add Championship Score.';
+    if(challenge?.is_championship || /\bchampionship\b/i.test(String(challenge?.title || '')))return 'Championship rounds do not add Championship Score.';
     if(challenge?.is_public===false)return 'This is a private challenge, so it does not add Championship Score.';
     const count=approvedEntries(challenge).length;
     if(count<2){
@@ -44880,6 +44867,7 @@ body.theme-light .fc-preparing-media-v1120,html[data-theme="light"] body .fc-pre
     const q=normalize(question);
     if(!q)return null;
     const title=escText(challenge.title)||'this challenge';
+    const isChampionshipV1274 = !!challenge.is_championship || /\bchampionship\b/i.test(title);
     const status=phase(challenge);
     const entries=approvedEntries(challenge);
     const mine=myEntry(challenge);
@@ -44907,12 +44895,12 @@ body.theme-light .fc-preparing-media-v1120,html[data-theme="light"] body .fc-pre
     if(/what happens next|what should happen next|what matters next|next step|what can i do now/.test(q)){
       if(mine&&['pending','flagged','escalated'].includes(moderation))return `Your entry in “${title}” is getting ready. You can leave this screen, and you may still edit or withdraw before entries close${submissions?` on ${submissions}`:''}.`;
       if(status==='submitting'){
-        if(challenge.is_championship){
+        if(isChampionshipV1274){
           if(mine)return `Your Championship entry in “${title}” can be edited until entries close${submissions?` on ${submissions}`:''}. After that, voting begins. Championship rounds award titles, not Championship Score.`;
           if(typeof canEnterChampionship==='function'&&canEnterChampionship(challenge))return `Your Championship spot is confirmed. Submit your entry${submissions?` by ${submissions}`:''}. After entries close, voting begins.`;
           return `Championship entries for “${title}” close${submissions?` on ${submissions}`:''}. Only qualified competitors with accepted invitations can enter.`;
         }
-        return `“${title}” is open for entries${submissions?` until ${submissions}`:''}. After entries close, approved entries move to voting. ${scoreRead(challenge)}`;
+        return `“${title}” is open for entries${submissions?` until ${submissions}`:''}. After entries close, entries move to voting. ${scoreRead(challenge)}`;
       }
       if(status==='championship_pending')return `Voting is closed for “${title}.” The ballots are locked, and the Championship result will be revealed ${challenge.championship_announce_at?fcChampionshipAnnouncementLabelV1268(challenge):'at 8:00 PM ET'}.`;
       if(status==='voting'||status==='sudden_death')return `Voting is open for “${title}”${voting?` until ${voting}`:''}. The final ballots determine the result.`;
@@ -49218,52 +49206,110 @@ window.FC_V1273_VALIDATION={
 
 
 
-<style id="fc-v1274-championship-flyer-card-unification">
-.fc-champ-flyer-post-v1272{
-  padding-bottom:0!important;
-  background:#070503!important;
-  border-color:rgba(216,162,51,.34)!important;
-}
-.fc-champ-flyer-post-v1272 .fc-champ-flyer-tag-v1274{
-  color:#d9aa3d!important;
-  letter-spacing:.10em!important;
-}
-.fc-champ-flyer-matchup-v1274{
-  padding:4px 12px 8px;
-}
-.fc-champ-flyer-matchup-v1274 > .fc-fight-card-v1244{
-  margin:0!important;
-  border-radius:20px!important;
-  box-shadow:
-    0 16px 36px rgba(0,0,0,.40),
-    0 0 24px rgba(178,110,13,.07)!important;
-}
-.fc-champ-flyer-matchup-v1274 .fc-fight-inner-v1244{
-  padding:18px 16px 16px!important;
-}
-.fc-champ-flyer-matchup-v1274 .fc-fight-crest-v1244{
-  width:84px!important;
-  height:52px!important;
-}
-.fc-champ-flyer-matchup-v1274 .fc-fight-title-v1244{
-  font-size:clamp(32px,8.5vw,44px)!important;
-}
-.fc-champ-flyer-matchup-v1274 .fc-fight-card-v1244[data-field-count="2"] .fc-fight-avatar-v1244{
-  width:96px!important;
-  height:96px!important;
-}
-.fc-champ-flyer-matchup-v1274 .fc-fight-status-v1244{
-  margin-top:16px!important;
-}
-.fc-champ-flyer-matchup-v1274 .fc-fight-cta-v1244{
-  min-height:52px!important;
-  margin-top:11px!important;
-}
+<script id="fc-v1274-entry-save-touch">
+(function initEntrySaveTouchV1274(){
+  'use strict';
+  const form = document.getElementById('submitEntryForm');
+  const button = document.getElementById('seSubmitActionV1274');
+  if (!form || !button) return;
 
-/* The v1272 raw-image month patch is intentionally irrelevant on the new
-   Championship flyer surface. Keep it only for fallback/legacy raw media. */
-.fc-champ-flyer-matchup-v1274 + .fc-champ-flyer-month-corrector-v1272{
+  let pointerSubmitAt = 0;
+
+  button.addEventListener('pointerup', event => {
+    if (button.disabled) return;
+    pointerSubmitAt = Date.now();
+
+    // iOS can lose the synthetic click when older sheet/card touch handlers are
+    // active. Submit the actual form on pointerup, through the existing handler.
+    event.preventDefault();
+    event.stopPropagation();
+
+    try {
+      form.requestSubmit(button);
+    } catch (_) {
+      form.dispatchEvent(new Event('submit', { bubbles:true, cancelable:true }));
+    }
+  }, { capture:true });
+
+  button.addEventListener('click', event => {
+    if (Date.now() - pointerSubmitAt < 800) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }, true);
+})();
+</script>
+
+
+
+<style id="fc-v1274-championship-entry-editor">
+#submitEntrySheet.fc-champ-entry-editor-v1274{
+  --champ-edit-gold:#dfae42;
+  --champ-edit-gold-hi:#ffe79a;
+  --champ-edit-ink:#171004;
+  background:
+    radial-gradient(circle at 50% 0%,rgba(176,103,17,.14),transparent 26%),
+    #0b0805!important;
+}
+#submitEntrySheet.fc-champ-entry-editor-v1274 .cc-sheet-header{
+  background:#0d0906!important;
+  border-bottom-color:rgba(220,169,61,.22)!important;
+}
+#submitEntrySheet.fc-champ-entry-editor-v1274 .cc-sheet-header h2{
+  color:#f4e4b2!important;
+}
+#submitEntrySheet.fc-champ-entry-editor-v1274 .cc-upload{
+  border-color:rgba(222,174,66,.72)!important;
+  background:rgba(124,78,14,.07)!important;
+}
+#submitEntrySheet.fc-champ-entry-editor-v1274 .cc-field>label,
+#submitEntrySheet.fc-champ-entry-editor-v1274 .cc-field>label span{
+  color:#cbb98e!important;
+}
+#submitEntrySheet.fc-champ-entry-editor-v1274 .fc-sug-btn{
+  border-color:rgba(223,174,66,.30)!important;
+  color:#dcb04c!important;
+  box-shadow:0 0 14px rgba(219,158,38,.10)!important;
+}
+/* Championship qualification already established the competition rules. Do not
+   repeat the generic "Before you enter" card inside this focused edit sheet. */
+#submitEntrySheet.fc-champ-entry-editor-v1274 #fcEntryRulesV1047{
   display:none!important;
+}
+#submitEntrySheet.fc-champ-entry-editor-v1274 .cc-submit-area{
+  z-index:12!important;
+  margin-top:20px!important;
+  padding-top:24px!important;
+  background:
+    linear-gradient(180deg,rgba(11,8,5,0),rgba(11,8,5,.96) 27%,#0b0805 48%)!important;
+}
+#submitEntrySheet.fc-champ-entry-editor-v1274 #seSubmitActionV1274{
+  min-height:58px!important;
+  border:1px solid rgba(255,232,160,.70)!important;
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.28),rgba(255,255,255,0) 34%),
+    linear-gradient(135deg,#634006 0%,#bd8321 23%,#ffe797 50%,#d6a034 70%,#704607 100%)!important;
+  color:var(--champ-edit-ink)!important;
+  font-weight:900!important;
+  text-shadow:none!important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.58),
+    inset 0 -4px 9px rgba(78,44,2,.26),
+    0 10px 26px rgba(0,0,0,.28)!important;
+}
+#submitEntrySheet.fc-champ-entry-editor-v1274 #seSubmitActionV1274:disabled{
+  opacity:.72!important;
+}
+#submitEntrySheet.fc-champ-entry-editor-v1274 #submitEntryForm{
+  padding-bottom:76px!important;
+}
+#submitEntrySheet.fc-champ-entry-editor-v1274 .cc-preview{
+  border-color:rgba(218,164,55,.24)!important;
+}
+#submitEntrySheet #seError.show{
+  position:relative!important;
+  z-index:20!important;
+  margin:10px 0 14px!important;
 }
 </style>
 
@@ -49272,18 +49318,23 @@ window.FC_V1273_VALIDATION={
 <script>
 window.FC_V1274_VALIDATION={
   build:"v1274",
-  championshipFlyerUsesPinnedCardRenderer:true,
-  rawPosterHiddenWhenRosterAvailable:true,
-  duplicateMonthLabelRemoved:true,
-  championshipFlyerAuthorShellPreserved:true,
-  championshipFlyerSocialActionsPreserved:true,
-  seeMatchupCtaPreserved:true,
+  directPointerSavePath:true,
+  authoritativeFormSubmitPreserved:true,
+  saveImmediateFeedback:true,
+  championshipEditorGold:true,
+  championshipGenericRuleCardRemoved:true,
+  replacementModerationCopyClear:true,replacementModerationCopyMatchesActualPaths:true,
+  emberChampionshipFallbackHardened:true,
+  promotionNavigatesImmediately:true,
+  promotionRapidDuplicateGuard:true,
+  approvedV1249ChampionshipDetailPreserved:true,
   v1273RoutingPreserved:true,
   v1272StateRecoveryPreserved:true,
   v1271InstantResponsePreserved:true,
-  approvedV1249DetailPreserved:true,
+  v1270ReplacementRecoveryPreserved:true,
   midnightDeadlinePolicyPreserved:true,
   eightPmAnnouncementPreserved:true,
+  videoPauseFixPreserved:true,
   updaterPreserved:true
 };
 </script>
