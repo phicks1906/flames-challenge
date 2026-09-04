@@ -1,8 +1,8 @@
-name: Apply v1278 audio corrections
+name: Apply v1278 audio fixes
 on:
   push:
     branches: [main]
-    paths: ['.github/v1278_payload_07.txt']
+    paths: ['.github/v1278-trigger.txt']
 permissions:
   contents: write
 jobs:
@@ -12,23 +12,79 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: main
-      - name: Reconstruct and apply exact v1278 patch
+      - name: Apply exact v1278 patch
         shell: bash
         run: |
           set -euo pipefail
-          test "$(sha256sum index.html | awk '{print $1}')" = "ce123c1f2df0d798a0a8de2fb6ba59559c3deaa4d7459f9291da2756640a9889"
-          cat .github/v1278_payload_*.txt | tr -d '\n' | base64 -d | gunzip > /tmp/v1278.patch
-          git apply --check /tmp/v1278.patch
-          git apply /tmp/v1278.patch
-          test "$(sha256sum index.html | awk '{print $1}')" = "432eef71fd043b38ca49326487ec7805f2dc1a650c12d0fcfdff102238490780"
-          grep -q 'v1278 · compact-live-audio-carousel' index.html
-      - name: Commit exact v1278 and remove temporary updater
+          git apply --check .github/v1278.patch
+          git apply .github/v1278.patch
+          test "$(sha256sum index.html | awk '{print $1}')" = "b17b59a4aff93e5d08869c3c139996303d2487cb2352a3d597de9b99e1db0651"
+          grep -q 'v1278 · compact-live-audio-swipe-fix' index.html
+      - name: Validate inline JavaScript and CSS
         shell: bash
         run: |
           set -euo pipefail
-          rm -f .github/v1278_payload_*.txt .github/workflows/apply-v1278.yml
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          import subprocess, tempfile, os, sys
+          html = Path('index.html').read_text(encoding='utf-8')
+          class P(HTMLParser):
+              def __init__(self):
+                  super().__init__(convert_charrefs=False); self.scripts=[]; self.styles=[]; self._tag=None; self._buf=[]; self._src=False
+              def handle_starttag(self, tag, attrs):
+                  if tag=='script':
+                      self._tag='script'; self._buf=[]; self._src=any(k=='src' for k,v in attrs)
+                  elif tag=='style':
+                      self._tag='style'; self._buf=[]; self._src=False
+              def handle_data(self, data):
+                  if self._tag in ('script','style'): self._buf.append(data)
+              def handle_endtag(self, tag):
+                  if tag==self._tag:
+                      text=''.join(self._buf)
+                      if tag=='script' and not self._src and text.strip(): self.scripts.append(text)
+                      if tag=='style': self.styles.append(text)
+                      self._tag=None; self._buf=[]; self._src=False
+          p=P(); p.feed(html)
+          for i,code in enumerate(p.scripts):
+              f=tempfile.NamedTemporaryFile('w',suffix='.js',delete=False,encoding='utf-8'); f.write(code); f.close()
+              r=subprocess.run(['node','--check',f.name],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+              os.unlink(f.name)
+              if r.returncode:
+                  print(f'inline script {i} failed'); print(r.stderr); sys.exit(1)
+          def balanced(css):
+              depth=0; i=0; quote=None; comment=False
+              while i<len(css):
+                  c=css[i]; n=css[i+1] if i+1<len(css) else ''
+                  if comment:
+                      if c=='*' and n=='/': comment=False; i+=2; continue
+                      i+=1; continue
+                  if quote:
+                      if c=='\\': i+=2; continue
+                      if c==quote: quote=None
+                      i+=1; continue
+                  if c=='/' and n=='*': comment=True; i+=2; continue
+                  if c in ('"',"'"): quote=c; i+=1; continue
+                  if c=='{': depth+=1
+                  elif c=='}':
+                      depth-=1
+                      if depth<0: return False
+                  i+=1
+              return depth==0
+          for i,css in enumerate(p.styles):
+              if not balanced(css):
+                  print(f'style block {i} brace imbalance'); sys.exit(2)
+          print(f'validated {len(p.scripts)} inline scripts and {len(p.styles)} style blocks')
+          PY
+          grep -q 'function _readMetaContentV1174' index.html
+          grep -q 'FC_UPDATE_PARSER_SELFTEST_V1174' index.html
+      - name: Commit v1278 and clean temporary updater
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/v1278.patch .github/v1278_payload_*.txt .github/v1278-trigger.txt .github/workflows/apply-v1278.yml
           git config user.name "FlamesChallenge Build Bot"
           git config user.email "actions@users.noreply.github.com"
           git add -A
-          git commit -m "Build v1278 compact live audio corrections"
+          git commit -m "Build v1278 compact live audio and swipe fix"
           git push origin HEAD:main
