@@ -1,0 +1,34 @@
+name: Apply v1278 audio corrections
+on:
+  push:
+    branches: [main]
+    paths: ['.github/v1278_payload_07.txt']
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Reconstruct and apply exact v1278 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(sha256sum index.html | awk '{print $1}')" = "ce123c1f2df0d798a0a8de2fb6ba59559c3deaa4d7459f9291da2756640a9889"
+          cat .github/v1278_payload_*.txt | tr -d '\n' | base64 -d | gunzip > /tmp/v1278.patch
+          git apply --check /tmp/v1278.patch
+          git apply /tmp/v1278.patch
+          test "$(sha256sum index.html | awk '{print $1}')" = "432eef71fd043b38ca49326487ec7805f2dc1a650c12d0fcfdff102238490780"
+          grep -q 'v1278 · compact-live-audio-carousel' index.html
+      - name: Commit exact v1278 and remove temporary updater
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/v1278_payload_*.txt .github/workflows/apply-v1278.yml
+          git config user.name "FlamesChallenge Build Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "Build v1278 compact live audio corrections"
+          git push origin HEAD:main
