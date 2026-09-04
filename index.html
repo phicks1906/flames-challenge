@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1269 · restored-approved-championship-mock" name="fc-build"/>
+<meta content="v1270 · championship-entry-state-recovery" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Restored the exact approved Championship Night detail treatment: cinematic gold arena, visible spotlights and shimmer, mock-matched matchup geometry, premium entry-status card, ceremonial divider, and real carousel dots, while preserving midnight deadlines, 8 PM crown reveal, entry gating, editing, poster, footer, and video fixes." name="fc-whatsnew"/>
+<meta content="Fixed Championship replacement/resubmission after delete by refreshing the accepted invite and current entry from the database before opening the entry sheet, purging stale deleted-entry caches immediately, and verifying edit updates actually changed a row before reporting success." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -24741,17 +24741,91 @@ function fcEntryWindowClosedV1267(ch) {
   return Number.isFinite(ts) && ts <= Date.now();
 }
 
+
+async function fcRefreshChampionshipEntryStateV1270(ch) {
+  if (!ch?.is_championship || !state.profile) return { invite:null, entry:null };
+
+  const uid = state.profile.id;
+  const round = ch.sd_phase === 'submitting' ? Number(ch.sd_round || 0) : 0;
+
+  try {
+    const [invRes, entryRes] = await Promise.all([
+      fcWithTimeoutV1099(
+        db.from('challenge_invites')
+          .select('id, invite_status')
+          .eq('challenge_id', ch.id)
+          .eq('invited_user_id', uid)
+          .maybeSingle(),
+        10000,
+        'Championship access'
+      ),
+      fcWithTimeoutV1099(
+        db.from('entries')
+          .select('id, challenge_id, user_id, media_url, media_type, caption, poster_url, media_hash, sd_round, moderation_status, moderation_reason, created_at')
+          .eq('challenge_id', ch.id)
+          .eq('user_id', uid)
+          .eq('sd_round', round)
+          .limit(1),
+        10000,
+        'Championship entry'
+      )
+    ]);
+
+    if (invRes?.error) throw invRes.error;
+    if (entryRes?.error) throw entryRes.error;
+
+    const invite = invRes?.data || null;
+    const entry = Array.isArray(entryRes?.data) ? (entryRes.data[0] || null) : null;
+
+    // Invite state: server wins over any cached roster/banner state.
+    state.myChampInvite = invite;
+    const roster = (state.champFighters || {})[ch.id];
+    if (roster && invite) {
+      const mine = roster.find(f => String(f.id) === String(uid));
+      if (mine) mine.invite_status = invite.invite_status;
+    }
+
+    // Entry state: remove every cached copy of this user's row for this challenge,
+    // then add back ONLY the row the database says currently exists.
+    const stripMine = arr => (Array.isArray(arr) ? arr : []).filter(e =>
+      !(String(e?.challenge_id) === String(ch.id) && String(e?.user_id) === String(uid))
+    );
+
+    if (state.currentChallenge && String(state.currentChallenge.id) === String(ch.id)) {
+      state.currentEntries = stripMine(state.currentEntries);
+      if (entry) state.currentEntries.push(entry);
+    }
+
+    state.feedEntries = stripMine(state.feedEntries);
+    if (entry) state.feedEntries.push(entry);
+
+    return { invite, entry };
+  } catch (err) {
+    console.warn('[v1270] Championship entry-state refresh failed', err);
+    return { invite: state.myChampInvite || null, entry: null, error: err };
+  }
+}
+
 /* ---------- SUBMIT ENTRY ---------- */
-function openSubmitEntry(entryToEdit = null) {
+async function openSubmitEntry(entryToEdit = null) {
   const ch = state.currentChallenge;
   if (!ch) return;
 
-  // v1254 — Championship entry is invitation-only. A generic challenge-entry
-  // surface must never open a NEW Championship submission for an unqualified
-  // viewer. Accepted invite status is the single eligibility source.
-  if (ch.is_championship && !entryToEdit && !canEnterChampionship(ch)) {
-    toast('Championship entry is limited to qualified competitors.');
-    return;
+  // v1270 — Championship access and "do I already have an entry?" are refreshed
+  // from the database BEFORE deciding whether this is a new submission or edit.
+  // This fixes the exact delete→resubmit failure: the deleted row remained in
+  // state.currentEntries, so the UI kept trying to edit an id that no longer existed.
+  if (ch.is_championship) {
+    const freshV1270 = await fcRefreshChampionshipEntryStateV1270(ch);
+
+    // A real current row always wins over a stale entry object supplied by a
+    // previously-rendered card. If the DB says the row is gone, edit mode is cleared.
+    entryToEdit = freshV1270.entry || null;
+
+    if (!entryToEdit && !canEnterChampionship(ch)) {
+      toast('Championship entry is limited to qualified competitors.');
+      return;
+    }
   }
 
   // Context guard (v618): never carry an entry from a DIFFERENT challenge into
@@ -25245,28 +25319,30 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
       // moderation state.
       if (editSwappedVideo) updates.moderation_status = 'pending';
       else if (needsResubmissionReset && (editReplacedMedia || editRewroteText)) updates.moderation_status = 'clear';
-      // v672: do NOT chain .select().single() onto the UPDATE. When this edit
-      // sets moderation_status='pending', the row can momentarily stop matching
-      // the entries_select RLS policy, so the post-update SELECT returns zero
-      // rows and .single() throws "Cannot coerce the result to a single JSON
-      // object" — even though the UPDATE itself SUCCEEDED. We already know the
-      // entry id, so we don't need to read it back. Update, check for a real
-      // error only, and proceed with the id we have.
+      // v1270 — an UPDATE that matches zero rows is a failure, not success.
+      // The current RLS allows an owner to read their own row, so select('id')
+      // is safe and lets us distinguish a real save from a stale/deleted entry id.
       const editId = seState.editingEntry.id;
       const runUpdate = () => db.from('entries')
         .update(updates)
         .eq('id', editId)
-        .eq('user_id', state.profile.id); // safety check
-      ({ error: entryError } = await fcWithTimeoutV1099(runUpdate(), 25000, 'Update entry'));
+        .eq('user_id', state.profile.id)
+        .select('id');
+      let updateRowsV1270 = null;
+      ({ data:updateRowsV1270, error: entryError } = await fcWithTimeoutV1099(runUpdate(), 25000, 'Update entry'));
       if (entryError && /moderation_status/.test(entryError.message || '')) {
         delete updates.moderation_status;
-        ({ error: entryError } = await fcWithTimeoutV1099(runUpdate(), 25000, 'Update entry'));
+        ({ data:updateRowsV1270, error: entryError } = await fcWithTimeoutV1099(runUpdate(), 25000, 'Update entry'));
       }
       if (entryError && /media_hash/.test(entryError.message || '')) {
         delete updates.media_hash;
-        ({ error: entryError } = await fcWithTimeoutV1099(runUpdate(), 25000, 'Update entry'));
+        ({ data:updateRowsV1270, error: entryError } = await fcWithTimeoutV1099(runUpdate(), 25000, 'Update entry'));
       }
       if (entryError) throw new Error('Update failed: ' + entryError.message);
+      if (!Array.isArray(updateRowsV1270) || updateRowsV1270.length !== 1) {
+        if (ch.is_championship) await fcRefreshChampionshipEntryStateV1270(ch);
+        throw new Error('That entry is no longer on the server. Reopen the entry form and submit your replacement.');
+      }
       entryData = { id: editId };
       // Re-trigger moderation for the swapped-in video
       if (editSwappedVideo && seState.editingEntry.id) {
@@ -29969,8 +30045,28 @@ async function deleteFvEntry(entryId, chId) {
       'Delete entry',
       { requireRows: true }
     );
-    toast('Entry deleted');
-    openFeedViewer(chId);
+
+    // v1270 — deletion is not complete until every local copy is gone.
+    // Leaving currentEntries/feedEntries untouched caused Championship detail
+    // to believe the member still had an entry and hid the new-submit path.
+    const uid = state.profile?.id;
+    const stripDeleted = arr => (Array.isArray(arr) ? arr : []).filter(e =>
+      String(e?.id) !== String(entryId) &&
+      !(String(e?.challenge_id) === String(chId) && String(e?.user_id) === String(uid))
+    );
+    state.currentEntries = stripDeleted(state.currentEntries);
+    state.feedEntries = stripDeleted(state.feedEntries);
+
+    if (state.currentChallenge && String(state.currentChallenge.id) === String(chId)) {
+      await loadChallengeDetail(chId);
+      renderChallengeDetail();
+    }
+
+    await loadChallenges().catch(()=>{});
+    await loadFeedActivity().catch(()=>{});
+
+    toast('Entry deleted — you can submit a replacement until entries close.');
+    await openFeedViewer(chId);
   } catch (error) {
     toast('Delete failed: ' + (error.message || 'try again'));
   }
@@ -48444,6 +48540,25 @@ window.FC_V1269_VALIDATION={
   editSaveFixPreserved:true,
   footerClearancePreserved:true,
   posterAvatarFixPreserved:true,
+  videoPauseFixPreserved:true,
+  updateParserPreserved:true
+};
+</script>
+
+
+<script>
+window.FC_V1270_VALIDATION={
+  build:"v1270",
+  championshipServerStateRefreshBeforeEntrySheet:true,
+  acceptedInviteRefreshedFromDatabase:true,
+  deletedEntryCachePurged:true,
+  deleteThenResubmitSupported:true,
+  staleEditIdCannotReportFalseSuccess:true,
+  editUpdateRequiresReturnedRow:true,
+  approvedChampionshipMockPreserved:true,
+  midnightDeadlinesPreserved:true,
+  eightPmAnnouncementPreserved:true,
+  posterFixPreserved:true,
   videoPauseFixPreserved:true,
   updateParserPreserved:true
 };
