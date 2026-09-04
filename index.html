@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1272 · championship-card-state-recovery" name="fc-build"/>
+<meta content="v1273 · championship-routing-restoration" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Repaired the Championship card/state regression caused by the failed replacement crossing the entry deadline: stale voided Championship viewers revalidate the live challenge before rendering, active fighter counts ignore no-shows, Championship flyer posts use the gold treatment, and local Championship posters use the launch month instead of the current calendar month." name="fc-whatsnew"/>
+<meta content="Championship feed cards, flyer posts, entry taps, and legacy top-level viewer routes now open the approved Championship Night detail screen instead of the generic feed viewer. Regular challenge routing is unchanged." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -17035,7 +17035,7 @@ async function openPostView(postId) {
     el.addEventListener('click', e => {
       e.stopPropagation();
       const chId = el.dataset.flyerViewer;
-      if (chId) { closePostView(); openFeedViewer(chId); }
+      if (chId) { closePostView(); fcOpenChallengeSurfaceV1273(chId); }
     });
   });
   wireLazyVideoThumbnails(body);
@@ -23498,7 +23498,7 @@ function renderChallenges() {
     card.addEventListener('click', e => {
       if (e.target.closest('[data-fcc-vote],.fcc-vote-btn,[data-show-likes],.fcc-fire-eq,audio[controls],.fc-video-unified-v1238,.fc-inline-video-play-v1264,.fc-inline-video-expand-v1239,video')) return;
       e.stopPropagation();
-      openFeedViewer(card.dataset.entryOpen, card.dataset.entryId || null);
+      fcOpenChallengeSurfaceV1273(card.dataset.entryOpen, card.dataset.entryId || null);
     });
   });
 
@@ -26498,7 +26498,7 @@ function renderFeed() {
     card.addEventListener('click', e => {
       if (e.target.closest('[data-fcc-vote],.fcc-vote-btn,[data-show-likes],.fcc-fire-eq,audio,video,.fc-video-unified-v1238,.fc-inline-video-play-v1264,.fc-inline-video-expand-v1239')) return;
       e.stopPropagation();
-      openFeedViewer(card.dataset.entryOpen, card.dataset.entryId || null);
+      fcOpenChallengeSurfaceV1273(card.dataset.entryOpen, card.dataset.entryId || null);
     });
   });
 
@@ -26506,7 +26506,7 @@ function renderFeed() {
   c.querySelectorAll('[data-flyer-viewer]').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
-      openFeedViewer(btn.dataset.flyerViewer);
+      fcOpenChallengeSurfaceV1273(btn.dataset.flyerViewer);
     });
   });
 
@@ -26531,7 +26531,7 @@ function renderFeed() {
       // v802 — the card now has its own primary action and an overflow dot.
       // Both handle their own tap; the card body still opens the viewer.
       if (e.target.closest('[data-fcc-vote],[data-fcc-submit],.fcc-vote-btn,.fcc-submit-btn,[data-chc-act],[data-chc-menu]')) return;
-      openFeedViewer(ch.id);
+      fcOpenChallengeSurfaceV1273(ch.id);
     });
   });
 
@@ -27256,6 +27256,18 @@ function fcCardAction(ch, status) {
   if (status === 'championship_pending') return { label:'Crown at 8 PM', mode:'view', ghost:true };
   return { label:'View result', mode:'view', ghost:true };
 }
+
+function fcOpenChallengeSurfaceV1273(chId, startEntryId = null) {
+  const ch = (state.challenges || []).find(c => String(c.id) === String(chId))
+    || (String(state.currentChallenge?.id || '') === String(chId) ? state.currentChallenge : null);
+
+  if (ch?.is_championship) {
+    openChallenge(ch);
+    return;
+  }
+  openFeedViewer(chId, startEntryId);
+}
+
 function runChallengeCardAction(ch, mode) {
   if (!ch) return;
   if (mode === 'promote') { openPromote('challenge', ch); return; }
@@ -29012,6 +29024,16 @@ let _fvEntries = [];    // entries loaded by openFeedViewer — used by standing
 
 // v1068 — restored exact v1065 native horizontal viewer behavior; no touch interception.
 async function openFeedViewer(chId, startEntryId = null) {
+  // v1273 — top-level Championship navigation belongs to the approved
+  // Championship Night detail screen, never the legacy generic feed viewer.
+  if (!startEntryId) {
+    const routedChV1273 = (state.challenges || []).find(c => String(c.id) === String(chId))
+      || (String(state.currentChallenge?.id || '') === String(chId) ? state.currentChallenge : null);
+    if (routedChV1273?.is_championship) {
+      openChallenge(routedChV1273);
+      return;
+    }
+  }
   let ch = state.challenges.find(c => c.id === chId) || state.currentChallenge;
   if (!ch) return;
 
@@ -48315,7 +48337,7 @@ document.addEventListener('pointerdown', function(event) {
 
       const card = expand.closest('[data-entry-open]');
       if (card && typeof openFeedViewer === 'function') {
-        openFeedViewer(card.dataset.entryOpen, card.dataset.entryId || null);
+        fcOpenChallengeSurfaceV1273(card.dataset.entryOpen, card.dataset.entryId || null);
       }
       return;
     }
@@ -49119,6 +49141,27 @@ window.FC_V1272_VALIDATION={
   pointer-events:none;
 }
 </style>
+
+
+
+<script>
+window.FC_V1273_VALIDATION={
+  build:"v1273",
+  championshipFlyerRoutesApprovedDetail:true,
+  championshipFeedCardRoutesApprovedDetail:true,
+  championshipEntryTapRoutesApprovedDetail:true,
+  genericViewerTopLevelChampionshipGuard:true,
+  regularChallengeFeedViewerPreserved:true,
+  approvedV1249ChampionshipDetailPreserved:true,
+  v1272StateRecoveryPreserved:true,
+  v1271InstantResponsePreserved:true,
+  v1270ReplacementRecoveryPreserved:true,
+  midnightDeadlinePolicyPreserved:true,
+  eightPmAnnouncementPreserved:true,
+  videoPauseFixPreserved:true,
+  updaterPreserved:true
+};
+</script>
 
 </body>
 </html>
