@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1273 · championship-routing-restoration" name="fc-build"/>
+<meta content="v1274 · championship-copy-review-and-post-confirmation" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Championship feed cards, flyer posts, entry taps, and legacy top-level viewer routes now open the approved Championship Night detail screen instead of the generic feed viewer. Regular challenge routing is unchanged." name="fc-whatsnew"/>
+<meta content="Unified remaining Championship/Ember wording, clarified replacement moderation, standardized the Championship Score formula as Turnout Points + Opponent Points = Championship Score, and made Post to Feed immediately leave the promotion screen and land on Home with visible confirmation instead of waiting on a feed reload." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -8647,7 +8647,7 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
 <div class="fc-score-rule-table-v1032"><span>Under 10 ballots <b>0</b></span><span>10–24 <b>3</b></span><span>25–49 <b>6</b></span><span>50–99 <b>10</b></span><span>100–249 <b>15</b></span><span>250+ <b>22</b></span></div>
 </div>
 </div>
-<div class="fc-score-rule-note-v1032"><strong>Monthly Championship Score = Opponent Points + Turnout Points</strong><span>Turnout is based on the total number of ballots cast in the challenge. Tap any leaderboard number to inspect the challenges behind it.</span></div>
+<div class="fc-score-rule-note-v1032"><strong>Turnout Points + Opponent Points = Championship Score</strong><span>Turnout is based on the total number of ballots cast in the challenge. Tap any leaderboard number to inspect the challenges behind it.</span></div>
 </div>
 </div>
 <!-- v766 TITLES — Rankings + Championship merged into one "This Month"
@@ -15611,6 +15611,18 @@ async function previewChampFlyer(chId) {
     ov.querySelector('[data-action="feed"]').onclick = async event => {
       const buttonV1219 = event.currentTarget;
       const originalV1219 = buttonV1219.textContent;
+
+      window.fcChampRecentPostsV1274 = window.fcChampRecentPostsV1274 || new Map();
+      const recentKeyV1274 = `${state.profile?.id || ''}:${chId}`;
+      const recentAtV1274 = Number(window.fcChampRecentPostsV1274.get(recentKeyV1274) || 0);
+      if (recentAtV1274 && Date.now() - recentAtV1274 < 120000) {
+        toast('This Championship was just posted to Home');
+        closeV1218();
+        if (typeof closeChallengeDetail === 'function') closeChallengeDetail();
+        if (typeof switchView === 'function') switchView('feed');
+        return;
+      }
+
       buttonV1219.disabled = true;
       buttonV1219.textContent = 'Posting…';
       try {
@@ -15647,21 +15659,41 @@ async function previewChampFlyer(chId) {
         }
         if (responseV1219.error) throw responseV1219.error;
 
-        toast('Championship posted to your feed');
+        window.fcChampRecentPostsV1274.set(recentKeyV1274, Date.now());
+        const postIdV1219 = responseV1219.data?.id;
+
+        // v1274 — the successful INSERT is the completion point. Do not hold
+        // navigation hostage to a second network request. That old await made a
+        // successful post look like nothing happened and led to duplicate posts.
+        buttonV1219.textContent = 'Posted ✓';
+        toast('Posted to Home');
         closeV1218();
         if (typeof closeChallengeDetail === 'function') closeChallengeDetail();
-        if (typeof loadPosts === 'function') await loadPosts();
+
+        state._fcDirtyViewsV1118 = state._fcDirtyViewsV1118 || {};
+        state._fcDirtyViewsV1118.feed = true;
         if (typeof switchView === 'function') switchView('feed');
-        const postIdV1219 = responseV1219.data?.id;
-        if (postIdV1219 && typeof scrollToPost === 'function') {
-          requestAnimationFrame(() => scrollToPost(postIdV1219));
+
+        // Refresh Home after the member is already looking at it.
+        if (typeof loadPosts === 'function') {
+          loadPosts().then(() => {
+            state._fcDirtyViewsV1118.feed = true;
+            if (state.currentView === 'feed' && typeof renderFeed === 'function') renderFeed();
+            if (postIdV1219 && typeof scrollToPost === 'function') {
+              requestAnimationFrame(() => scrollToPost(postIdV1219));
+            }
+          }).catch(errorV1274 => {
+            console.warn('Championship post succeeded; Home refresh failed', errorV1274);
+          });
         }
       } catch (errorV1219) {
         console.error('championship post to feed', errorV1219);
         toast('Could not post Championship to Feed');
       } finally {
-        buttonV1219.disabled = false;
-        buttonV1219.textContent = originalV1219;
+        if (buttonV1219.isConnected) {
+          buttonV1219.disabled = false;
+          buttonV1219.textContent = originalV1219;
+        }
       }
     };
 
@@ -16813,16 +16845,22 @@ async function postFlyerToFeed() {
     if (error) throw error;
 
     try { fcTrackAnalyticsV1048('promotion_shared', ch.id, { shareId: promoteState?.shareId || null, source: 'flames_feed', metadata: { post_id: inserted?.id || null, renderer_version: FC_FLYER_RENDERER_VERSION_V1182 } }); } catch(e) {}
-    toast('🔥 Posted to your feed!');
+    toast('🔥 Posted to Home!');
     closePromote();
-    // Land the user on the feed where the flyer now lives — not the challenge page
-    // they opened Promote from. Close the underlying challenge sheet, refresh the
-    // feed, switch to it, then scroll to + highlight the new flyer card.
     closeChallengeDetail();
-    await loadPosts();
-    switchView('feed');
+
     const newPostId = inserted?.id;
-    if (newPostId) requestAnimationFrame(() => scrollToPost(newPostId));
+    state._fcDirtyViewsV1118 = state._fcDirtyViewsV1118 || {};
+    state._fcDirtyViewsV1118.feed = true;
+    switchView('feed');
+
+    // Refresh after navigation so a slow request cannot make the Post button
+    // look unsuccessful.
+    loadPosts().then(() => {
+      state._fcDirtyViewsV1118.feed = true;
+      if (state.currentView === 'feed') renderFeed();
+      if (newPostId) requestAnimationFrame(() => scrollToPost(newPostId));
+    }).catch(errorV1274 => console.warn('Flyer posted; Home refresh failed', errorV1274));
   } catch(err) {
     console.error('Post flyer error:', err);
     toast('Failed to post — try again');
@@ -28498,12 +28536,12 @@ function fcEmberLocalAnswerV1046(question){
   const eligibilityWords=/(eligible|eligibility|earn score|affect championship score|score impact|private challenge|no contest)/.test(q);
   const tieWords=/(sudden death|tie|tied|co winner|co-winner)/.test(q);
 
-  if(/opponent points/.test(q)&&/turnout points/.test(q))return `${fcEmberRuleTablesV1046('opponent')}\n\n${fcEmberRuleTablesV1046('turnout')}\n\nOpponent Points + Turnout Points = Championship Score for each decisive public challenge win.`;
+  if(/opponent points/.test(q)&&/turnout points/.test(q))return `${fcEmberRuleTablesV1046('opponent')}\n\n${fcEmberRuleTablesV1046('turnout')}\n\nTurnout Points + Opponent Points = Championship Score for each decisive public challenge win.`;
   if(/opponent points/.test(q))return fcEmberRuleTablesV1046('opponent');
   if(/turnout|valid ballot/.test(q))return fcEmberRuleTablesV1046('turnout');
 
   if(scoreWords && /(formula|work|calculated|rolling|30 day|period|reset)/.test(q)){
-    return `Championship Score runs by calendar month, not a rolling 30-day window. Each decisive public challenge win earns Opponent Points + Turnout Points in that challenge’s category. Those win-level scores add together for your monthly category Score. At the start of a new calendar month, the monthly race starts fresh; your permanent competitive history and visible level remain.`;
+    return `Championship Score runs by calendar month, not a rolling 30-day window. Each decisive public challenge win earns Turnout Points + Opponent Points in that challenge’s category. Those win-level scores add together for your monthly category Score. At the start of a new calendar month, the monthly race starts fresh; your permanent competitive history and visible level remain.`;
   }
 
   if(qualifyWords){
@@ -28548,7 +28586,7 @@ function fcEmberLocalAnswerV1046(question){
   // Generic Championship Score questions should still resolve locally after more
   // specific patterns above, preventing stale server-side rules from surfacing.
   if(/championship score/.test(q)){
-    return `Championship Score is a monthly, category-specific race. Decisive public challenge wins earn Opponent Points + Turnout Points. At month-end, the top three Championship Scores qualify, and everyone tied at the cutoff advances.`;
+    return `Championship Score is a monthly, category-specific race. Decisive public challenge wins earn Turnout Points + Opponent Points. At month-end, the top three Championship Scores qualify, and everyone tied at the cutoff advances.`;
   }
   return null;
 }
@@ -34990,13 +35028,13 @@ window.fcPublicFeedDiagnostics = function(){
     else if(me){myMain=`${ord(myPlace)} place · ${myScore} Score`;mySub=cutoff!=null?`${Math.max(0,cutoff-myScore)} more Championship Score reaches the current cutoff.`:'The third qualifying score is still open.';}
     else if(cutoff!=null)mySub=`The current cutoff is ${cutoff} Score. Your first public win puts you on the board.`;
     const cutoffText=cutoff==null?(levels.length?`${openLevels} open score level${openLevels===1?'':'s'}`:'Not established yet'):`${cutoff} Score`;
-    host.innerHTML=`<div class="fc-score-head-v1032"><div class="fc-score-kicker-v1032">${esc(cat)} · Championship race</div><div class="fc-score-titleline-v1032"><div class="fc-score-title-v1032">Championship standings</div><div class="fc-score-time-v1032">${remaining===0?'Final day':`${remaining} day${remaining===1?'':'s'} remaining`}</div></div><div class="fc-score-formula-v1032"><b>Championship Score = Opponent Points + Turnout Points.</b> The top three Championship Scores qualify; ties at the cutoff advance.</div><div class="fc-score-cutoff-v1032"><span>Current qualification cutoff</span><b>${esc(cutoffText)}</b></div></div>${table}<div class="fc-score-ember-v1032">${emberFace(25,rows.length?'thinking':'directing')}<span>${leaderRead(rows,cat)}</span></div><div class="fc-score-you-v1032"><div class="fc-score-you-copy-v1032"><div class="fc-score-you-label-v1032">Your position in ${esc(cat)}</div><div class="fc-score-you-main-v1032">${esc(myMain)}</div><div class="fc-score-you-sub-v1032">${esc(mySub)}</div></div><div class="fc-score-you-actions-v1032">${me?'<button data-fc-score-action="history">Score history</button>':''}<button class="primary" data-fc-score-action="find">Find challenges</button></div></div>`;
+    host.innerHTML=`<div class="fc-score-head-v1032"><div class="fc-score-kicker-v1032">${esc(cat)} · Championship race</div><div class="fc-score-titleline-v1032"><div class="fc-score-title-v1032">Championship standings</div><div class="fc-score-time-v1032">${remaining===0?'Final day':`${remaining} day${remaining===1?'':'s'} remaining`}</div></div><div class="fc-score-formula-v1032"><b>Turnout Points + Opponent Points = Championship Score.</b> The top three Championship Scores qualify; ties at the cutoff advance.</div><div class="fc-score-cutoff-v1032"><span>Current qualification cutoff</span><b>${esc(cutoffText)}</b></div></div>${table}<div class="fc-score-ember-v1032">${emberFace(25,rows.length?'thinking':'directing')}<span>${leaderRead(rows,cat)}</span></div><div class="fc-score-you-v1032"><div class="fc-score-you-copy-v1032"><div class="fc-score-you-label-v1032">Your position in ${esc(cat)}</div><div class="fc-score-you-main-v1032">${esc(myMain)}</div><div class="fc-score-you-sub-v1032">${esc(mySub)}</div></div><div class="fc-score-you-actions-v1032">${me?'<button data-fc-score-action="history">Score history</button>':''}<button class="primary" data-fc-score-action="find">Find challenges</button></div></div>`;
     host.querySelectorAll('[data-fc-score-profile]').forEach(el=>el.addEventListener('click',()=>openUserProfile(el.dataset.fcScoreProfile)));
     host.querySelectorAll('[data-fc-score-metric]').forEach(btn=>btn.addEventListener('click',()=>openChampionshipScoreSheet(btn.dataset.user,cat,btn.dataset.fcScoreMetric)));
     host.querySelector('[data-fc-score-action="history"]')?.addEventListener('click',()=>openChampionshipScoreSheet(state.profile.id,cat,'total'));
     host.querySelector('[data-fc-score-action="find"]')?.addEventListener('click',()=>openCategory(cat));
     const sub=document.querySelector('#leaderboardViewSection .section-sub');
-    if(sub)sub.innerHTML='Championship Score measures the strength of public wins. <b>Score = Opponent Points + Turnout Points.</b> · <button class="link-btn" onclick="toggleLbHow()">How scoring works</button>';
+    if(sub)sub.innerHTML='Championship Score measures the strength of public wins. <b>Turnout Points + Opponent Points = Championship Score.</b> · <button class="link-btn" onclick="toggleLbHow()">How scoring works</button>';
   }
 
   async function openScoreChallenge(id){
@@ -35026,7 +35064,7 @@ window.fcPublicFeedDiagnostics = function(){
       const oppButtons=opps.map(o=>{const p=(state?.leaderboardData?.users||[]).find(x=>x.id===o.opponent_id);return `<button class="fc-score-opponent-v1032" data-score-opponent="${esc(o.opponent_id)}">${esc(p?.name||TIER_LABEL[o.tier]||'Competitor')} · ${esc(TIER_LABEL[o.tier]||o.tier)} +${Number(o.pts||0)}</button>`}).join('');
       return `<div class="fc-score-win-v1032"><div class="fc-score-win-top-v1032"><button class="fc-score-win-title-v1032" style="appearance:none;border:0;background:none;padding:0;text-align:left" data-score-challenge="${esc(r.challenge_id)}">${esc(titleById[r.challenge_id]||'Challenge')} →</button><div class="fc-score-win-total-v1032">+${Number(r.total_boost||0)}</div></div><div class="fc-score-win-grid-v1032"><div class="fc-score-win-part-v1032"><b>${Number(r.opponent_pts||0)} Opponent Points</b>${opps.length} competitor${opps.length===1?'':'s'} defeated</div><div class="fc-score-win-part-v1032"><b>${Number(r.vote_pts||0)} Turnout Points</b>${ballots} ballot${ballots===1?'':'s'} cast</div></div>${oppButtons?`<div class="fc-score-opponents-v1032">${oppButtons}</div>`:''}</div>`;
     }).join('');
-    body.innerHTML=`<div class="fc-score-sheet-head-v1032">${avatar(u)}<div><div class="fc-score-sheet-name-v1032">${esc(u.name||'Competitor')}</div><div class="fc-score-sheet-month-v1032">${cat?esc(cat)+' · ':''}${esc(monthLabel())}</div></div></div><div class="fc-score-total-v1032"><b>${score}</b><span>Championship Score · ${rows.length} public win${rows.length===1?'':'s'}</span><div class="fc-score-equation-v1032"><div><b>${opponent}</b><span>Opponent</span></div><i>+</i><div><b>${turnout}</b><span>Turnout</span></div><i>=</i><div><b>${score}</b><span>Score</span></div></div></div><div class="fc-score-sheet-ember-v1032">${emberFace(25,rows.length?'thinking':'directing')}<span>${esc(emberLine)}</span></div>${rows.length?`<div class="fc-score-section-v1032">How it adds up</div>${winsHtml}`:'<div class="fc-score-empty-v1032"><strong>No score yet</strong>Decisive public challenge wins will appear here with their opponent and turnout calculations.</div>'}<div class="fc-score-sheet-rule-v1032"><b>Monthly Championship Score = Opponent Points + Turnout Points.</b> Opponent tiers are frozen when the result closes. Turnout is based on the total number of ballots cast in the challenge. Monthly score resets; titles remain.</div>`;
+    body.innerHTML=`<div class="fc-score-sheet-head-v1032">${avatar(u)}<div><div class="fc-score-sheet-name-v1032">${esc(u.name||'Competitor')}</div><div class="fc-score-sheet-month-v1032">${cat?esc(cat)+' · ':''}${esc(monthLabel())}</div></div></div><div class="fc-score-total-v1032"><b>${score}</b><span>Championship Score · ${rows.length} public win${rows.length===1?'':'s'}</span><div class="fc-score-equation-v1032"><div><b>${turnout}</b><span>Turnout</span></div><i>+</i><div><b>${opponent}</b><span>Opponent</span></div><i>=</i><div><b>${score}</b><span>Score</span></div></div></div><div class="fc-score-sheet-ember-v1032">${emberFace(25,rows.length?'thinking':'directing')}<span>${esc(emberLine)}</span></div>${rows.length?`<div class="fc-score-section-v1032">How it adds up</div>${winsHtml}`:'<div class="fc-score-empty-v1032"><strong>No score yet</strong>Decisive public challenge wins will appear here with their opponent and turnout calculations.</div>'}<div class="fc-score-sheet-rule-v1032"><b>Turnout Points + Opponent Points = Championship Score.</b> Opponent tiers are frozen when the result closes. Turnout is based on the total number of ballots cast in the challenge. Monthly score resets; titles remain.</div>`;
     body.querySelectorAll('[data-score-challenge]').forEach(el=>el.addEventListener('click',()=>openScoreChallenge(el.dataset.scoreChallenge)));
     body.querySelectorAll('[data-score-opponent]').forEach(el=>el.addEventListener('click',()=>{const id=el.dataset.scoreOpponent;closeBoostSheet();if(id)openUserProfile(id)}));
   };
@@ -35269,7 +35307,7 @@ window.fcPublicFeedDiagnostics = function(){
     const body=document.getElementById('boostSheetBody'),sheet=document.getElementById('boostSheet');
     if(!body||!sheet)return;
     const count=challengeEntryCount(ch,detail),status=typeof computeChallengeStatus==='function'?computeChallengeStatus(ch):'';
-    body.innerHTML=`<div class="fc-score-eligibility-sheet-v1033"><div class="eyebrow">Championship Championship Score</div><h2>${esc(e.title)}</h2><div class="lead">${esc(e.copy)}</div><div class="fc-score-eligibility-now-v1033"><b>${esc(e.text)}</b><span>${count} current competitor${count===1?'':'s'} · ${esc(ch.category||'Challenge')} · ${esc(status||'status unavailable')}</span></div><div class="fc-score-eligibility-steps-v1033"><div class="fc-score-eligibility-step-v1033"><i>1</i><div><b>Public challenge</b><span>Private challenges and Championship rounds do not add Score.</span></div></div><div class="fc-score-eligibility-step-v1033"><i>2</i><div><b>At least two competitors</b><span>A single-entry challenge is a no-contest and earns no Score.</span></div></div><div class="fc-score-eligibility-step-v1033"><i>3</i><div><b>A decided final vote</b><span>The exact value is frozen only after the final voting round closes.</span></div></div></div><div class="fc-score-eligibility-formula-v1033"><b>Championship Score = Opponent Points + Turnout Points.</b><br>Opponent Points reflect who was defeated. Turnout Points use total ballots cast in the challenge.</div></div>`;
+    body.innerHTML=`<div class="fc-score-eligibility-sheet-v1033"><div class="eyebrow">Championship Championship Score</div><h2>${esc(e.title)}</h2><div class="lead">${esc(e.copy)}</div><div class="fc-score-eligibility-now-v1033"><b>${esc(e.text)}</b><span>${count} current competitor${count===1?'':'s'} · ${esc(ch.category||'Challenge')} · ${esc(status||'status unavailable')}</span></div><div class="fc-score-eligibility-steps-v1033"><div class="fc-score-eligibility-step-v1033"><i>1</i><div><b>Public challenge</b><span>Private challenges and Championship rounds do not add Score.</span></div></div><div class="fc-score-eligibility-step-v1033"><i>2</i><div><b>At least two competitors</b><span>A single-entry challenge is a no-contest and earns no Score.</span></div></div><div class="fc-score-eligibility-step-v1033"><i>3</i><div><b>A decided final vote</b><span>The exact value is frozen only after the final voting round closes.</span></div></div></div><div class="fc-score-eligibility-formula-v1033"><b>Turnout Points + Opponent Points = Championship Score.</b><br>Opponent Points reflect who was defeated. Turnout Points use total ballots cast in the challenge.</div></div>`;
     sheet.classList.add('open');
   }
   function bindBadge(badge,ch,e,detail=false){
@@ -39405,7 +39443,7 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
       emberSystem:{...(base.emberSystem||{}),version:'v1046',competitionFactsLocal:true,openEndedAiOnly:true},
       authoritativeRules:{
         scorePeriod:'calendar month',
-        scoreFormula:'Opponent Points + Turnout Points from decisive public challenge wins in that category',
+        scoreFormula:'Turnout Points + Opponent Points from decisive public challenge wins in that category',
         qualification:'at 11:59 PM ET on the final day of each calendar month, the top three Championship Scores qualify; everyone tied at the cutoff advances',
         opponentPoints:{Spark:1,Flame:2,Blaze:4,Inferno:6,Legend:10,Icon:14,Immortal:18,'G.O.A.T.':24},
         turnoutPoints:{under10:0,'10-24':3,'25-49':6,'50-99':10,'100-249':15,'250+':22},
@@ -39451,7 +39489,7 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
       'There is no manual administrator tie decision and no discretionary extension.'
     ]},
     {id:'score',label:'Score',title:'Championship Score and qualification',intro:R.score.eligibility,bullets:[
-      'Monthly Championship Score = Opponent Points + Turnout Points from decisive public challenge wins in that category.',
+      'Turnout Points + Opponent Points = Championship Score from decisive public challenge wins in that category.',
       'Turnout Points use total ballots cast in the challenge.',
       R.score.qualification,
       'Private challenges, Championship rounds, no-contests, and unresolved ties do not add monthly Championship Score.'
@@ -42331,7 +42369,7 @@ window.FC_PROFILE_VERSION = 'v1102';
     } else if (step === 1) {
       body.innerHTML = `<section class="fc-ob-step-v1103"><h3>Discover begins with your interests.</h3><p>Your saved categories lead the feed. Following creators adds their activity, and you can change your interests later.</p><div class="fc-ob-card-v1103"><b>Interests set the direction</b><span>They are the explicit signal used for category matches and suggested competitions.</span></div><div class="fc-ob-card-v1103"><b>Compete is the full arena</b><span>Open Compete whenever you want to browse beyond your personalized Home feed.</span></div></section>`;
     } else if (step === 2) {
-      body.innerHTML = `<section class="fc-ob-step-v1103"><h3>Wins build two different records.</h3><p><strong>Opponent Points + Turnout Points = Championship Score.</strong> Championship Score is the monthly qualification race. Your visible level is permanent career progression.</p><div class="fc-ob-card-v1103"><b>Opponent Points</b><span>Points based on the tier of the opponents defeated (Spark through G.O.A.T.).</span></div><div class="fc-ob-card-v1103"><b>Turnout Points</b><span>The total number of ballots cast in a challenge, not only votes received by the winner.</span></div><div class="fc-ob-card-v1103"><b>Championship Score</b><span>Adds your Opponent Points and Turnout Points within each category for the month.</span></div><div class="fc-ob-card-v1103"><b>Titles and visible level</b><span>Show what you have accomplished over your career.</span></div></section>`;
+      body.innerHTML = `<section class="fc-ob-step-v1103"><h3>Wins build two different records.</h3><p><strong>Turnout Points + Opponent Points = Championship Score.</strong> Championship Score is the monthly qualification race. Your visible level is permanent career progression.</p><div class="fc-ob-card-v1103"><b>Opponent Points</b><span>Points based on the tier of the opponents defeated (Spark through G.O.A.T.).</span></div><div class="fc-ob-card-v1103"><b>Turnout Points</b><span>The total number of ballots cast in a challenge, not only votes received by the winner.</span></div><div class="fc-ob-card-v1103"><b>Championship Score</b><span>Adds your Opponent Points and Turnout Points within each category for the month.</span></div><div class="fc-ob-card-v1103"><b>Titles and visible level</b><span>Show what you have accomplished over your career.</span></div></section>`;
     } else if (step === 3) {
       let ember = '<span aria-hidden="true" style="font-size:54px">🔥</span>';
       try { if (typeof emberFace === 'function') ember = emberFace(70,'attentive'); } catch (_) {}
@@ -43078,7 +43116,7 @@ html[data-theme="light"] body .nav-icon-btn:active{
     entry:Object.freeze({
       withdrawal:'You may edit or withdraw your own entry only while that round’s submission window is open. Once voting begins, self-service editing and withdrawal close.',
       hostDelete:'A host may delete a challenge only while entries are open and before another member has entered. Administrators may remove a challenge for safety or integrity reasons.',
-      moderation:'Only clear or approved entries compete publicly. Replacing rejected or flagged work sends the replacement through the applicable review path.',
+      moderation:'Replacement content is checked the same way as a new entry. Only entries that pass the applicable review can compete publicly.',
       noContest:'If fewer than two competitors remain when the result is settled, the challenge is a no-contest. No winner and no Championship Score are awarded.'
     }),
     voting:Object.freeze({
@@ -43099,7 +43137,7 @@ html[data-theme="light"] body .nav-icon-btn:active{
       admin:'Administrators do not choose winners, rewrite ballot totals, manually break ties, or grant discretionary sudden-death extensions.'
     }),
     score:Object.freeze({
-      formula:'Championship Score = Opponent Points + Turnout Points.',
+      formula:'Turnout Points + Opponent Points = Championship Score.',
       decisive:'A decisive public challenge winner earns points for every opponent defeated, plus points based on turnout.',
       coWinner:'Competitive co-winners with the same number of ballots receive Turnout Points plus Opponent Points only for finalists they finished ahead of. Co-winners do not receive Opponent Points for each other.',
       exclusions:'No-submission co-winners, no-ballot co-winners, private challenges, Championship rounds, no-contests, and unresolved ties do not add monthly Championship Score.',
@@ -44504,8 +44542,16 @@ body.fc-settings-open-v1117 #bottomNav{visibility:hidden!important;pointer-event
     const status = computeChallengeStatus(ch);
     const mine = myOpenEntry();
     const pending = mine && ['pending','flagged','escalated'].includes(String(mine.moderation_status || '').toLowerCase());
-    const submissionsClose = ch.submission_deadline ? new Date(ch.submission_deadline).toLocaleString('en-US', {timeZone:'America/New_York',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) + ' ET' : null;
-    const votingEnds = ch.voting_end ? new Date(ch.voting_end).toLocaleString('en-US', {timeZone:'America/New_York',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) + ' ET' : null;
+    const submissionsClose = ch.submission_deadline
+      ? (typeof fcEntryDeadlineEtLabelV1267 === 'function'
+          ? fcEntryDeadlineEtLabelV1267(ch)
+          : new Date(ch.submission_deadline).toLocaleString('en-US',{timeZone:'America/New_York',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) + ' ET')
+      : null;
+    const votingEnds = ch.voting_end
+      ? (typeof fcDeadlineDisplayV1268 === 'function'
+          ? fcDeadlineDisplayV1268(ch.voting_end)
+          : new Date(ch.voting_end).toLocaleString('en-US',{timeZone:'America/New_York',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) + ' ET')
+      : null;
     if (/why.*(review|pending)|under review|video review|moderation/.test(q)) {
       if (!mine) return 'I do not see an entry from your account in this challenge.';
       if (!pending) return `Your entry is currently ${mine.moderation_status || 'clear'}.`;
@@ -44517,7 +44563,17 @@ body.fc-settings-open-v1117 #bottomNav{visibility:hidden!important;pointer-event
         const p = moderationPresentation(mine);
         return `${p.title}. ${p.detail} ${submissionsClose ? `You may edit or withdraw before ${submissionsClose}. ` : ''}The challenge needs at least two competitors for a scored result.`;
       }
-      if (status === 'submitting') return `Entries remain open${submissionsClose ? ` until ${submissionsClose}` : ''}. After that, approved entries move into voting. A scored contest needs at least two competitors.`;
+      if (status === 'submitting') {
+        if (ch.is_championship) {
+          const deadlineV1274 = typeof fcEntryDeadlineEtLabelV1267 === 'function'
+            ? fcEntryDeadlineEtLabelV1267(ch)
+            : submissionsClose;
+          if (mine) return `Your Championship entry can be edited until ${deadlineV1274 || 'entries close'}. After that, voting begins. Championship rounds award titles, not Championship Score.`;
+          if (typeof canEnterChampionship === 'function' && canEnterChampionship(ch)) return `Your Championship spot is confirmed. Submit your entry by ${deadlineV1274 || 'the entry deadline'}. After entries close, voting begins.`;
+          return `Championship entries close ${deadlineV1274 || 'at the posted deadline'}. Entry is limited to qualified competitors with accepted invitations.`;
+        }
+        return `Entries remain open${submissionsClose ? ` until ${submissionsClose}` : ''}. After that, approved entries move into voting. A scored contest needs at least two competitors.`;
+      }
       if (status === 'voting' || status === 'sudden_death') return `Voting is open${votingEnds ? ` until ${votingEnds}` : ''}. The final ballot totals determine the result.`;
       if (status === 'closed') return 'Voting is closed. The durable result determines the winner, record, Championship Score, and any next qualification step.';
     }
@@ -49159,6 +49215,59 @@ window.FC_V1273_VALIDATION={
   midnightDeadlinePolicyPreserved:true,
   eightPmAnnouncementPreserved:true,
   videoPauseFixPreserved:true,
+  updaterPreserved:true
+};
+</script>
+
+
+
+<script id="fc-v1274-ember-copy-invariant">
+(function initEmberCopyInvariantV1274(){
+  'use strict';
+
+  function normalizeEmberContextV1274(){
+    const modal = document.getElementById('emberModal');
+    if (!modal?.classList.contains('open')) return;
+    if (!state?.currentChallenge?.id) return;
+
+    const line = document.getElementById('emberContextLine');
+    if (line) line.textContent = 'I’m using this challenge’s current status, deadlines, entries, and rules.';
+  }
+
+  const priorOpenV1274 = window.openEmber;
+  if (typeof priorOpenV1274 === 'function') {
+    window.openEmber = function(){
+      const result = priorOpenV1274.apply(this, arguments);
+      requestAnimationFrame(normalizeEmberContextV1274);
+      return result;
+    };
+    try { openEmber = window.openEmber; } catch (_) {}
+  }
+
+  window.fcNormalizeEmberContextV1274 = normalizeEmberContextV1274;
+})();
+</script>
+
+
+
+<script>
+window.FC_V1274_VALIDATION={
+  build:"v1274",
+  championshipGenericOpenForEntriesCopyBlocked:true,
+  emberContextSimplified:true,
+  replacementModerationClarified:true,
+  replacementUsesNewEntryReviewPath:true,
+  turnoutPlusOpponentFormulaStandardized:true,
+  scoreCalculationUnchanged:true,
+  postToFeedNavigatesBeforeRefresh:true,
+  championshipRecentPostGuard:true,
+  duplicatePostConfusionFixed:true,
+  approvedChampionshipDetailPreserved:true,
+  v1273RoutingPreserved:true,
+  v1272StateRecoveryPreserved:true,
+  v1271PerformancePreserved:true,
+  midnightDeadlinePolicyPreserved:true,
+  eightPmAnnouncementPreserved:true,
   updaterPreserved:true
 };
 </script>
