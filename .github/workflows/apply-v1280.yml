@@ -1,0 +1,127 @@
+name: Apply v1280 unified clean audio renderer
+on:
+  push:
+    branches: [main]
+    paths: ['.github/v1280-trigger.txt']
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Apply exact v1280 transform
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object index.html)" = "d21ba0ef4e5f180c0504c27863a735fcaa0c751f"
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          old='<meta content="v1279 · compact-audio-final-geometry" name="fc-build"/>'
+          new='<meta content="v1280 · unified-clean-audio-renderer" name="fc-build"/>'
+          if s.count(old)!=1: raise SystemExit(f'build marker count {s.count(old)}')
+          s=s.replace(old,new,1)
+          old2='<meta content="Locked audio cards to the intended compact 16:9 size on every Home/Compete path, removed the wasted lower area and remaining baked-control bleed-through, and kept winner audio at the same compact geometry." name="fc-whatsnew"/>'
+          new2='<meta content="Replaced the layered audio player with one clean shared 16:9 renderer across Home, winners, Challenge Detail, and entry viewers: one sharp Crowned F, one live waveform, one play control, one time pair, and preserved swipe-stop playback." name="fc-whatsnew"/>'
+          if s.count(old2)!=1: raise SystemExit(f'whatsnew marker count {s.count(old2)}')
+          s=s.replace(old2,new2,1)
+          start=s.index('  // v1277 — approved audio-card source of truth.')
+          end=s.index("\n  let visual = '';", start)
+          branch='''  // v1280 — one audio renderer across Home, winners, Challenge Detail and\n  // entry viewers. The artwork is now built from clean layers (brand asset +\n  // CSS atmosphere + live waveform) so no baked play button, EQ or timestamps\n  // can ever show through underneath the real controls.\n  const unifiedModesV1280 = new Set(['card','winner','viewer','detail','winner-results','feed-viewer']);\n  if (unifiedModesV1280.has(mode)) {\n    const barCountV1280 = 61;\n    const unifiedBarsV1280 = Array.from({length:barCountV1280}, (_, i) => {\n      const mid = (barCountV1280 - 1) / 2;\n      const edge = 1 - Math.min(1, Math.abs(i - mid) / mid);\n      const rhythm = .48 + .52 * Math.abs(Math.sin(i * .71) * .68 + Math.sin(i * .23 + .9) * .32);\n      const h = Math.round(18 + 66 * (.34 + .66 * edge) * rhythm);\n      return `<i class="fc-audio-unified-bar-v1280" style="--fc-idle-v1280:${h}%"></i>`;\n    }).join('');\n    const seekV1280 = controls ? `<input class="fc-audio-seek-v1123 fc-audio-unified-seek-v1280" type="range" min="0" max="0" step="0.1" value="0" aria-label="Seek through audio" oninput="seekFccAudioV1123(this,event)">` : '';\n    return `<div class="fcc-entry-media fcc-fire-eq fc-audio-unified-v1280 fc-audio-unified-mode-${mode}-v1280${controls ? ' fc-audio-has-controls-v1123' : ''}" data-audio-style="unified-v1280" data-audio-layout-v1201="compact" role="group" aria-label="Audio entry">\n      ${audio}\n      <div class="fc-audio-unified-scene-v1280">\n        <div class="fc-audio-unified-halo-v1280" aria-hidden="true"></div>\n        <div class="fc-audio-unified-logo-v1280" aria-hidden="true"></div>\n        <div class="fc-audio-unified-wave-v1280" aria-hidden="true">${unifiedBarsV1280}</div>\n        ${mainButton}\n        <span class="fc-audio-unified-time-v1280 fc-audio-unified-current-v1280 fc-audio-current-v1123">0:00</span>\n        <span class="fc-audio-unified-time-v1280 fc-audio-unified-total-v1280 fc-audio-duration-v1123">--:--</span>\n        ${seekV1280}\n      </div>\n    </div>`;\n  }\n'''
+          s=s[:start]+branch+s[end:]
+          old="    const isPremiumV1277 = tile.classList.contains('fc-audio-premium-v1277');\n    const isFlame = tile.classList.contains('eq-flame');"
+          new="    const isUnifiedV1280 = tile.classList.contains('fc-audio-unified-v1280');\n    const isPremiumV1277 = tile.classList.contains('fc-audio-premium-v1277');\n    const isFlame = tile.classList.contains('eq-flame');"
+          if s.count(old)!=1: raise SystemExit('analyser mode marker mismatch')
+          s=s.replace(old,new,1)
+          old="    const bars = isPremiumV1277\n      ? tile.querySelectorAll('.fc-audio-premium-bar-v1277')"
+          new="    const bars = isUnifiedV1280\n      ? tile.querySelectorAll('.fc-audio-unified-bar-v1280')\n      : isPremiumV1277\n        ? tile.querySelectorAll('.fc-audio-premium-bar-v1277')"
+          if s.count(old)!=1: raise SystemExit('bar selector marker mismatch')
+          s=s.replace(old,new,1)
+          old="      if (isPremiumV1277) {\n        // v1277 premium card: real frequency energy drives the illuminated"
+          new="      if (isUnifiedV1280 || isPremiumV1277) {\n        // v1280 unified player (and legacy v1277 fallback): real frequency energy drives the illuminated"
+          if s.count(old)!=1: raise SystemExit('live analyser branch mismatch')
+          s=s.replace(old,new,1)
+          old="        if (isPremiumV1277) {\n          const t = performance.now() / 1000;"
+          new="        if (isUnifiedV1280 || isPremiumV1277) {\n          const t = performance.now() / 1000;"
+          if s.count(old)!=1: raise SystemExit('fallback analyser branch mismatch')
+          s=s.replace(old,new,1)
+          old="  tile.querySelectorAll('.fc-audio-premium-bar-v1277').forEach(b => { b.style.removeProperty('height'); });"
+          new="  tile.querySelectorAll('.fc-audio-premium-bar-v1277,.fc-audio-unified-bar-v1280').forEach(b => { b.style.removeProperty('height'); });"
+          if s.count(old)!=1: raise SystemExit('analyser stop marker mismatch')
+          s=s.replace(old,new,1)
+          css='''\n<style id="fc-v1280-unified-clean-audio">\n/* v1280 — CLEAN SHARED AUDIO SURFACE. No bitmap UI is used here. */\n.fc-audio-unified-v1280{position:relative!important;display:block!important;width:100%!important;height:auto!important;min-height:0!important;max-height:none!important;aspect-ratio:16/9!important;padding:0!important;overflow:hidden!important;border-radius:18px!important;border:1px solid rgba(197,116,48,.42)!important;background:#070403!important;box-shadow:inset 0 1px 0 rgba(255,219,151,.07),0 12px 28px rgba(0,0,0,.25)!important;isolation:isolate!important;touch-action:pan-y!important}\n.fc-audio-unified-v1280 audio{display:none!important}\n.fc-audio-unified-scene-v1280{position:absolute!important;inset:0!important;overflow:hidden!important;background:radial-gradient(ellipse 39% 68% at 50% 35%,rgba(255,151,53,.20) 0%,rgba(255,98,24,.10) 34%,transparent 67%),radial-gradient(ellipse 78% 38% at 50% 109%,rgba(255,86,20,.24),transparent 67%),linear-gradient(180deg,#0d0805 0%,#090503 54%,#020101 100%)!important}\n.fc-audio-unified-scene-v1280::before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(116deg,transparent 0 22%,rgba(255,179,96,.035) 23% 24%,transparent 25% 75%,rgba(255,179,96,.035) 76% 77%,transparent 78%),repeating-linear-gradient(90deg,transparent 0 11px,rgba(255,126,48,.018) 12px 13px);opacity:.85}\n.fc-audio-unified-scene-v1280::after{content:"";position:absolute;left:-8%;right:-8%;bottom:-21%;height:58%;pointer-events:none;background:radial-gradient(ellipse at 17% 90%,rgba(139,45,11,.34),transparent 42%),radial-gradient(ellipse at 83% 90%,rgba(139,45,11,.34),transparent 42%),linear-gradient(180deg,transparent,rgba(0,0,0,.70));clip-path:polygon(0 58%,8% 42%,14% 50%,21% 28%,30% 52%,38% 36%,50% 60%,62% 36%,70% 52%,79% 28%,86% 50%,92% 42%,100% 58%,100% 100%,0 100%);opacity:.92}\n.fc-audio-unified-halo-v1280{position:absolute!important;left:50%!important;top:39%!important;width:68%!important;height:122%!important;transform:translate(-50%,-50%)!important;border-radius:50%!important;border:1px solid rgba(255,129,38,.38)!important;box-shadow:0 0 28px rgba(255,90,18,.18),inset 0 0 34px rgba(255,92,20,.08)!important;pointer-events:none!important}\n.fc-audio-unified-logo-v1280{position:absolute!important;left:50%!important;top:36%!important;width:23%!important;max-width:108px!important;min-width:78px!important;aspect-ratio:1!important;transform:translate(-50%,-50%)!important;background-image:var(--fc-approved-crowned-f)!important;background-size:contain!important;background-position:center!important;background-repeat:no-repeat!important;filter:brightness(1.06) contrast(1.03) drop-shadow(0 10px 22px rgba(255,91,21,.24))!important;z-index:3!important;pointer-events:none!important}\n.fc-audio-unified-wave-v1280{position:absolute!important;left:4%!important;right:4%!important;top:58%!important;height:24%!important;z-index:4!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:.75%!important;pointer-events:none!important}\n.fc-audio-unified-wave-v1280::before{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:linear-gradient(90deg,transparent,rgba(255,122,34,.36) 10%,rgba(255,206,113,.88) 50%,rgba(255,122,34,.36) 90%,transparent);box-shadow:0 0 10px rgba(255,103,24,.35)}\n.fc-audio-unified-bar-v1280{flex:1 1 0!important;min-width:2px!important;max-width:5px!important;height:var(--fc-idle-v1280,28%)!important;border-radius:999px!important;background:linear-gradient(180deg,#ffe0a0 0%,#ffad45 42%,#ff6123 100%)!important;box-shadow:0 0 5px rgba(255,99,25,.58)!important;opacity:.74!important;transition:height .055s linear,opacity .18s ease!important}\n.fc-audio-unified-v1280.playing .fc-audio-unified-bar-v1280{opacity:1!important}\n.fc-audio-unified-v1280 .fcc-audio-btn{position:absolute!important;left:50%!important;top:59%!important;transform:translate(-50%,-50%)!important;z-index:8!important;width:62px!important;height:62px!important;min-width:62px!important;min-height:62px!important;max-width:62px!important;max-height:62px!important;border-radius:50%!important;border:1px solid rgba(255,255,255,.16)!important;background:linear-gradient(145deg,rgba(40,36,33,.96),rgba(7,6,6,.99) 70%)!important;box-shadow:0 12px 27px rgba(0,0,0,.54),inset 0 1px 0 rgba(255,255,255,.12)!important;backdrop-filter:blur(12px)!important;-webkit-backdrop-filter:blur(12px)!important;font-size:0!important;touch-action:manipulation!important}\n.fc-audio-unified-v1280 .fcc-audio-btn::before{content:""!important;display:block!important;width:0!important;height:0!important;background:transparent!important}\n.fc-audio-unified-v1280 .fcc-audio-btn[aria-label="Play audio"]::before{border-top:11px solid transparent!important;border-bottom:11px solid transparent!important;border-left:18px solid #fff!important;transform:translateX(3px)!important}\n.fc-audio-unified-v1280 .fcc-audio-btn[aria-label="Pause audio"]::before{width:20px!important;height:23px!important;border:0!important;border-radius:2px!important;background:linear-gradient(90deg,#fff 0 6px,transparent 6px 14px,#fff 14px 20px)!important;transform:none!important}\n.fc-audio-unified-v1280 .fcc-audio-btn:active{transform:translate(-50%,-50%) scale(.95)!important}\n.fc-audio-unified-time-v1280{position:absolute!important;bottom:5.3%!important;z-index:7!important;height:28px!important;min-width:58px!important;padding:0 9px!important;display:flex!important;align-items:center!important;justify-content:center!important;border-radius:11px!important;border:1px solid rgba(255,255,255,.14)!important;background:rgba(6,5,5,.80)!important;color:#f2eee9!important;font-size:12px!important;font-weight:750!important;line-height:1!important;font-variant-numeric:tabular-nums!important;backdrop-filter:blur(7px)!important;-webkit-backdrop-filter:blur(7px)!important}\n.fc-audio-unified-current-v1280{left:4%!important}.fc-audio-unified-total-v1280{right:4%!important}\n.fc-audio-unified-seek-v1280{position:absolute!important;left:18%!important;right:18%!important;bottom:10.2%!important;width:64%!important;height:3px!important;z-index:7!important;margin:0!important;accent-color:#ff6730!important;background:linear-gradient(90deg,#ff6730 0 var(--fc-audio-progress-v1123,0%),rgba(255,255,255,.24) var(--fc-audio-progress-v1123,0%) 100%)!important;border-radius:999px!important}\n.fc-audio-unified-seek-v1280::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:#ff6730;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.45)}\n.fc-audio-unified-mode-card-v1280 .fc-audio-unified-seek-v1280,.fc-audio-unified-mode-winner-v1280 .fc-audio-unified-seek-v1280{display:none!important}\n.fc-entry-rail-v1079 .fc-entry-stage-fixed-v1202 > .fcc-entry-media.fc-audio-unified-v1280,.fc-entry-rail-v1079 .fcc-entry-card .fcc-entry-media.fc-audio-unified-v1280,.fc-winner-audio-v1123 .fcc-entry-media.fc-audio-unified-v1280,.fc-v1195-winning-audio .fcc-entry-media.fc-audio-unified-v1280,.fc-ev-audio-v1123 .fcc-entry-media.fc-audio-unified-v1280,.cd-entry-media .fcc-entry-media.fc-audio-unified-v1280{width:100%!important;height:auto!important;min-height:0!important;max-height:none!important;aspect-ratio:16/9!important;padding:0!important}\n.fc-winner-audio-v1123,.fc-v1195-winning-audio{height:auto!important;min-height:0!important;max-height:none!important}\n@media(max-width:390px){.fc-audio-unified-v1280{border-radius:16px!important}.fc-audio-unified-logo-v1280{width:24%!important;min-width:70px!important}.fc-audio-unified-v1280 .fcc-audio-btn{width:56px!important;height:56px!important;min-width:56px!important;min-height:56px!important;max-width:56px!important;max-height:56px!important}.fc-audio-unified-time-v1280{height:26px!important;min-width:54px!important;font-size:11px!important}}\n</style>\n<script>window.FC_V1280_VALIDATION={build:"v1280",cleanLayeredAudio:true,sharedRendererModes:["card","winner","viewer","detail","winner-results","feed-viewer"],onePlayControl:true,oneWaveform:true,oneTimePair:true,noBakedPlayerArtwork:true,swipeStopPreserved:true,updateParserPreserved:true};</script>\n'''
+          if 'id="fc-v1280-unified-clean-audio"' in s: raise SystemExit('v1280 already applied')
+          if '</body>' not in s: raise SystemExit('body marker missing')
+          s=s.replace('</body>',css+'</body>',1)
+          p.write_text(s,encoding='utf-8')
+          PY
+          test "$(sha256sum index.html | awk '{print $1}')" = "95bb92585f82b8aac0a31b0807ca97e8b2ef8d6e4f988e81e60c81c45e9dc1e3"
+          test "$(git hash-object index.html)" = "84de1fd1b6363263a579a4f8b0009c5d6424795f"
+      - name: Validate inline JavaScript and CSS
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          import subprocess,tempfile,os,sys
+          html=Path('index.html').read_text(encoding='utf-8')
+          class P(HTMLParser):
+            def __init__(self): super().__init__(convert_charrefs=False); self.scripts=[]; self.styles=[]; self.tag=None; self.buf=[]; self.src=False
+            def handle_starttag(self,tag,attrs):
+              if tag=='script': self.tag='script'; self.buf=[]; self.src=any(k=='src' for k,v in attrs)
+              elif tag=='style': self.tag='style'; self.buf=[]; self.src=False
+            def handle_data(self,d):
+              if self.tag in ('script','style'): self.buf.append(d)
+            def handle_endtag(self,tag):
+              if tag==self.tag:
+                text=''.join(self.buf)
+                if tag=='script' and not self.src and text.strip(): self.scripts.append(text)
+                elif tag=='style': self.styles.append(text)
+                self.tag=None; self.buf=[]; self.src=False
+          p=P(); p.feed(html)
+          for i,code in enumerate(p.scripts):
+            f=tempfile.NamedTemporaryFile('w',suffix='.js',delete=False,encoding='utf-8'); f.write(code); f.close()
+            r=subprocess.run(['node','--check',f.name],capture_output=True,text=True); os.unlink(f.name)
+            if r.returncode: print(f'inline script {i} failed'); print(r.stderr); sys.exit(1)
+          def balanced(css):
+            depth=0;i=0;quote=None;comment=False
+            while i<len(css):
+              c=css[i]; n=css[i+1] if i+1<len(css) else ''
+              if comment:
+                if c=='*' and n=='/': comment=False;i+=2;continue
+                i+=1;continue
+              if quote:
+                if c=='\\': i+=2;continue
+                if c==quote: quote=None
+                i+=1;continue
+              if c=='/' and n=='*': comment=True;i+=2;continue
+              if c in ('"',"'"): quote=c;i+=1;continue
+              if c=='{': depth+=1
+              elif c=='}':
+                depth-=1
+                if depth<0:return False
+              i+=1
+            return depth==0
+          for i,style in enumerate(p.styles):
+            if not balanced(style): print(f'style block {i} failed'); sys.exit(2)
+          print(f'validated {len(p.scripts)} inline scripts and {len(p.styles)} style blocks')
+          PY
+          grep -q 'function _readMetaContentV1174' index.html
+          grep -q 'FC_UPDATE_PARSER_SELFTEST_V1174' index.html
+          grep -q 'fcPauseEntryCardMediaV1278' index.html
+          grep -q 'fc-audio-unified-v1280' index.html
+      - name: Commit v1280 and clean temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/v1280-trigger.txt .github/workflows/apply-v1280.yml
+          git config user.name "FlamesChallenge Build Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "Build v1280 unified clean audio renderer"
+          git push origin HEAD:main
