@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1274 · championship-edit-save-and-promotion-flow" name="fc-build"/>
+<meta content="v1274 · entry-save-touch-and-submit-hardening" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Fixed Championship Edit Save on iPhone with a direct pointer-to-form submission path, restored the gold Championship editor treatment, removed the redundant generic entry-rules card from Championship edits, clarified replacement review wording, hardened Championship Ember wording, and made Post to Feed navigate immediately with rapid duplicate protection." name="fc-whatsnew"/>
+<meta content="Fixed the persistent Championship Save Changes dead-tap path by removing the document-level hidden-nav pointer interception, making the entry form use explicit in-app validation instead of silent browser validation, routing the Save button directly through requestSubmit, showing immediate save progress, and making Championship Post to Feed navigate immediately after a successful post." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -9779,7 +9779,7 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
 <h2>Your Entry</h2>
 </div>
 <div class="cc-sheet-inner">
-<form class="cc-form" id="submitEntryForm">
+<form class="cc-form" id="submitEntryForm" novalidate>
 <div class="cc-field" id="seUploadField">
 <label>Your <span id="seMediaTypeLabel">photo</span></label>
 <div id="seTip" style="display:none;background:var(--surface-2);border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:12px;color:var(--text-muted);line-height:1.5;">
@@ -9820,7 +9820,7 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
   </label>
 </div>
 <div class="cc-submit-area">
-<button class="btn btn-primary" id="seSubmitActionV1274" style="width:100%" type="submit">🔥 Submit entry</button>
+<button class="btn btn-primary" id="seSubmitEntryBtnV1274" style="width:100%;touch-action:manipulation" type="submit" formnovalidate>🔥 Submit entry</button>
 <div style="text-align:center;margin-top:10px;font-size:11px;color:var(--text-muted)">By entering you agree to our <a onclick="openGuidelines()" style="color:var(--ember);cursor:pointer;text-decoration:underline">Community Guidelines</a> and <a onclick="openCompetitionRules('entering')" style="color:var(--ember);cursor:pointer;text-decoration:underline">Competition Rules</a></div>
 </div>
 </form>
@@ -12501,7 +12501,7 @@ function fcWirePrimaryNavFromChallengeV1207() {
     if (!button) return;
 
     const challengeSheet = document.getElementById('challengeDetailSheet');
-    const challengeOpen = challengeSheet?.classList.contains('open') || !!state.currentChallenge;
+    const challengeOpen = !!challengeSheet?.classList.contains('open');
     if (!challengeOpen) return;
 
     const targetView = button.dataset.view;
@@ -12566,9 +12566,19 @@ function fcWireDocumentChallengeNavV1209() {
 
   document.addEventListener('pointerdown', event => {
     const challengeOpen =
-      document.getElementById('challengeDetailSheet')?.classList.contains('open') ||
-      !!state.currentChallenge;
-    if (!challengeOpen) {
+      document.getElementById('challengeDetailSheet')?.classList.contains('open');
+    const nav = document.getElementById('bottomNav');
+
+    // v1274 — never infer a nav tap merely because the pointer happens to land
+    // inside the nav's old screen rectangle. During Entry Edit the nav is hidden
+    // but still has layout geometry; that was swallowing Save Changes on iPhone.
+    if (!challengeOpen || !nav || !nav.contains(event.target)) {
+      fcChampNavPointerStartV1209 = null;
+      return;
+    }
+
+    const cs = getComputedStyle(nav);
+    if (cs.visibility === 'hidden' || cs.display === 'none' || cs.pointerEvents === 'none' || Number(cs.opacity) === 0) {
       fcChampNavPointerStartV1209 = null;
       return;
     }
@@ -12585,9 +12595,12 @@ function fcWireDocumentChallengeNavV1209() {
     if (!start || start.pointerId !== event.pointerId) return;
 
     const challengeOpen =
-      document.getElementById('challengeDetailSheet')?.classList.contains('open') ||
-      !!state.currentChallenge;
-    if (!challengeOpen) return;
+      document.getElementById('challengeDetailSheet')?.classList.contains('open');
+    const nav = document.getElementById('bottomNav');
+    if (!challengeOpen || !nav || !nav.contains(event.target)) return;
+
+    const cs = getComputedStyle(nav);
+    if (cs.visibility === 'hidden' || cs.display === 'none' || cs.pointerEvents === 'none' || Number(cs.opacity) === 0) return;
 
     const target = fcChallengeNavTargetFromPointV1209(event.clientX, event.clientY);
     const moved = Math.hypot(event.clientX - start.x, event.clientY - start.y);
@@ -15637,63 +15650,45 @@ async function previewChampFlyer(chId) {
           challenge_id:chId,
         };
 
-        let recentV1274 = null;
-        try {
-          const recentResV1274 = await db.from('posts')
-            .select('id, created_at')
-            .eq('user_id', state.profile.id)
-            .eq('challenge_id', chId)
-            .eq('post_type', 'flyer')
-            .order('created_at', {ascending:false})
-            .limit(1)
-            .maybeSingle();
-          if (!recentResV1274.error && recentResV1274.data) {
-            const ageV1274 = Date.now() - new Date(recentResV1274.data.created_at).getTime();
-            if (Number.isFinite(ageV1274) && ageV1274 >= 0 && ageV1274 < 90000) {
-              recentV1274 = recentResV1274.data;
-            }
-          }
-        } catch (_) {}
-
-        let responseV1219;
-        if (recentV1274) {
-          responseV1219 = { data:{id:recentV1274.id}, error:null };
-        } else {
+        let responseV1219 = await db.from('posts').insert(postV1219).select('id').single();
+        if (responseV1219.error &&
+            (responseV1219.error.message?.includes('post_type') ||
+             responseV1219.error.message?.includes('challenge_id'))) {
+          delete postV1219.post_type;
+          delete postV1219.challenge_id;
           responseV1219 = await db.from('posts').insert(postV1219).select('id').single();
-          if (responseV1219.error &&
-              (responseV1219.error.message?.includes('post_type') ||
-               responseV1219.error.message?.includes('challenge_id'))) {
-            delete postV1219.post_type;
-            delete postV1219.challenge_id;
-            responseV1219 = await db.from('posts').insert(postV1219).select('id').single();
-          }
-          if (responseV1219.error) throw responseV1219.error;
         }
+        if (responseV1219.error) throw responseV1219.error;
 
         const postIdV1219 = responseV1219.data?.id;
-        toast(recentV1274 ? 'Championship is already on your feed' : 'Championship posted to your feed');
+
+        // v1274 — give an unmistakable success state and navigate first.
+        // Feed refresh happens after the visible navigation instead of making the
+        // user wait on the Championship screen and wonder whether the tap worked.
+        buttonV1219.textContent = 'Posted ✓';
+        toast('Championship posted to your feed');
         closeV1218();
         if (typeof closeChallengeDetail === 'function') closeChallengeDetail();
-
-        // Move first; refresh second. A successful post must visibly leave the
-        // promotion surface instead of looking as if the button did nothing.
         if (typeof switchView === 'function') switchView('feed');
 
-        Promise.resolve(typeof loadPosts === 'function' ? loadPosts() : null)
-          .then(() => {
-            if (state?._fcDirtyViewsV1118) state._fcDirtyViewsV1118.feed = true;
-            if (state?.currentView === 'feed' && typeof renderFeed === 'function') renderFeed();
-            if (postIdV1219 && typeof scrollToPost === 'function') {
-              requestAnimationFrame(() => scrollToPost(postIdV1219));
-            }
-          })
-          .catch(error => console.warn('Championship feed refresh after post', error));
+        try {
+          if (typeof loadPosts === 'function') await loadPosts();
+          if (typeof renderFeed === 'function') renderFeed();
+        } catch (refreshErrorV1274) {
+          console.warn('Championship feed refresh after post', refreshErrorV1274);
+        }
+
+        if (postIdV1219 && typeof scrollToPost === 'function') {
+          requestAnimationFrame(() => scrollToPost(postIdV1219));
+        }
       } catch (errorV1219) {
         console.error('championship post to feed', errorV1219);
         toast('Could not post Championship to Feed');
       } finally {
-        buttonV1219.disabled = false;
-        buttonV1219.textContent = originalV1219;
+        if (buttonV1219.isConnected) {
+          buttonV1219.disabled = false;
+          buttonV1219.textContent = originalV1219;
+        }
       }
     };
 
@@ -23612,6 +23607,7 @@ let seState = {
   uploadAbortController: null,
   uploadCancelRequested: false,
   closeAfterCancel: false,
+  submitInFlightV1274: false,
 };
 
 function fcEntryUploadAbortErrorV1135() {
@@ -24921,11 +24917,6 @@ async function openSubmitEntry(entryToEdit = null) {
 
   seState.editingEntry = entryToEdit;
 
-  const submitSheetV1274 = document.getElementById('submitEntrySheet');
-  if (submitSheetV1274) {
-    submitSheetV1274.classList.toggle('fc-champ-entry-editor-v1274', !!ch.is_championship);
-  }
-
   // Reset form
   document.getElementById('submitEntryForm').reset();
   clearSubmitEntryPreview();
@@ -25043,7 +25034,6 @@ function removeCurrentEntryMedia() {
 }
 
 function closeSubmitEntry() {
-  document.getElementById('submitEntrySheet')?.classList.remove('fc-champ-entry-editor-v1274');
   if (seState.uploadInProgress) {
     cancelEntryUploadV1135(true);
     return;
@@ -25174,14 +25164,28 @@ function seFileChangeHandler(e) {
 
 document.getElementById('submitEntryForm').addEventListener('submit', async (e) => {
   e.preventDefault();
+
+  // v1274 — one write at a time. The explicit button activation + native form
+  // event can never create duplicate entry writes.
+  if (seState.submitInFlightV1274) return;
+
   const ch = state.currentChallenge;
-  if (!ch || !state.profile) return;
+  const errBox = document.getElementById('seError');
+  const btn = e.target.querySelector('button[type="submit"]');
+
+  if (!ch || !state.profile) {
+    if (errBox) {
+      errBox.textContent = 'This entry screen lost its challenge context. Close it and reopen the Championship.';
+      errBox.classList.add('show');
+    }
+    if (typeof toast === 'function') toast('Could not save — reopen the Championship and try again.');
+    return;
+  }
   // Context guard (v618): if editing state somehow belongs to another challenge,
   // drop it — an update must never cross challenges.
   if (seState.editingEntry && seState.editingEntry.challenge_id && seState.editingEntry.challenge_id !== ch.id) {
     seState.editingEntry = null;
   }
-  const errBox = document.getElementById('seError');
   errBox.classList.remove('show');
 
   const caption = document.getElementById('seCaption').value.trim();
@@ -25219,10 +25223,17 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
     errBox.textContent = 'Sudden Death submission window has closed.'; errBox.classList.add('show'); return;
   }
 
-  const btn = e.target.querySelector('button[type="submit"]');
-  const orig = btn.textContent;
+  const orig = btn?.textContent || (seState.editingEntry ? 'Save Changes' : 'Submit Entry');
+  if (!btn) {
+    errBox.textContent = 'Save control is unavailable. Close this screen and reopen it.';
+    errBox.classList.add('show');
+    return;
+  }
+
+  seState.submitInFlightV1274 = true;
   btn.disabled = true;
-  btn.textContent = seState.editingEntry ? 'Checking changes…' : 'Checking entry…';
+  btn.setAttribute('aria-busy','true');
+  btn.textContent = seState.editingEntry ? 'Saving…' : 'Submitting…';
   fcPauseEntryPreviewV1135();
   seState.uploadAbortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
   seState.uploadCancelRequested = false;
@@ -25252,6 +25263,9 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
           : 'You already have an entry in this challenge. Tap ✏️ Edit on your entry to change it.';
         errBox.classList.add('show');
         btn.disabled = false;
+        btn.removeAttribute('aria-busy');
+        btn.textContent = orig;
+        seState.submitInFlightV1274 = false;
         return;
       }
     } catch (dupErr) { console.warn('dup entry check', dupErr); /* non-fatal — DB constraint still guards */ }
@@ -25263,6 +25277,9 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
         errBox.textContent = `This challenge is full (${MAX_ENTRIES_PER_CHALLENGE} entries max). No more entries can be added.`;
         errBox.classList.add('show');
         btn.disabled = false;
+        btn.removeAttribute('aria-busy');
+        btn.textContent = orig;
+        seState.submitInFlightV1274 = false;
         return;
       }
     } catch (capErr) { console.warn('entry cap check', capErr); /* non-fatal */ }
@@ -25284,7 +25301,8 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
       if (!dupErr2 && dupMedia && dupMedia.length) {
         errBox.textContent = 'That exact media is already entered in this challenge. Please submit something original.';
         errBox.classList.add('show');
-        btn.disabled = false; btn.textContent = orig;
+        btn.disabled = false; btn.removeAttribute('aria-busy'); btn.textContent = orig;
+        seState.submitInFlightV1274 = false;
         return;
       }
     } catch (mhErr) { console.warn('media hash check', mhErr); seState._mediaHash = seState._mediaHash || null; }
@@ -25294,7 +25312,8 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
     // Moderate any text the user wrote (caption or text-entry body) before upload.
     const seModText = (ch.media_type === 'text' ? textEntry : (caption || '')).trim();
     if (seModText && !await moderateText(seModText, 'entry')) {
-      btn.disabled = false; btn.textContent = orig;
+      btn.disabled = false; btn.removeAttribute('aria-busy'); btn.textContent = orig;
+      seState.submitInFlightV1274 = false;
       if (_slowTipTimer) clearTimeout(_slowTipTimer);
       return;
     }
@@ -25370,7 +25389,8 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
             await fcCleanupUploadedAssetV1101(uploadedEntryAssetV1101);
             uploadedEntryAssetV1101 = null;
             if (_slowTipTimer) { clearTimeout(_slowTipTimer); _slowTipTimer = null; }
-            btn.disabled = false; btn.textContent = orig;
+            btn.disabled = false; btn.removeAttribute('aria-busy'); btn.textContent = orig;
+            seState.submitInFlightV1274 = false;
             return;
           }
         }
@@ -25506,7 +25526,10 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
     }
   } finally {
     const closeAfterCancelV1135 = seState.closeAfterCancel;
-    btn.disabled = false; btn.textContent = orig;
+    btn.disabled = false;
+    btn.removeAttribute('aria-busy');
+    btn.textContent = orig;
+    seState.submitInFlightV1274 = false;
     if (_slowTipTimer) clearTimeout(_slowTipTimer);
     const st = document.getElementById('seSlowTip'); if (st) st.style.display = 'none';
     fcSetEntryUploadBusyV1135(false);
@@ -43118,7 +43141,7 @@ html[data-theme="light"] body .nav-icon-btn:active{
     entry:Object.freeze({
       withdrawal:'You may edit or withdraw your own entry only while that round’s submission window is open. Once voting begins, self-service editing and withdrawal close.',
       hostDelete:'A host may delete a challenge only while entries are open and before another member has entered. Administrators may remove a challenge for safety or integrity reasons.',
-      moderation:'Photo replacements are checked before they go live. Video replacements return to automated review.',
+      moderation:'Replacement photos are checked before the change is saved. Replacement videos return to review before they go public.',
       noContest:'If fewer than two competitors remain when the result is settled, the challenge is a no-contest. No winner and no Championship Score are awarded.'
     }),
     voting:Object.freeze({
@@ -44834,7 +44857,7 @@ body.theme-light .fc-preparing-media-v1120,html[data-theme="light"] body .fc-pre
     return entriesFor(challenge).find(entry=>String(entry?.user_id||'')===String(uid))||null;
   }
   function scoreRead(challenge){
-    if(challenge?.is_championship || /\bchampionship\b/i.test(String(challenge?.title || '')))return 'Championship rounds do not add Championship Score.';
+    if(challenge?.is_championship)return 'Championship rounds do not add Championship Score.';
     if(challenge?.is_public===false)return 'This is a private challenge, so it does not add Championship Score.';
     const count=approvedEntries(challenge).length;
     if(count<2){
@@ -44867,7 +44890,6 @@ body.theme-light .fc-preparing-media-v1120,html[data-theme="light"] body .fc-pre
     const q=normalize(question);
     if(!q)return null;
     const title=escText(challenge.title)||'this challenge';
-    const isChampionshipV1274 = !!challenge.is_championship || /\bchampionship\b/i.test(title);
     const status=phase(challenge);
     const entries=approvedEntries(challenge);
     const mine=myEntry(challenge);
@@ -44895,12 +44917,12 @@ body.theme-light .fc-preparing-media-v1120,html[data-theme="light"] body .fc-pre
     if(/what happens next|what should happen next|what matters next|next step|what can i do now/.test(q)){
       if(mine&&['pending','flagged','escalated'].includes(moderation))return `Your entry in “${title}” is getting ready. You can leave this screen, and you may still edit or withdraw before entries close${submissions?` on ${submissions}`:''}.`;
       if(status==='submitting'){
-        if(isChampionshipV1274){
+        if(challenge.is_championship){
           if(mine)return `Your Championship entry in “${title}” can be edited until entries close${submissions?` on ${submissions}`:''}. After that, voting begins. Championship rounds award titles, not Championship Score.`;
           if(typeof canEnterChampionship==='function'&&canEnterChampionship(challenge))return `Your Championship spot is confirmed. Submit your entry${submissions?` by ${submissions}`:''}. After entries close, voting begins.`;
           return `Championship entries for “${title}” close${submissions?` on ${submissions}`:''}. Only qualified competitors with accepted invitations can enter.`;
         }
-        return `“${title}” is open for entries${submissions?` until ${submissions}`:''}. After entries close, entries move to voting. ${scoreRead(challenge)}`;
+        return `“${title}” is open for entries${submissions?` until ${submissions}`:''}. After entries close, approved entries move to voting. ${scoreRead(challenge)}`;
       }
       if(status==='championship_pending')return `Voting is closed for “${title}.” The ballots are locked, and the Championship result will be revealed ${challenge.championship_announce_at?fcChampionshipAnnouncementLabelV1268(challenge):'at 8:00 PM ET'}.`;
       if(status==='voting'||status==='sudden_death')return `Voting is open for “${title}”${voting?` until ${voting}`:''}. The final ballots determine the result.`;
@@ -49206,110 +49228,64 @@ window.FC_V1273_VALIDATION={
 
 
 
-<script id="fc-v1274-entry-save-touch">
-(function initEntrySaveTouchV1274(){
+<script id="fc-v1274-entry-submit-activation">
+(function initEntrySubmitActivationV1274(){
   'use strict';
+
   const form = document.getElementById('submitEntryForm');
-  const button = document.getElementById('seSubmitActionV1274');
+  const button = document.getElementById('seSubmitEntryBtnV1274');
   if (!form || !button) return;
 
-  let pointerSubmitAt = 0;
+  form.noValidate = true;
 
-  button.addEventListener('pointerup', event => {
+  // Track whether a real submit event was dispatched. This makes the fallback
+  // measurable and prevents a second request if Safari already submitted normally.
+  form.addEventListener('submit', () => {
+    form.dataset.fcSubmitEventAtV1274 = String(performance.now());
+  }, true);
+
+  button.addEventListener('click', event => {
     if (button.disabled) return;
-    pointerSubmitAt = Date.now();
 
-    // iOS can lose the synthetic click when older sheet/card touch handlers are
-    // active. Submit the actual form on pointerup, through the existing handler.
+    // We own validation in the application submit handler. Prevent Safari from
+    // running native hidden-control validation and explicitly dispatch submit.
     event.preventDefault();
     event.stopPropagation();
 
+    const before = Number(form.dataset.fcSubmitEventAtV1274 || 0);
     try {
       form.requestSubmit(button);
     } catch (_) {
       form.dispatchEvent(new Event('submit', { bubbles:true, cancelable:true }));
     }
-  }, { capture:true });
 
-  button.addEventListener('click', event => {
-    if (Date.now() - pointerSubmitAt < 800) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
+    // Defensive fallback for older iOS/WKWebView requestSubmit quirks.
+    queueMicrotask(() => {
+      const after = Number(form.dataset.fcSubmitEventAtV1274 || 0);
+      if (after <= before) {
+        form.dispatchEvent(new Event('submit', { bubbles:true, cancelable:true }));
+      }
+    });
   }, true);
 })();
 </script>
 
 
 
-<style id="fc-v1274-championship-entry-editor">
-#submitEntrySheet.fc-champ-entry-editor-v1274{
-  --champ-edit-gold:#dfae42;
-  --champ-edit-gold-hi:#ffe79a;
-  --champ-edit-ink:#171004;
-  background:
-    radial-gradient(circle at 50% 0%,rgba(176,103,17,.14),transparent 26%),
-    #0b0805!important;
-}
-#submitEntrySheet.fc-champ-entry-editor-v1274 .cc-sheet-header{
-  background:#0d0906!important;
-  border-bottom-color:rgba(220,169,61,.22)!important;
-}
-#submitEntrySheet.fc-champ-entry-editor-v1274 .cc-sheet-header h2{
-  color:#f4e4b2!important;
-}
-#submitEntrySheet.fc-champ-entry-editor-v1274 .cc-upload{
-  border-color:rgba(222,174,66,.72)!important;
-  background:rgba(124,78,14,.07)!important;
-}
-#submitEntrySheet.fc-champ-entry-editor-v1274 .cc-field>label,
-#submitEntrySheet.fc-champ-entry-editor-v1274 .cc-field>label span{
-  color:#cbb98e!important;
-}
-#submitEntrySheet.fc-champ-entry-editor-v1274 .fc-sug-btn{
-  border-color:rgba(223,174,66,.30)!important;
-  color:#dcb04c!important;
-  box-shadow:0 0 14px rgba(219,158,38,.10)!important;
-}
-/* Championship qualification already established the competition rules. Do not
-   repeat the generic "Before you enter" card inside this focused edit sheet. */
-#submitEntrySheet.fc-champ-entry-editor-v1274 #fcEntryRulesV1047{
-  display:none!important;
-}
-#submitEntrySheet.fc-champ-entry-editor-v1274 .cc-submit-area{
-  z-index:12!important;
-  margin-top:20px!important;
-  padding-top:24px!important;
-  background:
-    linear-gradient(180deg,rgba(11,8,5,0),rgba(11,8,5,.96) 27%,#0b0805 48%)!important;
-}
-#submitEntrySheet.fc-champ-entry-editor-v1274 #seSubmitActionV1274{
-  min-height:58px!important;
-  border:1px solid rgba(255,232,160,.70)!important;
-  background:
-    linear-gradient(180deg,rgba(255,255,255,.28),rgba(255,255,255,0) 34%),
-    linear-gradient(135deg,#634006 0%,#bd8321 23%,#ffe797 50%,#d6a034 70%,#704607 100%)!important;
-  color:var(--champ-edit-ink)!important;
-  font-weight:900!important;
-  text-shadow:none!important;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.58),
-    inset 0 -4px 9px rgba(78,44,2,.26),
-    0 10px 26px rgba(0,0,0,.28)!important;
-}
-#submitEntrySheet.fc-champ-entry-editor-v1274 #seSubmitActionV1274:disabled{
-  opacity:.72!important;
-}
-#submitEntrySheet.fc-champ-entry-editor-v1274 #submitEntryForm{
-  padding-bottom:76px!important;
-}
-#submitEntrySheet.fc-champ-entry-editor-v1274 .cc-preview{
-  border-color:rgba(218,164,55,.24)!important;
-}
-#submitEntrySheet #seError.show{
+<style id="fc-v1274-entry-save-touch-css">
+#submitEntrySheet #seSubmitEntryBtnV1274{
   position:relative!important;
-  z-index:20!important;
-  margin:10px 0 14px!important;
+  z-index:6!important;
+  pointer-events:auto!important;
+  -webkit-tap-highlight-color:rgba(255,220,120,.14)!important;
+  touch-action:manipulation!important;
+}
+#submitEntrySheet #seSubmitEntryBtnV1274[aria-busy="true"]{
+  cursor:wait!important;
+  opacity:.94!important;
+}
+body:has(#submitEntrySheet.open) #challengeDetailSheet{
+  pointer-events:none!important;
 }
 </style>
 
@@ -49318,23 +49294,22 @@ window.FC_V1273_VALIDATION={
 <script>
 window.FC_V1274_VALIDATION={
   build:"v1274",
-  directPointerSavePath:true,
-  authoritativeFormSubmitPreserved:true,
-  saveImmediateFeedback:true,
-  championshipEditorGold:true,
-  championshipGenericRuleCardRemoved:true,
-  replacementModerationCopyClear:true,replacementModerationCopyMatchesActualPaths:true,
-  emberChampionshipFallbackHardened:true,
-  promotionNavigatesImmediately:true,
-  promotionRapidDuplicateGuard:true,
-  approvedV1249ChampionshipDetailPreserved:true,
+  fullEntrySavePathAudited:true,
+  oneSubmitHandler:true,
+  nativeValidationDisabled:true,
+  explicitRequestSubmit:true,
+  hiddenNavPointerInterceptionRemoved:true,
+  challengeNavRequiresVisibleRealTarget:true,
+  immediateSavingFeedback:true,
+  duplicateSubmitGuard:true,
+  replacementPhotoModerationPreserved:true,
+  replacementVideoReviewPreserved:true,
+  championshipPostNavigatesImmediately:true,
+  approvedChampionshipDetailPreserved:true,
   v1273RoutingPreserved:true,
   v1272StateRecoveryPreserved:true,
-  v1271InstantResponsePreserved:true,
+  v1271PerformanceFixesPreserved:true,
   v1270ReplacementRecoveryPreserved:true,
-  midnightDeadlinePolicyPreserved:true,
-  eightPmAnnouncementPreserved:true,
-  videoPauseFixPreserved:true,
   updaterPreserved:true
 };
 </script>
