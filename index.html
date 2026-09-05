@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1280 · unified-clean-audio-renderer" name="fc-build"/>
+<meta content="v1281 · physical-pull-to-refresh" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Replaced the layered audio player with one clean shared 16:9 renderer across Home, winners, Challenge Detail, and entry viewers: one sharp Crowned F, one live waveform, one play control, one time pair, and preserved swipe-stop playback." name="fc-whatsnew"/>
+<meta content="Added a real physical pull-to-refresh gesture with visible drag, release threshold, spinner, success state, and confirmed data reload on Home, Compete, and Titles instead of relying on invisible iOS/PWA overscroll." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -49900,5 +49900,50 @@ window.FC_V1274_VALIDATION={
 @media(max-width:390px){.fc-audio-unified-v1280{border-radius:16px!important}.fc-audio-unified-logo-v1280{width:24%!important;min-width:70px!important}.fc-audio-unified-v1280 .fcc-audio-btn{width:56px!important;height:56px!important;min-width:56px!important;min-height:56px!important;max-width:56px!important;max-height:56px!important}.fc-audio-unified-time-v1280{height:26px!important;min-width:54px!important;font-size:11px!important}}
 </style>
 <script>window.FC_V1280_VALIDATION={build:"v1280",cleanLayeredAudio:true,sharedRendererModes:["card","winner","viewer","detail","winner-results","feed-viewer"],onePlayControl:true,oneWaveform:true,oneTimePair:true,noBakedPlayerArtwork:true,swipeStopPreserved:true,updateParserPreserved:true};</script>
+
+<style id="fc-v1281-physical-pull-refresh-css">
+html,body{overscroll-behavior-y:contain!important}
+#fcPullRefreshV1281{position:fixed;top:calc(var(--nav-h) + 8px);left:50%;z-index:91;display:flex;align-items:center;gap:9px;min-height:38px;padding:7px 12px 7px 8px;border:1px solid rgba(255,121,55,.26);border-radius:999px;background:rgba(13,8,6,.92);color:#f4eee9;box-shadow:0 10px 28px rgba(0,0,0,.34),0 0 24px rgba(255,83,25,.10);backdrop-filter:blur(16px) saturate(130%);-webkit-backdrop-filter:blur(16px) saturate(130%);opacity:0;transform:translate3d(-50%,-20px,0) scale(.94);pointer-events:none;transition:opacity .16s ease,transform .16s ease,border-color .16s ease;will-change:transform,opacity}
+body.fc-ptr-visible-v1281 #fcPullRefreshV1281{opacity:1;transform:translate3d(-50%,0,0) scale(1)}
+#fcPullRefreshV1281 .fc-ptr-icon-v1281{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(145deg,rgba(255,109,43,.22),rgba(255,64,25,.08));border:1px solid rgba(255,129,65,.28);color:#ff7138;font-size:17px;font-weight:900;line-height:1;transform:rotate(0);transition:transform .16s ease,background .16s ease}
+#fcPullRefreshV1281 .fc-ptr-copy-v1281{display:flex;flex-direction:column;gap:0;line-height:1.05}
+#fcPullRefreshV1281 .fc-ptr-copy-v1281 strong{font:750 12px/1.1 var(--font-ui);letter-spacing:.01em;color:#fff}
+#fcPullRefreshV1281 .fc-ptr-copy-v1281 span{font:650 9px/1.15 var(--font-ui);letter-spacing:.06em;text-transform:uppercase;color:#a9988d;margin-top:3px}
+body.fc-ptr-armed-v1281 #fcPullRefreshV1281{border-color:rgba(255,124,52,.52)}
+body.fc-ptr-armed-v1281 #fcPullRefreshV1281 .fc-ptr-icon-v1281{transform:rotate(180deg);background:rgba(255,92,31,.18)}
+body.fc-ptr-refreshing-v1281 #fcPullRefreshV1281 .fc-ptr-icon-v1281{color:transparent;border-color:rgba(255,120,52,.20);border-top-color:#ff6b2e;background:transparent;animation:fcPtrSpinV1281 .72s linear infinite}
+body.fc-ptr-done-v1281 #fcPullRefreshV1281 .fc-ptr-icon-v1281{color:#fff;background:linear-gradient(145deg,#ff7436,#ff3b24);border-color:transparent;transform:none}
+body.fc-ptr-error-v1281 #fcPullRefreshV1281{border-color:rgba(255,77,92,.48)}
+body.fc-ptr-error-v1281 #fcPullRefreshV1281 .fc-ptr-icon-v1281{color:#ff6875;background:rgba(255,65,85,.10);border-color:rgba(255,79,96,.30);transform:none}
+@keyframes fcPtrSpinV1281{to{transform:rotate(360deg)}}
+#feedView.fc-ptr-surface-v1281,#challengesViewSection.fc-ptr-surface-v1281,#leaderboardViewSection.fc-ptr-surface-v1281,#pollsViewSection.fc-ptr-surface-v1281{will-change:transform;transform:translate3d(0,var(--fc-ptr-y-v1281,0px),0)}
+body.fc-ptr-releasing-v1281 .fc-ptr-surface-v1281{transition:transform .28s cubic-bezier(.2,.8,.2,1)!important}
+body.fc-ptr-refreshing-v1281 .fc-ptr-surface-v1281{transition:transform .18s ease-out!important}
+@media(prefers-reduced-motion:reduce){#fcPullRefreshV1281,.fc-ptr-surface-v1281{transition:none!important}body.fc-ptr-refreshing-v1281 #fcPullRefreshV1281 .fc-ptr-icon-v1281{animation-duration:1.2s}}
+</style>
+<script id="fc-v1281-physical-pull-refresh-js">
+(function(){
+'use strict';
+const THRESHOLD=62,HOLD=46,MAX_PULL=96;
+const ptr={startY:0,startX:0,eligible:false,pulling:false,armed:false,refreshing:false,surface:null};
+function ui(){let el=document.getElementById('fcPullRefreshV1281');if(el)return el;el=document.createElement('div');el.id='fcPullRefreshV1281';el.setAttribute('role','status');el.setAttribute('aria-live','polite');el.innerHTML='<div class="fc-ptr-icon-v1281" aria-hidden="true">↓</div><div class="fc-ptr-copy-v1281"><strong>Pull to refresh</strong><span>Drag down</span></div>';document.body.appendChild(el);return el}
+function copy(title,sub,icon){const el=ui(),a=el.querySelector('strong'),b=el.querySelector('span'),c=el.querySelector('.fc-ptr-icon-v1281');if(a)a.textContent=title;if(b)b.textContent=sub||'';if(c&&icon!=null)c.textContent=icon}
+function atTop(){const root=document.scrollingElement||document.documentElement;return(window.scrollY||root.scrollTop||0)<=1}
+function surface(){const map={feed:'feedView',challenges:'challengesViewSection',leaderboard:'leaderboardViewSection',polls:'pollsViewSection'},id=map[state.currentView],el=id?document.getElementById(id):null;return el&&getComputedStyle(el).display!=='none'?el:null}
+function blocked(t){if(!t)return true;if(t.closest('input,textarea,select,[contenteditable="true"],.fc-audio-seek-v1123'))return true;return!!document.querySelector('.modal-backdrop.show,.modal-backdrop.open,.cc-sheet.open,.cd-sheet.open,.entry-viewer.open,.entrants-sheet.open,.ember-assistant-sheet.open,.user-profile-modal.open')}
+function setY(y){if(!ptr.surface)return;ptr.surface.classList.add('fc-ptr-surface-v1281');ptr.surface.style.setProperty('--fc-ptr-y-v1281',Math.max(0,y).toFixed(1)+'px')}
+function clearBody(){document.body.classList.remove('fc-ptr-visible-v1281','fc-ptr-armed-v1281','fc-ptr-refreshing-v1281','fc-ptr-done-v1281','fc-ptr-error-v1281','fc-ptr-releasing-v1281')}
+function reset(){if(ptr.surface){ptr.surface.style.removeProperty('--fc-ptr-y-v1281');ptr.surface.classList.remove('fc-ptr-surface-v1281')}ptr.surface=null;ptr.eligible=false;ptr.pulling=false;ptr.armed=false}
+function release(){if(!ptr.pulling){reset();return}document.body.classList.remove('fc-ptr-armed-v1281');document.body.classList.add('fc-ptr-releasing-v1281');setY(0);setTimeout(()=>{clearBody();reset();copy('Pull to refresh','Drag down','↓')},300)}
+async function refreshView(){const v=state.currentView;if(v==='feed'){await Promise.all([typeof loadChallenges==='function'?loadChallenges({throwOnError:true}):Promise.resolve(),typeof loadFeedActivity==='function'?loadFeedActivity({throwOnError:true}):Promise.resolve(),typeof loadPosts==='function'?loadPosts():Promise.resolve()]);if(typeof renderFeedHello==='function')renderFeedHello();if(typeof renderHeatCheck==='function')renderHeatCheck();if(typeof renderFeed==='function')renderFeed();if(typeof wireWinnerReveals==='function')requestAnimationFrame(()=>setTimeout(()=>wireWinnerReveals(),80));return}if(v==='challenges'){await Promise.all([typeof loadChallenges==='function'?loadChallenges({throwOnError:true}):Promise.resolve(),typeof loadFeedActivity==='function'?loadFeedActivity({throwOnError:true}):Promise.resolve()]);if(typeof renderChallenges==='function')renderChallenges();return}if(v==='leaderboard'){await Promise.all([typeof loadChampionshipData==='function'?loadChampionshipData():Promise.resolve(),typeof loadLeaderboard==='function'?loadLeaderboard():Promise.resolve(),typeof loadMyRecord==='function'?loadMyRecord():Promise.resolve()]);state._leaderboardStale=false;if(typeof renderLeaderboard==='function')renderLeaderboard();if(typeof buildTicker==='function')buildTicker();return}if(v==='polls'){if(typeof liveTick==='function')await liveTick();if(typeof renderPolls==='function')renderPolls()}}
+async function perform(){if(ptr.refreshing)return;ptr.refreshing=true;document.body.classList.remove('fc-ptr-armed-v1281','fc-ptr-releasing-v1281');document.body.classList.add('fc-ptr-visible-v1281','fc-ptr-refreshing-v1281');copy('Refreshing…','Getting the latest','');setY(HOLD);try{await refreshView();document.body.classList.remove('fc-ptr-refreshing-v1281');document.body.classList.add('fc-ptr-done-v1281');copy('Updated','You’re current','✓');await new Promise(r=>setTimeout(r,360))}catch(e){console.error('[v1281] pull refresh failed',e);document.body.classList.remove('fc-ptr-refreshing-v1281');document.body.classList.add('fc-ptr-error-v1281');copy('Couldn’t refresh','Try again','!');await new Promise(r=>setTimeout(r,650))}finally{document.body.classList.add('fc-ptr-releasing-v1281');setY(0);await new Promise(r=>setTimeout(r,290));ptr.refreshing=false;clearBody();reset();copy('Pull to refresh','Drag down','↓')}}
+function start(e){if(ptr.refreshing||e.touches?.length!==1||!atTop()||blocked(e.target))return;const s=surface();if(!s)return;const t=e.touches[0];ptr.startY=t.clientY;ptr.startX=t.clientX;ptr.surface=s;ptr.eligible=true;ptr.pulling=false;ptr.armed=false}
+function move(e){if(!ptr.eligible||ptr.refreshing||e.touches?.length!==1)return;const t=e.touches[0],dy=t.clientY-ptr.startY,dx=t.clientX-ptr.startX;if(dy<=0){if(ptr.pulling)release();else reset();return}if(Math.abs(dx)>Math.abs(dy)*.85&&Math.abs(dx)>10){reset();return}if(!atTop()&&!ptr.pulling){reset();return}if(dy<5)return;if(e.cancelable)e.preventDefault();ptr.pulling=true;const visual=Math.min(MAX_PULL,Math.pow(dy,.82)*1.18),armed=visual>=THRESHOLD;if(armed!==ptr.armed){ptr.armed=armed;document.body.classList.toggle('fc-ptr-armed-v1281',armed);copy(armed?'Release to refresh':'Pull to refresh',armed?'Let go':'Keep pulling',armed?'↑':'↓')}document.body.classList.add('fc-ptr-visible-v1281');setY(visual)}
+function end(){if(ptr.refreshing)return;if(!ptr.eligible&&!ptr.pulling)return;if(ptr.pulling&&ptr.armed)perform();else release()}
+ui();document.addEventListener('touchstart',start,{passive:true});document.addEventListener('touchmove',move,{passive:false});document.addEventListener('touchend',end,{passive:true});document.addEventListener('touchcancel',()=>{if(!ptr.refreshing)release()},{passive:true});
+window.FC_V1281_VALIDATION={build:'v1281',physicalDrag:true,releaseThreshold:true,visibleSpinner:true,successState:true,feedRefresh:true,competeRefresh:true,titlesRefresh:true,pwaNativeOverscrollDependencyRemoved:true};
+})();
+</script>
+
 </body>
 </html>
