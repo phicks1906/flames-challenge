@@ -1,0 +1,117 @@
+name: Apply v1282 modern pull refresh
+on:
+  push:
+    branches: [main]
+    paths: ['.github/v1282-trigger.txt']
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Apply v1282 transform
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object index.html)" = "30d6c9924cdcff0c24f686bd275bc1806d40fff1"
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          old='<meta content="v1281 · physical-pull-to-refresh" name="fc-build"/>'
+          new='<meta content="v1282 · modern-pull-to-refresh" name="fc-build"/>'
+          if s.count(old)!=1: raise SystemExit(f'build marker count {s.count(old)}')
+          s=s.replace(old,new,1)
+          old2='<meta content="Added a real physical pull-to-refresh gesture with visible drag, release threshold, spinner, success state, and confirmed data reload on Home, Compete, and Titles instead of relying on invisible iOS/PWA overscroll." name="fc-whatsnew"/>'
+          new2='<meta content="Refined pull-to-refresh into a compact native-feeling interaction: less page travel, a small progress ring, spinner, brief checkmark confirmation, threshold haptic where supported, and the same confirmed data reload." name="fc-whatsnew"/>'
+          if s.count(old2)!=1: raise SystemExit(f'whatsnew marker count {s.count(old2)}')
+          s=s.replace(old2,new2,1)
+          start=s.index('<style id="fc-v1281-physical-pull-refresh-css">')
+          script_start=s.index('<script id="fc-v1281-physical-pull-refresh-js">',start)
+          end=s.index('</script>',script_start)+len('</script>')
+          block=Path('.github/v1282-block.txt').read_text(encoding='utf-8')
+          if 'fc-v1282-modern-pull-refresh-js' not in block: raise SystemExit('staged v1282 block invalid')
+          s=s[:start]+block+s[end:]
+          p.write_text(s,encoding='utf-8')
+          PY
+          test "$(sha256sum index.html | awk '{print $1}')" = "408b60b0c4030736e2e95caa02db9b579a046a2da68582d40cf3ab5d96f86157"
+          test "$(git hash-object index.html)" = "4917e6ed3b33b271c58e5be162cd3c2eecaf79bf"
+      - name: Validate inline JavaScript and CSS
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          import subprocess,tempfile,os,sys,re
+          html=Path('index.html').read_text(encoding='utf-8')
+          class P(HTMLParser):
+            def __init__(self): super().__init__(convert_charrefs=False); self.scripts=[]; self.styles=[]; self.tag=None; self.buf=[]; self.src=False
+            def handle_starttag(self,tag,attrs):
+              if tag=='script': self.tag='script'; self.buf=[]; self.src=any(k=='src' for k,v in attrs)
+              elif tag=='style': self.tag='style'; self.buf=[]; self.src=False
+            def handle_data(self,d):
+              if self.tag in ('script','style'): self.buf.append(d)
+            def handle_endtag(self,tag):
+              if tag==self.tag:
+                text=''.join(self.buf)
+                if tag=='script' and not self.src and text.strip(): self.scripts.append(text)
+                elif tag=='style': self.styles.append(text)
+                self.tag=None; self.buf=[]; self.src=False
+          p=P(); p.feed(html)
+          for i,code in enumerate(p.scripts):
+            f=tempfile.NamedTemporaryFile('w',suffix='.js',delete=False,encoding='utf-8');f.write(code);f.close()
+            r=subprocess.run(['node','--check',f.name],capture_output=True,text=True);os.unlink(f.name)
+            if r.returncode: print(f'inline script {i} failed');print(r.stderr);sys.exit(1)
+          def balanced(css):
+            depth=0;i=0;quote=None;comment=False
+            while i<len(css):
+              c=css[i];n=css[i+1] if i+1<len(css) else ''
+              if comment:
+                if c=='*' and n=='/':comment=False;i+=2;continue
+                i+=1;continue
+              if quote:
+                if c=='\\':i+=2;continue
+                if c==quote:quote=None
+                i+=1;continue
+              if c=='/' and n=='*':comment=True;i+=2;continue
+              if c in ('"',"'"):quote=c;i+=1;continue
+              if c=='{':depth+=1
+              elif c=='}':
+                depth-=1
+                if depth<0:return False
+              i+=1
+            return depth==0 and not quote and not comment
+          for i,css in enumerate(p.styles):
+            if not balanced(css): print(f'style block {i} failed');sys.exit(2)
+          if html.count('<meta content="v1282 · modern-pull-to-refresh" name="fc-build"/>') != 1: raise SystemExit('fc-build marker invalid')
+          if re.search(r'>\s*Check for updates\s*<',html,re.I): raise SystemExit('manual update UI restored')
+          print(f'validated {len(p.scripts)} inline scripts and {len(p.styles)} style blocks')
+          PY
+          grep -q 'function _readMetaContentV1174' index.html
+          grep -q 'FC_UPDATE_PARSER_SELFTEST_V1174' index.html
+          grep -q 'FC_INLINE_VIDEO_V1239' index.html
+          grep -q 'fc-inline-video-play-v1264' index.html
+          grep -q 'fcInlineUserPlayV1263' index.html
+          grep -q 'fcPauseEntryCardMediaV1278' index.html
+          grep -q 'fc-audio-unified-v1280' index.html
+          grep -q 'FC_V1282_VALIDATION' index.html
+      - name: Package deployable file
+        uses: actions/upload-artifact@v4
+        with:
+          name: v1282-index
+          path: index.html
+          retention-days: 1
+      - name: Commit v1282 and clean staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/v1282-block.txt .github/v1282-trigger.txt .github/workflows/apply-v1282.yml
+          git config user.name "FlamesChallenge Build Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "Build v1282 modern pull-to-refresh"
+          git push origin HEAD:main
