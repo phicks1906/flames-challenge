@@ -1,0 +1,120 @@
+name: Apply v1281 physical pull refresh recovery
+on:
+  push:
+    branches: [main]
+    paths: ['.github/v1281-recovery-trigger.txt']
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Apply v1281 transform from staged workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object index.html)" = "0c5bd65192e60523762eca4e81cf1bec325f2d94"
+          python3 - <<'PY'
+          from pathlib import Path
+          w=Path('.github/workflows/apply-v1281.yml').read_text(encoding='utf-8')
+          start=w.index("          python3 - <<'PY'\n") + len("          python3 - <<'PY'\n")
+          end=w.index("\n          PY", start)
+          lines=w[start:end].splitlines()
+          code='\n'.join(line[10:] if line.startswith('          ') else line for line in lines) + '\n'
+          Path('/tmp/apply_v1281.py').write_text(code,encoding='utf-8')
+          PY
+          python3 /tmp/apply_v1281.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          marker='\\n<style id="fc-v1281-physical-pull-refresh-css">'
+          start=s.find(marker)
+          if start < 0:
+              raise SystemExit('v1281 escaped block start not found')
+          end_marker='\\n</script>\\n'
+          end=s.find(end_marker,start)
+          if end < 0:
+              raise SystemExit('v1281 escaped block end not found')
+          end += len(end_marker)
+          chunk=s[start:end].replace('\\n','\n')
+          s=s[:start]+chunk+s[end:]
+          p.write_text(s,encoding='utf-8')
+          PY
+          grep -q 'v1281 · physical-pull-to-refresh' index.html
+          grep -q 'fc-v1281-physical-pull-refresh-js' index.html
+          grep -q 'FC_V1281_VALIDATION' index.html
+      - name: Validate inline JavaScript and CSS
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          import subprocess,tempfile,os,sys
+          html=Path('index.html').read_text(encoding='utf-8')
+          class P(HTMLParser):
+            def __init__(self): super().__init__(convert_charrefs=False); self.scripts=[]; self.styles=[]; self.tag=None; self.buf=[]; self.src=False
+            def handle_starttag(self,tag,attrs):
+              if tag=='script': self.tag='script'; self.buf=[]; self.src=any(k=='src' for k,v in attrs)
+              elif tag=='style': self.tag='style'; self.buf=[]; self.src=False
+            def handle_data(self,d):
+              if self.tag in ('script','style'): self.buf.append(d)
+            def handle_endtag(self,tag):
+              if tag==self.tag:
+                text=''.join(self.buf)
+                if tag=='script' and not self.src and text.strip(): self.scripts.append(text)
+                elif tag=='style': self.styles.append(text)
+                self.tag=None; self.buf=[]; self.src=False
+          p=P();p.feed(html)
+          for i,code in enumerate(p.scripts):
+            f=tempfile.NamedTemporaryFile('w',suffix='.js',delete=False,encoding='utf-8');f.write(code);f.close()
+            r=subprocess.run(['node','--check',f.name],capture_output=True,text=True);os.unlink(f.name)
+            if r.returncode: print(f'inline script {i} failed');print(r.stderr);sys.exit(1)
+          def balanced(css):
+            depth=0;i=0;quote=None;comment=False
+            while i<len(css):
+              c=css[i];n=css[i+1] if i+1<len(css) else ''
+              if comment:
+                if c=='*' and n=='/':comment=False;i+=2;continue
+                i+=1;continue
+              if quote:
+                if c=='\\':i+=2;continue
+                if c==quote:quote=None
+                i+=1;continue
+              if c=='/' and n=='*':comment=True;i+=2;continue
+              if c in ('"',"'"):quote=c;i+=1;continue
+              if c=='{':depth+=1
+              elif c=='}':
+                depth-=1
+                if depth<0:return False
+              i+=1
+            return depth==0
+          for i,css in enumerate(p.styles):
+            if not balanced(css): print(f'style block {i} failed'); sys.exit(2)
+          print(f'validated {len(p.scripts)} inline scripts and {len(p.styles)} style blocks')
+          PY
+          grep -q 'function _readMetaContentV1174' index.html
+          grep -q 'FC_UPDATE_PARSER_SELFTEST_V1174' index.html
+          grep -q 'fcPauseEntryCardMediaV1278' index.html
+          grep -q 'fc-audio-unified-v1280' index.html
+      - name: Package exact deployable file
+        uses: actions/upload-artifact@v4
+        with:
+          name: v1281-index
+          path: index.html
+          if-no-files-found: error
+          retention-days: 1
+      - name: Commit v1281 and remove temporary workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/v1281-trigger.txt .github/v1281-recovery-trigger.txt .github/workflows/apply-v1281.yml .github/workflows/apply-v1281-recovery.yml
+          git config user.name "FlamesChallenge Build Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "Build v1281 physical pull-to-refresh"
+          git push origin HEAD:main
