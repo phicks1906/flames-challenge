@@ -1,0 +1,47 @@
+l replace it before entries close.',primary:'edit',mine};
+       if(mine)return {k:'Entries open',t:left(ch.submission_deadline),h:'Your entry is live',p:'You can edit or withdraw it until entries close.',primary:'edit',mine};
+       if(ch.is_championship){
+         if(canEnterChampionship(ch)) return {k:'Championship round',t:left(ch.submission_deadline),h:'Your Championship spot is confirmed',p:'Submit your Championship entry before entries close.',primary:'champ_submit'};
+@@ -40365,12 +40521,13 @@
+     document.getElementById('fcChallengeBriefV1054')?.remove();
+     const status=computeChallengeStatus(ch),d=statusCopy(ch,status),box=document.createElement('section');box.id='fcChallengeBriefV1054';box.className='fc-challenge-brief-v1054';
+     if(status==='submitting'&&ch.is_public!==false&&!ch.is_championship){const approved=(state.currentEntries||[]).filter(e=>!e.moderation_status||e.moderation_status==='clear'||e.moderation_status==='approved');const mine=approved.some(e=>e.user_id===state.profile?.id);const ids=[...new Set(approved.map(e=>e.user_id).filter(id=>id&&(!mine||id!==state.profile?.id)))];const value=ids.reduce((n,id)=>n+Number(getLadderStatus(id)?.points||0),0);d.p+=` Current field value: ${value} Opponent Point${value===1?'':'s'} before turnout.`;}
+-    let primary='';if(d.primary==='edit')primary='<button class="primary" data-v1054-action="edit">Edit entry</button>';else if(d.primary==='champ_submit')primary='<button class="primary" data-v1054-action="champ-submit">Submit entry</button>';else if(d.primary==='enter')primary='<button class="primary" data-v1054-action="enter">Enter challenge</button>';else if(d.primary==='results')primary='<button class="primary" data-v1054-action="results">View results</button>';
+-    const pendingReview=d.k==='Getting your entry ready';
++    let primary='';if(d.primary==='edit')primary='<button class="primary" data-v1054-action="edit">Edit entry</button>';else if(d.primary==='replace')primary='<button class="primary" data-v1054-action="replace">Replace entry</button>';else if(d.primary==='champ_submit')primary='<button class="primary" data-v1054-action="champ-submit">Submit entry</button>';else if(d.primary==='enter')primary='<button class="primary" data-v1054-action="enter">Enter challenge</button>';else if(d.primary==='results')primary='<button class="primary" data-v1054-action="results">View results</button>';
++    const pendingReview=d.k==='Video under review';
+     const insights=(!pendingReview&&(ch.creator_id===state.profile?.id||ch.creator?.id===state.profile?.id))?'':'';
+     box.innerHTML=`<div class="fc-challenge-brief-top-v1054"><div><div class="fc-challenge-brief-state-v1054">${esc(d.k)}</div><strong>${esc(d.h)}</strong></div><div class="fc-challenge-brief-time-v1054">${esc(d.t)}</div></div><p>${esc(d.p)}</p><div class="fc-challenge-actions-v1054${d.primary?'':' fc-challenge-actions-solo-v1255'}">${primary}${insights}<button class="help" data-v1054-action="ember">Ask Ember</button></div>`;
+     hero.insertAdjacentElement('afterend',box);
+     box.querySelector('[data-v1054-action="edit"]')?.addEventListener('click',()=>openSubmitEntry(d.mine));
++    box.querySelector('[data-v1054-action="replace"]')?.addEventListener('click',()=>openSubmitEntry(d.mine));
+     box.querySelector('[data-v1054-action="champ-submit"]')?.addEventListener('click',()=>{ if(canEnterChampionship(ch)) openSubmitEntry(); });
+     box.querySelector('[data-v1054-action="enter"]')?.addEventListener('click',()=>openSubmitEntry());
+     box.querySelector('[data-v1054-action="results"]')?.addEventListener('click',()=>document.getElementById('cdResultsPanel')?.scrollIntoView({behavior: fcMotionBehaviorV1100(),block:'start'}));
+@@ -50173,5 +50330,29 @@
+ <script>window.FC_V1286_VALIDATION={build:'v1286',sceneUsesApprovedCinematicArt:true,noBakedControlsVisible:true,oneLiveWaveform:true,onePlayControl:true,oneTimePair:true,compact169Preserved:true,recordFlameWaveformStylesPreserved:true,v1285ViewerHeightPreserved:true,v1283HallOfFamePreserved:true};</script>
+ <script>window.FC_V1287_VALIDATION={build:'v1287',waveformStyleRetired:true,legacyWaveformMigratesToScene:true,legacyCurveMigratesToScene:true,audioStyles:['scene','vinyl','flame'],scenePreserved:true,recordPreserved:true,flamePreserved:true,resultsUseSelectedRemainingStyle:true,v1286ScenePreserved:true,v1285ViewerHeightPreserved:true};</script>
+ 
++
++<style id="fc-v1288-entry-moderation-ux-css">
++.fc-entry-moderation-state-v1288{margin:0 0 14px;padding:13px 14px;border:1px solid rgba(255,184,72,.24);border-radius:14px;background:rgba(255,184,72,.055);color:var(--text)}
++.fc-entry-moderation-state-v1288[hidden]{display:none!important}
++.fc-entry-moderation-state-v1288 .fc-entry-moderation-badge-v1288{margin-bottom:5px;color:#d9aa52;font-size:9px;font-weight:900;letter-spacing:.15em}
++.fc-entry-moderation-state-v1288 strong{display:block;font-size:16px;line-height:1.18;color:#fff}
++.fc-entry-moderation-state-v1288 p{margin:5px 0 0;color:var(--text-muted);font-size:12px;line-height:1.45}
++.fc-entry-moderation-state-v1288.pending{border-color:rgba(255,168,63,.25);background:rgba(255,132,43,.055)}
++.fc-entry-moderation-state-v1288.review{border-color:rgba(255,199,82,.28);background:rgba(255,186,63,.055)}
++.fc-entry-moderation-state-v1288.rejected{border-color:rgba(255,75,69,.34);background:rgba(255,55,48,.065)}
++.fc-entry-moderation-state-v1288.rejected .fc-entry-moderation-badge-v1288{color:#ff6b63}
++.fc-mod-rejected-card-v1288{display:grid;grid-template-columns:82px minmax(0,1fr);gap:12px;align-items:center;margin:0 0 4px;padding:10px;border:1px solid rgba(255,75,69,.26);border-radius:15px;background:linear-gradient(145deg,rgba(255,49,42,.065),rgba(255,255,255,.015))}
++.fc-mod-rejected-media-v1288{position:relative;width:82px;height:82px;overflow:hidden;border-radius:12px;background:#0c0908;display:grid;place-items:center}
++.fc-mod-rejected-media-v1288 img{width:100%;height:100%;object-fit:cover;filter:saturate(.72) brightness(.65)}
++.fc-mod-rejected-media-v1288>span{position:absolute;left:5px;right:5px;bottom:5px;padding:3px 4px;border-radius:7px;background:rgba(33,3,3,.88);color:#ff756d;font-size:7px;font-weight:900;letter-spacing:.08em;text-align:center}
++.fc-mod-rejected-icon-v1288{font-size:30px;font-weight:900;color:#ff625a}
++.fc-mod-rejected-copy-v1288{min-width:0}
++.fc-mod-rejected-copy-v1288 strong{display:block;color:#fff;font-size:15px;line-height:1.18}
++.fc-mod-rejected-copy-v1288 small{display:block;margin-top:5px;color:#a99c93;font-size:11px;line-height:1.4}
++#submitEntrySheet:has(.fc-entry-moderation-state-v1288.rejected) #seSubmitEntryBtnV1274{background:linear-gradient(110deg,#ff7038,#ff3429)!important}
++@media(max-width:390px){.fc-mod-rejected-card-v1288{grid-template-columns:72px minmax(0,1fr)}.fc-mod-rejected-media-v1288{width:72px;height:72px}}
++</style>
++<script>window.FC_V1288_VALIDATION={build:'v1288',videoUnderReviewVisible:true,rejectedEntryVisible:true,rejectedRow
