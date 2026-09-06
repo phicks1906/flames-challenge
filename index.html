@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1287 · waveform-style-retired" name="fc-build"/>
+<meta content="v1288 · moderation-status-entry-recovery" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Retired the redundant Waveform audio style. Existing Waveform/Curve preferences now migrate to Scene, leaving three distinct choices—Scene, Record, and Flame—across Home, winners, Challenge Detail, and entry viewers." name="fc-whatsnew"/>
+<meta content="Made video moderation visible to entrants: under-review entries now show a persistent saved/private status, rejected entries clearly ask for a replacement, and opening the entry form recovers the existing server row instead of failing like a duplicate-submission bug." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -24629,10 +24629,16 @@ function renderChallengeDetail() {
       e.user_id === state.profile?.id &&
       ['pending', 'flagged', 'escalated'].includes(String(e.moderation_status || '').toLowerCase())
     );
+    const _hasRejectedEntryV1288 = !!detailState?.myRejectedEntryV1288 || (state.currentEntries || []).some(e =>
+      e.user_id === state.profile?.id &&
+      String(e.moderation_status || '').toLowerCase() === 'rejected'
+    );
     const _emptyMsg = ch.sd_phase === 'submitting'
       ? '🔒 Sudden Death in progress — entries are hidden until voting opens.'
+      : _hasRejectedEntryV1288
+      ? 'Your entry was not approved. Replace it before entries close to resubmit.'
       : _hasPrivatePendingEntry
-      ? 'Your entry is getting ready. Public entries will appear here.'
+      ? 'Your video is under review. It is saved and private until the check finishes.'
       : 'No entries yet. Be the first!';
     grid.innerHTML = `<div class="cd-entries-pager-empty">${_emptyMsg}</div>`;
     if (navEl) navEl.style.display = 'none';
@@ -25360,6 +25366,13 @@ async function openSubmitEntry(entryToEdit = null) {
     const _mine = e => e.user_id === state.profile.id && e.challenge_id === ch.id;
     entryToEdit = (state.currentEntries || []).find(_mine) || (state.feedEntries || []).find(_mine) || null;
   }
+  // v1288 — rejected entries are deliberately excluded from several public
+  // participation caches. If the local cache cannot see the row, read the user's
+  // server row before choosing create mode. Otherwise the UI says Enter challenge
+  // and the database correctly rejects it as a duplicate, which looks like a bug.
+  if (!entryToEdit && state.profile && !ch.is_championship) {
+    entryToEdit = await fcRefreshOwnEntryForChallengeV1288(ch);
+  }
 
   seState.editingEntry = entryToEdit;
 
@@ -25406,11 +25419,13 @@ async function openSubmitEntry(entryToEdit = null) {
 
   // Pre-fill if editing
   const submitBtn = document.querySelector('#submitEntryForm button[type="submit"]');
+  const entryModerationV1288 = String(entryToEdit?.moderation_status || '').toLowerCase();
+  fcSyncEntryModerationBannerV1288(ch, entryToEdit);
   if (entryToEdit) {
-    document.querySelector('#submitEntrySheet h2').textContent = 'Edit Your Entry';
+    document.querySelector('#submitEntrySheet h2').textContent = entryModerationV1288 === 'rejected' ? 'Replace Your Entry' : 'Edit Your Entry';
     if (submitBtn) {
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Save Changes';
+      submitBtn.textContent = entryModerationV1288 === 'rejected' ? 'Replace & Resubmit' : 'Save Changes';
     }
     if (isText && entryToEdit.caption) {
       document.getElementById('seTextEntry').value = entryToEdit.caption;
@@ -25433,6 +25448,7 @@ async function openSubmitEntry(entryToEdit = null) {
     }
   } else {
     document.querySelector('#submitEntrySheet h2').textContent = 'Your Entry';
+    fcSyncEntryModerationBannerV1288(ch, null);
     if (submitBtn) submitBtn.textContent = 'Submit Entry';
   }
 
@@ -25668,6 +25684,13 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
   }
   if (ch.media_type !== 'text' && !seState.file && !seState.editingEntry?.media_url) {
     errBox.textContent = 'Upload your ' + ch.media_type + '.'; errBox.classList.add('show'); return;
+  }
+  const editingModerationV1288 = String(seState.editingEntry?.moderation_status || '').toLowerCase();
+  if (editingModerationV1288 === 'rejected' && ch.media_type !== 'text' && !seState.file) {
+    errBox.textContent = `This ${ch.media_type} was not approved. Choose a replacement ${ch.media_type} to resubmit.`;
+    errBox.classList.add('show');
+    try { errBox.scrollIntoView({behavior:fcMotionBehaviorV1100(),block:'center'}); } catch (_) {}
+    return;
   }
   // Normal deadline gate — but Sudden Death submission happens AFTER the original
   // deadline, so bypass it when this user is a tied player in the submitting phase.
@@ -25914,7 +25937,7 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
       // Re-trigger moderation for the swapped-in video
       if (editSwappedVideo && seState.editingEntry.id) {
         triggerVideoModeration(seState.editingEntry.id, mediaUrl);
-        toast('Entry updated — awaiting review.');
+        toast('Video replaced — under review. Your entry is saved.');
       } else {
         toast('✅ Entry updated!');
       }
@@ -25956,7 +25979,7 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
       // Kick off async video moderation — non-blocking, entry already saved.
       if (entryData && ch.media_type === 'video' && mediaUrl) {
         triggerVideoModeration(entryData.id, mediaUrl);
-        toast('Entry submitted — awaiting review.');
+        toast('Video uploaded — under review. Your entry is saved.');
       } else {
         toast('🔥 Entry submitted!');
       }
@@ -27635,6 +27658,105 @@ function fcCardSplitTitle(ch) {
   const parts = raw.split(/\s*(?::|—|\s-\s)\s*/).filter(Boolean);
   return { title: parts[0] || raw, prompt: parts.slice(1).join(' — ') };
 }
+function fcOwnEntryAnyV1288(ch) {
+  const uid = state.profile?.id;
+  if (!uid || !ch) return null;
+  const rows = [
+    ...(state.challengeEntriesV1060 || []),
+    ...(state.feedEntries || []),
+    ...(state.currentEntries || [])
+  ];
+  return rows.find(e =>
+    String(e?.challenge_id || '') === String(ch.id) &&
+    String(e?.user_id || '') === String(uid)
+  ) || null;
+}
+function fcEntryModerationUxV1288(entry) {
+  const status = String(entry?.moderation_status || '').toLowerCase();
+  if (status === 'pending') return {
+    kind:'pending',
+    label:'UNDER REVIEW',
+    title:'Video under review',
+    detail:'Your entry is saved and private while the safety check finishes.',
+    action:'Entry under review'
+  };
+  if (status === 'flagged' || status === 'escalated') return {
+    kind:'review',
+    label:'REVIEW IN PROGRESS',
+    title:'We’re taking a closer look',
+    detail:'Your entry is saved and private while the review is completed.',
+    action:'Review in progress'
+  };
+  if (status === 'rejected') return {
+    kind:'rejected',
+    label:'NOT APPROVED',
+    title:'Entry not approved',
+    detail:'This entry is not competing. Replace the video before entries close to resubmit it.',
+    action:'Replace rejected entry'
+  };
+  return null;
+}
+function fcRejectedEntryCardV1288(ch, entry) {
+  const poster = entry?.poster_url
+    ? `<img src="${escapeHtml(entry.poster_url)}" alt="" loading="lazy">`
+    : '<span class="fc-mod-rejected-icon-v1288" aria-hidden="true">!</span>';
+  return `<div class="fc-mod-rejected-card-v1288" data-entry-moderation="rejected">
+    <div class="fc-mod-rejected-media-v1288">${poster}<span>NOT APPROVED</span></div>
+    <div class="fc-mod-rejected-copy-v1288">
+      <strong>Replace this entry</strong>
+      <small>Your video is saved, but it is not public or competing. Choose a replacement before entries close.</small>
+    </div>
+  </div>`;
+}
+async function fcRefreshOwnEntryForChallengeV1288(ch) {
+  const uid = state.profile?.id;
+  if (!uid || !ch?.id) return null;
+  try {
+    const { data, error } = await db.from('entries')
+      .select('id, challenge_id, user_id, media_url, poster_url, media_type, caption, moderation_status, moderation_reason, moderation_checked_at, created_at, sd_round')
+      .eq('challenge_id', ch.id)
+      .eq('user_id', uid)
+      .order('created_at', { ascending:false })
+      .limit(20);
+    if (error) throw error;
+    const rows = data || [];
+    const currentRound = ch.sd_phase === 'submitting' ? Number(ch.sd_round || 0) : 0;
+    const row = rows.find(e => Number(e.sd_round || 0) === currentRound) || rows[0] || null;
+    if (row) {
+      const merge = arr => [row, ...(arr || []).filter(e => String(e?.id || '') !== String(row.id))];
+      state.feedEntries = merge(state.feedEntries);
+      if (String(state.currentChallenge?.id || '') === String(ch.id)) state.currentEntries = merge(state.currentEntries);
+    }
+    return row;
+  } catch (e) {
+    console.warn('Own entry refresh', e);
+    return null;
+  }
+}
+function fcSyncEntryModerationBannerV1288(ch, entry) {
+  const form = document.getElementById('submitEntryForm');
+  if (!form) return;
+  let banner = document.getElementById('seModerationStateV1288');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'seModerationStateV1288';
+    banner.className = 'fc-entry-moderation-state-v1288';
+    form.insertBefore(banner, form.firstChild);
+  }
+  const ux = fcEntryModerationUxV1288(entry);
+  if (!ux) {
+    banner.hidden = true;
+    banner.className = 'fc-entry-moderation-state-v1288';
+    banner.innerHTML = '';
+    return;
+  }
+  banner.hidden = false;
+  banner.className = `fc-entry-moderation-state-v1288 ${ux.kind}`;
+  const detail = ux.kind === 'rejected'
+    ? `${ux.detail} Your existing upload will stay rejected until you choose a new file.`
+    : `${ux.detail} You can replace it before entries close if you want to submit a different video.`;
+  banner.innerHTML = `<div class="fc-entry-moderation-badge-v1288">${escapeHtml(ux.label)}</div><strong>${escapeHtml(ux.title)}</strong><p>${escapeHtml(detail)}</p>`;
+}
 function fcCardMyEntry(ch) {
   const uid = state.profile?.id;
   if (!uid || !ch) return null;
@@ -27772,7 +27894,13 @@ function fcCardAction(ch, status) {
   const isCreator = !!uid && String(ownerId) === String(uid);
   const entered = fcCardHasEntered(ch);
   const voted = fcCardHasVoted(ch);
+  const ownEntryV1288 = fcOwnEntryAnyV1288(ch);
+  const ownModerationV1288 = String(ownEntryV1288?.moderation_status || '').toLowerCase();
   if (status === 'submitting') {
+    if (ownModerationV1288 === 'rejected') return { label:'Replace rejected entry', mode:'replace-rejected' };
+    if (['pending','flagged','escalated'].includes(ownModerationV1288)) {
+      return { label:ownModerationV1288 === 'pending' ? 'Entry under review' : 'Review in progress', mode:'edit', ghost:true };
+    }
     if (ch.is_championship) {
       if (entered) return { label:'Edit your entry', mode:'edit' };
       if (canEnterChampionship(ch)) return { label:'Enter challenge', mode:'enter' };
@@ -27804,9 +27932,15 @@ function fcOpenChallengeSurfaceV1273(chId, startEntryId = null) {
 function runChallengeCardAction(ch, mode) {
   if (!ch) return;
   if (mode === 'promote') { openPromote('challenge', ch); return; }
+  if (mode === 'replace-rejected') {
+    state.currentChallenge = ch;
+    const entry = fcOwnEntryAnyV1288(ch);
+    if (entry) openSubmitEntry(entry); else openSubmitEntry();
+    return;
+  }
   if (mode === 'edit') {
     state.currentChallenge = ch;
-    const entry = fcCardMyEntry(ch);
+    const entry = fcCardMyEntry(ch) || fcOwnEntryAnyV1288(ch);
     if (entry) openSubmitEntry(entry); else openChallenge(ch);
     return;
   }
@@ -27815,7 +27949,12 @@ function runChallengeCardAction(ch, mode) {
 }
 function fcCardGuidanceV1055(ch,status,entryCount,isCreator){
   const entered=fcCardHasEntered(ch),voted=fcCardHasVoted(ch);
+  const ownEntryV1288=fcOwnEntryAnyV1288(ch);
+  const ownModerationV1288=String(ownEntryV1288?.moderation_status||'').toLowerCase();
   if(status==='submitting'){
+    if(ownModerationV1288==='rejected')return 'Your video was not approved. Replace it before entries close to resubmit.';
+    if(ownModerationV1288==='pending')return 'Your video is uploaded and under review. It stays private until the check finishes.';
+    if(ownModerationV1288==='flagged'||ownModerationV1288==='escalated')return 'Your video is saved and waiting for a closer review. It is not public yet.';
     if(isCreator){
       if(entryCount===0)return 'No entries yet. Share this challenge to bring in competitors.';
       if(entryCount===1)return 'One entry is in. Another competitor is needed for a scored result.';
@@ -27975,12 +28114,16 @@ function buildChallengeCardShell(ch, surface = 'compete') {
     : `<span>${escapeHtml((creator.name || '?').trim().charAt(0).toUpperCase() || '?')}</span>`;
 
   const myEntry = fcCardMyEntry(ch);
-  const myModeration = String(myEntry?.moderation_status || '').toLowerCase();
-  const myPreparing = !!myEntry && ['pending','flagged','escalated'].includes(myModeration);
+  const myOwnEntryV1288 = fcOwnEntryAnyV1288(ch);
+  const myModeration = String(myOwnEntryV1288?.moderation_status || '').toLowerCase();
+  const myPreparing = !!myOwnEntryV1288 && ['pending','flagged','escalated'].includes(myModeration);
+  const myRejectedV1288 = !!myOwnEntryV1288 && myModeration === 'rejected';
   const voteTotal = _cardVotes(ch, cardEntries);
-  const mediaHtml = myPreparing
-    ? fcPreparingEntryCardV1120(ch, myEntry)
-    : _cardMediaHTML(ch, status, cardEntries, isChampionship, entryCount);
+  const mediaHtml = myRejectedV1288
+    ? fcRejectedEntryCardV1288(ch, myOwnEntryV1288)
+    : myPreparing
+      ? fcPreparingEntryCardV1120(ch, myOwnEntryV1288)
+      : _cardMediaHTML(ch, status, cardEntries, isChampionship, entryCount);
 
   const action = fcCardAction(ch, status);
   const ctaCls = action.ghost ? ' chc-ghost' : '';
@@ -33438,7 +33581,7 @@ async function notifyEntryModerated(entryId, action) {
     const title = e.challenge?.title || 'a challenge';
     const message = action === 'deleted'
       ? `🚫 Your entry to "${title}" was removed by moderation for violating community guidelines.`
-      : `🚫 Your entry to "${title}" was rejected by moderation and is not visible to others. Review the community guidelines before resubmitting.`;
+      : `🚫 Your entry to "${title}" was not approved. It is not visible to others. Open the challenge and replace the video before entries close to resubmit.`;
     await db.from('notifications').insert({
       user_id: e.user_id, type: 'entry_rejected', challenge_id: e.challenge_id,
       message, created_at: new Date().toISOString(),
@@ -33856,8 +33999,12 @@ document.addEventListener('click', async (e) => {
     const entered = emberHasEntered(ch);
     const voted = state.emberVotedChallengeIds instanceof Set && state.emberVotedChallengeIds.has(ch.id);
     const myEntry = emberEntryFor(ch);
+    const myModerationV1288 = String(myEntry?.moderation_status || '').toLowerCase();
 
     if(status === 'submitting'){
+      if(myModerationV1288 === 'rejected') return { label:'Replace entry', relation:'Your video was not approved. Replace it before entries close to resubmit.', run:()=>{ state.currentChallenge=ch; openSubmitEntry(myEntry); } };
+      if(myModerationV1288 === 'pending') return { label:'Entry under review', relation:'Your video is uploaded, saved, and private until the safety check finishes.', run:()=>{ state.currentChallenge=ch; openSubmitEntry(myEntry); } };
+      if(myModerationV1288 === 'flagged' || myModerationV1288 === 'escalated') return { label:'Review in progress', relation:'Your video is saved and private while a closer review is completed.', run:()=>{ state.currentChallenge=ch; openSubmitEntry(myEntry); } };
       // v1275 — Championship entry is invitation-only on Home too. The old
       // Ember Home path predated canEnterChampionship() and could advertise a
       // generic Enter challenge action to non-qualified viewers.
@@ -34126,7 +34273,11 @@ document.addEventListener('click', async (e) => {
   function fcAction(ch,status){
     const mine=!!state.profile?.id && String(ch.creator_id || ch.creator?.id || ch.user_id)===String(state.profile.id);
     const entry=fcMyEntry(ch);
+    const moderationV1288=String(entry?.moderation_status||'').toLowerCase();
     if(status==='submitting'){
+      if(moderationV1288==='rejected') return {label:'Replace entry',run:()=>{state.currentChallenge=ch;openSubmitEntry(entry);}};
+      if(moderationV1288==='pending') return {label:'Entry under review',run:()=>{state.currentChallenge=ch;openSubmitEntry(entry);}};
+      if(moderationV1288==='flagged'||moderationV1288==='escalated') return {label:'Review in progress',run:()=>{state.currentChallenge=ch;openSubmitEntry(entry);}};
       // v1275 — the Home shelf had its own older entry logic and bypassed the
       // authoritative Championship invite gate. Keep regular challenge behavior,
       // but never expose a generic Championship entry action to non-qualifiers.
@@ -34994,24 +35145,28 @@ window.fcPublicFeedDiagnostics = function(){
       : ch.sd_phase === 'voting'
         ? approvedEntries.filter(e => Number(e.sd_round || 0) === sdRound)
         : approvedEntries;
-    const myEntry = myId ? allEntries.find(e =>
+    const myEntryAnyV1288 = myId ? allEntries.find(e =>
       String(e.user_id) === String(myId) &&
-      String(e.moderation_status || '').toLowerCase() !== 'rejected' &&
       inCurrentRound(e)) : null;
+    const myModerationAnyV1288 = String(myEntryAnyV1288?.moderation_status || '').toLowerCase();
+    const myRejectedEntryV1288 = myModerationAnyV1288 === 'rejected' ? myEntryAnyV1288 : null;
+    const myEntry = myRejectedEntryV1288 ? null : myEntryAnyV1288;
     const myModeration = String(myEntry?.moderation_status || '').toLowerCase();
     const hasPrivatePendingEntry = !!myEntry && MOD_PENDING.has(myModeration);
     const enteredThisRound = !!myEntry;
+    const hasOwnRowV1288 = !!myEntryAnyV1288;
     const challengeFull = allEntries.length >= MAX_ENTRIES_PER_CHALLENGE;
     const amTiedPlayer = isSdSubmitting && Array.isArray(ch.sd_user_ids) && ch.sd_user_ids.includes(myId);
-    const canEnter = !!state.profile && !enteredThisRound && (
+    const canEnter = !!state.profile && !hasOwnRowV1288 && (
       (status === 'submitting' && !challengeFull) ||
       (isSdSubmitting && amTiedPlayer)
     ) && canEnterChampionship(ch);
     const promotionBlocked = allEntries.some(e => MOD_PENDING.has(String(e.moderation_status || '').toLowerCase()));
     return {
       ch, status, allEntries, approvedEntries, visibleEntries, myId, myEntry,
+      myEntryAnyV1288, myRejectedEntryV1288, myModerationAnyV1288,
       myModeration, hasPrivatePendingEntry, enteredThisRound,
-      userHasEntered:enteredThisRound, challengeFull, amTiedPlayer, canEnter,
+      userHasEntered:enteredThisRound, hasOwnRowV1288, challengeFull, amTiedPlayer, canEnter,
       isSdSubmitting, sdRound, promotionBlocked,
       publicEntryCount:visibleEntries.length
     };
@@ -40344,9 +40499,10 @@ body.theme-light .fc-score-metric-v1032,body.theme-light .fc-score-cutoff-v1032,
   const esc=v=>typeof escapeHtml==='function'?escapeHtml(String(v??'')):String(v??'');
   function left(d){if(!d)return '';const ms=new Date(d)-Date.now();if(ms<=0)return 'Ending now';const m=Math.ceil(ms/60000);if(m<60)return `${m}m left`;const h=Math.floor(m/60),mm=m%60;if(h<48)return `${h}h${mm?` ${mm}m`:''} left`;const days=Math.ceil(h/24);return `${days}d left`;}
   function statusCopy(ch,status){
-    const shared=window.fcGetChallengeDetailStateV1078?.(ch);const entries=shared?.approvedEntries||(state.currentEntries||[]).filter(e=>fcEntryCompetesV1060(e));const me=state.profile?.id;const mine=shared?.myEntry||null;const mod=shared?.myModeration||String(mine?.moderation_status||'').toLowerCase();const pending=shared?.hasPrivatePendingEntry??['pending','flagged','escalated'].includes(mod);
+    const shared=window.fcGetChallengeDetailStateV1078?.(ch);const entries=shared?.approvedEntries||(state.currentEntries||[]).filter(e=>fcEntryCompetesV1060(e));const me=state.profile?.id;const mine=shared?.myEntry||null;const rejectedV1288=shared?.myRejectedEntryV1288||null;const mod=shared?.myModeration||String(mine?.moderation_status||'').toLowerCase();const pending=shared?.hasPrivatePendingEntry??['pending','flagged','escalated'].includes(mod);
     if(status==='submitting'){
-      if(pending)return {k:'Getting your entry ready',t:left(ch.submission_deadline),h:'Private for a moment',p:'Your upload is complete. We’re finishing a quick safety check and will publish it automatically when ready. You can still edit or withdraw before entries close.',primary:'edit',mine};
+      if(rejectedV1288)return {k:'Entry not approved',t:left(ch.submission_deadline),h:'Replace your video to resubmit',p:'Your entry is saved, but it is not public or competing. Choose a replacement video before entries close and it will go through review again.',primary:'replace',mine:rejectedV1288};
+      if(pending)return {k:'Video under review',t:left(ch.submission_deadline),h:'Your entry is saved',p:'Your upload is complete and private while the safety check finishes. It will publish automatically if approved. You can still replace it before entries close.',primary:'edit',mine};
       if(mine)return {k:'Entries open',t:left(ch.submission_deadline),h:'Your entry is live',p:'You can edit or withdraw it until entries close.',primary:'edit',mine};
       if(ch.is_championship){
         if(canEnterChampionship(ch)) return {k:'Championship round',t:left(ch.submission_deadline),h:'Your Championship spot is confirmed',p:'Submit your Championship entry before entries close.',primary:'champ_submit'};
@@ -40365,12 +40521,13 @@ body.theme-light .fc-score-metric-v1032,body.theme-light .fc-score-cutoff-v1032,
     document.getElementById('fcChallengeBriefV1054')?.remove();
     const status=computeChallengeStatus(ch),d=statusCopy(ch,status),box=document.createElement('section');box.id='fcChallengeBriefV1054';box.className='fc-challenge-brief-v1054';
     if(status==='submitting'&&ch.is_public!==false&&!ch.is_championship){const approved=(state.currentEntries||[]).filter(e=>!e.moderation_status||e.moderation_status==='clear'||e.moderation_status==='approved');const mine=approved.some(e=>e.user_id===state.profile?.id);const ids=[...new Set(approved.map(e=>e.user_id).filter(id=>id&&(!mine||id!==state.profile?.id)))];const value=ids.reduce((n,id)=>n+Number(getLadderStatus(id)?.points||0),0);d.p+=` Current field value: ${value} Opponent Point${value===1?'':'s'} before turnout.`;}
-    let primary='';if(d.primary==='edit')primary='<button class="primary" data-v1054-action="edit">Edit entry</button>';else if(d.primary==='champ_submit')primary='<button class="primary" data-v1054-action="champ-submit">Submit entry</button>';else if(d.primary==='enter')primary='<button class="primary" data-v1054-action="enter">Enter challenge</button>';else if(d.primary==='results')primary='<button class="primary" data-v1054-action="results">View results</button>';
-    const pendingReview=d.k==='Getting your entry ready';
+    let primary='';if(d.primary==='edit')primary='<button class="primary" data-v1054-action="edit">Edit entry</button>';else if(d.primary==='replace')primary='<button class="primary" data-v1054-action="replace">Replace entry</button>';else if(d.primary==='champ_submit')primary='<button class="primary" data-v1054-action="champ-submit">Submit entry</button>';else if(d.primary==='enter')primary='<button class="primary" data-v1054-action="enter">Enter challenge</button>';else if(d.primary==='results')primary='<button class="primary" data-v1054-action="results">View results</button>';
+    const pendingReview=d.k==='Video under review';
     const insights=(!pendingReview&&(ch.creator_id===state.profile?.id||ch.creator?.id===state.profile?.id))?'':'';
     box.innerHTML=`<div class="fc-challenge-brief-top-v1054"><div><div class="fc-challenge-brief-state-v1054">${esc(d.k)}</div><strong>${esc(d.h)}</strong></div><div class="fc-challenge-brief-time-v1054">${esc(d.t)}</div></div><p>${esc(d.p)}</p><div class="fc-challenge-actions-v1054${d.primary?'':' fc-challenge-actions-solo-v1255'}">${primary}${insights}<button class="help" data-v1054-action="ember">Ask Ember</button></div>`;
     hero.insertAdjacentElement('afterend',box);
     box.querySelector('[data-v1054-action="edit"]')?.addEventListener('click',()=>openSubmitEntry(d.mine));
+    box.querySelector('[data-v1054-action="replace"]')?.addEventListener('click',()=>openSubmitEntry(d.mine));
     box.querySelector('[data-v1054-action="champ-submit"]')?.addEventListener('click',()=>{ if(canEnterChampionship(ch)) openSubmitEntry(); });
     box.querySelector('[data-v1054-action="enter"]')?.addEventListener('click',()=>openSubmitEntry());
     box.querySelector('[data-v1054-action="results"]')?.addEventListener('click',()=>document.getElementById('cdResultsPanel')?.scrollIntoView({behavior: fcMotionBehaviorV1100(),block:'start'}));
@@ -50172,6 +50329,30 @@ body:not(:has(#submitEntrySheet.open)):has(#feedViewerSheet.open) #feedViewerShe
 </style>
 <script>window.FC_V1286_VALIDATION={build:'v1286',sceneUsesApprovedCinematicArt:true,noBakedControlsVisible:true,oneLiveWaveform:true,onePlayControl:true,oneTimePair:true,compact169Preserved:true,recordFlameWaveformStylesPreserved:true,v1285ViewerHeightPreserved:true,v1283HallOfFamePreserved:true};</script>
 <script>window.FC_V1287_VALIDATION={build:'v1287',waveformStyleRetired:true,legacyWaveformMigratesToScene:true,legacyCurveMigratesToScene:true,audioStyles:['scene','vinyl','flame'],scenePreserved:true,recordPreserved:true,flamePreserved:true,resultsUseSelectedRemainingStyle:true,v1286ScenePreserved:true,v1285ViewerHeightPreserved:true};</script>
+
+
+<style id="fc-v1288-entry-moderation-ux-css">
+.fc-entry-moderation-state-v1288{margin:0 0 14px;padding:13px 14px;border:1px solid rgba(255,184,72,.24);border-radius:14px;background:rgba(255,184,72,.055);color:var(--text)}
+.fc-entry-moderation-state-v1288[hidden]{display:none!important}
+.fc-entry-moderation-state-v1288 .fc-entry-moderation-badge-v1288{margin-bottom:5px;color:#d9aa52;font-size:9px;font-weight:900;letter-spacing:.15em}
+.fc-entry-moderation-state-v1288 strong{display:block;font-size:16px;line-height:1.18;color:#fff}
+.fc-entry-moderation-state-v1288 p{margin:5px 0 0;color:var(--text-muted);font-size:12px;line-height:1.45}
+.fc-entry-moderation-state-v1288.pending{border-color:rgba(255,168,63,.25);background:rgba(255,132,43,.055)}
+.fc-entry-moderation-state-v1288.review{border-color:rgba(255,199,82,.28);background:rgba(255,186,63,.055)}
+.fc-entry-moderation-state-v1288.rejected{border-color:rgba(255,75,69,.34);background:rgba(255,55,48,.065)}
+.fc-entry-moderation-state-v1288.rejected .fc-entry-moderation-badge-v1288{color:#ff6b63}
+.fc-mod-rejected-card-v1288{display:grid;grid-template-columns:82px minmax(0,1fr);gap:12px;align-items:center;margin:0 0 4px;padding:10px;border:1px solid rgba(255,75,69,.26);border-radius:15px;background:linear-gradient(145deg,rgba(255,49,42,.065),rgba(255,255,255,.015))}
+.fc-mod-rejected-media-v1288{position:relative;width:82px;height:82px;overflow:hidden;border-radius:12px;background:#0c0908;display:grid;place-items:center}
+.fc-mod-rejected-media-v1288 img{width:100%;height:100%;object-fit:cover;filter:saturate(.72) brightness(.65)}
+.fc-mod-rejected-media-v1288>span{position:absolute;left:5px;right:5px;bottom:5px;padding:3px 4px;border-radius:7px;background:rgba(33,3,3,.88);color:#ff756d;font-size:7px;font-weight:900;letter-spacing:.08em;text-align:center}
+.fc-mod-rejected-icon-v1288{font-size:30px;font-weight:900;color:#ff625a}
+.fc-mod-rejected-copy-v1288{min-width:0}
+.fc-mod-rejected-copy-v1288 strong{display:block;color:#fff;font-size:15px;line-height:1.18}
+.fc-mod-rejected-copy-v1288 small{display:block;margin-top:5px;color:#a99c93;font-size:11px;line-height:1.4}
+#submitEntrySheet:has(.fc-entry-moderation-state-v1288.rejected) #seSubmitEntryBtnV1274{background:linear-gradient(110deg,#ff7038,#ff3429)!important}
+@media(max-width:390px){.fc-mod-rejected-card-v1288{grid-template-columns:72px minmax(0,1fr)}.fc-mod-rejected-media-v1288{width:72px;height:72px}}
+</style>
+<script>window.FC_V1288_VALIDATION={build:'v1288',videoUnderReviewVisible:true,rejectedEntryVisible:true,rejectedRowRecoveredBeforeCreate:true,rejectedMediaRequiresReplacement:true,replacementVideoRerunsModeration:true,homeModerationStateVisible:true,competeModerationStateVisible:true,challengeDetailModerationStateVisible:true,moderationRulesUnchanged:true,v1287AudioStylesPreserved:true};</script>
 
 </body>
 </html>
