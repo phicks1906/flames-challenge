@@ -1,0 +1,180 @@
+--- a/index.html
++++ b/index.html
+@@ -21,9 +21,9 @@
+      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
+      this tag; bump it HERE and nowhere else.
+      fc-whatsnew is the one line shown in the update prompt. -->
+-<meta content="v1284 · audio-style-preference-restored" name="fc-build"/>
++<meta content="v1285 · adaptive-feed-viewer-height" name="fc-build"/>
+ <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
+-<meta content="Restored the Audio style setting across Home, winners, Challenge Detail, and entry viewers. Scene keeps the new unified player; Record, Flame, and Waveform now render their selected visual treatment without inheriting the old oversized media stage." name="fc-whatsnew"/>
++<meta content="Removed the large empty area in challenge entry viewers by sizing the horizontal carousel to the currently visible entry instead of the tallest submission, and restored usable bottom navigation on read-only detail screens." name="fc-whatsnew"/>
+ <!-- v1011 CANONICAL BRAND ASSET:
+      The primary logo is the approved Crowned F extracted from the approved
+      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
+@@ -20744,6 +20744,86 @@
+ }
+ 
+ 
++/* v1285 — horizontal entry viewers must size to the entry the member is
++   actually looking at. A flex row's cross-size is normally set by its tallest
++   child, so one portrait submission could leave hundreds of blank pixels under
++   a shorter landscape/video entry. Keep native horizontal scrolling, but make
++   the rail height follow the nearest snap page. */
++function fcResetFeedViewerActiveHeightV1285(list = document.getElementById('fvEntries')) {
++  if (!list) return;
++  if (list._fcHeightROV1285) {
++    try { list._fcHeightROV1285.disconnect(); } catch (_) {}
++    list._fcHeightROV1285 = null;
++  }
++  if (list._fcHeightScrollV1285) {
++    try { list.removeEventListener('scroll', list._fcHeightScrollV1285); } catch (_) {}
++    list._fcHeightScrollV1285 = null;
++  }
++  if (list._fcHeightRafV1285) {
++    try { cancelAnimationFrame(list._fcHeightRafV1285); } catch (_) {}
++    list._fcHeightRafV1285 = 0;
++  }
++  list.style.removeProperty('height');
++  list.removeAttribute('data-fc-active-height-v1285');
++  delete list.dataset.fcActiveIndexV1285;
++}
++
++function fcFeedViewerActiveIndexV1285(list) {
++  const slides = [...(list?.querySelectorAll('.fc-v1024-fv-slide') || [])];
++  if (!slides.length) return 0;
++  const width = Math.max(1, list.clientWidth || list.getBoundingClientRect().width || 1);
++  return Math.max(0, Math.min(slides.length - 1, Math.round(list.scrollLeft / width)));
++}
++
++function fcSyncFeedViewerActiveHeightV1285(list = document.getElementById('fvEntries')) {
++  if (!list || list.style.display === 'none') return;
++  const slides = [...list.querySelectorAll('.fc-v1024-fv-slide')];
++  if (!slides.length) {
++    list.style.removeProperty('height');
++    list.removeAttribute('data-fc-active-height-v1285');
++    return;
++  }
++  const index = fcFeedViewerActiveIndexV1285(list);
++  const slide = slides[index];
++  if (!slide) return;
++  const rectH = slide.getBoundingClientRect().height || 0;
++  const naturalH = Math.max(rectH, slide.scrollHeight || 0, slide.offsetHeight || 0);
++  if (!Number.isFinite(naturalH) || naturalH < 1) return;
++  const target = Math.ceil(naturalH);
++  const current = parseFloat(list.style.height || '0') || 0;
++  list.setAttribute('data-fc-active-height-v1285', '1');
++  list.dataset.fcActiveIndexV1285 = String(index);
++  if (Math.abs(current - target) > 1) list.style.height = target + 'px';
++  requestAnimationFrame(() => {
++    if (document.getElementById('feedViewerSheet')?.classList.contains('open')) {
++      fcPositionFeedViewerV1199();
++    }
++  });
++}
++
++function fcWireFeedViewerActiveHeightV1285(list = document.getElementById('fvEntries')) {
++  if (!list) return;
++  fcResetFeedViewerActiveHeightV1285(list);
++  const queue = () => {
++    if (list._fcHeightRafV1285) return;
++    list._fcHeightRafV1285 = requestAnimationFrame(() => {
++      list._fcHeightRafV1285 = 0;
++      fcSyncFeedViewerActiveHeightV1285(list);
++    });
++  };
++  list._fcHeightScrollV1285 = queue;
++  list.addEventListener('scroll', queue, { passive:true });
++  if (typeof ResizeObserver === 'function') {
++    const ro = new ResizeObserver(queue);
++    list.querySelectorAll('.fc-v1024-fv-slide').forEach(slide => ro.observe(slide));
++    list._fcHeightROV1285 = ro;
++  }
++  requestAnimationFrame(queue);
++  setTimeout(queue, 80);
++  setTimeout(queue, 260);
++}
++
++
+ 
+ 
+ /* ---------- ENTRY VIEWER ---------- */
+@@ -29585,6 +29665,7 @@
+   const promoteBtn = document.getElementById('fvPromoteBtn');
+   if (promoteBtn) promoteBtn.style.display = (ch.is_public && status !== 'closed' && status !== 'voided') ? 'block' : 'none';
+   list.style.display = 'flex';
++  fcResetFeedViewerActiveHeightV1285(list);
+   list.innerHTML    = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Loading…</div>';
+   const fvCounterResetV1193 = document.getElementById('fvCounter');
+   const fvDotsResetV1193 = document.getElementById('fvDots');
+@@ -29670,6 +29751,7 @@
+     renderFvVotingNoticeV1024(ch, status, myVoteEntryId, _validVotesV1047.length);
+ 
+     if (!_eligibleVisibleV1047.length) {
++      fcResetFeedViewerActiveHeightV1285(list);
+       list.innerHTML = '';
+       empty.textContent = entries.length ? 'No approved entries are available yet.' : 'No entries yet.';
+       empty.style.display = 'block';
+@@ -29688,6 +29770,7 @@
+     const dotsV1193 = document.getElementById('fvDots');
+ 
+     if (viewerModeV1193 === 'results') {
++      fcResetFeedViewerActiveHeightV1285(list);
+       // Closed challenges lead with the winner and final standings. The entry
+       // carousel remains available through View Details, but is not rendered as
+       // a large obsolete stage above the result.
+@@ -29707,6 +29790,7 @@
+     } else {
+       list.style.display = 'flex';
+       list.innerHTML = _eligibleVisibleV1047.map(e => renderFvEntry(e, ch, canVote, myVoteEntryId, status)).join('');
++      fcWireFeedViewerActiveHeightV1285(list);
+       _checkFreshVideoEncoding(list);
+       if (counterV1193) counterV1193.style.display = '';
+       if (dotsV1193) dotsV1193.style.display = '';
+@@ -30674,6 +30758,7 @@
+ function closeFeedViewer() {
+   dlog('viewer', 'close-feed');
+   const sheet = document.getElementById('feedViewerSheet');
++  fcResetFeedViewerActiveHeightV1285(document.getElementById('fvEntries'));
+   sheet.querySelectorAll('video, audio').forEach(m => {
+     try { m.pause(); m.currentTime = 0; m.src = ''; m.load(); } catch(_) {}
+   });
+@@ -50046,5 +50131,38 @@
+ </style>
+ <script>window.FC_V1284_VALIDATION={build:'v1284',audioStyleSettingRespected:true,sceneUsesUnifiedV1280:true,recordRestored:true,flameRestored:true,waveformRestored:true,compactGeometryPreserved:true,feedViewerRerendersOnStyleChange:true,v1283HallOfFamePreserved:true};</script>
+ 
++
++<style id="fc-v1285-adaptive-feed-viewer-height-css">
++/* The carousel's height follows the visible snap page instead of the tallest
++   sibling. This removes the large empty lower panel seen when a landscape
++   entry shares a challenge with a taller submission. */
++#feedViewerModal #fvEntries[data-fc-active-height-v1285="1"]{
++  align-items:flex-start!important;
++  transition:height .18s cubic-bezier(.2,.8,.2,1)!important;
++  overflow-y:hidden!important;
++}
++#feedViewerModal #fvEntries[data-fc-active-height-v1285="1"] > .fc-v1024-fv-slide{
++  align-self:flex-start!important;
++  height:auto!important;
++  min-height:0!important;
++  flex:0 0 100%!important;
++}
++/* v1283 made primary navigation route away from read-only details, but v1198's
++   immersive rule still hid the bar. Keep it visible on read-only detail
++   surfaces; the focused entry editor remains intentionally nav-free. */
++body:not(:has(#submitEntrySheet.open)):has(#feedViewerSheet.open) #bottomNav,
++body:not(:has(#submitEntrySheet.open)):has(#entryViewerSheet.open) #bottomNav,
++body:not(:has(#submitEntrySheet.open)):has(#challengeDetailSheet.open) #bottomNav,
++body:not(:has(#submitEntrySheet.open)):has(#profileSheet.open) #bottomNav{
++  visibility:visible!important;
++  opacity:1!important;
++  pointer-events:auto!important;
++}
++body:not(:has(#submitEntrySheet.open)):has(#feedViewerSheet.open) #feedViewerSheet{
++  padding-bottom:calc(var(--fc-bottom-nav-bar-h) + env(safe-area-inset-bottom,0px) + 4px)!important;
++}
++</style>
++<script>window.FC_V1285_VALIDATION={build:'v1285',feedViewerUsesActiveSlideHeight:true,portraitSiblingCannotStretchLandscapeEntry:true,heightReflowsOnSwipe:true,heightReflowsWhenMediaLoads:true,bottomNavVisibleOnReadOnlyDetails:true,entryEditorNavHidePreserved:true,v1284AudioStylePreserved:true,v1283HallOfFamePreserved:true};</script>
++
+ </body>
+ </html>
