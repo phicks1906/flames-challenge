@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1283 · hall-of-fame-ceremony-and-detail-nav" name="fc-build"/>
+<meta content="v1284 · audio-style-preference-restored" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Redesigned Hall of Fame as a ceremonial legacy surface with personal progress reduced to a compact secondary strip, and made the persistent bottom navigation close open read-only detail screens before navigating." name="fc-whatsnew"/>
+<meta content="Restored the Audio style setting across Home, winners, Challenge Detail, and entry viewers. Scene keeps the new unified player; Record, Flame, and Waveform now render their selected visual treatment without inheriting the old oversized media stage." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -11307,6 +11307,7 @@ function cycleEqStyle() {
     if (state.currentView === 'challenges' && typeof renderChallenges === 'function') renderChallenges();
     if (state.currentChallenge && document.getElementById('challengeDetailSheet')?.classList.contains('open') && typeof renderChallengeDetail === 'function') renderChallengeDetail();
     if (typeof _evEntry !== 'undefined' && _evEntry && document.getElementById('entryViewerSheet')?.classList.contains('open') && typeof _renderEvEntry === 'function') _renderEvEntry();
+    if (typeof _fvChallenge !== 'undefined' && _fvChallenge && document.getElementById('feedViewerSheet')?.classList.contains('open') && typeof openFeedViewer === 'function') openFeedViewer(_fvChallenge.id);
   } catch (e) { dlog('audio-style', 'rerender-fail', { e: String(e).slice(0, 80) }); }
 }
 // Apply immediately (before any layout shows)
@@ -18561,7 +18562,7 @@ function _audioTileHtml(e, options = {}) {
   // CSS atmosphere + live waveform) so no baked play button, EQ or timestamps
   // can ever show through underneath the real controls.
   const unifiedModesV1280 = new Set(['card','winner','viewer','detail','winner-results','feed-viewer']);
-  if (unifiedModesV1280.has(mode)) {
+  if (unifiedModesV1280.has(mode) && style === 'scene') {
     const barCountV1280 = 61;
     const unifiedBarsV1280 = Array.from({length:barCountV1280}, (_, i) => {
       const mid = (barCountV1280 - 1) / 2;
@@ -18571,7 +18572,7 @@ function _audioTileHtml(e, options = {}) {
       return `<i class="fc-audio-unified-bar-v1280" style="--fc-idle-v1280:${h}%"></i>`;
     }).join('');
     const seekV1280 = controls ? `<input class="fc-audio-seek-v1123 fc-audio-unified-seek-v1280" type="range" min="0" max="0" step="0.1" value="0" aria-label="Seek through audio" oninput="seekFccAudioV1123(this,event)">` : '';
-    return `<div class="fcc-entry-media fcc-fire-eq fc-audio-unified-v1280 fc-audio-unified-mode-${mode}-v1280${controls ? ' fc-audio-has-controls-v1123' : ''}" data-audio-style="unified-v1280" data-audio-layout-v1201="compact" role="group" aria-label="Audio entry">
+    return `<div class="fcc-entry-media fcc-fire-eq fc-audio-unified-v1280 fc-audio-unified-mode-${mode}-v1280${controls ? ' fc-audio-has-controls-v1123' : ''}" data-audio-style="scene" data-audio-layout-v1201="compact" role="group" aria-label="Audio entry · Scene style">
       ${audio}
       <div class="fc-audio-unified-scene-v1280">
         <div class="fc-audio-unified-halo-v1280" aria-hidden="true"></div>
@@ -50031,6 +50032,19 @@ window.FC_V1282_VALIDATION={build:'v1282',compactIndicator:true,maxPageTravel52:
 <script id="fc-v1283-detail-nav-js">
 (function(){'use strict';function isOpen(id){return document.getElementById(id)?.classList.contains('open')}function closeReadOnlyDetails(target){const profile=document.getElementById('profileSheet');if(profile?.classList.contains('open')){const own=profile.classList.contains('fc-own-profile-page-v1075');if(!(target==='you'&&own)){try{if(typeof closeProfileSheet==='function')closeProfileSheet(true)}catch(_){}}}const closers=[['challengeDetailSheet','closeChallengeDetail'],['entryViewerSheet','closeEntryViewer'],['feedViewerSheet','closeFeedViewer'],['postSheet','closePostView'],['recordSheet','closeRecordSheet'],['boostSheet','closeBoostSheet'],['badgeLegendSheet','closeBadgeLegend']];closers.forEach(([id,fn])=>{if(isOpen(id)&&typeof window[fn]==='function'){try{window[fn]()}catch(_){}}});const archive=document.getElementById('fcProfileArchiveV1036');if(archive?.classList.contains('open')){try{window.closeProfileArchiveV1036?.()}catch(_){archive.classList.remove('open')}}}function navTarget(btn){if(!btn)return null;if(btn.classList.contains('bnav-create'))return 'create';return btn.dataset.view||null}const nav=document.getElementById('bottomNav');if(nav&&!nav.dataset.fcDetailNavV1283){nav.dataset.fcDetailNavV1283='1';nav.addEventListener('click',e=>{const btn=e.target.closest('button');if(!btn||!nav.contains(btn))return;const target=navTarget(btn);if(!target)return;closeReadOnlyDetails(target)},true)}window.fcCloseReadOnlyDetailsV1283=closeReadOnlyDetails;window.FC_V1283_VALIDATION={build:'v1283',hallCeremonialHero:true,personalRecordSecondary:true,hofTierProgression:true,hofFoundersSecondary:true,detailNavClosesReadOnlySheets:true,bottomNavStillPersistent:true,entryEditorNavHidePreserved:true};})();
 </script>
+
+
+<style id="fc-v1284-audio-style-preference-css">
+.fc-entry-rail-v1079 .fc-entry-stage-fixed-v1202 > .fcc-entry-media.fcc-fire-eq:not(.fc-audio-unified-v1280),
+.fc-entry-rail-v1079 .fcc-entry-card .fcc-entry-media.fcc-fire-eq:not(.fc-audio-unified-v1280),
+.fc-winner-audio-v1123 .fcc-entry-media.fcc-fire-eq:not(.fc-audio-unified-v1280),
+.fc-v1195-winning-audio .fcc-entry-media.fcc-fire-eq:not(.fc-audio-unified-v1280),
+.cd-entry-media .fcc-entry-media.fcc-fire-eq:not(.fc-audio-unified-v1280){width:100%!important;height:auto!important;min-height:0!important;max-height:none!important;aspect-ratio:16/9!important;padding:0!important;overflow:hidden!important}
+.fc-audio-layout-compact-v1201.eq-vinyl .fc-audio-record-v1160{height:100%!important;width:auto!important;max-width:100%!important;aspect-ratio:1/1!important}
+.fc-audio-layout-compact-v1201.eq-waveform .fc-audio-waveform-v1171,.fc-audio-layout-compact-v1201.eq-scene .fc-audio-scene-restored-v1205{width:100%!important;height:100%!important;max-height:none!important;aspect-ratio:auto!important}
+.fcc-fire-eq.eq-vinyl,.fcc-fire-eq.eq-flame,.fcc-fire-eq.eq-waveform{border-radius:18px!important;border:1px solid rgba(197,116,48,.36)!important;background:#070403!important;box-shadow:inset 0 1px 0 rgba(255,219,151,.05),0 12px 28px rgba(0,0,0,.22)!important}
+</style>
+<script>window.FC_V1284_VALIDATION={build:'v1284',audioStyleSettingRespected:true,sceneUsesUnifiedV1280:true,recordRestored:true,flameRestored:true,waveformRestored:true,compactGeometryPreserved:true,feedViewerRerendersOnStyleChange:true,v1283HallOfFamePreserved:true};</script>
 
 </body>
 </html>
