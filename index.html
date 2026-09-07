@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1288 · moderation-status-entry-recovery" name="fc-build"/>
+<meta content="v1289 · ember-competitor-context-and-scene-reveal" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Made video moderation visible to entrants: under-review entries now show a persistent saved/private status, rejected entries clearly ask for a replacement, and opening the entry form recovers the existing server row instead of failing like a duplicate-submission bug." name="fc-whatsnew"/>
+<meta content="Simplified Ember challenge context, replaced the stale explanatory sentence with competitor badges and monthly records, removed legacy Recorded rule wording, and rebuilt Scene audio from clean layers so no lower-half cover or baked controls remain." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -10272,7 +10272,7 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
 <button aria-label="Close" class="fc-icon-close" onclick="closeEmber()">×</button>
 <div class="ember-assistant-identity">
 <div class="ember-assistant-avatar" id="emberAssistantAvatar"></div>
-<div><h2>Ember</h2><p>Your competition guide</p></div>
+<div><h2>Ember</h2></div>
 </div>
 <span aria-label="Available" class="ember-live-dot"></span>
 </header>
@@ -10282,7 +10282,7 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
 <div>
 <div class="ember-kicker">ASK ABOUT THIS COMPETITION</div>
 <h3>I can help you understand the competition and take action.</h3>
-<p id="emberContextLine">Ask about rules, voting, Championship Score, challenge setup, entries, results, improvements, or what to do next. I use this screen and recorded activity when available.</p>
+<div id="emberContextLine" class="ember-context-roster-v1289" aria-label="Challenge competitors"></div>
 </div>
 </section>
 <div aria-label="Suggested questions" class="ember-quick-prompts">
@@ -40096,7 +40096,7 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
     const map={
       create:['CREATE','Build a stronger challenge.','I can help sharpen the title, prompt, rules, and entry wording without inventing details.'],
       entry:['ENTRY','Make the work clearer.','I can help interpret the prompt, polish your wording, and explain what happens after submission.'],
-      challenge:['CHALLENGE',ch?.title?`Read “${ch.title}.”`:'Read this competition.','I can explain this challenge’s status, rules, Championship Score, or a useful next move.'],
+      challenge:['CHALLENGE',ch?.title?`Read “${ch.title}.”`:'Read this competition.',''],
       titles:['TITLES','Understand the Championship race.','I can explain recorded Score, qualification position, strongest wins, Opponent Points, and Turnout Points.'],
       profile:['PROFILE','Read the competitive identity.','I can interpret the recorded competitive history, strongest results, visible level, Hall of Fame record, and what stands out.'],
       compete:['COMPETE','Find the right competition.','I can use your saved interests and currently loaded challenges to help you choose where to enter or vote.'],
@@ -45662,8 +45662,7 @@ body.theme-light .fc-preparing-media-v1120,html[data-theme="light"] body .fc-pre
     else if(/photo|photograph|picture|image/.test(haystack)) advice='Use one clear focal subject, strong lighting, clean framing, and an image that communicates the idea at first glance.';
     else if(/draw|paint|art|design/.test(haystack)) advice='Show the finished work clearly, use even lighting, avoid distracting backgrounds, and make the detail voters should judge easy to see.';
     else if(/cook|food|recipe|dish|bake/.test(haystack)) advice='Show the finished result clearly, include the texture or detail voters need to judge, use clean lighting, and avoid unnecessary setup footage.';
-    const rules=compactRules(challenge);
-    return `For “${title},” ${advice}${rules?` Follow the recorded rule: “${rules}”`:''}`;
+    return `For “${title},” ${advice}`;
   }
   function challengeAnswer(question){
     const challenge=activeChallenge();
@@ -45685,8 +45684,11 @@ body.theme-light .fc-preparing-media-v1120,html[data-theme="light"] body .fc-pre
       return `For “${title},” make the judging standard unmistakable in the title and rules, then promote the direct challenge link while entries are open. Lead with what to submit and the deadline${submissions?` (${submissions})`:''}. It currently has ${count} approved public entr${count===1?'y':'ies'}.`;
     }
     if(/rules.*score|score.*rules|championship score eligibility|score eligibility|earn score|does this challenge.*score/.test(q)){
+      if(challenge.is_championship){
+        return 'Entry is limited to qualified competitors. Championship rounds decide the title and do not add Championship Score.';
+      }
       const rules=compactRules(challenge);
-      return `${rules?`Recorded rule: “${rules}” `:'No additional host-written rule is recorded. '}${scoreRead(challenge)}`;
+      return `${rules?`${rules} `:''}${scoreRead(challenge)}`.trim();
     }
     if(/why.*(review|pending)|video review|moderation|getting.*ready|preparing/.test(q)){
       if(!mine)return `I do not see an entry from your account in “${title}.”`;
@@ -45784,6 +45786,29 @@ body.theme-light .fc-preparing-media-v1120,html[data-theme="light"] body .fc-pre
     input.value=question;return window.askEmberModal();
   };
 
+  function fcEmberCompetitorRosterV1289(challenge){
+    const line=document.getElementById('emberContextLine');
+    if(!line)return;
+    const entries=approvedEntries(challenge);
+    const ids=[...new Set(entries.map(e=>e?.user_id).filter(Boolean).map(String))];
+    if(!ids.length){line.innerHTML='';line.style.display='none';return;}
+    const users=Array.isArray(state?.leaderboardData?.users)?state.leaderboardData.users:[];
+    const pmap=state?._profilesCache||{};
+    line.innerHTML=ids.slice(0,6).map(uid=>{
+      const entry=entries.find(e=>String(e?.user_id||'')===uid)||{};
+      const u=users.find(x=>String(x?.id||'')===uid)||pmap[uid]||{};
+      const rawName=u.name||entry.user_name||entry.profile_name||entry.name||'Competitor';
+      const name=typeof escapeHtml==='function'?escapeHtml(rawName):String(rawName);
+      let badge='';
+      try{badge=typeof renderLadderChip==='function'?renderLadderChip(uid,{size:17,showSpark:true,includeFounder:true}):'';}catch(_){}
+      const wins=Number(u.monthly);
+      const losses=Number(u.monthlyLosses);
+      const record=Number.isFinite(wins)&&Number.isFinite(losses)?`${wins}W · ${losses}L this month`:'';
+      return `<span class="ember-competitor-v1289"><b>${name}</b>${badge}${record?`<small>${record}</small>`:''}</span>`;
+    }).join('');
+    line.style.display='flex';
+  }
+
   function refreshPinnedCopy(){
     if(typeof priorRefresh==='function')priorRefresh();
     const challenge=activeChallenge();
@@ -45793,8 +45818,8 @@ body.theme-light .fc-preparing-media-v1120,html[data-theme="light"] body .fc-pre
     const line=document.getElementById('emberContextLine');
     const tag=document.querySelector('#emberModal .ember-surface-label');
     if(heading)heading.textContent=`Read “${title}.”`;
-    if(line)line.textContent='I’m using this challenge’s current status, deadlines, entries, and rules.';
-    if(tag)tag.textContent=`Current context · ${title}`;
+    fcEmberCompetitorRosterV1289(challenge);
+    if(tag)tag.style.display='none';
   }
   window.fcRefreshAskEmber=refreshPinnedCopy;
 
@@ -50315,9 +50340,10 @@ body:not(:has(#submitEntrySheet.open)):has(#feedViewerSheet.open) #feedViewerShe
    for the Crowned F + fiery environment; the lower half is deliberately masked
    so the live waveform, play/pause and times remain the only controls. */
 .fc-audio-scene-v1286{position:relative!important;width:100%!important;height:auto!important;min-height:0!important;max-height:none!important;aspect-ratio:16/9!important;overflow:hidden!important;border-radius:18px!important;border:1px solid rgba(205,128,49,.44)!important;background:#070403!important;box-shadow:inset 0 1px 0 rgba(255,221,156,.07),0 12px 28px rgba(0,0,0,.26)!important;isolation:isolate!important;touch-action:pan-y!important}
-.fc-audio-scene-v1286 .fc-audio-scene-art-v1286{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;min-height:0!important;border-radius:inherit!important;background-position:center top!important;background-size:100% auto!important;filter:saturate(1.04) contrast(1.02)!important}
-.fc-audio-scene-v1286 .fc-audio-scene-art-v1286::after{content:""!important;position:absolute!important;z-index:2!important;pointer-events:none!important;left:0!important;right:0!important;bottom:0!important;top:46%!important;background:radial-gradient(ellipse 52% 44% at 50% 4%,rgba(255,108,23,.12),transparent 68%),linear-gradient(180deg,rgba(8,5,3,.86) 0%,rgba(8,5,3,.94) 22%,rgba(5,3,2,.985) 68%,#030201 100%)!important}
-.fc-audio-scene-v1286 .fc-audio-scene-horizon-v1286{position:absolute!important;z-index:3!important;left:7%!important;right:7%!important;top:61%!important;height:25%!important;pointer-events:none!important;background:radial-gradient(ellipse at 50% 50%,rgba(255,178,61,.28),rgba(255,90,20,.10) 31%,transparent 68%),linear-gradient(90deg,transparent,rgba(255,109,31,.10) 20%,rgba(255,190,82,.24) 50%,rgba(255,109,31,.10) 80%,transparent)!important;filter:blur(5px)!important;opacity:.92!important}
+.fc-audio-scene-v1286 .fc-audio-scene-art-v1286{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;min-height:0!important;border-radius:inherit!important;background-image:radial-gradient(ellipse 48% 72% at 50% 31%,rgba(255,146,45,.24) 0%,rgba(255,86,18,.10) 34%,transparent 67%),radial-gradient(ellipse 34% 74% at 8% 48%,rgba(255,95,18,.18),transparent 70%),radial-gradient(ellipse 34% 74% at 92% 48%,rgba(255,95,18,.18),transparent 70%),linear-gradient(180deg,#100803 0%,#0a0503 42%,#050302 72%,#020101 100%)!important;background-position:center!important;background-size:cover!important;filter:none!important}
+.fc-audio-scene-v1286 .fc-audio-scene-art-v1286::before{content:""!important;position:absolute!important;z-index:4!important;pointer-events:none!important;left:50%!important;top:10%!important;width:25%!important;min-width:82px!important;max-width:138px!important;height:48%!important;transform:translateX(-50%)!important;background-image:var(--fc-approved-crowned-f)!important;background-repeat:no-repeat!important;background-position:center!important;background-size:contain!important;filter:brightness(1.08) contrast(1.04) drop-shadow(0 10px 24px rgba(255,101,20,.28))!important}
+.fc-audio-scene-v1286 .fc-audio-scene-art-v1286::after{content:""!important;position:absolute!important;z-index:2!important;pointer-events:none!important;left:-3%!important;right:-3%!important;bottom:-4%!important;top:49%!important;background:linear-gradient(180deg,rgba(18,8,3,.18),rgba(4,2,1,.96) 76%)!important;clip-path:polygon(0 54%,7% 39%,13% 47%,21% 19%,31% 48%,39% 31%,50% 58%,61% 31%,69% 48%,79% 19%,87% 47%,93% 39%,100% 54%,100% 100%,0 100%)!important;opacity:.94!important}
+.fc-audio-scene-v1286 .fc-audio-scene-horizon-v1286{position:absolute!important;z-index:3!important;left:11%!important;right:11%!important;top:8%!important;height:112%!important;pointer-events:none!important;border:1px solid rgba(255,126,29,.32)!important;border-radius:50%!important;background:radial-gradient(ellipse at 50% 67%,rgba(255,180,57,.20),rgba(255,80,14,.055) 30%,transparent 57%)!important;box-shadow:0 0 30px rgba(255,85,14,.14),inset 0 0 32px rgba(255,93,19,.06)!important;opacity:.92!important}
 .fc-audio-scene-v1286 .fc-audio-scene-wave-v1286{left:5%!important;right:5%!important;top:64%!important;height:20%!important;z-index:5!important;gap:.72%!important;opacity:.68!important}
 .fc-audio-scene-v1286.playing .fc-audio-scene-wave-v1286{opacity:1!important}
 .fc-audio-scene-v1286 .fc-audio-scene-wave-v1286::before{box-shadow:0 0 12px rgba(255,121,27,.52)!important}
@@ -50353,6 +50379,20 @@ body:not(:has(#submitEntrySheet.open)):has(#feedViewerSheet.open) #feedViewerShe
 @media(max-width:390px){.fc-mod-rejected-card-v1288{grid-template-columns:72px minmax(0,1fr)}.fc-mod-rejected-media-v1288{width:72px;height:72px}}
 </style>
 <script>window.FC_V1288_VALIDATION={build:'v1288',videoUnderReviewVisible:true,rejectedEntryVisible:true,rejectedRowRecoveredBeforeCreate:true,rejectedMediaRequiresReplacement:true,replacementVideoRerunsModeration:true,homeModerationStateVisible:true,competeModerationStateVisible:true,challengeDetailModerationStateVisible:true,moderationRulesUnchanged:true,v1287AudioStylesPreserved:true};</script>
+
+
+<style id="fc-v1289-ember-context-css">
+#emberModal .ember-assistant-identity>div:last-child{display:flex;align-items:center}
+#emberModal .ember-assistant-identity h2{margin:0!important}
+#emberModal .ember-context-roster-v1289{display:none;flex-wrap:wrap;justify-content:center;gap:6px;margin:10px auto 0;max-width:100%;color:var(--text-muted)}
+#emberModal .ember-competitor-v1289{display:inline-flex;align-items:center;gap:5px;min-height:30px;padding:4px 7px;border:1px solid rgba(255,145,62,.16);border-radius:999px;background:rgba(255,255,255,.025);max-width:100%}
+#emberModal .ember-competitor-v1289>b{font:800 10px/1 var(--font-ui);color:#f2ece7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px}
+#emberModal .ember-competitor-v1289>small{font:700 8px/1 var(--font-ui);color:#8f8178;white-space:nowrap}
+#emberModal .ember-competitor-v1289 .ladder-chip{padding:3px 5px!important;font-size:8px!important;gap:3px!important;white-space:nowrap!important}
+#emberModal .ember-competitor-v1289 .hof-badge-img{width:15px!important;height:15px!important}
+@media(max-width:390px){#emberModal .ember-competitor-v1289>small{display:none}#emberModal .ember-competitor-v1289>b{max-width:90px}}
+</style>
+<script>window.FC_V1289_VALIDATION={build:'v1289',emberHeaderSubtitleRemoved:true,staleChallengeContextSentenceRemoved:true,competitorBadgesShown:true,monthlyRecordShownWhenLoaded:true,recordedRulePrefixRemoved:true,strongEntryAdviceNoLegacyRuleDump:true,sceneCleanLayeredArtwork:true,noSceneCoverBand:true,noBakedSceneControls:true,v1288ModerationUxPreserved:true,v1287AudioStyleRetirementPreserved:true};</script>
 
 </body>
 </html>
