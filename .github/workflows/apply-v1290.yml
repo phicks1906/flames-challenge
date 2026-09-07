@@ -1,0 +1,113 @@
+name: Apply v1290 Ember title and score copy fix
+on:
+  push:
+    branches: [main]
+    paths: ['.github/v1290-trigger.txt']
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Apply exact v1290 transform
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object index.html)" = "d5814dd577b321e21c9bc2df6ba0063db60ce191"
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          repls=[
+          ('<meta content="v1289 · ember-competitor-context-and-scene-reveal" name="fc-build"/>','<meta content="v1290 · ember-title-and-score-copy-fix" name="fc-build"/>'),
+          ('<meta content="Simplified Ember challenge context, replaced the stale explanatory sentence with competitor badges and monthly records, removed legacy Recorded rule wording, and rebuilt Scene audio from clean layers so no lower-half cover or baked controls remain." name="fc-whatsnew"/>','<meta content="Removed the Read prefix from Ember challenge titles and corrected Championship copy so Championship rounds do not add to the Championship Score." name="fc-whatsnew"/>'),
+          ("      challenge:['CHALLENGE',ch?.title?`Read “${ch.title}.”`:'Read this competition.',''],","      challenge:['CHALLENGE',ch?.title?`${ch.title}`:'This competition.',''],"),
+          ("    if(heading)heading.textContent=`Read “${title}.”`;","    if(heading)heading.textContent=title;"),
+          ("  if(ch.is_championship)return {state:'ineligible',text:'Championship rounds do not add Championship Score.'};","  if(ch.is_championship)return {state:'ineligible',text:'Championship rounds do not add to the Championship Score.'};"),
+          ("    if(challenge?.is_championship)return 'Championship rounds do not add Championship Score.';","    if(challenge?.is_championship)return 'Championship rounds do not add to the Championship Score.';"),
+          ("        return 'Entry is limited to qualified competitors. Championship rounds decide the title and do not add Championship Score.';","        return 'Entry is limited to qualified competitors. Championship rounds decide the title and do not add to the Championship Score.';"),
+          ("    if(ch.is_championship)return {text:'Championship round · awards a title, not Score',kind:'neutral',title:'Championship round',copy:'Championship rounds award the category title. They do not add Championship Score.'};","    if(ch.is_championship)return {text:'Championship round · awards a title, not Score',kind:'neutral',title:'Championship round',copy:'Championship rounds award the category title. They do not add to the Championship Score.'};"),
+          ('<span>Private challenges and Championship rounds do not add Score.</span>','<span>Private challenges and Championship rounds do not add to the Championship Score.</span>'),
+          ("'Private challenges, Championship rounds, no-contests, and unresolved ties do not add monthly Championship Score.'","'Private challenges, Championship rounds, no-contests, and unresolved ties do not add to monthly Championship Score.'"),
+          ("exclusions:'No-submission co-winners, no-ballot co-winners, private challenges, Championship rounds, no-contests, and unresolved ties do not add monthly Championship Score.'","exclusions:'No-submission co-winners, no-ballot co-winners, private challenges, Championship rounds, no-contests, and unresolved ties do not add to monthly Championship Score.'"),
+          ("'Qualified contenders compete for the category title. The Championship round itself does not add regular monthly Championship Score.'","'Qualified contenders compete for the category title. The Championship round itself does not add to monthly Championship Score.'"),
+          ("explanation: 'Championship rounds decide titles. They use the same hidden-entry sudden-death model, but the Championship round itself does not add regular monthly Championship Score.'","explanation: 'Championship rounds decide titles. They use the same hidden-entry sudden-death model, but the Championship round itself does not add to monthly Championship Score.'"),
+          ]
+          for old,new in repls:
+              c=s.count(old)
+              if c!=1: raise SystemExit(f'replacement count {c}: {old[:100]}')
+              s=s.replace(old,new,1)
+          p.write_text(s,encoding='utf-8')
+          PY
+          test "$(git hash-object index.html)" = "c2a45b600a4cf47bbc4efa63b17c02a1892e8a26"
+          test "$(sha256sum index.html | awk '{print $1}')" = "71758dc9dbfd10acd55982dcbd874ba10b3dc5f0cdd2d63946cc15e049addfff"
+      - name: Validate inline JavaScript and CSS
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          import subprocess,tempfile,os,sys
+          html=Path('index.html').read_text(encoding='utf-8')
+          class P(HTMLParser):
+            def __init__(self): super().__init__(convert_charrefs=False); self.scripts=[]; self.styles=[]; self.tag=None; self.buf=[]; self.src=False
+            def handle_starttag(self,tag,attrs):
+              if tag=='script': self.tag='script'; self.buf=[]; self.src=any(k=='src' for k,v in attrs)
+              elif tag=='style': self.tag='style'; self.buf=[]; self.src=False
+            def handle_data(self,d):
+              if self.tag in ('script','style'): self.buf.append(d)
+            def handle_endtag(self,tag):
+              if tag==self.tag:
+                text=''.join(self.buf)
+                if tag=='script' and not self.src and text.strip(): self.scripts.append(text)
+                elif tag=='style': self.styles.append(text)
+                self.tag=None; self.buf=[]; self.src=False
+          p=P();p.feed(html)
+          for i,code in enumerate(p.scripts):
+            f=tempfile.NamedTemporaryFile('w',suffix='.js',delete=False,encoding='utf-8');f.write(code);f.close()
+            r=subprocess.run(['node','--check',f.name],capture_output=True,text=True);os.unlink(f.name)
+            if r.returncode: print(f'inline script {i} failed');print(r.stderr);sys.exit(1)
+          def balanced(css):
+            depth=0;i=0;quote=None;comment=False
+            while i<len(css):
+              c=css[i];n=css[i+1] if i+1<len(css) else ''
+              if comment:
+                if c=='*' and n=='/':comment=False;i+=2;continue
+                i+=1;continue
+              if quote:
+                if c=='\\':i+=2;continue
+                if c==quote:quote=None
+                i+=1;continue
+              if c=='/' and n=='*':comment=True;i+=2;continue
+              if c in ('"',"'"):quote=c;i+=1;continue
+              if c=='{':depth+=1
+              elif c=='}':
+                depth-=1
+                if depth<0:return False
+              i+=1
+            return depth==0
+          for i,css in enumerate(p.styles):
+            if not balanced(css): print(f'style block {i} failed');sys.exit(2)
+          print(f'validated {len(p.scripts)} inline scripts and {len(p.styles)} style blocks')
+          PY
+          grep -q 'v1290 · ember-title-and-score-copy-fix' index.html
+          ! grep -q 'Read “' index.html
+          ! grep -q 'Championship rounds do not add Championship Score\.' index.html
+          grep -q 'Championship rounds do not add to the Championship Score\.' index.html
+          grep -q 'function _readMetaContentV1174' index.html
+          grep -q 'FC_UPDATE_PARSER_SELFTEST_V1174' index.html
+          grep -q 'FC_V1289_VALIDATION' index.html
+      - name: Commit v1290 and clean staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/v1290-trigger.txt .github/workflows/apply-v1290.yml
+          git config user.name "FlamesChallenge Build Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "Build v1290 Ember title and score copy fix"
+          git push origin HEAD:main
