@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1289 · ember-competitor-context-and-scene-reveal" name="fc-build"/>
+<meta content="v1290 · ember-title-and-score-copy-fix" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Simplified Ember challenge context, replaced the stale explanatory sentence with competitor badges and monthly records, removed legacy Recorded rule wording, and rebuilt Scene audio from clean layers so no lower-half cover or baked controls remain." name="fc-whatsnew"/>
+<meta content="Removed the Read prefix from Ember challenge titles and corrected Championship copy so Championship rounds do not add to the Championship Score." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -29064,7 +29064,7 @@ const FC_COMPETITION_RULES_V1047 = Object.freeze({
     monthlyByCategory: true,
     regularScoreFromChampionshipRound: false,
     suddenDeathParity: true,
-    explanation: 'Championship rounds decide titles. They use the same hidden-entry sudden-death model, but the Championship round itself does not add regular monthly Championship Score.'
+    explanation: 'Championship rounds decide titles. They use the same hidden-entry sudden-death model, but the Championship round itself does not add to monthly Championship Score.'
   }),
   privateChallenges: Object.freeze({
     monthlyScore: false,
@@ -29140,7 +29140,7 @@ function fcEmberChallengeEligibilityV1046(ch){
   if(!ch)return null;
   const status=computeChallengeStatus(ch);
   const entries=(state?.currentEntries||[]).filter(e=>e?.moderation_status!=='rejected');
-  if(ch.is_championship)return {state:'ineligible',text:'Championship rounds do not add Championship Score.'};
+  if(ch.is_championship)return {state:'ineligible',text:'Championship rounds do not add to the Championship Score.'};
   if(ch.is_public===false)return {state:'ineligible',text:'Private challenges do not add Championship Score.'};
   if(entries.length<2)return {state:'needs_competitor',text:'This challenge needs at least two competitors before it can become a valid scoring challenge.'};
   const row=fcEmberChallengeScoreRowV1046(ch);
@@ -36037,7 +36037,7 @@ window.fcPublicFeedDiagnostics = function(){
   }
   function eligibility(ch,detail=false){
     if(!ch)return {text:'Championship Score unavailable',kind:'neutral',title:'Championship Score unavailable',copy:'This challenge could not be evaluated.'};
-    if(ch.is_championship)return {text:'Championship round · awards a title, not Score',kind:'neutral',title:'Championship round',copy:'Championship rounds award the category title. They do not add Championship Score.'};
+    if(ch.is_championship)return {text:'Championship round · awards a title, not Score',kind:'neutral',title:'Championship round',copy:'Championship rounds award the category title. They do not add to the Championship Score.'};
     if(ch.is_public===false)return {text:'Private challenge · no Championship Score',kind:'neutral',title:'Private challenge',copy:'Private challenges do not affect public Championship standings.'};
     const row=(state?.boostByChallenge||{})[ch.id];
     if(row)return {text:`Awarded ${Number(row.total_boost||0)} Championship Score`,kind:'awarded',title:`${Number(row.total_boost||0)} Championship Score awarded`,copy:`The result earned ${Number(row.opponent_pts||0)} Opponent Points and ${Number(row.vote_pts||0)} Turnout Points.`};
@@ -36054,7 +36054,7 @@ window.fcPublicFeedDiagnostics = function(){
     const body=document.getElementById('boostSheetBody'),sheet=document.getElementById('boostSheet');
     if(!body||!sheet)return;
     const count=challengeEntryCount(ch,detail),status=typeof computeChallengeStatus==='function'?computeChallengeStatus(ch):'';
-    body.innerHTML=`<div class="fc-score-eligibility-sheet-v1033"><div class="eyebrow">Championship Championship Score</div><h2>${esc(e.title)}</h2><div class="lead">${esc(e.copy)}</div><div class="fc-score-eligibility-now-v1033"><b>${esc(e.text)}</b><span>${count} current competitor${count===1?'':'s'} · ${esc(ch.category||'Challenge')} · ${esc(status||'status unavailable')}</span></div><div class="fc-score-eligibility-steps-v1033"><div class="fc-score-eligibility-step-v1033"><i>1</i><div><b>Public challenge</b><span>Private challenges and Championship rounds do not add Score.</span></div></div><div class="fc-score-eligibility-step-v1033"><i>2</i><div><b>At least two competitors</b><span>A single-entry challenge is a no-contest and earns no Score.</span></div></div><div class="fc-score-eligibility-step-v1033"><i>3</i><div><b>A decided final vote</b><span>The exact value is frozen only after the final voting round closes.</span></div></div></div><div class="fc-score-eligibility-formula-v1033"><b>Championship Score = Opponent Points + Turnout Points.</b><br>Opponent Points reflect who was defeated. Turnout Points use total ballots cast in the challenge.</div></div>`;
+    body.innerHTML=`<div class="fc-score-eligibility-sheet-v1033"><div class="eyebrow">Championship Championship Score</div><h2>${esc(e.title)}</h2><div class="lead">${esc(e.copy)}</div><div class="fc-score-eligibility-now-v1033"><b>${esc(e.text)}</b><span>${count} current competitor${count===1?'':'s'} · ${esc(ch.category||'Challenge')} · ${esc(status||'status unavailable')}</span></div><div class="fc-score-eligibility-steps-v1033"><div class="fc-score-eligibility-step-v1033"><i>1</i><div><b>Public challenge</b><span>Private challenges and Championship rounds do not add to the Championship Score.</span></div></div><div class="fc-score-eligibility-step-v1033"><i>2</i><div><b>At least two competitors</b><span>A single-entry challenge is a no-contest and earns no Score.</span></div></div><div class="fc-score-eligibility-step-v1033"><i>3</i><div><b>A decided final vote</b><span>The exact value is frozen only after the final voting round closes.</span></div></div></div><div class="fc-score-eligibility-formula-v1033"><b>Championship Score = Opponent Points + Turnout Points.</b><br>Opponent Points reflect who was defeated. Turnout Points use total ballots cast in the challenge.</div></div>`;
     sheet.classList.add('open');
   }
   function bindBadge(badge,ch,e,detail=false){
@@ -40096,7 +40096,7 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
     const map={
       create:['CREATE','Build a stronger challenge.','I can help sharpen the title, prompt, rules, and entry wording without inventing details.'],
       entry:['ENTRY','Make the work clearer.','I can help interpret the prompt, polish your wording, and explain what happens after submission.'],
-      challenge:['CHALLENGE',ch?.title?`Read “${ch.title}.”`:'Read this competition.',''],
+      challenge:['CHALLENGE',ch?.title?`${ch.title}`:'This competition.',''],
       titles:['TITLES','Understand the Championship race.','I can explain recorded Score, qualification position, strongest wins, Opponent Points, and Turnout Points.'],
       profile:['PROFILE','Read the competitive identity.','I can interpret the recorded competitive history, strongest results, visible level, Hall of Fame record, and what stands out.'],
       compete:['COMPETE','Find the right competition.','I can use your saved interests and currently loaded challenges to help you choose where to enter or vote.'],
@@ -40239,7 +40239,7 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
       'Monthly Championship Score = Opponent Points + Turnout Points from decisive public challenge wins in that category.',
       'Turnout Points use total ballots cast in the challenge.',
       R.score.qualification,
-      'Private challenges, Championship rounds, no-contests, and unresolved ties do not add monthly Championship Score.'
+      'Private challenges, Championship rounds, no-contests, and unresolved ties do not add to monthly Championship Score.'
     ],callout:'Opponent Points: Spark 1 · Flame 2 · Blaze 4 · Inferno 6 · Legend 10 · Icon 14 · Immortal 18 · G.O.A.T. 24. Turnout: under 10 = 0 · 10–24 = 3 · 25–49 = 6 · 50–99 = 10 · 100–249 = 15 · 250+ = 22.'},
     {id:'championships',label:'Championships',title:'Championship rounds',intro:R.championships.explanation,bullets:[
       'Championship standings are category-specific and monthly.',
@@ -43946,7 +43946,7 @@ html[data-theme="light"] body .nav-icon-btn:active{
       formula:'Championship Score = Opponent Points + Turnout Points.',
       decisive:'A decisive public challenge winner earns points for every opponent defeated, plus points based on turnout.',
       coWinner:'Competitive co-winners with the same number of ballots receive Turnout Points plus Opponent Points only for finalists they finished ahead of. Co-winners do not receive Opponent Points for each other.',
-      exclusions:'No-submission co-winners, no-ballot co-winners, private challenges, Championship rounds, no-contests, and unresolved ties do not add monthly Championship Score.',
+      exclusions:'No-submission co-winners, no-ballot co-winners, private challenges, Championship rounds, no-contests, and unresolved ties do not add to monthly Championship Score.',
       qualification:'At 11:59 PM ET on the final day of each calendar month, the top three Championship Scores in each category qualify. Everyone tied at the cutoff advances.',
       opponent:'Opponent Points are points based on the tier of the opponents defeated (Spark through G.O.A.T.).',
       turnout:'Turnout Points are the total number of ballots cast in a challenge, not only votes received by the winner.'
@@ -43982,7 +43982,7 @@ html[data-theme="light"] body .nav-icon-btn:active{
     {id:'voting',label:'Voting',title:'Voting and ballots',intro:RULES.voting.oneBallot,bullets:[RULES.voting.close,RULES.voting.selfVote,RULES.voting.live,RULES.voting.manipulation],enforced:true,enforcementLabel:'Anti-manipulation enforcement'},
     {id:'results',label:'Results',title:'Winners, ties, and sudden death',intro:RULES.results.decisive,bullets:[RULES.results.suddenDeath,RULES.results.oneSubmission,RULES.results.noSubmissions,RULES.results.noBallots,RULES.results.tiedRunoff,RULES.results.unresolved,RULES.results.admin],enforced:true},
     {id:'score',label:'Score',title:'Championship Score and qualification',intro:RULES.score.formula,bullets:[RULES.score.decisive,RULES.score.coWinner,RULES.score.opponent,RULES.score.turnout,RULES.score.exclusions,RULES.score.qualification],callout:'Opponent Points: Spark 1 · Flame 2 · Blaze 4 · Inferno 6 · Legend 10 · Icon 14 · Immortal 18 · G.O.A.T. 24. Turnout: under 10 = 0 · 10–24 = 3 · 25–49 = 6 · 50–99 = 10 · 100–249 = 15 · 250+ = 22.',enforced:true},
-    {id:'championships',label:'Titles',title:'Championship rounds and titles',intro:'Championship standings are category-specific and monthly.',bullets:[RULES.score.qualification,'Qualified contenders compete for the category title. The Championship round itself does not add regular monthly Championship Score.','Championship sudden death uses the same hidden-entry, simultaneous-reveal, fresh-runoff model.'],enforced:true},
+    {id:'championships',label:'Titles',title:'Championship rounds and titles',intro:'Championship standings are category-specific and monthly.',bullets:[RULES.score.qualification,'Qualified contenders compete for the category title. The Championship round itself does not add to monthly Championship Score.','Championship sudden death uses the same hidden-entry, simultaneous-reveal, fresh-runoff model.'],enforced:true},
     {id:'private',label:'Private',title:'Private challenges',intro:RULES.privateChallenges.access,bullets:[RULES.privateChallenges.score],enforced:true},
     {id:'moderation',label:'Reports',title:'Reports, moderation, and removals',intro:RULES.moderation.reports,bullets:[RULES.moderation.removal,RULES.moderation.scope],enforced:true},
     {id:'authority',label:'Authority',title:'Host and administrator authority',intro:RULES.authority.host,bullets:[RULES.authority.admin,RULES.authority.durable],enforced:true}
@@ -45638,7 +45638,7 @@ body.theme-light .fc-preparing-media-v1120,html[data-theme="light"] body .fc-pre
     return entriesFor(challenge).find(entry=>String(entry?.user_id||'')===String(uid))||null;
   }
   function scoreRead(challenge){
-    if(challenge?.is_championship)return 'Championship rounds do not add Championship Score.';
+    if(challenge?.is_championship)return 'Championship rounds do not add to the Championship Score.';
     if(challenge?.is_public===false)return 'This is a private challenge, so it does not add Championship Score.';
     const count=approvedEntries(challenge).length;
     if(count<2){
@@ -45685,7 +45685,7 @@ body.theme-light .fc-preparing-media-v1120,html[data-theme="light"] body .fc-pre
     }
     if(/rules.*score|score.*rules|championship score eligibility|score eligibility|earn score|does this challenge.*score/.test(q)){
       if(challenge.is_championship){
-        return 'Entry is limited to qualified competitors. Championship rounds decide the title and do not add Championship Score.';
+        return 'Entry is limited to qualified competitors. Championship rounds decide the title and do not add to the Championship Score.';
       }
       const rules=compactRules(challenge);
       return `${rules?`${rules} `:''}${scoreRead(challenge)}`.trim();
@@ -45817,7 +45817,7 @@ body.theme-light .fc-preparing-media-v1120,html[data-theme="light"] body .fc-pre
     const heading=document.querySelector('#emberModal .ember-welcome h3');
     const line=document.getElementById('emberContextLine');
     const tag=document.querySelector('#emberModal .ember-surface-label');
-    if(heading)heading.textContent=`Read “${title}.”`;
+    if(heading)heading.textContent=title;
     fcEmberCompetitorRosterV1289(challenge);
     if(tag)tag.style.display='none';
   }
