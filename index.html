@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1292 · admin-entry-controls-and-adaptive-video-viewer" name="fc-build"/>
+<meta content="v1293 · home-next-move-routing-fix" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Added direct Admin moderation controls to the entry viewer and made played videos use their actual orientation instead of forcing every video into a small 16:9 stage." name="fc-whatsnew"/>
+<meta content="Fixed Your Next Move routing so Home recommendations perform their own action instead of being intercepted by the daily Ember briefing. The daily briefing still opens automatically on first login each day." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -49207,32 +49207,11 @@ document.addEventListener('pointerdown', function(event) {
     await openDailyEmberV1221(false);
   }
 
-  let homeTileOpeningV1275 = false;
-  function wireHomeTileV1221() {
-    const tile = byId('emberHomeCard');
-    if (!tile || tile.dataset.fcDailyBriefingV1221 === '1') return;
-    tile.dataset.fcDailyBriefingV1221 = '1';
-    tile.addEventListener('click', async event => {
-      if (!event.target.closest('#emberHomeCard')) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-
-      // v1275 root-cause fix: when there were no daily-briefing items, the old
-      // fallback called action.click(). That synthetic click re-entered THIS
-      // capture handler, failed again, clicked again, and created an unbounded
-      // async click loop that made the entire Home surface appear frozen.
-      if (homeTileOpeningV1275) return;
-      homeTileOpeningV1275 = true;
-      try {
-        if (!(await openDailyEmberV1221(true))) {
-          const run = tile.__fcGuidanceRunV1275;
-          if (typeof run === 'function') run();
-        }
-      } finally {
-        homeTileOpeningV1275 = false;
-      }
-    }, true);
-  }
+  // v1293 — Your Next Move is a recommendation/action surface, not the
+  // launcher for the daily Ember briefing. The old capture-phase listener
+  // intercepted every Home recommendation tap before the recommendation's own
+  // click handler could run. Daily Ember remains automatic once per day below;
+  // the Home tile now owns its tap again.
 
   document.querySelectorAll('[data-ember-daily-close]').forEach(button => {
     button.addEventListener('click', closeDailyEmberV1221);
@@ -49243,15 +49222,9 @@ document.addEventListener('pointerdown', function(event) {
     if (event.target === overlay) closeDailyEmberV1221();
   });
 
-  const observer = new MutationObserver(() => wireHomeTileV1221());
-  const home = byId('emberHomeCard');
-  if (home) observer.observe(home,{childList:true,subtree:true});
-  wireHomeTileV1221();
-
   let attempts = 0;
   const timer = setInterval(() => {
     attempts++;
-    wireHomeTileV1221();
     if (state?.profile && !state?.loading) {
       clearInterval(timer);
       setTimeout(maybeOpenDailyEmberV1221, 500);
@@ -50552,5 +50525,6 @@ body:not(:has(#submitEntrySheet.open)):has(#feedViewerSheet.open) #feedViewerShe
 </style>
 <script>window.FC_V1292_VALIDATION={build:'v1292',adminControlsInEntryViewer:true,adminGateUsesIsAdmin:true,approveRejectDeleteReuseHardenedMutations:true,videoStageUsesIntrinsicAspect:true,portraitVideoUsesVerticalSpace:true,forced169Removed:true,v1291ModerationNotificationsPreserved:true};</script>
 
+<script>window.FC_V1293_VALIDATION={build:'v1293',homeNextMoveOwnsTap:true,dailyBriefingCaptureInterceptorRemoved:true,dailyBriefingAutomaticFirstLoginPreserved:true,directGuidanceRunPreserved:true,v1292AdminViewerPreserved:true};</script>
 </body>
 </html>
