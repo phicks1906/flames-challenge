@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1293 · home-next-move-routing-fix" name="fc-build"/>
+<meta content="v1294 · authoritative-admin-entitlement-refresh" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Fixed Your Next Move routing so Home recommendations perform their own action instead of being intercepted by the daily Ember briefing. The daily briefing still opens automatically on first login each day." name="fc-whatsnew"/>
+<meta content="Restored Admin controls when a valid admin session has stale client profile state by re-checking the signed-in user’s server-side admin entitlement on boot and when Settings opens." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -12472,6 +12472,12 @@ function hydrateApp(force = false) {
         await fcWithTimeoutV1099(loadProfile(), 22000, 'Profile restoration');
       }
       if (!state.profile) return; // banned or signed out — loadProfile handled redirect
+      // v1294 — a same-user profile object can survive an iOS/PWA restore even
+      // when its is_admin field is stale or missing. Re-check the signed-in user's
+      // authoritative profile before deciding whether Admin UI exists.
+      if (typeof window.fcRefreshAdminEntitlementV1294 === 'function') {
+        await window.fcRefreshAdminEntitlementV1294({ silent:true });
+      }
       if (typeof window.fcEnsureAccountSetupV1103 === 'function') {
         await window.fcEnsureAccountSetupV1103();
       }
@@ -33031,6 +33037,46 @@ function isRealAdmin() {
   return false;
 }
 
+// v1294 — authoritative admin entitlement refresh. The Admin shield and the
+// View as member escape hatch must not disappear because the in-memory profile
+// is stale or was restored without is_admin. Query only the signed-in user's own
+// profile row, merge the entitlement into state.profile, then resync both Admin
+// surfaces. This never grants access based on a client flag; the server row wins.
+function fcSyncAdminSurfacesV1294() {
+  const real = isRealAdmin();
+  const va = document.getElementById('viewAsRow');
+  const admin = document.getElementById('fcAdminSettingsV1117');
+  const vaState = document.getElementById('viewAsState');
+  if (va) va.style.display = real ? 'grid' : 'none';
+  if (admin) admin.style.display = real ? 'block' : 'none';
+  if (vaState) vaState.textContent = state.viewAsMember ? 'On' : 'Off';
+  showAdminNav();
+  return real;
+}
+
+async function fcRefreshAdminEntitlementV1294({ silent=false } = {}) {
+  const uid = state.session?.user?.id;
+  if (!uid || !state.profile || String(state.profile.id) !== String(uid)) {
+    fcSyncAdminSurfacesV1294();
+    return false;
+  }
+  try {
+    const req = db.from('profiles').select('id,is_admin').eq('id', uid).maybeSingle();
+    const result = typeof fcWithTimeoutV1099 === 'function'
+      ? await fcWithTimeoutV1099(req, 8000, 'Admin entitlement')
+      : await req;
+    if (result?.error) throw result.error;
+    if (result?.data && String(result.data.id) === String(uid)) {
+      state.profile = { ...state.profile, is_admin: result.data.is_admin === true };
+    }
+  } catch (e) {
+    if (!silent) console.warn('[v1294] admin entitlement refresh failed', e);
+  }
+  return fcSyncAdminSurfacesV1294();
+}
+window.fcRefreshAdminEntitlementV1294 = fcRefreshAdminEntitlementV1294;
+window.fcSyncAdminSurfacesV1294 = fcSyncAdminSurfacesV1294;
+
 // v690 — VIEW AS MEMBER. Flips every client-side admin gate off (all 18 call
 // sites route through here) so you can see the UI a normal member sees.
 //
@@ -44975,12 +45021,16 @@ body.fc-settings-open-v1117 #bottomNav{visibility:hidden!important;pointer-event
     document.body.classList.add('fc-settings-open-v1117');
     document.body.style.overflow='hidden';
     const getApp=document.getElementById('fcSettingsGetAppV1117');if(getApp)getApp.style.display=installed()?'none':'';
-    const va=document.getElementById('viewAsRow');
-    const admin=document.getElementById('fcAdminSettingsV1117');
-    const show=typeof isRealAdmin==='function'&&isRealAdmin();
-    if(va)va.style.display=show?'grid':'none';
-    if(admin)admin.style.display=show?'block':'none';
-    const vaState=document.getElementById('viewAsState');if(vaState)vaState.textContent=state.viewAsMember?'On':'Off';
+    if(typeof window.fcSyncAdminSurfacesV1294==='function')window.fcSyncAdminSurfacesV1294();
+    else {
+      const va=document.getElementById('viewAsRow');
+      const admin=document.getElementById('fcAdminSettingsV1117');
+      const show=typeof isRealAdmin==='function'&&isRealAdmin();
+      if(va)va.style.display=show?'grid':'none';
+      if(admin)admin.style.display=show?'block':'none';
+      const vaState=document.getElementById('viewAsState');if(vaState)vaState.textContent=state.viewAsMember?'On':'Off';
+    }
+    if(typeof window.fcRefreshAdminEntitlementV1294==='function')window.fcRefreshAdminEntitlementV1294({silent:true});
     const ticker=document.getElementById('tickerState');if(ticker&&typeof tickerDismissed==='function')ticker.textContent=tickerDismissed()?'Off':'On';
   };
   window.openProfileSettings=function(){window.openProfile();};
@@ -50526,5 +50576,7 @@ body:not(:has(#submitEntrySheet.open)):has(#feedViewerSheet.open) #feedViewerShe
 <script>window.FC_V1292_VALIDATION={build:'v1292',adminControlsInEntryViewer:true,adminGateUsesIsAdmin:true,approveRejectDeleteReuseHardenedMutations:true,videoStageUsesIntrinsicAspect:true,portraitVideoUsesVerticalSpace:true,forced169Removed:true,v1291ModerationNotificationsPreserved:true};</script>
 
 <script>window.FC_V1293_VALIDATION={build:'v1293',homeNextMoveOwnsTap:true,dailyBriefingCaptureInterceptorRemoved:true,dailyBriefingAutomaticFirstLoginPreserved:true,directGuidanceRunPreserved:true,v1292AdminViewerPreserved:true};</script>
+
+<script>window.FC_V1294_VALIDATION={build:'v1294',authoritativeAdminRefresh:true,bootRefresh:true,settingsRefresh:true,viewAsEscapeHatchRestoredForRealAdmins:true,serverIsAdminWins:true,nonAdminsRemainHidden:true,v1293NextMovePreserved:true,v1292AdminEntryControlsPreserved:true};</script>
 </body>
 </html>
