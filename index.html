@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1294 · authoritative-admin-entitlement-refresh" name="fc-build"/>
+<meta content="v1295 · sudden-death-fresh-entry-editor" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Restored Admin controls when a valid admin session has stale client profile state by re-checking the signed-in user’s server-side admin entitlement on boot and when Settings opens." name="fc-whatsnew"/>
+<meta content="Fixed sudden-death entry submission so tied finalists get a fresh current-round editor with the sudden-death deadline, rather than the closed original entry or old round media." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -25365,6 +25365,20 @@ function fcEntryWindowClosedV1267(ch) {
   return Number.isFinite(ts) && ts <= Date.now();
 }
 
+// v1295 — a sudden-death submission is a fresh challenge round. The original
+// entry window and round-0 entry are not authoritative while tied finalists are
+// submitting new hidden work. Centralize that state so the editor, cache lookup,
+// and deadline UI cannot disagree again.
+function fcSuddenDeathEntryStateV1295(ch) {
+  const active = ch?.sd_phase === 'submitting';
+  const round = Number(ch?.sd_round || 0);
+  const uid = String(state.profile?.id || '');
+  const tied = active && !!uid && Array.isArray(ch?.sd_user_ids) &&
+    ch.sd_user_ids.some(id => String(id) === uid);
+  const endMs = Date.parse(ch?.sd_submit_end || '');
+  const open = active && tied && (!Number.isFinite(endMs) || endMs > Date.now());
+  return { active, round, tied, endMs, open };
+}
 
 async function fcRefreshChampionshipEntryStateV1270(ch) {
   if (!ch?.is_championship || !state.profile) return { invite:null, entry:null };
@@ -25444,6 +25458,22 @@ async function openSubmitEntry(entryToEdit = null) {
   seState.standaloneContextV1275 =
     !document.getElementById('challengeDetailSheet')?.classList.contains('open');
 
+  const sdEntryStateV1295 = fcSuddenDeathEntryStateV1295(ch);
+  if (sdEntryStateV1295.active && !sdEntryStateV1295.tied) {
+    toast('Sudden Death entry is limited to the tied finalists.');
+    if (seState.standaloneContextV1275) fcClearStandaloneEntryContextV1275(ch.id);
+    return;
+  }
+  if (sdEntryStateV1295.active && !sdEntryStateV1295.open) {
+    toast('Sudden Death submission window has closed.');
+    if (seState.standaloneContextV1275) fcClearStandaloneEntryContextV1275(ch.id);
+    return;
+  }
+  if (sdEntryStateV1295.active && entryToEdit &&
+      Number(entryToEdit.sd_round || 0) !== sdEntryStateV1295.round) {
+    entryToEdit = null;
+  }
+
   // v1270 — Championship access and "do I already have an entry?" are refreshed
   // from the database BEFORE deciding whether this is a new submission or edit.
   // This fixes the exact delete→resubmit failure: the deleted row remained in
@@ -25453,6 +25483,7 @@ async function openSubmitEntry(entryToEdit = null) {
       state._fcChampEntryStateAtV1271?.[String(ch.id)] || 0
     );
     const hasFreshDetailStateV1271 =
+      ch.sd_phase !== 'submitting' &&
       freshnessV1271 > 0 && (Date.now() - freshnessV1271) < 45000;
 
     let freshV1270;
@@ -25495,8 +25526,16 @@ async function openSubmitEntry(entryToEdit = null) {
   // (challenge detail) and feedEntries (feed/challenges cards), since either
   // can be the fresh one depending on where the tap came from.
   if (!entryToEdit && state.profile) {
-    const _mine = e => e.user_id === state.profile.id && e.challenge_id === ch.id;
+    const _mine = e => e.user_id === state.profile.id &&
+      e.challenge_id === ch.id &&
+      (!sdEntryStateV1295.active || Number(e.sd_round || 0) === sdEntryStateV1295.round);
     entryToEdit = (state.currentEntries || []).find(_mine) || (state.feedEntries || []).find(_mine) || null;
+  }
+  // A round-0 object supplied by an older card must never turn a sudden-death
+  // submission into an edit of the original entry.
+  if (sdEntryStateV1295.active && entryToEdit &&
+      Number(entryToEdit.sd_round || 0) !== sdEntryStateV1295.round) {
+    entryToEdit = null;
   }
   // v1288 — rejected entries are deliberately excluded from several public
   // participation caches. If the local cache cannot see the row, read the user's
@@ -25554,7 +25593,9 @@ async function openSubmitEntry(entryToEdit = null) {
   const entryModerationV1288 = String(entryToEdit?.moderation_status || '').toLowerCase();
   fcSyncEntryModerationBannerV1288(ch, entryToEdit);
   if (entryToEdit) {
-    document.querySelector('#submitEntrySheet h2').textContent = entryModerationV1288 === 'rejected' ? 'Replace Your Entry' : 'Edit Your Entry';
+    document.querySelector('#submitEntrySheet h2').textContent = sdEntryStateV1295.active
+      ? 'Edit Sudden-Death Entry'
+      : (entryModerationV1288 === 'rejected' ? 'Replace Your Entry' : 'Edit Your Entry');
     if (submitBtn) {
       submitBtn.disabled = false;
       submitBtn.textContent = entryModerationV1288 === 'rejected' ? 'Replace & Resubmit' : 'Save Changes';
@@ -25579,14 +25620,22 @@ async function openSubmitEntry(entryToEdit = null) {
       document.getElementById('seUploadZone').classList.add('has-file');
     }
   } else {
-    document.querySelector('#submitEntrySheet h2').textContent = 'Your Entry';
+    document.querySelector('#submitEntrySheet h2').textContent = sdEntryStateV1295.active ? 'Sudden-Death Entry' : 'Your Entry';
     fcSyncEntryModerationBannerV1288(ch, null);
-    if (submitBtn) submitBtn.textContent = 'Submit Entry';
+    if (submitBtn) submitBtn.textContent = sdEntryStateV1295.active ? 'Submit New Entry' : 'Submit Entry';
   }
 
-  // v1268 — the database deadline is authoritative. Championship entry
-  // windows now close at midnight ET; never leave Save looking active afterward.
-  if (entryToEdit && ch.is_championship && fcEntryWindowClosedV1267(ch)) {
+  // v1295 — the active sudden-death window replaces the original entry deadline
+  // for tied finalists. Do not disable a current-round edit just because round 0
+  // closed days earlier.
+  if (sdEntryStateV1295.active && !sdEntryStateV1295.open) {
+    const error = document.getElementById('seError');
+    if (error) {
+      error.textContent = 'Sudden Death submission window has closed.';
+      error.classList.add('show');
+    }
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Sudden Death Closed'; }
+  } else if (!sdEntryStateV1295.active && entryToEdit && ch.is_championship && fcEntryWindowClosedV1267(ch)) {
     const error = document.getElementById('seError');
     if (error) {
       error.textContent = `Entries closed ${fcEntryDeadlineEtLabelV1267(ch)}. Changes can no longer be saved.`;
@@ -25826,7 +25875,8 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
   }
   // Normal deadline gate — but Sudden Death submission happens AFTER the original
   // deadline, so bypass it when this user is a tied player in the submitting phase.
-  const _sdSubmitting = ch.sd_phase === 'submitting' && Array.isArray(ch.sd_user_ids) && ch.sd_user_ids.includes(state.profile.id);
+  const _sdStateV1295 = fcSuddenDeathEntryStateV1295(ch);
+  const _sdSubmitting = _sdStateV1295.active && _sdStateV1295.tied;
   if (!_sdSubmitting && new Date(ch.submission_deadline) <= new Date()) {
     const closedMessageV1267 = ch.is_championship
       ? `Entries closed ${fcEntryDeadlineEtLabelV1267(ch)}. Your changes were not saved.`
@@ -27853,7 +27903,8 @@ async function fcRefreshOwnEntryForChallengeV1288(ch) {
     if (error) throw error;
     const rows = data || [];
     const currentRound = ch.sd_phase === 'submitting' ? Number(ch.sd_round || 0) : 0;
-    const row = rows.find(e => Number(e.sd_round || 0) === currentRound) || rows[0] || null;
+    const row = rows.find(e => Number(e.sd_round || 0) === currentRound) ||
+      (ch.sd_phase === 'submitting' ? null : (rows[0] || null));
     if (row) {
       const merge = arr => [row, ...(arr || []).filter(e => String(e?.id || '') !== String(row.id))];
       state.feedEntries = merge(state.feedEntries);
@@ -50578,5 +50629,6 @@ body:not(:has(#submitEntrySheet.open)):has(#feedViewerSheet.open) #feedViewerShe
 <script>window.FC_V1293_VALIDATION={build:'v1293',homeNextMoveOwnsTap:true,dailyBriefingCaptureInterceptorRemoved:true,dailyBriefingAutomaticFirstLoginPreserved:true,directGuidanceRunPreserved:true,v1292AdminViewerPreserved:true};</script>
 
 <script>window.FC_V1294_VALIDATION={build:'v1294',authoritativeAdminRefresh:true,bootRefresh:true,settingsRefresh:true,viewAsEscapeHatchRestoredForRealAdmins:true,serverIsAdminWins:true,nonAdminsRemainHidden:true,v1293NextMovePreserved:true,v1292AdminEntryControlsPreserved:true};</script>
+<script>window.FC_V1295_VALIDATION={build:'v1295',suddenDeathFreshRoundEditor:true,oldRoundEntryNeverPrefilled:true,sdDeadlineOverridesOriginalDeadline:true,sdCurrentRoundEditSupported:true,sdNewEntryCopy:true,championshipRoundRefreshForced:true,regularSuddenDeathFallbackFixed:true,v1294AdminRefreshPreserved:true};</script>
 </body>
 </html>
