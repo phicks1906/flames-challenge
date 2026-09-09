@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1295 · sudden-death-fresh-entry-editor" name="fc-build"/>
+<meta content="v1296 · ember-pending-upload-scope" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Fixed sudden-death entry submission so tied finalists get a fresh current-round editor with the sudden-death deadline, rather than the closed original entry or old round media." name="fc-whatsnew"/>
+<meta content="Fixed Ember upload-status guidance so it only reports the signed-in member’s recent moderation job, never another competitor’s stale pending entry, and calls out unusually slow reviews accurately." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -49199,18 +49199,37 @@ document.addEventListener('pointerdown', function(event) {
       }
     });
 
+    // v1296 — upload status must be scoped to the signed-in member. The old
+    // briefing searched feedEntries (which contains everyone) and took the first
+    // pending row it found, so a weeks-old pending video from another competitor
+    // could be announced as "Your upload". Keep only the member's own recent
+    // moderation work and do not resurrect abandoned/stale jobs indefinitely.
+    const meV1296 = String(state?.profile?.id || '');
+    const nowV1296 = Date.now();
     const pending = [
-      ...(state?.feedEntries || []),
-      ...(state?.myEntries || [])
-    ].find(e => ['pending','processing','reviewing','under_review'].includes(norm(e?.moderation_status || e?.review_state)));
+      ...(state?.myEntries || []),
+      ...(state?.feedEntries || [])
+    ]
+      .filter(e => meV1296 && String(e?.user_id || '') === meV1296)
+      .filter(e => ['pending','processing','reviewing','under_review','flagged','escalated'].includes(norm(e?.moderation_status || e?.review_state)))
+      .filter(e => {
+        const createdMs = Date.parse(e?.created_at || '');
+        if (!Number.isFinite(createdMs)) return false;
+        return nowV1296 - createdMs >= 0 && nowV1296 - createdMs <= 2 * 60 * 60 * 1000;
+      })
+      .sort((a,b) => Date.parse(b?.created_at || 0) - Date.parse(a?.created_at || 0))[0] || null;
     if (pending) {
       const ch = challenges.find(c => String(c.id) === String(pending.challenge_id));
+      const ageMsV1296 = nowV1296 - Date.parse(pending.created_at || '');
+      const slowV1296 = Number.isFinite(ageMsV1296) && ageMsV1296 > 10 * 60 * 1000;
       add({
         kind:'processing',
         priority:60,
-        title:'Your upload is still being prepared',
-        text:ch?.title ? `${ch.title} will publish automatically when ready.` : 'It will publish automatically when ready.',
-        action:'View status',
+        title:slowV1296 ? 'Your video review is taking longer than usual' : 'Your video is being checked',
+        text:slowV1296
+          ? (ch?.title ? `${ch.title} is saved and private while the review finishes.` : 'Your entry is saved and private while the review finishes.')
+          : (ch?.title ? `${ch.title} usually clears in seconds and will publish automatically if approved.` : 'Video review usually clears in seconds and publishes automatically if approved.'),
+        action:'Check status',
         challenge:ch,
         run:()=>ch ? runChallengeV1221(ch) : closeDailyEmberV1221()
       });
@@ -50630,5 +50649,6 @@ body:not(:has(#submitEntrySheet.open)):has(#feedViewerSheet.open) #feedViewerShe
 
 <script>window.FC_V1294_VALIDATION={build:'v1294',authoritativeAdminRefresh:true,bootRefresh:true,settingsRefresh:true,viewAsEscapeHatchRestoredForRealAdmins:true,serverIsAdminWins:true,nonAdminsRemainHidden:true,v1293NextMovePreserved:true,v1292AdminEntryControlsPreserved:true};</script>
 <script>window.FC_V1295_VALIDATION={build:'v1295',suddenDeathFreshRoundEditor:true,oldRoundEntryNeverPrefilled:true,sdDeadlineOverridesOriginalDeadline:true,sdCurrentRoundEditSupported:true,sdNewEntryCopy:true,championshipRoundRefreshForced:true,regularSuddenDeathFallbackFixed:true,v1294AdminRefreshPreserved:true};</script>
+<script>window.FC_V1296_VALIDATION={build:'v1296',pendingUploadScopedToSignedInUser:true,foreignFeedPendingExcluded:true,pendingJobsRecencyCapped:true,slowReviewCopyAfterTenMinutes:true,approvedConditionalCopy:true,v1295SuddenDeathPreserved:true};</script>
 </body>
 </html>
