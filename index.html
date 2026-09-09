@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1296 · ember-pending-upload-scope" name="fc-build"/>
+<meta content="v1297 · detail-video-layer-and-record-swipe-identity" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Fixed Ember upload-status guidance so it only reports the signed-in member’s recent moderation job, never another competitor’s stale pending entry, and calls out unusually slow reviews accurately." name="fc-whatsnew"/>
+<meta content="Stopped Challenge Detail video previews from painting over challenger identity, and made Record-style audio entries visibly distinct while swiping by putting each challenger’s profile image on the record label." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -18545,6 +18545,14 @@ function _audioTileHtml(e, options = {}) {
   const controls = options.controls === true;
   const preload = controls ? 'metadata' : 'none';
   const IMG_URL = 'https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/Assets/fire.jpeg';
+  // v1297 — Record style needed the same entry-to-entry identity cue the other
+  // audio presentations already get from their surrounding card. Put the
+  // challenger on the center label so a horizontal swipe visibly changes the
+  // record even when two audio files share identical artwork. Upload previews
+  // and non-competition audio fall back to the branded label.
+  const recordProfileV1297 = e?.submitter?.avatar
+    ? `<span class="fc-audio-record-profile-v1297">${avatarInner(e.submitter.avatar)}</span>`
+    : '<span class="fc-audio-record-brand-v1297"></span>';
   const rootClasses = `fcc-entry-media fcc-fire-eq eq-${style} fc-audio-mode-${mode}-v1123 fc-audio-layout-${audioLayoutV1201}-v1201${controls ? ' fc-audio-has-controls-v1123' : ''}`;
   const audio = `<audio src="${escapeHtml(mediaUrl)}" preload="${preload}" crossorigin="anonymous"
     onloadedmetadata="syncFccAudioControlsV1123(this.closest('.fcc-fire-eq'),this)"
@@ -18599,7 +18607,7 @@ function _audioTileHtml(e, options = {}) {
       <div class="fc-audio-record-deck-v1160"></div>
       <div class="fc-audio-record-disc-v1160">
         <div class="fc-audio-record-grooves-v1160"></div>
-        <div class="fc-audio-record-label-v1160"><span></span></div>
+        <div class="fc-audio-record-label-v1160">${recordProfileV1297}</div>
         ${mainButton}
       </div>
       <div class="fc-audio-record-arm-base-v1160"></div>
@@ -24842,20 +24850,19 @@ function renderChallengeDetail() {
     } else if (entry.media_type === 'photo' && entry.media_url) {
       mediaHtml = `<img src="${entry.media_url}" alt="" loading="lazy">`;
     } else if (entry.media_type === 'video' && entry.media_url) {
-      // Use poster+overlay so external URLs don't break — same as feed card
+      // v1297 — Challenge Detail is a browse surface, not the deliberate video
+      // player. A real <video> element here could become its own accelerated
+      // Safari layer and paint over the challenger identity below it. Use the
+      // static Bunny poster as the preview and open the shared Entry Viewer for
+      // deliberate playback. Feed/Compete three-second previews are untouched.
       if (entry.poster_url) {
-        mediaHtml = `<div style="position:relative;cursor:pointer;" onclick="openEntryViewer('${entry.id}','${entry.challenge_id}')">
-          <video data-src="${escapeHtml(entry.media_url)}" ${_videoPosterAttr(entry.media_url, entry.poster_url)} muted playsinline preload="none" data-lazy-video style="width:100%;object-fit:cover;display:block;border-radius:8px;pointer-events:none;"></video>
-          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.25);border-radius:8px;font-size:52px;">▶</div>
+        mediaHtml = `<div class="fc-cd-video-poster-v1297" data-open-entry="${entry.id}" data-open-ch="${entry.challenge_id}" role="button" tabindex="0" aria-label="Open ${escapeHtml(entry.submitter?.name || 'competitor')} video">
+          <img src="${escapeHtml(entry.poster_url)}" alt="${escapeHtml(entry.submitter?.name || 'Competitor')} video preview" loading="lazy">
+          <div class="fc-cd-video-play-v1297" aria-hidden="true">▶</div>
         </div>`;
       } else {
-        // No poster — use autoplay muted video to show first frame (same as feed cards)
-        mediaHtml = `<div style="position:relative;cursor:pointer;" data-open-entry="${entry.id}" data-open-ch="${entry.challenge_id}">
-          <video data-src="${escapeHtml(entry.media_url)}" muted playsinline preload="none" data-lazy-video
-            style="width:100%;height:100%;object-fit:cover;display:block;border-radius:8px;pointer-events:none;"></video>
-          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;border-radius:8px;">
-            <div style="width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;font-size:20px;">▶</div>
-          </div>
+        mediaHtml = `<div class="fc-cd-video-poster-v1297 fc-cd-video-poster-empty-v1297" data-open-entry="${entry.id}" data-open-ch="${entry.challenge_id}" role="button" tabindex="0" aria-label="Open ${escapeHtml(entry.submitter?.name || 'competitor')} video">
+          <div class="fc-cd-video-play-v1297" aria-hidden="true">▶</div>
         </div>`;
       }
     } else if (entry.media_type === 'audio' && entry.media_url) {
@@ -50650,5 +50657,73 @@ body:not(:has(#submitEntrySheet.open)):has(#feedViewerSheet.open) #feedViewerShe
 <script>window.FC_V1294_VALIDATION={build:'v1294',authoritativeAdminRefresh:true,bootRefresh:true,settingsRefresh:true,viewAsEscapeHatchRestoredForRealAdmins:true,serverIsAdminWins:true,nonAdminsRemainHidden:true,v1293NextMovePreserved:true,v1292AdminEntryControlsPreserved:true};</script>
 <script>window.FC_V1295_VALIDATION={build:'v1295',suddenDeathFreshRoundEditor:true,oldRoundEntryNeverPrefilled:true,sdDeadlineOverridesOriginalDeadline:true,sdCurrentRoundEditSupported:true,sdNewEntryCopy:true,championshipRoundRefreshForced:true,regularSuddenDeathFallbackFixed:true,v1294AdminRefreshPreserved:true};</script>
 <script>window.FC_V1296_VALIDATION={build:'v1296',pendingUploadScopedToSignedInUser:true,foreignFeedPendingExcluded:true,pendingJobsRecencyCapped:true,slowReviewCopyAfterTenMinutes:true,approvedConditionalCopy:true,v1295SuddenDeathPreserved:true};</script>
+
+<style id="fc-v1297-detail-video-record-swipe-css">
+/* v1297 — Challenge Detail video previews are static poster layers. The actual
+   video only exists in the shared Entry Viewer, so Safari cannot composite it
+   over the submitter name / record / action row underneath. */
+#challengeDetailSheet .cd-entry-media:has(.fc-cd-video-poster-v1297){
+  display:block!important;
+  width:100%!important;
+  max-height:min(60dvh,560px)!important;
+  overflow:hidden!important;
+  contain:paint!important;
+  isolation:isolate!important;
+  background:#000!important;
+}
+#challengeDetailSheet .fc-cd-video-poster-v1297{
+  position:relative!important;
+  width:100%!important;
+  max-height:min(60dvh,560px)!important;
+  overflow:hidden!important;
+  display:grid!important;
+  place-items:center!important;
+  background:#000!important;
+  cursor:pointer!important;
+}
+#challengeDetailSheet .fc-cd-video-poster-v1297>img{
+  width:100%!important;
+  height:auto!important;
+  max-height:min(60dvh,560px)!important;
+  object-fit:contain!important;
+  display:block!important;
+  background:#000!important;
+}
+#challengeDetailSheet .fc-cd-video-poster-empty-v1297{
+  aspect-ratio:16/9!important;
+  min-height:190px!important;
+}
+#challengeDetailSheet .fc-cd-video-play-v1297{
+  position:absolute!important;
+  left:50%!important;top:50%!important;transform:translate(-50%,-50%)!important;
+  width:58px!important;height:58px!important;border-radius:50%!important;
+  display:grid!important;place-items:center!important;
+  background:rgba(8,6,5,.66)!important;
+  border:1px solid rgba(255,255,255,.16)!important;
+  color:#fff!important;font-size:22px!important;line-height:1!important;
+  box-shadow:0 8px 26px rgba(0,0,0,.34)!important;
+  pointer-events:none!important;z-index:2!important;
+}
+#challengeDetailSheet .cd-entry:has(.fc-cd-video-poster-v1297) .cd-entry-body{
+  position:relative!important;
+  z-index:3!important;
+  background:linear-gradient(180deg,var(--surface),var(--bg-2))!important;
+  isolation:isolate!important;
+}
+.eq-vinyl .fc-audio-record-label-v1160>.fc-audio-record-profile-v1297{
+  width:82%!important;height:82%!important;display:grid!important;place-items:center!important;
+  overflow:hidden!important;border-radius:50%!important;background:none!important;
+  background-image:none!important;filter:none!important;box-shadow:0 0 0 2px rgba(255,210,157,.46),0 3px 10px rgba(0,0,0,.44)!important;
+  color:#fff!important;font-size:clamp(15px,4vw,24px)!important;line-height:1!important;
+}
+.eq-vinyl .fc-audio-record-label-v1160>.fc-audio-record-profile-v1297 img,
+.eq-vinyl .fc-audio-record-label-v1160>.fc-audio-record-profile-v1297 .avatar-img{
+  width:100%!important;height:100%!important;object-fit:cover!important;border-radius:50%!important;display:block!important;
+}
+.eq-vinyl .fc-audio-record-label-v1160>.fc-audio-record-brand-v1297{
+  width:72%!important;height:72%!important;display:block!important;
+}
+</style>
+<script>window.FC_V1297_VALIDATION={build:'v1297',challengeDetailUsesStaticVideoPoster:true,noDetailVideoLayerOverIdentity:true,feedVideoPreviewPreserved:true,recordLabelUsesChallengerAvatar:true,recordOuterGeometryPreserved:true,v1296EmberPendingScopePreserved:true};</script>
 </body>
 </html>
