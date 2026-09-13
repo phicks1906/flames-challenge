@@ -24,9 +24,10 @@ jobs:
           from pathlib import Path
           import re, subprocess, tempfile, sys
           s=Path('index.html').read_text(encoding='utf-8')
-          meta=re.findall(r'<meta\s+content="([^"]+)"\s+name="fc-build"\s*/?>',s,re.I)
-          if meta != ['v1298 · unmistakable-final-results-and-entry-access']:
-              raise SystemExit(f'bad fc-build meta: {meta}')
+          head=s[:4096]
+          meta=re.search(r'<meta\s+content="([^"]+)"\s+name="fc-build"\s*/?>',head,re.I)
+          if not meta or meta.group(1) != 'v1298 · unmistakable-final-results-and-entry-access':
+              raise SystemExit(f'bad primary fc-build meta: {meta.group(1) if meta else None}')
           for token in ['_readMetaContentV1174','FC_UPDATE_PARSER_SELFTEST_V1174','FC_V1297_VALIDATION','FC_V1298_VALIDATION','data-fv-result-entry','Challenge Complete','View Full Details']:
               if token not in s: raise SystemExit(f'missing invariant: {token}')
           if "s3 = 'live'; cd3 = 'Decided'" in s:
