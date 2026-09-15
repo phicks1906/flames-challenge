@@ -1,0 +1,71 @@
+name: Apply v1300 audio handoff and stable viewer scroll retry
+on:
+  push:
+    branches: [main]
+    paths: ['.github/v1300b.trigger']
+permissions:
+  contents: write
+jobs:
+  build:
+    if: github.event.head_commit.message == 'Trigger v1300 build retry'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply transform
+        run: python .github/v1300_transform.py
+      - name: Validate v1300
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re, subprocess, tempfile
+          s=Path('index.html').read_text(encoding='utf-8')
+          head=s[:5000]
+          m=re.search(r'<meta\s+content="([^"]+)"\s+name="fc-build"\s*/?>',head,re.I)
+          if not m or m.group(1) != 'v1300 · seamless-audio-handoff-and-stable-viewer-scroll':
+              raise SystemExit(f'bad build meta: {m.group(1) if m else None}')
+          for token in ['FC_V1300_VALIDATION','fcPrimeFccAudioGraphV1300','_fcActiveAudibleMediaV1300','_fcHeightSettleTimerV1300','FC_V1299_VALIDATION']:
+              if token not in s: raise SystemExit(f'missing invariant: {token}')
+          scripts=re.findall(r'<script\b(?![^>]*\bsrc=)[^>]*>(.*?)</script>',s,re.I|re.S)
+          with tempfile.TemporaryDirectory() as d:
+              for i,code in enumerate(scripts,1):
+                  f=Path(d)/f's{i}.js'; f.write_text(code,encoding='utf-8')
+                  r=subprocess.run(['node','--check',str(f)],capture_output=True,text=True)
+                  if r.returncode:
+                      print(r.stderr); raise SystemExit(f'inline JS {i} failed')
+          styles=re.findall(r'<style\b[^>]*>(.*?)</style>',s,re.I|re.S)
+          def ok(css):
+              depth=0;i=0;quote=None;comment=False;esc=False
+              while i<len(css):
+                  c=css[i];n=css[i+1] if i+1<len(css) else ''
+                  if comment:
+                      if c=='*' and n=='/': comment=False;i+=2;continue
+                      i+=1;continue
+                  if quote:
+                      if esc: esc=False
+                      elif c=='\\': esc=True
+                      elif c==quote: quote=None
+                      i+=1;continue
+                  if c=='/' and n=='*': comment=True;i+=2;continue
+                  if c in ('"',"'"): quote=c;i+=1;continue
+                  if c=='{': depth+=1
+                  elif c=='}':
+                      depth-=1
+                      if depth<0:return False
+                  i+=1
+              return depth==0
+          bad=[i for i,x in enumerate(styles,1) if not ok(x)]
+          if bad: raise SystemExit(f'CSS brace failure: {bad}')
+          print(f'validated {len(scripts)} inline JS blocks and {len(styles)} CSS blocks')
+          PY
+      - name: Commit v1300
+        run: |
+          git config user.name 'FlamesChallenge Build Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add index.html
+          git commit -m 'Build v1300 stabilize audio handoff and viewer scrolling'
+          git push
