@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1299 · closed-results-carousel-restored" name="fc-build"/>
+<meta content="v1300 · seamless-audio-handoff-and-stable-viewer-scroll" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Restored post-result entry swiping so completed challenges still let members swipe through every finalist and see exactly who the winner beat." name="fc-whatsnew"/>
+<meta content="Removed audio handoff glitches when switching players and stabilized the swipe viewer so its height no longer shifts underneath an active scroll gesture." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -18677,6 +18677,10 @@ function syncFccAudioControlsV1123(tile, audio) {
 
 
 const _fcAudioControlFadeTimersV1172 = new WeakMap();
+// v1300 — authoritative pointer to the one deliberate audible media element.
+// Avoid scanning/pausing every audio+video node on each play tap; that work was
+// large enough on iOS to make player-to-player handoff stutter.
+let _fcActiveAudibleMediaV1300 = null;
 
 function showFccAudioControlV1172(tile, holdMs = 1150) {
   if (!tile) return;
@@ -18704,6 +18708,8 @@ function clearFccAudioControlFadeV1172(tile) {
 
 function fcAudioPlayStateV1123(tile, audio) {
   if (!tile || !audio) return;
+  _fcActiveAudibleMediaV1300 = audio;
+  _userAudioActive = true;
   tile.classList.add('playing');
   tile.querySelectorAll('.fcc-audio-btn,.fc-audio-play-v1123').forEach(btn => { btn.textContent = 'Ⅱ'; btn.setAttribute('aria-label','Pause audio'); });
   showFccAudioControlV1172(tile, 1250);
@@ -18713,6 +18719,10 @@ function fcAudioPlayStateV1123(tile, audio) {
 
 function fcAudioPauseStateV1123(tile, audio) {
   if (!tile || !audio) return;
+  if (_fcActiveAudibleMediaV1300 === audio) {
+    _fcActiveAudibleMediaV1300 = null;
+    _userAudioActive = false;
+  }
   tile.classList.remove('playing');
   clearFccAudioControlFadeV1172(tile);
   tile.querySelectorAll('.fcc-audio-btn,.fc-audio-play-v1123').forEach(btn => { btn.textContent = '▶'; btn.setAttribute('aria-label','Play audio'); });
@@ -18741,9 +18751,21 @@ function toggleFccAudio(tile, ev) {
   const audio = tile?.querySelector('audio');
   if (!audio) return;
   if (audio.paused) {
+    // v1300 — prepare any analyser graph before playback begins. Creating a
+    // MediaElementSource from the onplay callback rerouted the element after its
+    // first samples had already started and could produce a brief skip on iOS.
+    // Record/vinyl has no analyser at all, so it stays on the native media path.
+    fcPrimeFccAudioGraphV1300(tile, audio);
+
+    const prior = _fcActiveAudibleMediaV1300;
+    if (prior && prior !== audio && !prior.paused) {
+      try { prior.pause(); } catch (_) {}
+    }
+    _fcActiveAudibleMediaV1300 = audio;
     _userAudioActive = true;
-    document.querySelectorAll('audio,video').forEach(media => { if (media !== audio) { try { media.pause(); } catch (_) {} } });
     audio.play().catch(error => {
+      if (_fcActiveAudibleMediaV1300 === audio) _fcActiveAudibleMediaV1300 = null;
+      _userAudioActive = false;
       fcAudioPauseStateV1123(tile, audio);
       toast('Audio could not start. Tap again.');
       dlog('audio', 'play-failed', { error: String(error?.message || error).slice(0,80) });
@@ -18784,16 +18806,36 @@ function toggleFccAudioMuteV1123(button, ev) {
 // all zeros for ~1s (CORS blocked, or a quirk), switch to the CSS keyframe
 // dance so the bars are never simply frozen.
 let _feqCtx = null;
-function _feqStart(tile, a) {
+function fcPrimeFccAudioGraphV1300(tile, a) {
+  if (!tile || !a) return false;
+  // Record/vinyl animation is pure CSS. Routing it through WebAudio served no
+  // visual purpose and was the main source of iOS handoff artifacts.
+  if (tile.classList.contains('eq-vinyl')) return false;
   try {
     if (!_feqCtx) _feqCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (_feqCtx.state === 'suspended') _feqCtx.resume();
+    if (_feqCtx.state === 'suspended') {
+      const resume = _feqCtx.resume();
+      if (resume?.catch) resume.catch(() => {});
+    }
     if (!a._feqSrc) {
       a._feqSrc = _feqCtx.createMediaElementSource(a);
       a._feqAn = _feqCtx.createAnalyser();
       a._feqAn.fftSize = 256;
       a._feqSrc.connect(a._feqAn);
       a._feqAn.connect(_feqCtx.destination);
+    }
+    return !!a._feqAn;
+  } catch (err) {
+    dlog('feq', 'prime-fail', { e: String(err && err.message || err).slice(0, 60) });
+    return false;
+  }
+}
+function _feqStart(tile, a) {
+  try {
+    if (tile.classList.contains('eq-vinyl')) return;
+    if (!fcPrimeFccAudioGraphV1300(tile, a)) {
+      tile.classList.add('feq-fallback');
+      return;
     }
     const an = a._feqAn;
     an.smoothingTimeConstant = 0.5;
@@ -18938,12 +18980,21 @@ let _lastFvTapSrc = null;     // tap de-dupe: src of last fv-play activation
   document.addEventListener('play', function (e) {
     const el = e.target;
     if (!(el instanceof HTMLMediaElement) || el.muted) return;
-    document.querySelectorAll('audio, video').forEach(m => {
-      if (m !== el && !m.muted && !m.paused) {
-        try { m.pause(); } catch (_) {}
-      }
-    });
+    const prior = _fcActiveAudibleMediaV1300;
+    if (prior && prior !== el && !prior.paused) {
+      try { prior.pause(); } catch (_) {}
+    }
+    _fcActiveAudibleMediaV1300 = el;
   }, true);
+  const clear = function (e) {
+    const el = e.target;
+    if (el instanceof HTMLMediaElement && _fcActiveAudibleMediaV1300 === el) {
+      _fcActiveAudibleMediaV1300 = null;
+      if (el.tagName === 'AUDIO') _userAudioActive = false;
+    }
+  };
+  document.addEventListener('pause', clear, true);
+  document.addEventListener('ended', clear, true);
 })();
 
 function _bunnyPreviewUrl(src) {
@@ -20766,6 +20817,24 @@ function fcResetFeedViewerActiveHeightV1285(list = document.getElementById('fvEn
     try { cancelAnimationFrame(list._fcHeightRafV1285); } catch (_) {}
     list._fcHeightRafV1285 = 0;
   }
+  if (list._fcHeightSettleTimerV1300) {
+    clearTimeout(list._fcHeightSettleTimerV1300);
+    list._fcHeightSettleTimerV1300 = 0;
+  }
+  if (list._fcHeightScrollEndV1300) {
+    try { list.removeEventListener('scrollend', list._fcHeightScrollEndV1300); } catch (_) {}
+    list._fcHeightScrollEndV1300 = null;
+  }
+  if (list._fcHeightTouchStartV1300) {
+    try { list.removeEventListener('touchstart', list._fcHeightTouchStartV1300); } catch (_) {}
+    list._fcHeightTouchStartV1300 = null;
+  }
+  if (list._fcHeightTouchEndV1300) {
+    try { list.removeEventListener('touchend', list._fcHeightTouchEndV1300); } catch (_) {}
+    try { list.removeEventListener('touchcancel', list._fcHeightTouchEndV1300); } catch (_) {}
+    list._fcHeightTouchEndV1300 = null;
+  }
+  list._fcHeightGestureV1300 = false;
   list.style.removeProperty('height');
   list.removeAttribute('data-fc-active-height-v1285');
   delete list.dataset.fcActiveIndexV1285;
@@ -20807,23 +20876,58 @@ function fcSyncFeedViewerActiveHeightV1285(list = document.getElementById('fvEnt
 function fcWireFeedViewerActiveHeightV1285(list = document.getElementById('fvEntries')) {
   if (!list) return;
   fcResetFeedViewerActiveHeightV1285(list);
-  const queue = () => {
+
+  // v1300 — never resize/reposition the sheet while the member is actively
+  // swiping the horizontal entry rail. v1285 synchronized height on every
+  // scroll frame, which could change the rail height and re-center the modal
+  // underneath the finger. That produced the erratic second-screen swipe seen
+  // in the recording. Height now updates only after the native scroll settles.
+  const syncNow = () => {
     if (list._fcHeightRafV1285) return;
     list._fcHeightRafV1285 = requestAnimationFrame(() => {
       list._fcHeightRafV1285 = 0;
-      fcSyncFeedViewerActiveHeightV1285(list);
+      if (!list._fcHeightGestureV1300) fcSyncFeedViewerActiveHeightV1285(list);
     });
   };
-  list._fcHeightScrollV1285 = queue;
-  list.addEventListener('scroll', queue, { passive:true });
+  const settle = (delay = 120) => {
+    if (list._fcHeightSettleTimerV1300) clearTimeout(list._fcHeightSettleTimerV1300);
+    list._fcHeightSettleTimerV1300 = setTimeout(() => {
+      list._fcHeightSettleTimerV1300 = 0;
+      syncNow();
+    }, delay);
+  };
+  const onScroll = () => settle(140);
+  const onScrollEnd = () => settle(0);
+  const onTouchStart = () => {
+    list._fcHeightGestureV1300 = true;
+    if (list._fcHeightSettleTimerV1300) {
+      clearTimeout(list._fcHeightSettleTimerV1300);
+      list._fcHeightSettleTimerV1300 = 0;
+    }
+  };
+  const onTouchEnd = () => {
+    list._fcHeightGestureV1300 = false;
+    settle(70);
+  };
+
+  list._fcHeightScrollV1285 = onScroll;
+  list._fcHeightScrollEndV1300 = onScrollEnd;
+  list._fcHeightTouchStartV1300 = onTouchStart;
+  list._fcHeightTouchEndV1300 = onTouchEnd;
+  list.addEventListener('scroll', onScroll, { passive:true });
+  list.addEventListener('scrollend', onScrollEnd, { passive:true });
+  list.addEventListener('touchstart', onTouchStart, { passive:true });
+  list.addEventListener('touchend', onTouchEnd, { passive:true });
+  list.addEventListener('touchcancel', onTouchEnd, { passive:true });
+
   if (typeof ResizeObserver === 'function') {
-    const ro = new ResizeObserver(queue);
+    const ro = new ResizeObserver(() => list._fcHeightGestureV1300 ? settle(140) : settle(40));
     list.querySelectorAll('.fc-v1024-fv-slide').forEach(slide => ro.observe(slide));
     list._fcHeightROV1285 = ro;
   }
-  requestAnimationFrame(queue);
-  setTimeout(queue, 80);
-  setTimeout(queue, 260);
+  requestAnimationFrame(syncNow);
+  setTimeout(syncNow, 90);
+  setTimeout(syncNow, 280);
 }
 
 
@@ -50816,6 +50920,17 @@ body:not(:has(#submitEntrySheet.open)):has(#feedViewerSheet.open) #feedViewerShe
 #feedViewerModal #fvScrollRegion[data-viewer-mode-v1193="results"] #fvDots{display:flex!important;justify-content:center!important;gap:6px!important;padding:0 0 10px!important}
 #feedViewerModal #fvScrollRegion[data-viewer-mode-v1193="results"] #fvEmpty{order:3!important}
 </style>
+<style id="fc-v1300-stable-viewer-audio-css">
+/* v1300 — keep native swipe physics; geometry is committed only after settle. */
+#feedViewerModal #fvEntries{
+  overscroll-behavior-x:contain!important;
+  scroll-behavior:auto!important;
+}
+#feedViewerModal #fvEntries>.fc-v1024-fv-slide{
+  scroll-snap-align:center!important;
+}
+</style>
+<script>window.FC_V1300_VALIDATION={build:'v1300',singleAudibleMediaPointer:true,recordAudioBypassesWebAudio:true,analyserPrimedBeforePlay:true,viewerHeightDefersUntilScrollSettles:true,noSheetRepositionDuringSwipe:true,v1299ClosedCarouselPreserved:true};</script>
 <script>window.FC_V1299_VALIDATION={build:'v1299',closedResultKeepsEntryCarousel:true,finalSummaryBeforeEntryRail:true,allFinalistsSwipeableAfterResult:true,closedCounterAndDotsRestored:true,noDuplicateWinnerMedia:true,v1298ResultClarityPreserved:true};</script>
 <script>window.FC_V1298_VALIDATION={build:'v1298',completeStateHero:true,closedJourneyAllDone:true,finalRowsOpenExactEntry:true,losingEntriesRemainAccessible:true,winnerSummaryBeforeMedia:true,closedActionSaysViewFullDetails:true,v1297VideoAndRecordFixesPreserved:true};</script>
 <script>window.FC_V1297_VALIDATION={build:'v1297',challengeDetailUsesStaticVideoPoster:true,noDetailVideoLayerOverIdentity:true,feedVideoPreviewPreserved:true,recordLabelUsesChallengerAvatar:true,recordOuterGeometryPreserved:true,v1296EmberPendingScopePreserved:true};</script>
