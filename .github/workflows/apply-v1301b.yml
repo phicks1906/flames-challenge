@@ -1,13 +1,13 @@
-name: Apply v1301 native audio pitch stability retry
+name: Apply v1302 feed swipe popout viewer
 on:
   push:
     branches: [main]
-    paths: ['.github/v1301b.trigger']
+    paths: ['.github/v1302.trigger']
 permissions:
   contents: write
 jobs:
   build:
-    if: github.event.head_commit.message == 'Trigger v1301 build retry'
+    if: github.event.head_commit.message == 'Trigger v1302 build'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,8 +17,8 @@ jobs:
         with:
           node-version: '22'
       - name: Apply transform
-        run: python .github/v1301_transform.py
-      - name: Validate v1301
+        run: python .github/v1302_transform.py
+      - name: Validate v1302
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -26,15 +26,25 @@ jobs:
           s=Path('index.html').read_text(encoding='utf-8')
           head=s[:5000]
           m=re.search(r'<meta\s+content="([^"]+)"\s+name="fc-build"\s*/?>',head,re.I)
-          if not m or m.group(1) != 'v1301 · native-audio-pitch-stability':
+          if not m or m.group(1) != 'v1302 · feed-swipe-popout-viewer':
               raise SystemExit(f'bad build meta: {m.group(1) if m else None}')
-          for token in ['FC_V1301_VALIDATION','fcNormalizeAudioTransportV1301','visualsDrivenByCurrentTimeOnly','FC_V1300_VALIDATION']:
+          required=[
+              'FC_V1302_VALIDATION','feedCardsExposeNextChallenger:true',
+              'fc-feed-popout-active-v1302','calc(100% - 42px)',
+              'fcFeedPopV1302','FC_V1301_VALIDATION','fcNormalizeAudioTransportV1301',
+              'FC_UPDATE_PARSER_SELFTEST_V1174','updateViaCache'
+          ]
+          for token in required:
               if token not in s: raise SystemExit(f'missing invariant: {token}')
-          block=s[s.index('// ── v1301: PITCH-SAFE AUDIO VISUALS'):s.index('function _feqStop(tile)',s.index('// ── v1301: PITCH-SAFE AUDIO VISUALS'))]
-          for bad in ['new (window.AudioContext','.createMediaElementSource(','.createAnalyser(']:
-              if bad in block: raise SystemExit(f'forbidden competition audio graph call: {bad}')
-          if 'a.playbackRate = 1' not in block or 'a.defaultPlaybackRate = 1' not in block:
-              raise SystemExit('transport rate lock missing')
+          if "fcOpenImmersiveViewerV1198('feed-viewer')" not in s:
+              raise SystemExit('feed viewer scroll/depth guard was removed')
+          if "document.body.classList.add('fc-feed-popout-active-v1302')" not in s:
+              raise SystemExit('feed popout open state missing')
+          if "document.body.classList.remove('fc-feed-popout-active-v1302')" not in s:
+              raise SystemExit('feed popout close state missing')
+          # Feed card width override must come after the v1082 100% override.
+          if s.rfind('calc(100% - 42px)') < s.find('id="fc-v1082-uniform-entry-preview-css"'):
+              raise SystemExit('feed peek override does not win cascade')
           scripts=re.findall(r'<script\b(?![^>]*\bsrc=)[^>]*>(.*?)</script>',s,re.I|re.S)
           with tempfile.TemporaryDirectory() as d:
               for i,code in enumerate(scripts,1):
@@ -68,10 +78,10 @@ jobs:
           print(f'validated {len(scripts)} inline JS blocks and {len(styles)} CSS blocks')
           print('sha256',hashlib.sha256(Path('index.html').read_bytes()).hexdigest())
           PY
-      - name: Commit v1301
+      - name: Commit v1302
         run: |
           git config user.name 'FlamesChallenge Build Bot'
           git config user.email 'actions@users.noreply.github.com'
           git add index.html
-          git commit -m 'Build v1301 stabilize native audio pitch'
+          git commit -m 'Build v1302 feed swipe popout viewer'
           git push
