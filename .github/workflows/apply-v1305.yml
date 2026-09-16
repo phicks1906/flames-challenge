@@ -1,0 +1,105 @@
+name: Apply v1305 standard media frames
+on:
+  push:
+    branches: [main]
+    paths: ['.github/v1305.trigger']
+permissions:
+  contents: write
+jobs:
+  build:
+    if: github.event.head_commit.message == 'Trigger v1305 build'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify v1304 baseline
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib,re
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          m=re.search(r'<meta\s+content="([^"]+)"\s+name="fc-build"\s*/?>',s[:5000],re.I)
+          if not m or m.group(1)!='v1304 · completed-challenge-celebration':
+              raise SystemExit(f'expected v1304 baseline, found {m.group(1) if m else None}')
+          digest=hashlib.sha256(p.read_bytes()).hexdigest()
+          expected='d1686d1dc3b94ae7dcf95e8edd4e45701dddd06e7f2e9f9ec90c3bee70a204eb'
+          if digest!=expected: raise SystemExit(f'baseline hash mismatch: {digest}')
+          print('baseline OK',digest)
+          PY
+      - name: Apply exact v1305 patch
+        env:
+          FC_PATCH_GZ_B64: H4sIAGxQqmoC/+08XXPbRpLv/hVj7p0BrEiIlCVZIg05smLHrrItlaR1HlIpBwSGImIQYPBBipF1df/gXq725X7GVe2930/JL7nunhlgAIIUrcS72dvN1sogMNPT09/d00Cn02HudhD5/NoeZ5PwwdbWFhvqN776inV2eu1DtkV/v/rqAaP/Ev5TztOMBVGacddn8YhN8zAMoiuWjTmbj+OQs569w94+Z6Mg5DY7Pjv78P7F+cXr03cw2/VTNkriiQSXjYOUZe7VgA3zyZQFGXv14vwFcyOfRfF8zBPOeJhyWw4feZ352M3SiM8ZToQV44gzWJ6zdBzPI8CL7uZT3804m8JK08xmnc7Rg87TCc9c5sVRxqPMac16j7u77H//B+5MpiHPuN/xxm4Y8uiKdzwe8mHiZkEctVjkTrjTgrWHeRD6re2jB1sNsPYQVpoB6m7idybcD9zOKIGpaRME9vQh8GDW6+33+iyYAKIz7rNz7sWJD1AWQMVZkAbDIAyyBZsH2TjOMwYIRldI6yBLWegu8F6csClcDl3vIxvysTsL4qR5x29dn5e7ZcVuU5ZHkwBQ/+gOwwWwLQrSMQzAVZnLJjFwQREkThbsKg59HOWGnYSneZixDBibTWAREABgOtCdpzyZIaZhMOPlUswD4qS2RhHFzyayXkhqBj8juoA4zwJkCZuO4yzengU+j3GtWcDnKbA+g19xkiUuyNFuf4/EKIQ/qedOQSr3+4dMcKQt9jYCye0MQw7QiV+6VEcg5XAfSJXxZBhfw7WYuwp5xdFur8dOjt+dvnt9cvyGPT8/fvc1O764eHHZl0J8OUYCBRMXSBnGV7GSZHcqpeAkAUmGf18yfg2b8TJaO55URklgp1MiyA4SzePTjA1jIJjNvo5BgTJQOLifZknuZW344SfuvI0Sk+bDFGiZg464MA4Ujb20hdLvHhwctJ+A3suLQvXZ9jbKdxZ47HkeRQugNZAoYa5AX/KBiB5PudDDdOzCquxFlMFm38NjGD+KEw2iz8NgyBPSVinGNnsJLNk+IYZzgJNw3klxJ37JbYALYpvFuQeiquwDC0bM5LiYLZD7kCehxW4edORzwedXYOGYw3546gcz5oVumhI3Pb9DItURczuz3s7hkxYDS+J2cEcdguy0/uVGLBH4t/pTb1w+KgT+Aw1KwCo6rWGeZWhPMndIltZpdVuwD7AToTvkodM6RbIBCJJXRFLuBbg1CVAOn9koeuzTJ2YodYgTw7plhHcLNOjX7hMeC9OVJl6HzBptqo4RjSHi3v59EYiV/z0NJlcMttm4QU18AD03zBpHNa17sryuktoW6Lvrg1V0WqH786KGziomgVYoFhEtxoHv88hpgVbz1tEvf/7L022YqsESv38YCH1+8uTwkPSZLg4KfQbdA/dzsMt++ff/LA20YKEw0+iCWZ5y0mQwh+AdhGOoaOQEjIhfgFRWAG04MDXk4IuO2cgFr1Aorz3nwynMgzACbZQHw9wpLEMG3GXDJP7IowIiGErwGwEAHBAigqLgAHk4AjwjsElBGIJFm07BeQmjA06Ajbi2ojAACc/yJKrrgyf2LOSe4W9B+GycT4YYcojHsH8gD9j3/W55U4yEm08O8ab4mUfBKIBwApj2+KAldPJvsTTergUkChLodUsZC6X35N6Uzis/urFZKE0CaQHIfktJJEEQ+EnUETspwHfoNz2wbo20rsFPhRwQ7AYlbkAHAH+gSWek28dZliyPazOu6b6aW+oWSTt5qjSIKO4EEUOtdloRhKKSXKjdYseaLev0WlIjD7rCw8LFYcXDPhUWkGWLqWYOS6MgllS0vJ4Cb4mYhw1kpOAmhdBJUe6X/wJLIWBKKhaGAq5vUUU2k9JlqWwdkTEtERUjhmGeyAENhla3rU2mrW4sG5dAO+MG0WarrJAsgrS8nCLO1v3pcocGfhHVExvegFolxpCohQqlL0FBEC4Qx8ijUHXkUTR4Di7hPaJheuM2AQh4iqGajOIeyls2uqVsbDXywBvDFiDDw8Wabnfi2fKTaZinraMtgV3ztEl61Tp6Fyu02IJn5CaHwheOgiTN5Hztr/S4j7sQOrf3umwLrw7bO481DWfoUBNIbBKwI32U83b5SJqSvuHmWWyo+7fWQMWv6LP3wd4jLof93j4jaWKQu4OmYaCN4bOfxFM9kxmGlBq6SWprcDALwXtsjkl2xGcQmVNYD+wcuZDU9YW33X9ywGZ+MMFUhckEheKByIshnQxSDSakbiEHj/xkp3vd2znosrPT88vz49eXzHQT1rX39h9bdrmyhyETJTaXr15fQKLPKYWEzWkwJ+51Z8yDq3HW39ubwS/YczyF+F/Ak+EAQaE9oCwX1YjAz0C44FIDCOHFHFigZXaQv8QqZYV8KJ1yL2MmZOKQPUHahL9VZp0nVhszHB0eUPcqifPI7/+h2+2yKShYJokU8lEWI1ZX7lTwQWfBu3jeh32MAkgu5R51rpoTN4PkJsVsN5JWHLDRclwpnhpInqZwM4BgbkGUgDgJEYYE3Y3SKeRMQF9BMUqA4+GPsEXQ/6wvTQMjdF19f0q0wnieT1GgKNsjH2nDHrIxFSSAnSB3U+4TfWiM3JJIbzWIKfEdslBk2EIYD9wXzYmT4GdEJQRCXgEqfszTyMjYj1gfglRzEecsnQdTviTMgKcm/yghF5fHl69PVJ5KgWSbQk6XyeBVRBFHpFD6puVjn6OQJ2wK/xdozuOcih+0sdMLUBY5ppOGADgMIB9oYxXEG1NxS4M5BrqESNwQy2AIKvmYwt3EF/IXZyR3wNepC0YileQR2blgmjsE9ljFziM+fx/4NpWLbC9NL/l1BvmeARumOknfHaZxCBHLAMwBz/rdAWlEv9ft/utAKhVdL8vBwA9SjHL6wHbv40ATck2UBsZABZGUTWARjLIJvVSjalO0JQrPkf3ZvMiK2BWPJ1wYWjfVAOr7F1oLUX4ycj3eL3RgO/0px1JA5wgrPm2t3AN3sOJjawBRTGShR6QPqCISKVQ5kWBgdcvPp2HgYVFi2bLqKF6BZtrsJYVaHiRFUbXUIVITZVrESqoABxKfJx4v8PsyzAQSrmYl2ivkoXQ0VCpio9kFmR8HVM/L0SLbHpb3+Athn00DfJ1R+iQ53iYn+g55C0iPZiLQMYphCvhzVNPNYePwZtAUXRq6azznmKxiTY48gSA+GgKpcCCNkklmJRPFUOmIymJVOyVTDGE+jixV6CJDI5lXuEzK2CKIaYTlmboQyPokgG3dluaZ5i8oOhc8Qtxc3fijMSW/BCOvxjKxlYVR3eNKU0s4QfQsZQwELiNXgXVi4f8RIzTUwtNjsbwMBwRvPiCQi8QDIpsQn1zxzP4pBw28AMfsZXFiGkAnw8IY8+bWsiFQxMsVQ4l05WBpgimdKliGYZ5a1FK8FvJfEun1RAjjDxCGmhB/qgm3LeuHalwkSxmU8hQqjSQsqgbAp+OTyz8dv5FOvi29ToJxDDgGDVzhucHUeVzROeEjLIZH0ukBbLQgIqShwEysOXerdj/x0UX4gr+miIPaJAzBGfr2lOq0CQ04tPdwyO6+RbvJsC6TiI3p+JWVEI88UlQEP2XkU5UOQIqRrCHmLkYkFXBuhkIBoNDZQqwDEd51gCVwm73FOETFVNI/oD9NSdfobuRmwUzXHcw+pbKh7ZGOXMQGQWbg1IU+SOA/dv3mQJVULoOkm01zCJIXqIsQOQFxUFL6AmQcwQOCQ0cnIZenQXo0GVOIORR8hLCWRynYViwnJ7ABMgIglm4hLyRNnotEGXI6v9JxOzm9wNjWw8o797Vadriw+kX2gGU0cJcYSAhyBWBpIPLH6viUt6uMxbh2d18KhIys/u3JYXd6TbJQRlfpmENWImMsOhjiSFUe6WEMBEoIY8izOVJZYQRBnB+MRpziQaELKUmx0gSQlgWK90fOp5XAiIJVtSoebZCo/MyTWMT0FEhFWECcwh46wroLowQSVzi7tU5jfdZcxhwKCKbJ4BHtkfcS8+j3FIc4TBqmxqdoiFQIsQ7gW1wdrI2CCUav5i4/gJ9VDtO0mHOknzaghVsCigVjv8hnURAGZQoogM4BmIwHSBC/FYnMuHb7FbFBm02J8xx397DMmEFLUj4ojwbEEmWgBHjPGZgpix05rGf39jSAzcgjs3qlHS+HCeMtBOocT09h5BzSUwPgG/DveOUcSOzEbhA2VtJ08D7knqYhAoo2yAnwrM1u2BwoAvqQ9NmW3IGdxS9RQM3HFqXNWyv3URWVkhjPmFH8MFi/SUoYWNfIj+dKPAjSiQupGoF7ZsMCz2wTRKW9dl0dv9oOC+nXCkPaluluf/2mcPsFG5tk7ba4+s7AqgP38fAVYSEG4o76hSYc7AheQmgBJtH43gYL+gI2bZp8JsVeFD8e73SxbeBxd+dwt1Lc1I45iOdOawS+RARBj8G+DSagsEHUGcZZFk/6B9Pr1tEv//Hf9dMN/O9CxtWxBwkvGjjhKqcUMEEqsagcrKjiTCFPsozSh7GwM0+EC5AsfvNCpIeZqFAoD0vAC3+L1hwPtdMKPIjJ4SmzCxvmhnF0RfcKD0x+kGIOsS4iTj6rAF4BKVLNkKOBdSExT6Zg5CkRr2UkQw7e2ZeBnzq9sUvhotC43Kjo0Uj1s3WBciqJpxKyhXS5XjwmT2GXVMWHN6VtE+ngOywIPSsSiL60VZYtyfxtkI3NeeJOrQG7BSQhqjA/WBAflnAB1dcj4c1decosy+gYaQRUCSj6ExYcIrhpDJKAPhFrZtiPAOEnt6sm8cNo9iLyvskBl1JM9/awBo/y+qS9r4mpNLAQLr+YwabeYBAE4Y6pKQEG2mfw6xRiDfjnPR5noHbiETzV9HTtWwtvc2D1dMudTiGkOBkHoW+K0LlcsmmM5MXaMaNZHZFyvPSmOislCEuVPQ8Od9o7VPY82H+MV9rBhl5m9YvjAchHOaRB+bB1dImdQLLG4mJAPKFSI5aJZkEcgjMBbYHceZJH2BFzBczkeBiSipCSghZUuTL6a4NSemHuy0h9Eee2bksqhx/UZUSyQvHG5QL9ooPZN3aaGOzRI1Y/+FZ+vnrSvu5MuXJoLk2glsMvVToHE7CG8s5OFy3k59RpZm5idjqyYNLZsQZL9fkfpANa1ysA9mwpAvvrnGoskax+pAGoyTaa1WcXDYSX500rzyrWSYPIClZIgzJgsvZjoifBQ2jIBDDdXqpHbrFf/vyXtsx8XIZ4bKMRKw+t9RQIHxcVs4kr/Yowji1V4ZAmqoXlBOrBoSovaAatRFXJAiholgcK5qK6UYcRHmqgE7XZK8wDioMOcqx04ildjBvqNeQUpU3iekf7zWpBU1I2hmmFbhSVL8j4KL8ceHmSxkl/GmOJPRkoWZpRk8SGjSowuukguDq6zZbbQIrpPPLQ/DhUjUAfhZ7lZRJP/pQsL/vpk2FoS4uEyNcaYcSND24mRh6VMcBnNKhsYk3uqAtKonY4eqm0jzH4ksnAbsskiROnhbVtGbpLMI4M28HusLFDz70wTsEhm4ZdYbBhDYKRObZuxkvVHsfAmqQxUE/AAoq0wDHIAhqD27LLaTNxYr8vK/YPLtxbFeG+jzFvFPzflfDe6o1der6zupSvVHEU8uuBGwZXUSfI+CTte5yE4cc8zYKROMCHO+p247aXu8oq1mFvHwIJZRnwehgneH6VAK3ytL8HtkOLIpKroWt22/Q/ew9y1ntiWqZ6O7uw5pq+tQf1tE1kq8InfzFXUj8VWQq97quOfx19+v9tCuvM+Z3y4p86f2+dxwRyt7d/0G3vQFIOV3u9dm+3SCBFyZJ444DfkPUGeWg4ULGn+ZBGPBNVZUy0bZklpaZRZJ00xrBUebRIrem+NhUSdtMQjbiUBJZ9XQc9w9JTp00ntY31hW2VbNeBilzYtG377NXp5emHkzf4PsGFGi6IQy+rOOa7fDLkiYlEilzYnxtS7RikuWttNzwV0RU87qlTVwGOjiYcAnrkYFFYGd5nrLK/olgq96iG9QVCT52ufXBQhrS12cqG1Cbj9CoV6ZBfjhqs5hdhjRsRQ0KeFVUyR4yvHVP2Uw/yJHbEbLGcLEzIOSWzO0rC1COr8ETFAkhVCBoijnUwk6ru5Um2GlWeeDjGmiWX52HaajTcB1uCMV4wBNNiGloXJYgbVo+MBhyEQGnTZKCkjRXUQlOVZM/ptMxU09uwUTXwVmbKZolP4j10BC2wTBlleKIMCXPDALhaJiPerU3/9EmOVosK3audY+jCukY7K6X+dZJcl8GarFYtQFMJ3vmMU4U6lMq50ypyoN+pzK8I93EYbirfRS2fh84RD5XBsSzZGczwn6KBcx4k/AxJgnbEEvXUve7h/kF7n23Bxc5+e+fxHtlumPp0mzwRmPwHW0/Fi23ogUcySOg0vjHX8dIUg5vtP2pdRdgE5+YZdohlFCbofUadWjPRgqULyBMmogx+pjrmsFYoO4awV2S3v2ezNwWbqEWJmobYmfaGmezvxV4hglY2F3AfjDfIBv4rmodGq1qBgKboiETznKjFxwQNblLDIb22GMkmuqK/5Dj3A3EMm1Izhw+4YF+SL1//s9kftx9s2WsdS/vB1h+KFzy+5uAQwws6PLarTvG7hjjve5yMVSyxjbex74bsD1hPFyfJjXNucGNLUd3DYIJi76LH3mKsrFXUHsg4BUthtSdaUN6tPyrLHRgR1Z5iuWMUxvO+MI21p7XwsvL09i7ifrc+OP7+1xC/Ducz+aBPJ5aIg9kOGcr+7vbeb7HTwq792q3WAH32XrX5y5vt7W8f1ncLxgXfM2TbTL5p2MdKadH5Vx6w4aFg0ffig8Ji98s08CCA4qX+iQ0CtUP5Uo6t3hAAnNEkxGEoENMCaIyokcZJVpNJ6rIU+rMkz7d3LQiROHBQWwybHVettQZa5YUG0aY86+10d6Q/WS0qN3ep5LpFV4OV69ZfLqHVVI7yJZaqvDbRvi88ciYbmUaRITYYwLtsZsOTOwxjrSZce1ypEH+e1QTtOine+hbGoM/4tetl6i092QYstJgleSiVaSMbYq9Isja1Qf2xm5r2qpdhrZu7dr+SE38bH3UPmmkp1UbOYcUSq+PKm2aVvP2VHAZNgrgTgGbmmsWt9h0YLzP982cIVG7+zjTzMzd5s8ZaaV50CpSHeLSvPhEgPtGgPhEQ+U0v+ovPA5TWIB1z7KYlI7DG/9srypjtu6bJ3pwNfNdvr96iuWlp0l28ugcZpOuqn6j8NtT5h/NjX4xmqh7cSLP7oUEx0WqzW6TikIh7STDNNsnEf6RE3FTZvylco4HZcwrLe7KEIYoxHnZBYs/nugbJO59/+oRNU+ytOzUtHTjWcYLRwjHn7bHlHN2I0sfckVXNORY5B2P1k2qeg8rb9/Oj7qNHY/wz3x6LStFdpZlb+lvUPlz8yICJZyltQKKNtSrDsCQmWB/ER2VpWatTETkdtQfagnyOUxpKyOsLxeXMxtITrVZZ/yNfOBcZNv+bVDqqza0UnLCwpNaATcFUS7AWq434s03wtSH4wno8Kvl6zmHky0Jkjz20DqLW/L63c7DnOI6hiEr9NJIIdOT6zDaNUrwNS9G3+PrUcQR2DafSjk0ThGHjlc3izaMrrk4Qni9eI821FdXWqNR4WxEBLH/RSylY/moTvzX+w71Pn5qk4AtwGRTFWS4lyvo9SKZk93pOr6ktWhWIV7GDhL7BbdaPFx49Wj5S0HWlPr69NBxVCdtCS5EixOS7chX44kAD8DEVgqoIjYNqhPoWuEU7fQgS1zNKUVo31qHudm3gcvMmVsyN9lXcvin6NG/vEJr36ANM8RpvXWzo7t+X4BDKFdERd9LyUs591ixQZFF8RxgWUEaTRKCgiXhsrTFyYsRKIRU4lO9PPHqk3WkQ0vr49tLwZSHdaA1NUospm4rp+tEVQV1u46908Zf9y8s9/HzmHImVliSdz0jKp+i3ZkrQ10i6SwYXv+5wAtJpYoFE7UaxPfFT5zvbtvHZHWcWej3LsL4vqfhQfEiu9nGIKA/Dijzga3wOrSMKcG/g91JYIEAl3M89cCZDfHcSb4EcvXWzsQ2Bmkkd9fFoBExAEB2Eaz0tHuOcpcfPcFK/AJd+1/1e0K1KsHQReUguIS0VguE+8fenT7SFD5L93wDIXEpAY6yByzlNjKjRr3Hy2KFteTwITbqCyFvsX5BQ4AlEpF2h4j7H4Bkk6yQMgFvnwEnTssdqmKWtCrEXrEnsoN4pMcgZbxnY2tdsNnEH66hS0w2BXqkhQp+qG91kXqlZeIqcBROeON2qpeRZFnLHhMTWXTiHXbI7+AGM5BJGQy5s0iwwGGI2jFcP0EY18b1NsDQTQ5guex/BCaNNcAgNs7fTtepqugkQHvkVOJ8Lhb7AR1VlAaaM1VaJrCNeQ5LDmghWPBNtH+71K6eQxG4bLMf9rAfMn5IkS8X+DUXcKpEG8USMmyUdn5TCDuK+gthi58Ab6c5WE1O83SeF0dzv3i084puJyHb4cw9mey5EPOG62WVCcE6e5nRI3z9IKlF/6eNkA0vsYNZXnWFWJLMk8mczv3B1gv9JbMdiCbpRh6wofX4qiJzEusNbl4c0aXWj1QcqmkkcZ47KR6pekjbi4IBnS/uEnBUfQLKq5krsaFIDWTY9ntLIpCyvdU/Qy9/C0oBjuKVZCrFjiLMdivVqLTorjmGMupmg+KURgvwWga6h2LnQlMnpY2ia1Ry6K3G4izwbVbrvogyVUiliErkAvqsFQTeEb5D0qp4NIDR1FYGKvX77jfHo0UO42dQIt64RpE5TUb5dyZY1RXGjGdQr3N9ngavyjUihc45uLPNOQChNTKWFEJIVp0Tn2boqiPaKLtp1+XgpKam266hhS+9cL2U8BcDqOjL1ublX7nd3wqSsWJE6a+QkstToebupsN+jWP1rrEK9wr2s4qv5f1f569fybtO0tYEHy8aoyoBbUUGX9S7tG9knZTsULZeK9dDVVKuYFK6ZijrkigovVAlAYuW4qR6bZ+TsCt8svlGRajyD/cubdhqDR0zA09r0KRzsiUwfPdJ/qeTNWudOK7gtmV2FX+HMi+LeMPYX7Rsylag64kt7aT7MEl4JVoiYgHYxkV6kA6JmZEqLxsjyg0XLUdHXp29PROfzG8q3jTYReLk0RIyWxMeyvkX/SFa+PPlA/Prw/vjN66+PL1+fvnNu6HvxfUN+AEBVbIg+fWO3D/eK4rW8ie1rgACd7v4p5elZZQ6RgWwmuTT8cNVz/P65eBDFWDj9WnXA4EvF6sFJ1Y81jCmV/0we7+mfb5djYL0Lao6j3jgx/J0o65EKnslPZcnxLna/vaFGt7T2iD7ff6I+Zl+gVx2FkfDTbXHYcfRg6wFb7kDc7dzx/X/Zi8hkL6L8XjJWqiuf0FevYOInbFyWBB5+tawEjaei+LqmeDUUPduBJb78iJ8BwhPQV6AwqNbYXIQxKb0GLb5hlafq6zs/5QHED+Ct9w7YGNbDT/C9dT/SGeqD/wOQP7fs1mEAAA==
+        run: |
+          python - <<'PY'
+          import os,base64,gzip
+          from pathlib import Path
+          data=gzip.decompress(base64.b64decode(os.environ['FC_PATCH_GZ_B64']))
+          Path('/tmp/v1305.patch').write_bytes(data)
+          PY
+          git apply --check /tmp/v1305.patch
+          git apply /tmp/v1305.patch
+      - name: Validate v1305
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re,subprocess,tempfile,hashlib
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          m=re.search(r'<meta\s+content="([^"]+)"\s+name="fc-build"\s*/?>',s[:5000],re.I)
+          if not m or m.group(1)!='v1305 · standard-media-frames':
+              raise SystemExit(f'bad build meta: {m.group(1) if m else None}')
+          required=['FC_V1305_VALIDATION','fc-standard-media-stage-v1305','data-fc-frame-v1305','fcMediaFrameCacheV1305','syncRailHeight','FC_V1304_VALIDATION','FC_V1303_VALIDATION','FC_V1302_VALIDATION','FC_V1301_VALIDATION','FC_UPDATE_PARSER_SELFTEST_V1174','updateViaCache']
+          for token in required:
+              if token not in s: raise SystemExit(f'missing invariant: {token}')
+          start=s.find('function fcEntryCardMediaV1060'); end=s.find('function fcEntryRailV1060',start)
+          if 'fc-entry-blur-v1060' in s[start:end]: raise SystemExit('feed card still renders duplicate blur image')
+          i=s.find('function fitPhoto(img){'); j=s.find('function wirePhoto(img){',i)
+          if 'cloneNode' in s[i:j]: raise SystemExit('challenge detail still clones photo backdrop')
+          if 'Check for updates' in s: raise SystemExit('manual update UI text returned')
+          scripts=re.findall(r'<script\b(?![^>]*\bsrc=)[^>]*>(.*?)</script>',s,re.I|re.S)
+          with tempfile.TemporaryDirectory() as d:
+              for n,code in enumerate(scripts,1):
+                  f=Path(d)/f's{n}.js'; f.write_text(code,encoding='utf-8')
+                  r=subprocess.run(['node','--check',str(f)],capture_output=True,text=True)
+                  if r.returncode: print(r.stderr); raise SystemExit(f'inline JS {n} failed')
+          styles=re.findall(r'<style\b[^>]*>(.*?)</style>',s,re.I|re.S)
+          def ok(css):
+              depth=0;i=0;quote=None;comment=False;esc=False
+              while i<len(css):
+                  c=css[i];n=css[i+1] if i+1<len(css) else ''
+                  if comment:
+                      if c=='*' and n=='/': comment=False;i+=2;continue
+                      i+=1;continue
+                  if quote:
+                      if esc: esc=False
+                      elif c=='\\': esc=True
+                      elif c==quote: quote=None
+                      i+=1;continue
+                  if c=='/' and n=='*': comment=True;i+=2;continue
+                  if c in ('"',"'"): quote=c;i+=1;continue
+                  if c=='{': depth+=1
+                  elif c=='}':
+                      depth-=1
+                      if depth<0:return False
+                  i+=1
+              return depth==0
+          bad=[n for n,x in enumerate(styles,1) if not ok(x)]
+          if bad: raise SystemExit(f'CSS brace failure: {bad}')
+          digest=hashlib.sha256(p.read_bytes()).hexdigest()
+          expected='8db5ed7e1f620e725231f6131080c56f51c8bd0a84d3ea51e48378b6350a2df0'
+          if digest!=expected: raise SystemExit(f'output hash mismatch: {digest}')
+          print(f'validated {len(scripts)} inline JS blocks and {len(styles)} CSS blocks')
+          print('sha256',digest)
+          PY
+      - name: Commit v1305
+        run: |
+          git config user.name 'FlamesChallenge Build Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add index.html
+          git commit -m 'Build v1305 standard media frames'
+          git push
