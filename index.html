@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1304 · completed-challenge-celebration" name="fc-build"/>
+<meta content="v1305 · standard-media-frames" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Made completed challenges unmistakably finished with a more celebratory gold final-result treatment while preserving live challenge cards." name="fc-whatsnew"/>
+<meta content="Standardized competition photo/video previews into portrait 4:5 and landscape 16:9 frames, with full-bleed media instead of nested letterboxed frames." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -24888,7 +24888,7 @@ function renderChallengeDetail() {
       // static Bunny poster as the preview and open the shared Entry Viewer for
       // deliberate playback. Feed/Compete three-second previews are untouched.
       if (entry.poster_url) {
-        mediaHtml = `<div class="fc-cd-video-poster-v1297" data-open-entry="${entry.id}" data-open-ch="${entry.challenge_id}" role="button" tabindex="0" aria-label="Open ${escapeHtml(entry.submitter?.name || 'competitor')} video">
+        mediaHtml = `<div class="fc-cd-video-poster-v1297" data-fc-media-src-v1305="${escapeHtml(entry.media_url)}" data-open-entry="${entry.id}" data-open-ch="${entry.challenge_id}" role="button" tabindex="0" aria-label="Open ${escapeHtml(entry.submitter?.name || 'competitor')} video">
           <img src="${escapeHtml(entry.poster_url)}" alt="${escapeHtml(entry.submitter?.name || 'Competitor')} video preview" loading="lazy">
           <div class="fc-cd-video-play-v1297" aria-hidden="true">▶</div>
         </div>`;
@@ -27799,7 +27799,8 @@ function fcEntryCardMediaV1060(e, ch) {
     // v1184 — challenge-entry cards now use the established three-second muted
     // preview controller. A failed preview.webp must not collapse into a broken
     // image icon; the video itself can still supply the short feed preview.
-    return `<div class="fcc-entry-media fcc-video-thumb fc-entry-stage-v1060 fc-entry-video-v1079 fc-video-unified-v1238"
+    return `<div class="fcc-entry-media fcc-video-thumb fc-entry-stage-v1060 fc-entry-video-v1079 fc-video-unified-v1238 fc-standard-media-stage-v1305"
+      data-fc-frame-v1305="portrait" data-fc-media-src-v1305="${escapeHtml(e.media_url || '')}"
       data-video-entry-v1238="true" aria-label="Open ${escapeHtml(label)}'s video">
       <video data-src="${escapeHtml(e.media_url || '')}" ${_videoPosterAttr(e.media_url || '', e.poster_url || '')}
         muted playsinline preload="none" data-lazy-video tabindex="-1"
@@ -27808,7 +27809,7 @@ function fcEntryCardMediaV1060(e, ch) {
       <button type="button" class="fc-inline-video-expand-v1239" aria-label="Open full-size video">⛶</button>
     </div>`;
   }
-  return `<div class="fcc-entry-media fc-entry-stage-v1060"><img class="fc-entry-blur-v1060" src="${escapeHtml(url)}" alt="" aria-hidden="true" loading="lazy"><img class="fc-entry-contain-v1060" src="${escapeHtml(url)}" alt="${escapeHtml(label)}'s entry" loading="lazy"></div>`;
+  return `<div class="fcc-entry-media fc-entry-stage-v1060 fc-standard-media-stage-v1305" data-fc-frame-v1305="portrait" data-fc-media-src-v1305="${escapeHtml(e.media_url || url)}"><img class="fc-entry-contain-v1060 fc-entry-fill-v1305" src="${escapeHtml(url)}" alt="${escapeHtml(label)}'s entry" loading="lazy"></div>`;
 }
 function fcEntryRailV1060(ch, entries) {
   if (!entries.length) return `<div class="chc-empty"><div class="chc-empty-ov"><div class="chc-plus">+</div><div class="chc-empty-msg">No entries yet — be the first</div></div></div>`;
@@ -30248,50 +30249,23 @@ async function openFeedViewer(chId, startEntryId = null) {
         userStarted:true,
         preload:'auto'
       });
-      // v679 — 9:16 stage + blurred backdrop instead of black bars.
-      // The bars were never Bunny's fault: the v678 vdim log proved the encode is
-      // a clean 720x1280 PORTRAIT (ar 0.563). The bars came from THIS element —
-      // max-height:55vmax stops a 0.563 video from ever filling the width, the
-      // browser letterboxes to preserve aspect (correct, spec behaviour), and
-      // background:#000 painted the leftover gap black.
-      // Now: a fixed-height 9:16 stage (matches phone video, so portrait entries
-      // essentially fill it), a transparent video with object-fit:contain over a
-      // blurred blowup of the poster. Nothing is cropped, and the height is the
-      // same for every entry so the horizontal pager doesn't jump as you swipe.
-      // The blur backdrop is a STATIC poster image, not a second <video> — a
-      // second decoder per entry would fight iOS's decoder-slot limit, which this
-      // handler already works hard to protect (it pauses every other video above).
-      newVid.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block;background:transparent;';
+      // v1305 — competition playback uses the same two preview geometries as
+      // every other browse surface: portrait/square -> 4:5, landscape -> 16:9.
+      // The media itself fills the stage; the old duplicate blurred backdrop is
+      // gone. Full-screen Entry Viewer still preserves the complete source.
+      newVid.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;background:#000;';
       const fvStage = document.createElement('div');
-      fvStage.className = 'fv-stage';
-      const fvBlur = document.createElement('div');
-      fvBlur.className = 'fv-stage-blur';
-      // Reuse whatever still is already on screen (preview.webp <img>, or the
-      // <video poster>) as the blur source. Bunny's thumbnail is a padded 16:9,
-      // but background-size:cover on a 9:16 stage crops to roughly the content
-      // and the blur hides the rest, so its black padding never shows.
-      const _blurSrc = (target.querySelector('img') || {}).src || (target.querySelector('video') || {}).poster || '';
-      if (_blurSrc) fvBlur.style.backgroundImage = `url("${_blurSrc}")`;
-      // v684 — size the stage to the video's ACTUAL aspect, so there is no
-      // leftover space and therefore nothing to fill. The v679 stage was
-      // hardcoded 9:16 (0.563), but iPhones record 9:19.5 (0.46) — taller — so
-      // the video could never fill the width and the blur was covering a gap
-      // that shouldn't have existed. Matching the container is what the native
-      // fullscreen player does, and it's why fullscreen never had bars.
-      // The blur stays purely as a fallback: it's only ever visible in the
-      // moment before dimensions arrive, or if a video's size can't be read.
-      // COST (accepted deliberately): entries now render at their true shape, so
-      // a 0.46 recording is ~790px tall, and the sheet height changes when
-      // swiping between entries of different aspects. There is no way to keep a
-      // fixed height AND have zero bars — any cap re-creates the gap.
+      fvStage.className = 'fv-stage fc-standard-media-stage-v1305';
+      fvStage.dataset.fcFrameV1305 = target.dataset.fcFrameV1305 || 'portrait';
+      fvStage.dataset.fcMediaSrcV1305 = src;
       const _fitStage = () => {
-        if (fvStage.dataset.fitted) return true;
         const w = newVid.videoWidth, h = newVid.videoHeight;
         if (!w || !h) return false;
+        const landscape = (w / h) >= 1.15;
         fvStage.dataset.fitted = '1';
-        fvStage.style.aspectRatio = w + ' / ' + h;
-        fvStage.style.maxHeight = 'none';
-        dlog('stage', 'fit', { w, h, ar: +(w / h).toFixed(3) });
+        fvStage.dataset.fcFrameV1305 = landscape ? 'landscape' : 'portrait';
+        window.fcMediaFrameCacheV1305?.set?.(src, fvStage.dataset.fcFrameV1305);
+        dlog('stage', 'standard-frame-v1305', { w, h, frame: fvStage.dataset.fcFrameV1305 });
         return true;
       };
       ['loadedmetadata', 'loadeddata', 'playing', 'resize'].forEach((ev) => {
@@ -30320,9 +30294,7 @@ async function openFeedViewer(chId, startEntryId = null) {
             <div style="font-size:30px;margin-bottom:8px">⏳</div>
             Still processing — tap to retry
           </div>`;
-        // v679: replace the STAGE, not the bare video — the video now lives
-        // inside .fv-stage alongside the blur layer, so replacing only the video
-        // would leave an orphaned blurred backdrop behind the retry card.
+        // Replace the whole standardized stage so retry geometry stays coherent.
         try { (fvStage.parentNode ? fvStage : newVid).replaceWith(wrap); } catch(_) {}
         // If it's a Bunny video that isn't finished yet, poll and auto-restore.
         if (_fvEncGuid) {
@@ -30355,7 +30327,6 @@ async function openFeedViewer(chId, startEntryId = null) {
       newVid.addEventListener('playing', hidePlayOverlayV1238, { once:true });
       newVid.addEventListener('play', hidePlayOverlayV1238, { once:true });
 
-      fvStage.appendChild(fvBlur);
       fvStage.appendChild(newVid);
       fvStage.appendChild(fvPlayOverlayV1238);
       target.replaceWith(fvStage);
@@ -30892,20 +30863,20 @@ function renderFvEntry(entry, ch, canVote, myVoteEntryId, status) {
       <div class="cd-entry-blocked-sub">This entry was removed for violating community guidelines and is no longer visible, including to you.</div>
     </div>`;
   } else if (mediaType === 'photo' && entry.media_url) {
-    mediaHtml = `<img src="${escapeHtml(entry.media_url)}" style="width:100%;max-height:55vmax;min-height:200px;object-fit:contain;display:block;background:var(--surface-2);" loading="lazy">`;
+    mediaHtml = `<div class="fc-fv-media-stage-v1305 fc-standard-media-stage-v1305" data-fc-frame-v1305="portrait" data-fc-media-src-v1305="${escapeHtml(entry.media_url)}"><img class="fc-fv-primary-v1305" src="${escapeHtml(entry.media_url)}" alt="" loading="lazy"></div>`;
   } else if (mediaType === 'video' && entry.media_url) {
     // Viewer (not feed): show a STATIC poster + ▶, never a lazy/auto preview.
     // The lazy preview made the video "already playing" on open with no ▶, which
     // forced a wasted first tap. Here the first tap plays the real video with sound.
     if (entry.poster_url) {
-      mediaHtml = `<div class="fv-media-host" style="position:relative;cursor:pointer;" data-fv-play="${escapeHtml(entry.media_url)}" data-fv-${_videoPosterAttr(entry.media_url, entry.poster_url)} data-fv-encguid="${_bunnyGuidFromUrl(entry.media_url)||''}" data-fv-created="${entry.created_at||''}">
-        <img src="${escapeHtml(entry.poster_url)}" style="width:100%;max-height:55vmax;object-fit:cover;display:block;pointer-events:none;" loading="lazy" onerror="this.style.display='none';var h=this.closest('.fv-media-host');if(h){h.style.background='#000';h.style.minHeight='200px';}">
+      mediaHtml = `<div class="fv-media-host fc-fv-media-stage-v1305 fc-standard-media-stage-v1305" data-fc-frame-v1305="portrait" data-fc-media-src-v1305="${escapeHtml(entry.media_url)}" style="position:relative;cursor:pointer;" data-fv-play="${escapeHtml(entry.media_url)}" data-fv-${_videoPosterAttr(entry.media_url, entry.poster_url)} data-fv-encguid="${_bunnyGuidFromUrl(entry.media_url)||''}" data-fv-created="${entry.created_at||''}">
+        <img class="fc-fv-primary-v1305" src="${escapeHtml(entry.poster_url)}" style="pointer-events:none;" loading="lazy" onerror="this.style.display='none';var h=this.closest('.fv-media-host');if(h){h.style.background='#000';}">
         <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;">
           <div style="width:56px;height:56px;border-radius:50%;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;font-size:24px;">▶</div>
         </div>
       </div>`;
     } else {
-      mediaHtml = `<div class="fv-media-host" style="position:relative;cursor:pointer;background:#000;min-height:200px;" data-fv-play="${escapeHtml(entry.media_url)}" data-fv-encguid="${_bunnyGuidFromUrl(entry.media_url)||''}" data-fv-created="${entry.created_at||''}">
+      mediaHtml = `<div class="fv-media-host fc-fv-media-stage-v1305 fc-standard-media-stage-v1305" data-fc-frame-v1305="portrait" data-fc-media-src-v1305="${escapeHtml(entry.media_url)}" style="position:relative;cursor:pointer;background:#000;" data-fv-play="${escapeHtml(entry.media_url)}" data-fv-encguid="${_bunnyGuidFromUrl(entry.media_url)||''}" data-fv-created="${entry.created_at||''}">
         <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;">
           <div style="width:56px;height:56px;border-radius:50%;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;font-size:24px;">▶</div>
         </div>
@@ -41680,27 +41651,14 @@ body.fc-insights-unavailable-v1081 .pm-tile[onclick*="openCreatorInsightsV1048"]
     const media=img.parentElement;
     if(!media?.classList.contains('cd-entry-media')) return;
 
-    media.classList.add('fc-cd-photo-stage-v1081');
+    media.classList.add('fc-cd-photo-stage-v1081','fc-standard-media-stage-v1305');
     media.classList.remove(...PHOTO_CLASSES);
     const ratio=(Number(img.naturalWidth)||0)/(Number(img.naturalHeight)||1);
-    const shape=ratio>=1.15
-      ? 'fc-cd-photo-landscape-v1081'
-      : ratio<=0.88
-        ? 'fc-cd-photo-portrait-v1081'
-        : 'fc-cd-photo-square-v1081';
-    media.classList.add(shape);
-
-    let backdrop=media.querySelector(':scope > .fc-cd-entry-backdrop-v1081');
-    if(!backdrop){
-      backdrop=img.cloneNode(false);
-      backdrop.className='fc-cd-entry-backdrop-v1081';
-      backdrop.alt='';
-      backdrop.setAttribute('aria-hidden','true');
-      backdrop.removeAttribute('loading');
-      media.insertBefore(backdrop,img);
-    }else if(backdrop.src!==img.currentSrc && backdrop.src!==img.src){
-      backdrop.src=img.currentSrc||img.src;
-    }
+    const landscape=ratio>=1.15;
+    media.classList.add(landscape ? 'fc-cd-photo-landscape-v1081' : 'fc-cd-photo-portrait-v1081');
+    media.dataset.fcFrameV1305=landscape ? 'landscape' : 'portrait';
+    media.dataset.fcMediaSrcV1305=img.currentSrc||img.src||'';
+    media.querySelectorAll(':scope > .fc-cd-entry-backdrop-v1081').forEach(el=>el.remove());
   }
 
   function wirePhoto(img){
@@ -50967,6 +50925,235 @@ body.theme-light #feedViewerSheet.open{
   #feedViewerSheet.open #feedViewerModal{animation:none!important}
 }
 </style>
+
+<style id="fc-v1305-standard-media-frames-css">
+/* v1305 — one authoritative competition-preview geometry system.
+   Portrait and square use 4:5. Landscape uses 16:9. Photo/video media fills
+   the stage edge-to-edge; the full-screen Entry Viewer remains the place to
+   inspect the uncropped source. Audio keeps its dedicated layout. */
+.fc-standard-media-stage-v1305,
+#challengeDetailSheet .cd-entry-media[data-fc-frame-v1305],
+#feedViewerModal #fvEntries [data-fc-frame-v1305]{
+  position:relative!important;
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  overflow:hidden!important;
+  background:#000!important;
+}
+.fc-standard-media-stage-v1305[data-fc-frame-v1305="portrait"],
+#challengeDetailSheet .cd-entry-media[data-fc-frame-v1305="portrait"],
+#feedViewerModal #fvEntries [data-fc-frame-v1305="portrait"]{
+  aspect-ratio:4/5!important;
+}
+.fc-standard-media-stage-v1305[data-fc-frame-v1305="landscape"],
+#challengeDetailSheet .cd-entry-media[data-fc-frame-v1305="landscape"],
+#feedViewerModal #fvEntries [data-fc-frame-v1305="landscape"]{
+  aspect-ratio:16/9!important;
+}
+/* Feed / Compete: no duplicated backdrop, no contained inner picture. */
+.fc-entry-rail-v1079 .fcc-entries-scroll{
+  align-items:flex-start!important;
+  transition:none!important;
+}
+.fc-entry-rail-v1079 .fcc-entry-card{
+  align-self:flex-start!important;
+}
+.fc-entry-rail-v1079 .fc-entry-stage-fixed-v1202 > .fc-standard-media-stage-v1305{
+  max-height:none!important;
+}
+.fc-entry-rail-v1079 .fc-standard-media-stage-v1305 > .fc-entry-blur-v1060{
+  display:none!important;
+}
+.fc-entry-rail-v1079 .fc-standard-media-stage-v1305 > .fc-entry-contain-v1060,
+.fc-entry-rail-v1079 .fc-standard-media-stage-v1305 > video{
+  position:relative!important;
+  inset:auto!important;
+  width:100%!important;
+  height:100%!important;
+  max-height:none!important;
+  object-fit:cover!important;
+  display:block!important;
+  background:#000!important;
+}
+/* Challenge Detail: exactly the same two-frame rule. */
+#challengeDetailSheet .cd-entry-media.fc-cd-photo-stage-v1081,
+#challengeDetailSheet .cd-entry-media:has(.fc-cd-video-poster-v1297){
+  display:block!important;
+  width:100%!important;
+  min-height:0!important;
+  max-height:none!important;
+  overflow:hidden!important;
+  background:#000!important;
+}
+#challengeDetailSheet .cd-entry-media.fc-cd-photo-square-v1081{
+  aspect-ratio:4/5!important;
+}
+#challengeDetailSheet .fc-cd-entry-backdrop-v1081{display:none!important}
+#challengeDetailSheet .cd-entry-media.fc-cd-photo-stage-v1081 > img:not(.fc-cd-entry-backdrop-v1081),
+#challengeDetailSheet .fc-cd-video-poster-v1297,
+#challengeDetailSheet .fc-cd-video-poster-v1297 > img{
+  width:100%!important;
+  height:100%!important;
+  max-height:none!important;
+  object-fit:cover!important;
+  display:block!important;
+  background:#000!important;
+}
+#challengeDetailSheet .fc-cd-video-poster-v1297{position:relative!important}
+/* Feed pop-out: static photo/poster and deliberate playback share the same shell. */
+#feedViewerModal #fvEntries .fc-fv-media-stage-v1305,
+#feedViewerModal #fvEntries .fv-stage.fc-standard-media-stage-v1305{
+  width:100%!important;
+  min-height:0!important;
+  max-height:none!important;
+  margin:0!important;
+  background:#000!important;
+}
+#feedViewerModal #fvEntries .fc-fv-media-stage-v1305 > .fc-fv-primary-v1305,
+#feedViewerModal #fvEntries .fv-stage.fc-standard-media-stage-v1305 > video{
+  position:relative!important;
+  inset:auto!important;
+  width:100%!important;
+  height:100%!important;
+  max-height:none!important;
+  object-fit:cover!important;
+  display:block!important;
+  background:#000!important;
+}
+#feedViewerModal #fvEntries .fv-stage.fc-standard-media-stage-v1305 > video{
+  position:absolute!important;
+  inset:0!important;
+}
+#feedViewerModal #fvEntries .fv-stage-blur{display:none!important}
+</style>
+<script id="fc-v1305-standard-media-frames-js">
+(function(){
+  'use strict';
+  const cache = window.fcMediaFrameCacheV1305 = window.fcMediaFrameCacheV1305 || new Map();
+  const classify=(w,h)=>{
+    w=Number(w)||0;h=Number(h)||0;
+    return w>0&&h>0&&w/h>=1.15 ? 'landscape' : 'portrait';
+  };
+  function apply(host,w,h,src=''){
+    if(!host) return;
+    const frame=classify(w,h);
+    host.classList.add('fc-standard-media-stage-v1305');
+    host.dataset.fcFrameV1305=frame;
+    const key=String(src||host.dataset.fcMediaSrcV1305||'');
+    if(key) cache.set(key,frame);
+    if(typeof window.fcResetFeedViewerActiveHeightV1285==='function' && host.closest?.('#fvEntries')){
+      requestAnimationFrame(()=>window.fcResetFeedViewerActiveHeightV1285(document.getElementById('fvEntries')));
+    }
+  }
+  function wireImage(img,host){
+    if(!img||!host) return;
+    host.classList.add('fc-standard-media-stage-v1305');
+    host.dataset.fcFrameV1305 ||= 'portrait';
+    const src=String(host.dataset.fcMediaSrcV1305||img.currentSrc||img.src||'');
+    const go=()=>{ if(img.naturalWidth&&img.naturalHeight) apply(host,img.naturalWidth,img.naturalHeight,src); };
+    if(img.complete&&img.naturalWidth) go();
+    else if(img.dataset.fcFrameWireV1305!=='1'){
+      img.dataset.fcFrameWireV1305='1';
+      img.addEventListener('load',go,{once:true});
+    }
+  }
+  function wireVideo(video,host){
+    if(!video||!host) return;
+    host.classList.add('fc-standard-media-stage-v1305');
+    host.dataset.fcFrameV1305 ||= 'portrait';
+    const src=String(host.dataset.fcMediaSrcV1305||video.currentSrc||video.src||video.dataset?.src||'');
+    const cached=cache.get(src);
+    if(cached) host.dataset.fcFrameV1305=cached;
+    const go=()=>{ if(video.videoWidth&&video.videoHeight) apply(host,video.videoWidth,video.videoHeight,src); };
+    if(video.videoWidth&&video.videoHeight) go();
+    if(video.dataset.fcFrameWireV1305!=='1'){
+      video.dataset.fcFrameWireV1305='1';
+      ['loadedmetadata','loadeddata','playing','resize'].forEach(ev=>video.addEventListener(ev,go,{passive:true}));
+    }
+  }
+  function activeRailCard(rail){
+    const cards=[...rail.querySelectorAll(':scope > .fcc-entry-card')];
+    if(!cards.length) return null;
+    const left=rail.scrollLeft||0;
+    return cards.reduce((best,card)=>Math.abs(card.offsetLeft-left)<Math.abs(best.offsetLeft-left)?card:best,cards[0]);
+  }
+  function syncRailHeight(rail){
+    if(!rail||rail._fcFrameGestureV1305) return;
+    const card=activeRailCard(rail);
+    if(!card) return;
+    const h=Math.ceil(Math.max(card.scrollHeight||0,card.getBoundingClientRect().height||0));
+    if(h>0) rail.style.height=h+'px';
+  }
+  function wireRail(rail){
+    if(!rail||rail.dataset.fcFrameHeightWireV1305==='1') return;
+    rail.dataset.fcFrameHeightWireV1305='1';
+    let timer=0;
+    const settle=(delay=90)=>{ clearTimeout(timer); timer=setTimeout(()=>syncRailHeight(rail),delay); };
+    rail.addEventListener('scroll',()=>settle(120),{passive:true});
+    rail.addEventListener('scrollend',()=>settle(0),{passive:true});
+    rail.addEventListener('touchstart',()=>{
+      rail._fcFrameGestureV1305=true;
+      clearTimeout(timer);
+      const maxH=Math.max(0,...[...rail.querySelectorAll(':scope > .fcc-entry-card')].map(card=>Math.ceil(Math.max(card.scrollHeight||0,card.getBoundingClientRect().height||0))));
+      if(maxH>0) rail.style.height=maxH+'px';
+    },{passive:true});
+    const end=()=>{ rail._fcFrameGestureV1305=false; settle(60); };
+    rail.addEventListener('touchend',end,{passive:true});
+    rail.addEventListener('touchcancel',end,{passive:true});
+    if(typeof ResizeObserver==='function'){
+      const ro=new ResizeObserver(()=>settle(0));
+      rail.querySelectorAll(':scope > .fcc-entry-card').forEach(card=>ro.observe(card));
+      rail._fcFrameROV1305=ro;
+    }
+    requestAnimationFrame(()=>syncRailHeight(rail));
+  }
+  function scan(root=document){
+    const scope=root?.querySelectorAll ? root : document;
+    scope.querySelectorAll('.fc-entry-rail-v1079 .fcc-entries-scroll').forEach(wireRail);
+    scope.querySelectorAll('.fc-entry-rail-v1079 .fc-entry-stage-v1060').forEach(host=>{
+      const img=host.querySelector('.fc-entry-contain-v1060');
+      const video=host.querySelector('video');
+      if(img) wireImage(img,host);
+      if(video) wireVideo(video,host);
+    });
+    scope.querySelectorAll('#challengeDetailSheet .cd-entry-media').forEach(host=>{
+      const photo=[...host.children].find(el=>el.tagName==='IMG'&&!el.classList.contains('fc-cd-entry-backdrop-v1081'));
+      const poster=host.querySelector('.fc-cd-video-poster-v1297 > img');
+      const posterHost=host.querySelector('.fc-cd-video-poster-v1297');
+      if(photo) wireImage(photo,host);
+      if(poster){
+        const mediaSrc=posterHost?.dataset.fcMediaSrcV1305||'';
+        if(mediaSrc) host.dataset.fcMediaSrcV1305=mediaSrc;
+        const cached=cache.get(mediaSrc);
+        if(cached){ host.classList.add('fc-standard-media-stage-v1305'); host.dataset.fcFrameV1305=cached; }
+        else wireImage(poster,host);
+      }
+    });
+    scope.querySelectorAll('#feedViewerModal #fvEntries .fc-fv-media-stage-v1305').forEach(host=>{
+      const img=host.querySelector('.fc-fv-primary-v1305');
+      if(img){
+        const mediaSrc=host.dataset.fcMediaSrcV1305||'';
+        const cached=cache.get(mediaSrc);
+        if(cached) host.dataset.fcFrameV1305=cached;
+        else wireImage(img,host);
+      }
+    });
+  }
+  window.fcStandardizeCompetitionFramesV1305=scan;
+  function start(){
+    scan(document);
+    const observer=new MutationObserver(records=>{
+      if(records.some(r=>r.addedNodes&&r.addedNodes.length)) requestAnimationFrame(()=>scan(document));
+    });
+    observer.observe(document.body,{childList:true,subtree:true});
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',start,{once:true});
+  else start();
+})();
+window.FC_V1305_VALIDATION={build:'v1305',portraitFrame:'4:5',landscapeFrame:'16:9',squareUsesPortraitFrame:true,photoVideoFullBleed:true,noFeedDuplicateBlur:true,noChallengeDetailDuplicateBlur:true,feedViewerPlaybackStandardized:true,fullScreenEntryViewerNaturalMediaPreserved:true,audioLayoutsPreserved:true,v1304CompletedChallengePreserved:true};
+</script>
 
 <style id="fc-v1304-completed-challenge-celebration-css">
 /* v1304 — closed challenges already had a richer completed-state viewer (v1298),
