@@ -1,1 +1,1 @@
-export canonical v1301 source
+export canonical v1301 source retry
