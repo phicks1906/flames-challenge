@@ -1,0 +1,142 @@
+--- a/index.html
++++ b/index.html
+@@ -21,9 +21,9 @@
+      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
+      this tag; bump it HERE and nowhere else.
+      fc-whatsnew is the one line shown in the update prompt. -->
+-<meta content="v1302 · feed-swipe-popout-viewer" name="fc-build"/>
++<meta content="v1304 · completed-challenge-celebration" name="fc-build"/>
+ <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
+-<meta content="Made Challenger swipes obvious on the feed and replaced the near-full-screen feed viewer with a quiet pop-out overlay that closes back to the same feed position." name="fc-whatsnew"/>
++<meta content="Made completed challenges unmistakably finished with a more celebratory gold final-result treatment while preserving live challenge cards." name="fc-whatsnew"/>
+ <!-- v1011 CANONICAL BRAND ASSET:
+      The primary logo is the approved Crowned F extracted from the approved
+      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
+@@ -28482,8 +28482,14 @@
+   }
+   const score=(state.boostByChallenge||{})[challenge.id];
+   const scoreHtml=score&&Number(score.total_boost)>0?`<div class="fc-winner-score-v1058"><strong>+${Number(score.total_boost)} Championship Score</strong><span>${Number(score.opponent_pts||0)} Opponent + ${Number(score.vote_pts||0)} Turnout</span></div>`:'';
+-  return `<article class="feed-activity-card winner fc-winner-card-v1058" data-cid="${challenge.id}">
+-    <header class="fc-winner-head-v1058"><span>Winner · ${escapeHtml(challenge.category||'Other')}</span><time>${timeAgo(challenge.voting_end)}</time></header>
++  return `<article class="feed-activity-card winner fc-winner-card-v1058 fc-complete-challenge-v1304" data-cid="${challenge.id}">
++    <header class="fc-winner-head-v1058 fc-winner-head-v1304">
++      <div class="fc-winner-state-v1304">
++        <div class="fc-winner-mark-v1304" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M4 7.5 7.3 11 12 5l4.7 6L20 7.5l-1.6 9H5.6L4 7.5Z"></path><path d="M6.2 19h11.6"></path></svg></div>
++        <div class="fc-winner-state-copy-v1304"><strong>Challenge complete</strong><small>Winner · ${escapeHtml(challenge.category||'Other')}</small></div>
++      </div>
++      <time>${timeAgo(challenge.voting_end)}</time>
++    </header>
+     <div class="fc-winner-body-v1058">
+       <div class="fc-winner-identity-v1058">
+         <div class="fc-winner-avatar-v1058" ${userAttr}>${avatarInner(s.avatar)}</div>
+@@ -29919,6 +29925,10 @@
+ let _fvChallenge = null;
+ let _fvVoteCounts = {}; // entryId → count
+ let _fvEntries = [];    // entries loaded by openFeedViewer — used by standings
++// v1303 — a feed pop-out must return to the exact underlying feed state.
++// Capture only on the first open; internal refreshes while the viewer is open
++// must not overwrite the original return point.
++let _fvFeedReturnStateV1303 = null;
+ 
+ // v1068 — restored exact v1065 native horizontal viewer behavior; no touch interception.
+ async function openFeedViewer(chId, startEntryId = null) {
+@@ -29982,6 +29992,15 @@
+ 
+   // Show sheet immediately with loading state
+   const sheet = document.getElementById('feedViewerSheet');
++  if (sheet && !sheet.classList.contains('open')) {
++    const active = document.activeElement;
++    _fvFeedReturnStateV1303 = {
++      x: window.scrollX || 0,
++      y: window.scrollY || 0,
++      focus: active instanceof HTMLElement ? active : null,
++      view: state.currentView || null,
++    };
++  }
+   const title = document.getElementById('fvTitle');
+   const meta  = document.getElementById('fvMeta');
+   const btn   = document.getElementById('fvChallengeBtn');
+@@ -31145,7 +31164,19 @@
+   sheet.classList.remove('fc-viewer-centered-v1199','fc-viewer-bottom-v1199');
+   document.body.classList.remove('fc-feed-popout-active-v1302');
+   fcCloseImmersiveViewerV1198('feed-viewer');
++  const returnStateV1303 = _fvFeedReturnStateV1303;
++  _fvFeedReturnStateV1303 = null;
+   _fvChallenge = null;
++  if (returnStateV1303) {
++    requestAnimationFrame(() => {
++      // No navigation/rerender occurs on close; this is a defensive iOS
++      // restoration in case overflow locking nudged the page.
++      window.scrollTo({ left:returnStateV1303.x, top:returnStateV1303.y, behavior:'auto' });
++      if (returnStateV1303.focus && returnStateV1303.focus.isConnected) {
++        try { returnStateV1303.focus.focus({ preventScroll:true }); } catch (_) {}
++      }
++    });
++  }
+ }
+ 
+ 
+@@ -50936,6 +50967,63 @@
+   #feedViewerSheet.open #feedViewerModal{animation:none!important}
+ }
+ </style>
++
++<style id="fc-v1304-completed-challenge-celebration-css">
++/* v1304 — closed challenges already had a richer completed-state viewer (v1298),
++   but the Home winner card was still using the quiet v1058 header. Make the
++   completed state unmistakable before the tap without changing live cards. */
++#feedContainer > .fc-winner-card-v1058.fc-complete-challenge-v1304{
++  position:relative!important;
++  isolation:isolate!important;
++  border-color:rgba(255,200,87,.44)!important;
++  background:
++    radial-gradient(circle at 8% -10%,rgba(255,205,93,.18),transparent 34%),
++    linear-gradient(180deg,rgba(255,192,66,.045),var(--surface) 28%)!important;
++  box-shadow:0 0 0 1px rgba(255,206,99,.055),0 16px 36px -26px rgba(255,176,43,.72)!important;
++}
++#feedContainer > .fc-winner-card-v1058.fc-complete-challenge-v1304::before{
++  content:"";position:absolute;z-index:3;left:0;right:0;top:0;height:2px;pointer-events:none;
++  background:linear-gradient(90deg,transparent 0%,#a56f17 14%,#ffd976 42%,#fff1b0 50%,#ffd976 58%,#a56f17 86%,transparent 100%);
++  box-shadow:0 0 14px rgba(255,199,78,.34);
++}
++.fc-winner-head-v1304{
++  position:relative!important;overflow:hidden!important;min-height:70px!important;padding:12px 14px!important;
++  background:linear-gradient(100deg,rgba(255,199,77,.115),rgba(255,135,36,.035) 46%,transparent 78%)!important;
++  border-bottom-color:rgba(255,205,102,.20)!important;
++}
++.fc-winner-head-v1304::after{
++  content:"";position:absolute;top:-40%;bottom:-40%;left:-34%;width:22%;pointer-events:none;opacity:.34;
++  background:linear-gradient(90deg,transparent,rgba(255,239,184,.42),transparent);
++  transform:skewX(-18deg);animation:fcWinnerSweepV1304 5.2s ease-in-out infinite;
++}
++@keyframes fcWinnerSweepV1304{
++  0%,70%{left:-34%;opacity:0}75%{opacity:.34}90%{left:112%;opacity:.18}100%{left:112%;opacity:0}
++}
++.fc-winner-state-v1304{display:flex;align-items:center;gap:10px;min-width:0;position:relative;z-index:1}
++.fc-winner-mark-v1304{
++  width:38px;height:38px;flex:0 0 38px;border-radius:50%;display:grid;place-items:center;
++  background:radial-gradient(circle at 35% 28%,#4d3616,#21150a 72%);
++  border:1px solid rgba(255,211,112,.48);box-shadow:inset 0 1px 0 rgba(255,245,211,.10),0 0 18px rgba(255,190,60,.13);
++}
++.fc-winner-mark-v1304 svg{width:22px;height:22px;fill:rgba(255,205,92,.18);stroke:#ffd56d;stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round}
++.fc-winner-state-copy-v1304{min-width:0;display:flex;flex-direction:column;gap:3px}
++.fc-winner-state-copy-v1304 strong{
++  color:#ffe09a;font-size:10px;line-height:1;font-weight:900;letter-spacing:.16em;text-transform:uppercase;white-space:nowrap;
++}
++.fc-winner-state-copy-v1304 small{
++  color:var(--gold);font-size:12px;line-height:1.1;font-weight:850;letter-spacing:.09em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
++}
++.fc-winner-head-v1304 time{position:relative;z-index:1;color:#b9aa9f!important;font-size:12px!important}
++body.theme-light #feedContainer > .fc-winner-card-v1058.fc-complete-challenge-v1304{
++  background:radial-gradient(circle at 8% -10%,rgba(201,148,31,.14),transparent 34%),linear-gradient(180deg,rgba(201,148,31,.045),var(--surface) 28%)!important;
++  border-color:rgba(168,119,20,.38)!important;
++}
++body.theme-light .fc-winner-state-copy-v1304 strong{color:#7b5814}
++body.theme-light .fc-winner-state-copy-v1304 small{color:#9a6d13}
++@media(prefers-reduced-motion:reduce){.fc-winner-head-v1304::after{animation:none!important;display:none!important}}
++</style>
++<script>window.FC_V1304_VALIDATION={build:'v1304',completedFeedCardsVisuallyDistinct:true,challengeCompleteLabel:true,winnerCategoryRetained:true,metallicGoldFinalState:true,subtleCelebrationSweep:true,reducedMotionRespected:true,v1298CompletedViewerPreserved:true,v1303FeedPopoutPreserved:true};</script>
++<script>window.FC_V1303_VALIDATION={build:'v1303',strongFeedChallengerTravel:true,feedViewerIsOverlayNotDestination:true,explicitFeedScrollRestore:true,originFocusRestore:true,backgroundFeedRemainsMounted:true,v1302PopoutPreserved:true,v1301NativeAudioPreserved:true};</script>
+ <script>window.FC_V1302_VALIDATION={build:'v1302',feedCardsExposeNextChallenger:true,nativeFeedSwipePreserved:true,feedViewerIsCenteredPopout:true,feedRemainsVisibleUnderOverlay:true,feedScrollPositionPreserved:true,noSecondScreenAnimation:true,v1301NativeAudioPreserved:true};</script>
+ <script>window.FC_V1301_VALIDATION={build:'v1301',nativeAudioOutputOnly:true,noCompetitionMediaElementSource:true,noCompetitionAudioContext:true,pitchRateLockedAtOne:true,pitchPreservationEnabled:true,visualsDrivenByCurrentTimeOnly:true,v1300ScrollFixPreserved:true};</script>
+ <script>window.FC_V1300_VALIDATION={build:'v1300',singleAudibleMediaPointer:true,recordAudioBypassesWebAudio:true,analyserPrimedBeforePlay:true,viewerHeightDefersUntilScrollSettles:true,noSheetRepositionDuringSwipe:true,v1299ClosedCarouselPreserved:true};</script>
