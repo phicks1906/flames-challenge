@@ -1,0 +1,94 @@
+name: Apply v1304 production build
+on:
+  push:
+    branches: [main]
+    paths: ['.github/v1304.trigger']
+permissions:
+  contents: write
+jobs:
+  build:
+    if: github.event.head_commit.message == 'Trigger v1304 build'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply exact v1302 to v1304 patch
+        run: |
+          git apply --check .github/v1304.patch
+          git apply .github/v1304.patch
+      - name: Validate v1304
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re, subprocess, tempfile, hashlib
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          head=s[:5000]
+          m=re.search(r'<meta\s+content="([^"]+)"\s+name="fc-build"\s*/?>',head,re.I)
+          expected='v1304 · completed-challenge-celebration'
+          if not m or m.group(1) != expected:
+              raise SystemExit(f'bad build meta: {m.group(1) if m else None}')
+          required=[
+              'FC_V1304_VALIDATION','fc-complete-challenge-v1304','Challenge complete',
+              'fcWinnerSweepV1304','FC_V1303_VALIDATION','_fvFeedReturnStateV1303',
+              "window.scrollTo({ left:returnStateV1303.x, top:returnStateV1303.y, behavior:'auto' })",
+              'FC_V1302_VALIDATION','fc-feed-popout-active-v1302','calc(100% - 42px)',
+              'FC_V1301_VALIDATION','fcNormalizeAudioTransportV1301',
+              'FC_UPDATE_PARSER_SELFTEST_V1174','updateViaCache'
+          ]
+          for token in required:
+              if token not in s: raise SystemExit(f'missing invariant: {token}')
+          if "fcOpenImmersiveViewerV1198('feed-viewer')" not in s:
+              raise SystemExit('feed viewer depth guard missing')
+          if "document.body.classList.add('fc-feed-popout-active-v1302')" not in s:
+              raise SystemExit('feed popout open state missing')
+          if "document.body.classList.remove('fc-feed-popout-active-v1302')" not in s:
+              raise SystemExit('feed popout close state missing')
+          scripts=re.findall(r'<script\b(?![^>]*\bsrc=)[^>]*>(.*?)</script>',s,re.I|re.S)
+          with tempfile.TemporaryDirectory() as d:
+              for i,code in enumerate(scripts,1):
+                  f=Path(d)/f's{i}.js'; f.write_text(code,encoding='utf-8')
+                  r=subprocess.run(['node','--check',str(f)],capture_output=True,text=True)
+                  if r.returncode:
+                      print(r.stderr); raise SystemExit(f'inline JS {i} failed')
+          styles=re.findall(r'<style\b[^>]*>(.*?)</style>',s,re.I|re.S)
+          def ok(css):
+              depth=0;i=0;quote=None;comment=False;esc=False
+              while i<len(css):
+                  c=css[i];n=css[i+1] if i+1<len(css) else ''
+                  if comment:
+                      if c=='*' and n=='/': comment=False;i+=2;continue
+                      i+=1;continue
+                  if quote:
+                      if esc: esc=False
+                      elif c=='\\': esc=True
+                      elif c==quote: quote=None
+                      i+=1;continue
+                  if c=='/' and n=='*': comment=True;i+=2;continue
+                  if c in ('"',"'"): quote=c;i+=1;continue
+                  if c=='{': depth+=1
+                  elif c=='}':
+                      depth-=1
+                      if depth<0:return False
+                  i+=1
+              return depth==0
+          bad=[i for i,x in enumerate(styles,1) if not ok(x)]
+          if bad: raise SystemExit(f'CSS brace failure: {bad}')
+          digest=hashlib.sha256(p.read_bytes()).hexdigest()
+          expected_digest='d1686d1dc3b94ae7dcf95e8edd4e45701dddd06e7f2e9f9ec90c3bee70a204eb'
+          if digest != expected_digest:
+              raise SystemExit(f'output does not match approved v1304 file: {digest}')
+          print(f'validated {len(scripts)} inline JS blocks and {len(styles)} CSS blocks')
+          print('sha256',digest)
+          PY
+      - name: Commit v1304
+        run: |
+          git config user.name 'FlamesChallenge Build Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add index.html
+          git commit -m 'Build v1304 completed challenge celebration'
+          git push
