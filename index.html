@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1306 · feed-card-motion-vote-dismiss" name="fc-build"/>
+<meta content="v1307 · live-media-motion" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Made Challenger swipes visibly move the feed cards and added a dismiss X to recorded-vote notices so they stop blocking the viewer." name="fc-whatsnew"/>
+<meta content="Restored live media motion: active vinyl records spin on the feed and the first visible video reliably plays its short muted preview; vote-notice dismissal remains." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -19095,6 +19095,29 @@ function wireLazyVideoThumbnails(container) {
   }
 
   targets.forEach(vid => _lazyVideoObserver.observe(vid));
+
+  // v1307 — IntersectionObserver reliably catches later cards as they enter,
+  // but the first already-visible card can miss the initial preview handoff on
+  // iOS during a fast render. After layout settles, explicitly prime the most
+  // visible passive video using the same 3-second preview controller. No new
+  // playback path is introduced; this only gives the existing controller its
+  // initial candidate.
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    let best = null;
+    let bestRatio = 0;
+    const vw = window.innerWidth || document.documentElement.clientWidth || 0;
+    const vh = window.innerHeight || document.documentElement.clientHeight || 0;
+    targets.forEach(vid => {
+      if (!vid?.isConnected || vid.dataset.fcInlineUserPlayV1263 === '1') return;
+      const r = vid.getBoundingClientRect();
+      if (!(r.width > 0 && r.height > 0)) return;
+      const w = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0));
+      const h = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
+      const ratio = (w * h) / (r.width * r.height);
+      if (ratio > bestRatio) { best = vid; bestRatio = ratio; }
+    });
+    if (best && bestRatio >= 0.35 && best !== _activePreview) _startPreview(best);
+  }));
 }
 
 function mediaTypeLabel(mt) {
@@ -27830,7 +27853,7 @@ function fcEntryRailV1060(ch, entries) {
     const voteFooterV1085 = votingV1085 ? `<footer class="fcc-direct-vote-foot-v1085"><button type="button" class="fcc-direct-vote-btn-v1085${selectedV1085 ? ' selected' : ''}" data-fcc-direct-vote-v1085 data-challenge-id="${ch.id}" data-entry-id="${e.id}" ${selectedV1085 ? 'disabled aria-current="true"' : ''} onclick="event.stopPropagation();voteFromCompeteCardV1085(this)">${voteLabelV1085}</button><span class="fcc-direct-vote-total-v1085" data-fcc-direct-total-v1085="${e.id}">${votesV1085} vote${votesV1085 === 1 ? '' : 's'} · ${pctV1085}%</span></footer>` : '';
     const entryTypeV1276 = String(e.media_type || ch?.media_type || '').toLowerCase();
     const audioCardClassV1276 = entryTypeV1276 === 'audio' ? ' fc-entry-card-audio-v1276 fc-entry-card-audio-v1277' : '';
-    return `<article class="fcc-entry-card fc-entry-stage-fixed-v1202${audioCardClassV1276}${voteClassV1083}" data-entry-open="${ch.id}" data-entry-id="${e.id}" aria-label="Entry ${i+1} of ${entries.length}"><header class="fcc-entry-head-v1079"><span class="fcc-entry-avatar">${av}</span><span class="fcc-entry-name-v1079">${escapeHtml(sub.name || `Entry ${i+1}`)}</span><span class="fcc-entry-position-v1079">${i+1} of ${entries.length}</span></header>${fcEntryCardMediaV1060(e,ch)}${voteFooterV1085}</article>`;
+    return `<article class="fcc-entry-card fc-entry-stage-fixed-v1202${i===0 ? ' fc-active-entry-v1307' : ''}${audioCardClassV1276}${voteClassV1083}" data-entry-open="${ch.id}" data-entry-id="${e.id}" aria-label="Entry ${i+1} of ${entries.length}"><header class="fcc-entry-head-v1079"><span class="fcc-entry-avatar">${av}</span><span class="fcc-entry-name-v1079">${escapeHtml(sub.name || `Entry ${i+1}`)}</span><span class="fcc-entry-position-v1079">${i+1} of ${entries.length}</span></header>${fcEntryCardMediaV1060(e,ch)}${voteFooterV1085}</article>`;
   }).join('')}</div>${_entryDotsHtml(entries.length)}</div>`;
 }
 
@@ -33095,8 +33118,10 @@ function _wireEntryDots(root) {
       const st = step(); if (!st) return;
       const list = dots.querySelectorAll('.fcc-dot');
       const i = Math.max(0, Math.min(list.length - 1, Math.round(sc.scrollLeft / st)));
+      const cards = sc.querySelectorAll('.fcc-entry-card');
+      cards.forEach((card, n) => card.classList.toggle('fc-active-entry-v1307', n === i));
       if (sc._fcActiveEntryIndexV1278 !== i) {
-        sc.querySelectorAll('.fcc-entry-card').forEach((card, n) => { if (n !== i) fcPauseEntryCardMediaV1278(card); });
+        cards.forEach((card, n) => { if (n !== i) fcPauseEntryCardMediaV1278(card); });
         sc._fcActiveEntryIndexV1278 = i;
       }
       list.forEach((d, n) => d.classList.toggle('active', n === i));
@@ -51219,37 +51244,6 @@ body.theme-light .fc-winner-state-copy-v1304 small{color:#9a6d13}
 <script>window.FC_V1297_VALIDATION={build:'v1297',challengeDetailUsesStaticVideoPoster:true,noDetailVideoLayerOverIdentity:true,feedVideoPreviewPreserved:true,recordLabelUsesChallengerAvatar:true,recordOuterGeometryPreserved:true,v1296EmberPendingScopePreserved:true};</script>
 
 <style id="fc-v1306-feed-motion-vote-dismiss-css">
-/* v1306 — make Challenger changes read as physical card travel on Home.
-   v1302's ~42px peek was still too subtle when adjacent entries used similar
-   artwork. Keep native horizontal scrolling, but expose enough of the next
-   frame that the outgoing and incoming cards are visibly distinct. */
-#feedContainer .fc-entry-rail-v1079 .fcc-entries-scroll{
-  gap:14px!important;
-  padding-left:16px!important;
-  padding-right:32px!important;
-  scroll-padding-left:16px!important;
-  scroll-snap-type:x mandatory!important;
-  overscroll-behavior-x:contain!important;
-}
-#feedContainer .fc-entry-rail-v1079 .fcc-entry-card{
-  flex:0 0 84%!important;
-  min-width:84%!important;
-  width:84%!important;
-  max-width:84%!important;
-  scroll-snap-align:start!important;
-  scroll-snap-stop:always!important;
-}
-#feedContainer .fc-entry-rail-v1079 .fcc-entries-scroll::after{
-  content:"";
-  flex:0 0 calc(16% + 18px)!important;
-  width:calc(16% + 18px)!important;
-}
-/* The card frame itself is the motion cue; do not animate the media independently. */
-#feedContainer .fc-entry-rail-v1079 .fcc-entry-card,
-#feedContainer .fc-entry-rail-v1079 .fcc-entry-media{
-  transition:none!important;
-}
-
 /* Recorded-vote notices can be dismissed so they do not occupy the top of the
    challenge/feed viewer after the member already understands the state. */
 .fc-v1024-vote-notice.recorded{
@@ -51357,8 +51351,7 @@ body.theme-light .fc-vote-dismiss-v1306{
 
   window.FC_V1306_VALIDATION={
     build:'v1306',
-    feedCardWidth:'84%',
-    obviousPhysicalChallengerTravel:true,
+    feedWidthExperimentSupersededByV1307:true,
     nativeHorizontalSwipePreserved:true,
     recordedVoteNoticeDismissible:true,
     dismissalScopedToChallengeAndVote:true,
@@ -51371,5 +51364,20 @@ body.theme-light .fc-vote-dismiss-v1306{
 })();
 </script>
 
+
+<style id="fc-v1307-live-media-motion-css">
+/* v1307 — "movement" is media motion, not smaller cards. v1302's established
+   feed geometry remains authoritative. The active Record-style card gets a
+   gentle visual spin while idle; audio itself stays paused until the member taps. */
+#feedContainer .fcc-entry-card.fc-active-entry-v1307 .eq-vinyl:not(.playing) .fc-audio-record-disc-v1160{
+  animation:fcRecordSpinV1160 6.4s linear infinite!important;
+}
+@media(prefers-reduced-motion:reduce){
+  #feedContainer .fcc-entry-card.fc-active-entry-v1307 .eq-vinyl:not(.playing) .fc-audio-record-disc-v1160{
+    animation:none!important;
+  }
+}
+</style>
+<script>window.FC_V1307_VALIDATION={build:'v1307',feedGeometryRestoredToV1302:true,activeVinylSpinsWithoutAudio:true,firstVisibleVideoPreviewPrimed:true,existingThreeSecondPreviewControllerPreserved:true,recordedVoteDismissPreserved:true,v1305StandardFramesPreserved:true,v1304CompletedChallengePreserved:true,v1303FeedPopoutPreserved:true};</script>
 </body>
 </html>
