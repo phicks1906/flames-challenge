@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1309 · voting-focus-cleanup" name="fc-build"/>
+<meta content="v1311 · clean-one-card-swipe" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Simplified voting so entries appear sooner: compact status and help links, a smaller vote confirmation, and redundant directions, score explanation, and live-race card removed from the voting surface." name="fc-whatsnew"/>
+<meta content="Simplified Challenger swiping to one full card at a time with native iPhone scrolling; the numeric position indicator remains the navigation cue." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -33008,6 +33008,12 @@ function fcPauseEntryCardMediaV1278(card) {
 // after direction lock.
 function _wireTactileEntrySwipeV1125(sc, cardSelector, onSettled) {
   if (!sc || sc.dataset.tactileSwipeV1125 === '1') return;
+  // v1311: Home/Compete rails use native iOS horizontal scrolling + scroll-snap.
+  // The old JS drag controller fought Safari momentum and made paging feel odd.
+  if (sc.classList?.contains('fcc-entries-scroll')) {
+    sc.dataset.tactileSwipeV1125 = 'native-v1311';
+    return;
+  }
   sc.dataset.tactileSwipeV1125 = '1';
 
   let gesture = null;
@@ -46254,7 +46260,10 @@ window.FC_V1124_VALIDATION={build:'v1124',basedOn:'v1123',sceneArtworkRestored:t
 <style id="fc-v1125-tactile-swipe-css">
 /* v1125 — JS owns horizontal dragging so cards visibly track the finger.
    Vertical page scrolling and pinch zoom remain native. */
-.fcc-entries-scroll,
+.fcc-entries-scroll{
+  touch-action:pan-x pan-y pinch-zoom!important;
+  overscroll-behavior-x:contain!important;
+}
 .cd-entries-grid{
   touch-action:pan-y pinch-zoom!important;
   overscroll-behavior-x:contain!important;
@@ -49604,8 +49613,12 @@ document.addEventListener('pointerdown', function(event) {
     const media = event.target.closest('.fc-video-unified-v1238');
     if (!media) return;
 
-    // Controls must remain usable after inline playback starts.
-    if (event.target.closest('video[controls]') && media.classList.contains('is-playing-v1239')) {
+    // v1310 — once native controls are present, they own BOTH play and pause.
+    // On iOS Safari a pause tap can pause the video before this capture listener
+    // sees the click. The pause event removes is-playing-v1239, so the old guard
+    // fell through and playInlineV1239() immediately restarted the same video.
+    // Never reinterpret a native-control tap as a custom play request.
+    if (event.target.closest('video[controls]')) {
       return;
     }
 
@@ -50945,28 +50958,28 @@ body:not(:has(#submitEntrySheet.open)):has(#feedViewerSheet.open) #feedViewerShe
 }
 </style>
 <style id="fc-v1302-feed-swipe-popout-css">
-/* v1302 — Eric feedback: feed Challenger changes must visibly travel.
-   v1079 deliberately exposed the next card, but v1082 later reset every card
-   to 100% width. Restore a meaningful peek without adding touch interception. */
+/* v1311 — one Challenger at a time. The numeric "1 of N" indicator already
+   communicates that more entries exist, so a next-card peek is redundant and
+   makes the iPhone swipe feel loose. Use full-width native scroll-snap paging. */
 #feedContainer .fc-entry-rail-v1079 .fcc-entries-scroll,
 #challengesGrid .fc-entry-rail-v1079 .fcc-entries-scroll{
-  gap:10px!important;
+  gap:0!important;
   scroll-snap-type:x mandatory!important;
   overscroll-behavior-x:contain!important;
+  touch-action:pan-x pan-y pinch-zoom!important;
 }
 #feedContainer .fc-entry-rail-v1079 .fcc-entry-card,
 #challengesGrid .fc-entry-rail-v1079 .fcc-entry-card{
-  flex:0 0 calc(100% - 42px)!important;
-  min-width:calc(100% - 42px)!important;
-  width:calc(100% - 42px)!important;
+  flex:0 0 100%!important;
+  min-width:100%!important;
+  width:100%!important;
   scroll-snap-align:start!important;
   scroll-snap-stop:always!important;
 }
 #feedContainer .fc-entry-rail-v1079 .fcc-entries-scroll::after,
 #challengesGrid .fc-entry-rail-v1079 .fcc-entries-scroll::after{
-  content:'';
-  flex:0 0 32px;
-  width:32px;
+  display:none!important;
+  content:none!important;
 }
 
 /* Feed detail is now a contained pop-out over the feed, not a second screen. */
@@ -51768,5 +51781,7 @@ body.fc-v1309-voting-focus #challengeDetailSheet #cdEntriesGrid{margin-top:0!imp
 })();
 </script>
 
+<script>window.FC_V1310_VALIDATION={build:'v1310',nativeVideoControlsOwnPause:true,iosPauseRestartLoopFixed:true,userPausedVideoStaysUserOwned:true,passivePreviewCannotReclaimPausedVideo:true,v1309VotingCleanupPreserved:true,v1308FeedOnlyRoutingPreserved:true};</script>
+<script>window.FC_V1311_VALIDATION={build:'v1311',oneFullCardAtATime:true,nextCardPeekRemoved:true,numericPositionIndicatorPreserved:true,nativeIOSHorizontalScroll:true,customFeedDragDisabled:true,mandatorySnapPreserved:true,v1310ReliablePausePreserved:true,v1309VotingCleanupPreserved:true,v1308FeedOnlyFlowPreserved:true};</script>
 </body>
 </html>
