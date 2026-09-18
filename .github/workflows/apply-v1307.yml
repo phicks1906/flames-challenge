@@ -1,0 +1,118 @@
+name: Apply v1307 live media motion
+on:
+  push:
+    branches: [main]
+    paths: ['.github/v1307.trigger']
+permissions:
+  contents: write
+jobs:
+  build:
+    if: github.event.head_commit.message == 'Trigger v1307 build'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify v1306 baseline
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib,re
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          m=re.search(r'<meta\s+content="([^"]+)"\s+name="fc-build"\s*/?>',s[:5000],re.I)
+          if not m or m.group(1)!='v1306 · feed-card-motion-vote-dismiss':
+              raise SystemExit(f'expected v1306 baseline, found {m.group(1) if m else None}')
+          digest=hashlib.sha256(p.read_bytes()).hexdigest()
+          expected='15225a5482a62f0b370328d24930503810d26b1012ff67c3619a8c6873a9698f'
+          if digest!=expected: raise SystemExit(f'baseline hash mismatch: {digest}')
+          print('baseline OK',digest)
+          PY
+      - name: Apply exact v1307 patch
+        env:
+          FC_PATCH_GZ_B64: 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
+        run: |
+          python - <<'PY'
+          import os,base64,gzip
+          from pathlib import Path
+          data=gzip.decompress(base64.b64decode(os.environ['FC_PATCH_GZ_B64']))
+          Path('/tmp/v1307.patch').write_bytes(data)
+          PY
+          git apply --check /tmp/v1307.patch
+          git apply /tmp/v1307.patch
+      - name: Validate v1307
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re,subprocess,tempfile,hashlib
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          m=re.search(r'<meta\s+content="([^"]+)"\s+name="fc-build"\s*/?>',s[:5000],re.I)
+          if not m or m.group(1)!='v1307 · live-media-motion':
+              raise SystemExit(f'bad build meta: {m.group(1) if m else None}')
+          required=[
+              'FC_V1307_VALIDATION','fc-active-entry-v1307',
+              'fcRecordSpinV1160 6.4s','firstVisibleVideoPreviewPrimed:true',
+              'requestAnimationFrame(() => requestAnimationFrame(() =>',
+              'recordedVoteNoticeDismissible:true','FC_V1306_VALIDATION',
+              'FC_V1305_VALIDATION','FC_V1304_VALIDATION','FC_V1303_VALIDATION',
+              'FC_UPDATE_PARSER_SELFTEST_V1174','updateViaCache'
+          ]
+          for token in required:
+              if token not in s: raise SystemExit(f'missing invariant: {token}')
+          if 'flex:0 0 84%!important' in s:
+              raise SystemExit('v1306 small-card experiment still present')
+          if "feedCardWidth:'84%'" in s:
+              raise SystemExit('stale v1306 width marker remains')
+          if 'flex:0 0 calc(100% - 42px)!important' not in s:
+              raise SystemExit('v1302 feed geometry not restored')
+          if 'const CAP_S = 3;' not in s:
+              raise SystemExit('three-second video preview controller missing')
+          if 'Check for updates' in s:
+              raise SystemExit('manual update UI text returned')
+          scripts=re.findall(r'<script\b(?![^>]*\bsrc=)[^>]*>(.*?)</script>',s,re.I|re.S)
+          with tempfile.TemporaryDirectory() as d:
+              for n,code in enumerate(scripts,1):
+                  f=Path(d)/f's{n}.js'; f.write_text(code,encoding='utf-8')
+                  r=subprocess.run(['node','--check',str(f)],capture_output=True,text=True)
+                  if r.returncode:
+                      print(r.stderr); raise SystemExit(f'inline JS {n} failed')
+          styles=re.findall(r'<style\b[^>]*>(.*?)</style>',s,re.I|re.S)
+          def ok(css):
+              depth=0;i=0;quote=None;comment=False;esc=False
+              while i<len(css):
+                  c=css[i];n=css[i+1] if i+1<len(css) else ''
+                  if comment:
+                      if c=='*' and n=='/': comment=False;i+=2;continue
+                      i+=1;continue
+                  if quote:
+                      if esc: esc=False
+                      elif c=='\\': esc=True
+                      elif c==quote: quote=None
+                      i+=1;continue
+                  if c=='/' and n=='*': comment=True;i+=2;continue
+                  if c in ('"',"'"): quote=c;i+=1;continue
+                  if c=='{': depth+=1
+                  elif c=='}':
+                      depth-=1
+                      if depth<0:return False
+                  i+=1
+              return depth==0
+          bad=[n for n,x in enumerate(styles,1) if not ok(x)]
+          if bad: raise SystemExit(f'CSS brace failure: {bad}')
+          digest=hashlib.sha256(p.read_bytes()).hexdigest()
+          expected='350f5757bbc21e3b59033c1960baa4ee70233dfce7b49255434f85162bcf4d4c'
+          if digest!=expected: raise SystemExit(f'output hash mismatch: {digest}')
+          print(f'validated {len(scripts)} inline JS blocks and {len(styles)} CSS blocks')
+          print('sha256',digest)
+          PY
+      - name: Commit v1307
+        run: |
+          git config user.name 'FlamesChallenge Build Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add index.html
+          git commit -m 'Build v1307 live media motion'
+          git push
