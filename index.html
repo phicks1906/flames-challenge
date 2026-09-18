@@ -21,7 +21,7 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1307 · live-media-motion" name="fc-build"/>
+<meta content="v1308 · feed-only-challenge-flow" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
 <meta content="Restored live media motion: active vinyl records spin on the feed and the first visible video reliably plays its short muted preview; vote-notice dismissal remains." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
@@ -10507,6 +10507,7 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
          (overflow:hidden traps scroll unless the scroll region is a distinct
          box) — action bar is now a true flex sibling, always visible. -->
 <div id="fvScrollRegion" style="flex:0 1 auto;min-height:0;max-height:calc(90vh - 190px - env(safe-area-inset-bottom,0px));overflow-y:auto;">
+<div id="fvChallengeDetails" class="fc-fv-details-v1308" style="display:none"></div>
 <!-- Horizontal snap-scroll entries -->
 <div style="position:relative;">
 <div id="fvEntries" style="display:flex;flex-direction:row;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scroll-snap-stop:always;-webkit-overflow-scrolling:touch;scrollbar-width:none;gap:0;"></div>
@@ -24096,7 +24097,7 @@ function renderChallenges() {
     card.addEventListener('click', e => {
       if (e.target.closest('[data-chc-act],[data-chc-menu],[data-fc-compete-score-v1059]')) return;
       const ch = list.find(c => c.id === card.dataset.chid);
-      if (ch) openChallenge(ch);
+      if (ch) fcOpenChallengeSurfaceV1273(ch.id);
     });
   });
 
@@ -24287,6 +24288,11 @@ function cancelEntryUploadV1135(closeAfter = false) {
 }
 
 async function openChallenge(ch) {
+  // v1308 — Home must never navigate into the legacy Challenge Detail screen.
+  // Keep the feed mounted and use the single challenge overlay instead.
+  if (state.currentView === 'feed' && ch?.id) {
+    return openFeedViewer(ch.id);
+  }
   state.currentChallenge = ch;
   try { fcTrackChallengeOpenV1048(ch); } catch(e) {}
   document.getElementById('cdHeaderTitle').textContent = ch.title;
@@ -28165,13 +28171,8 @@ function fcCardAction(ch, status) {
 }
 
 function fcOpenChallengeSurfaceV1273(chId, startEntryId = null) {
-  const ch = (state.challenges || []).find(c => String(c.id) === String(chId))
-    || (String(state.currentChallenge?.id || '') === String(chId) ? state.currentChallenge : null);
-
-  if (ch?.is_championship) {
-    openChallenge(ch);
-    return;
-  }
+  // v1308 — one challenge-viewing contract for Home + Compete. Championship
+  // cards no longer escape to the legacy full-screen Challenge Detail sheet.
   openFeedViewer(chId, startEntryId);
 }
 
@@ -28187,11 +28188,11 @@ function runChallengeCardAction(ch, mode) {
   if (mode === 'edit') {
     state.currentChallenge = ch;
     const entry = fcCardMyEntry(ch) || fcOwnEntryAnyV1288(ch);
-    if (entry) openSubmitEntry(entry); else openChallenge(ch);
+    if (entry) openSubmitEntry(entry); else fcOpenChallengeSurfaceV1273(ch.id);
     return;
   }
   if (mode === 'enter') { state.currentChallenge = ch; openSubmitEntry(); return; }
-  openChallenge(ch);
+  fcOpenChallengeSurfaceV1273(ch.id);
 }
 function fcCardGuidanceV1055(ch,status,entryCount,isCreator){
   const entered=fcCardHasEntered(ch),voted=fcCardHasVoted(ch);
@@ -29956,16 +29957,6 @@ let _fvFeedReturnStateV1303 = null;
 
 // v1068 — restored exact v1065 native horizontal viewer behavior; no touch interception.
 async function openFeedViewer(chId, startEntryId = null) {
-  // v1273 — top-level Championship navigation belongs to the approved
-  // Championship Night detail screen, never the legacy generic feed viewer.
-  if (!startEntryId) {
-    const routedChV1273 = (state.challenges || []).find(c => String(c.id) === String(chId))
-      || (String(state.currentChallenge?.id || '') === String(chId) ? state.currentChallenge : null);
-    if (routedChV1273?.is_championship) {
-      openChallenge(routedChV1273);
-      return;
-    }
-  }
   let ch = state.challenges.find(c => c.id === chId) || state.currentChallenge;
   if (!ch) return;
 
@@ -30032,6 +30023,8 @@ async function openFeedViewer(chId, startEntryId = null) {
   const empty = document.getElementById('fvEmpty');
   const fvStandingsEl = document.getElementById('fvStandings');
   if (fvStandingsEl) { fvStandingsEl.style.display = 'none'; fvStandingsEl.innerHTML = ''; }
+  const fvDetailsElV1308 = document.getElementById('fvChallengeDetails');
+  if (fvDetailsElV1308) fvDetailsElV1308.style.display = 'none';
 
   const status = computeChallengeStatus(ch);
   const phase  = challengePhase(status);
@@ -30148,6 +30141,8 @@ async function openFeedViewer(chId, startEntryId = null) {
     _validVotesV1047.forEach(v => { _fvVoteCounts[v.entry_id] = (_fvVoteCounts[v.entry_id] || 0) + 1; });
     const myVoteEntryId = _validVotesV1047.find(v => v.voter_id === state.profile?.id)?.entry_id || null;
     renderFvVotingNoticeV1024(ch, status, myVoteEntryId, _validVotesV1047.length);
+    renderFvChallengeDetailsV1308(ch, status, entries, _validVotesV1047);
+    fcConfigureFeedViewerActionV1308(ch, status, entries);
 
     if (!_eligibleVisibleV1047.length) {
       fcResetFeedViewerActiveHeightV1285(list);
@@ -30196,26 +30191,9 @@ async function openFeedViewer(chId, startEntryId = null) {
     }
 
     const total = _eligibleVisibleV1047.length;
-    const userHasEntered = !!myLiveEntry(entries); // v715
-    if (status === 'submitting' && !userHasEntered && ch.is_championship && !canEnterChampionship(ch)) {
-      btn.textContent = '📋 View Details';
-      btn.style.display = 'block';
-    } else if (status === 'submitting' && !userHasEntered) {
-      btn.textContent = '🔥 Enter Challenge';
-      btn.style.display = 'block';
-    } else if (status === 'submitting' && userHasEntered) {
-      btn.textContent = '✏️ Edit Entry';
-      btn.style.display = 'block';
-    } else if (status === 'voting') {
-      btn.textContent = '🗳 Vote & Details';
-      btn.style.display = 'block';
-    } else if (status === 'closed') {
-      btn.textContent = '📋 View Full Details';
-      btn.style.display = 'block';
-    } else {
-      btn.textContent = '📋 View Details';
-      btn.style.display = 'block';
-    }
+    // v1308 — the footer action is configured once, and never navigates to the
+    // legacy Challenge Detail sheet. Voting/results details expand in place.
+    fcConfigureFeedViewerActionV1308(ch, status, entries);
 
     // v1299 — The counter/dots stay active after the challenge closes too.
     // A winner is a result state, not the end of entry browsing.
@@ -31065,10 +31043,100 @@ async function fvLike(btn) {
   if (!wasLiked) spawnFlameFloat(btn);
 }
 
+function fcFeedViewerDetailsMetaV1308(ch, status, entries, votes) {
+  const creator = ch?.creator?.name || ch?.creator_name || '';
+  const entryCount = (entries || []).filter(fcEntryCompetesV1060).length;
+  const voteCount = (votes || []).length;
+  const rows = [];
+  if (creator) rows.push(`<span><b>Created by</b> ${escapeHtml(creator)}</span>`);
+  if (ch?.category) rows.push(`<span><b>Category</b> ${escapeHtml(ch.category)}</span>`);
+  rows.push(`<span><b>${entryCount === 1 ? 'Entry' : 'Entries'}</b> ${entryCount}</span>`);
+  if (isVotingPhase(status) || status === 'closed') rows.push(`<span><b>${voteCount === 1 ? 'Ballot' : 'Ballots'}</b> ${voteCount}</span>`);
+  return rows.join('');
+}
+
+function renderFvChallengeDetailsV1308(ch, status, entries, votes) {
+  const panel = document.getElementById('fvChallengeDetails');
+  if (!panel || !ch) return;
+  const rules = fcChallengeRulesTextV1212(ch);
+  const phase = challengePhase(status);
+  const target = status === 'submitting' ? ch.submission_deadline
+    : isVotingPhase(status) ? ch.voting_end
+    : null;
+  const when = target ? new Date(target).toLocaleString('en-US', {
+    month:'short', day:'numeric', hour:'numeric', minute:'2-digit'
+  }) : '';
+  panel.innerHTML = `
+    <div class="fc-fv-details-head-v1308">
+      <div>
+        <span class="fc-fv-details-kicker-v1308">Challenge details</span>
+        <strong>${escapeHtml(ch.title || 'Challenge')}</strong>
+      </div>
+      <button type="button" class="fc-fv-details-close-v1308" aria-label="Hide challenge details" onclick="toggleFvChallengeDetailsV1308(false)">×</button>
+    </div>
+    <div class="fc-fv-details-meta-v1308">${fcFeedViewerDetailsMetaV1308(ch,status,entries,votes)}</div>
+    <div class="fc-fv-details-phase-v1308"><b>${escapeHtml(phase?.label || '')}</b>${when ? ` · ${escapeHtml(when)}` : ''}</div>
+    <div class="fc-fv-details-rules-v1308">
+      <span>RULES</span>
+      ${fcRenderChallengeRulesV1212(rules)}
+    </div>`;
+}
+
+function toggleFvChallengeDetailsV1308(force) {
+  const panel = document.getElementById('fvChallengeDetails');
+  const btn = document.getElementById('fvChallengeBtn');
+  if (!panel) return;
+  const show = typeof force === 'boolean' ? force : panel.style.display === 'none';
+  panel.style.display = show ? 'block' : 'none';
+  if (btn && _fvChallenge) {
+    const status = computeChallengeStatus(_fvChallenge);
+    if (status !== 'submitting' || (status === 'submitting' && _fvChallenge.is_championship && !canEnterChampionship(_fvChallenge) && !myLiveEntry(_fvEntries))) {
+      btn.textContent = show ? 'Hide Challenge Details' : 'Challenge Details';
+    }
+  }
+  if (show) {
+    const region = document.getElementById('fvScrollRegion');
+    try { region?.scrollTo({top:0,behavior:'smooth'}); } catch (_) {}
+  }
+}
+
+function fcConfigureFeedViewerActionV1308(ch, status, entries) {
+  const btn = document.getElementById('fvChallengeBtn');
+  if (!btn || !ch) return;
+  const mine = myLiveEntry(entries || [], ch.id);
+  if (status === 'submitting') {
+    if (!mine && ch.is_championship && !canEnterChampionship(ch)) {
+      btn.textContent = 'Challenge Details';
+      btn.dataset.fcFvActionV1308 = 'details';
+    } else if (!mine) {
+      btn.textContent = '🔥 Enter Challenge';
+      btn.dataset.fcFvActionV1308 = 'enter';
+    } else {
+      btn.textContent = '✏️ Edit Entry';
+      btn.dataset.fcFvActionV1308 = 'edit';
+    }
+  } else {
+    btn.textContent = 'Challenge Details';
+    btn.dataset.fcFvActionV1308 = 'details';
+  }
+  btn.style.display = 'block';
+}
+
 function openFeedViewerChallenge() {
   const ch = _fvChallenge;
+  if (!ch) return;
+  const btn = document.getElementById('fvChallengeBtn');
+  const action = btn?.dataset.fcFvActionV1308 || 'details';
+  if (action === 'details') {
+    toggleFvChallengeDetailsV1308();
+    return;
+  }
+  const mine = myLiveEntry(_fvEntries || [], ch.id);
+  const editable = (mine && !mine._fromMap) ? mine : fcOwnEntryAnyV1288(ch);
   closeFeedViewer();
-  if (ch) openChallenge(ch);
+  state.currentChallenge = ch;
+  if (action === 'edit' && editable) openSubmitEntry(editable);
+  else openSubmitEntry();
 }
 
 function promoteFeedViewerChallenge() {
@@ -51379,5 +51447,31 @@ body.theme-light .fc-vote-dismiss-v1306{
 }
 </style>
 <script>window.FC_V1307_VALIDATION={build:'v1307',feedGeometryRestoredToV1302:true,activeVinylSpinsWithoutAudio:true,firstVisibleVideoPreviewPrimed:true,existingThreeSecondPreviewControllerPreserved:true,recordedVoteDismissPreserved:true,v1305StandardFramesPreserved:true,v1304CompletedChallengePreserved:true,v1303FeedPopoutPreserved:true};</script>
+
+<style id="fc-v1308-feed-only-challenge-css">
+/* v1308 — challenge details live inside the existing feed/Compete overlay. */
+.fc-fv-details-v1308{
+  margin:12px 14px 2px!important;
+  padding:14px!important;
+  border:1px solid var(--border-bright)!important;
+  border-radius:16px!important;
+  background:var(--surface-2)!important;
+}
+.fc-fv-details-head-v1308{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.fc-fv-details-head-v1308>div{min-width:0;display:flex;flex-direction:column;gap:3px}
+.fc-fv-details-kicker-v1308{font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:var(--ember)}
+.fc-fv-details-head-v1308 strong{font-size:17px;line-height:1.2;color:var(--text)}
+.fc-fv-details-close-v1308{width:30px;height:30px;min-width:30px;border-radius:50%;border:1px solid var(--border-bright);background:var(--overlay-2);color:var(--text);font-size:20px;line-height:1;display:grid;place-items:center}
+.fc-fv-details-meta-v1308{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:12px;color:var(--text-muted);font-size:12px}
+.fc-fv-details-meta-v1308 span{display:inline-flex;gap:4px}.fc-fv-details-meta-v1308 b{color:var(--text);font-weight:750}
+.fc-fv-details-phase-v1308{margin-top:10px;padding:9px 10px;border-radius:10px;background:var(--overlay-1);color:var(--text-muted);font-size:12px}
+.fc-fv-details-phase-v1308 b{color:var(--text)}
+.fc-fv-details-rules-v1308{margin-top:12px;color:var(--text-muted);font-size:13px;line-height:1.5}
+.fc-fv-details-rules-v1308>span{display:block;margin-bottom:5px;font-size:10px;font-weight:900;letter-spacing:.14em;color:var(--text-dim)}
+.fc-fv-details-rules-v1308 p{margin:0}.fc-fv-details-rules-v1308 ul{margin:6px 0 0;padding-left:18px}
+/* Once the feed overlay is open, there is no visual affordance suggesting a second page. */
+#feedViewerModal #fvChallengeBtn{white-space:nowrap!important}
+</style>
+<script>window.FC_V1308_VALIDATION={build:'v1308',homeChallengeStaysOnFeed:true,competeChallengeUsesSameOverlay:true,championshipNoLongerEscapesToDetail:true,feedViewerDetailsInline:true,feedViewerFooterNeverOpensLegacyDetail:true,submissionReturnsToUnderlyingSurface:true,v1307LiveMediaMotionPreserved:true,v1306VoteDismissPreserved:true,v1305StandardFramesPreserved:true};</script>
 </body>
 </html>
