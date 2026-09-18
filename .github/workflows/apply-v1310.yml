@@ -1,0 +1,87 @@
+name: Apply v1310 reliable video pause
+on:
+  push:
+    branches: [main]
+    paths: ['.github/v1310.trigger']
+permissions:
+  contents: write
+jobs:
+  build:
+    if: github.event.head_commit.message == 'Trigger v1310 build'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify v1309 baseline
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib,re
+          p=Path('index.html'); s=p.read_text(encoding='utf-8')
+          m=re.search(r'<meta\s+content="([^"]+)"\s+name="fc-build"\s*/?>',s[:7000],re.I)
+          if not m or m.group(1)!='v1309 · voting-focus-cleanup':
+              raise SystemExit(f'expected v1309 baseline, found {m.group(1) if m else None}')
+          d=hashlib.sha256(p.read_bytes()).hexdigest()
+          if d!='d8c0518d5970e2477a0d85193465de951f0155a25a371ae869268239bbae7ebf':
+              raise SystemExit(f'baseline hash mismatch: {d}')
+          print('baseline OK',d)
+          PY
+      - name: Apply exact v1310 patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import base64,gzip
+          data=Path('.github/v1310.patch.gz.b64').read_text().strip()
+          Path('/tmp/v1310.patch').write_bytes(gzip.decompress(base64.b64decode(data)))
+          PY
+          git apply --check /tmp/v1310.patch
+          git apply /tmp/v1310.patch
+      - name: Validate v1310
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re,subprocess,tempfile,hashlib
+          p=Path('index.html'); s=p.read_text(encoding='utf-8')
+          m=re.findall(r'<meta\s+content="([^"]+)"\s+name="fc-build"\s*/?>',s[:7000],re.I)
+          if m!=['v1310 · reliable-video-pause']:
+              raise SystemExit(f'bad build meta: {m}')
+          required=[
+            'FC_V1310_VALIDATION','nativeVideoControlsOwnPause:true',
+            'iosPauseRestartLoopFixed:true','userPausedVideoStaysUserOwned:true',
+            'passivePreviewCannotReclaimPausedVideo:true',
+            "if (event.target.closest('video[controls]'))",
+            'FC_V1309_VALIDATION','FC_V1308_VALIDATION','FC_V1307_VALIDATION',
+            'FC_V1306_VALIDATION','FC_V1305_VALIDATION',
+            'const CAP_S = 3;','updateViaCache'
+          ]
+          for t in required:
+              if t not in s: raise SystemExit(f'missing invariant: {t}')
+          if "event.target.closest('video[controls]') && media.classList.contains('is-playing-v1239')" in s:
+              raise SystemExit('old pause-race guard still present')
+          if 'Check for updates' in s:
+              raise SystemExit('manual update UI returned')
+          scripts=re.findall(r'<script\b(?![^>]*\bsrc=)[^>]*>(.*?)</script>',s,re.I|re.S)
+          with tempfile.TemporaryDirectory() as d:
+              for i,code in enumerate(scripts,1):
+                  f=Path(d)/f's{i}.js'; f.write_text(code,encoding='utf-8')
+                  r=subprocess.run(['node','--check',str(f)],capture_output=True,text=True)
+                  if r.returncode:
+                      print(r.stderr); raise SystemExit(f'inline JS {i} failed')
+          digest=hashlib.sha256(p.read_bytes()).hexdigest()
+          expected='bbb2db7cbb5c7aef4bf043a990fc7ce77b30052f0b99bf9e823c4aa613005ec1'
+          if digest!=expected:
+              raise SystemExit(f'output hash mismatch: {digest}')
+          print(f'validated {len(scripts)} inline JS blocks')
+          print('sha256',digest)
+          PY
+      - name: Commit v1310
+        run: |
+          git config user.name 'FlamesChallenge Build Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add index.html
+          git commit -m 'Build v1310 reliable video pause'
+          git push
