@@ -1,0 +1,108 @@
+name: Apply v1308 feed-only challenge flow
+on:
+  push:
+    branches: [main]
+    paths: ['.github/v1308.trigger']
+permissions:
+  contents: write
+jobs:
+  build:
+    if: github.event.head_commit.message == 'Trigger v1308 build'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify v1307 baseline
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib,re
+          p=Path('index.html'); s=p.read_text(encoding='utf-8')
+          m=re.search(r'<meta\s+content="([^"]+)"\s+name="fc-build"\s*/?>',s[:5000],re.I)
+          if not m or m.group(1)!='v1307 · live-media-motion':
+              raise SystemExit(f'expected v1307 baseline, found {m.group(1) if m else None}')
+          d=hashlib.sha256(p.read_bytes()).hexdigest()
+          if d!='350f5757bbc21e3b59033c1960baa4ee70233dfce7b49255434f85162bcf4d4c':
+              raise SystemExit(f'baseline hash mismatch: {d}')
+          print('baseline OK',d)
+          PY
+      - name: Apply exact v1308 patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import base64,gzip
+          data=Path('.github/v1308.patch.gz.b64').read_text().strip()
+          Path('/tmp/v1308.patch').write_bytes(gzip.decompress(base64.b64decode(data)))
+          PY
+          git apply --check /tmp/v1308.patch
+          git apply /tmp/v1308.patch
+      - name: Validate v1308
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re,subprocess,tempfile,hashlib
+          p=Path('index.html'); s=p.read_text(encoding='utf-8')
+          m=re.search(r'<meta\s+content="([^"]+)"\s+name="fc-build"\s*/?>',s[:5000],re.I)
+          if not m or m.group(1)!='v1308 · feed-only-challenge-flow':
+              raise SystemExit(f'bad build meta: {m.group(1) if m else None}')
+          required=['FC_V1308_VALIDATION','homeChallengeStaysOnFeed:true','competeChallengeUsesSameOverlay:true','championshipNoLongerEscapesToDetail:true','feedViewerDetailsInline:true','feedViewerFooterNeverOpensLegacyDetail:true','FC_V1307_VALIDATION','FC_V1306_VALIDATION','FC_V1305_VALIDATION','FC_UPDATE_PARSER_SELFTEST_V1174','updateViaCache']
+          for t in required:
+              if t not in s: raise SystemExit(f'missing invariant: {t}')
+          surface=s[s.index('function fcOpenChallengeSurfaceV1273'):s.index('function runChallengeCardAction')]
+          if 'openChallenge(' in surface or 'openFeedViewer(chId, startEntryId)' not in surface:
+              raise SystemExit('unified challenge surface routing failed')
+          openbtn=s[s.index('function openFeedViewerChallenge()'):s.index('function promoteFeedViewerChallenge()')]
+          if 'openChallenge(' in openbtn or 'toggleFvChallengeDetailsV1308' not in openbtn:
+              raise SystemExit('feed viewer footer still escapes to legacy detail')
+          openc=s[s.index('async function openChallenge(ch)'):s.index('function closeChallengeDetail')]
+          if "state.currentView === 'feed'" not in openc or 'return openFeedViewer(ch.id)' not in openc:
+              raise SystemExit('feed legacy detail guard missing')
+          if 'routedChV1273' in s[s.index('async function openFeedViewer('):s.index('let ch = state.challenges.find',s.index('async function openFeedViewer('))]:
+              raise SystemExit('championship escape route remains')
+          if 'Check for updates' in s: raise SystemExit('manual update UI returned')
+          scripts=re.findall(r'<script\b(?![^>]*\bsrc=)[^>]*>(.*?)</script>',s,re.I|re.S)
+          with tempfile.TemporaryDirectory() as d:
+              for i,code in enumerate(scripts,1):
+                  f=Path(d)/f'{i}.js'; f.write_text(code)
+                  r=subprocess.run(['node','--check',str(f)],capture_output=True,text=True)
+                  if r.returncode: print(r.stderr); raise SystemExit(f'inline JS {i} failed')
+          styles=re.findall(r'<style\b[^>]*>(.*?)</style>',s,re.I|re.S)
+          def ok(css):
+              depth=0;i=0;quote=None;comment=False;esc=False
+              while i<len(css):
+                  c=css[i];n=css[i+1] if i+1<len(css) else ''
+                  if comment:
+                      if c=='*' and n=='/': comment=False;i+=2;continue
+                      i+=1;continue
+                  if quote:
+                      if esc: esc=False
+                      elif c=='\\': esc=True
+                      elif c==quote: quote=None
+                      i+=1;continue
+                  if c=='/' and n=='*': comment=True;i+=2;continue
+                  if c in ('"',"'"): quote=c;i+=1;continue
+                  if c=='{': depth+=1
+                  elif c=='}':
+                      depth-=1
+                      if depth<0:return False
+                  i+=1
+              return depth==0
+          bad=[i for i,x in enumerate(styles,1) if not ok(x)]
+          if bad: raise SystemExit(f'CSS brace failure: {bad}')
+          d=hashlib.sha256(p.read_bytes()).hexdigest()
+          if d!='7e54644afab805f5c2c4e14b53a34cb2bfa7ad89968ec75c709ddc6e3182ba17':
+              raise SystemExit(f'output hash mismatch: {d}')
+          print(f'validated {len(scripts)} inline JS blocks and {len(styles)} CSS blocks')
+          print('sha256',d)
+          PY
+      - name: Commit v1308
+        run: |
+          git config user.name 'FlamesChallenge Build Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add index.html
+          git commit -m 'Build v1308 feed-only challenge flow'
+          git push
