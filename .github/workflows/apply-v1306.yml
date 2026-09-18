@@ -1,0 +1,109 @@
+name: Apply v1306 feed card motion and vote dismissal
+on:
+  push:
+    branches: [main]
+    paths: ['.github/v1306.trigger']
+permissions:
+  contents: write
+jobs:
+  build:
+    if: github.event.head_commit.message == 'Trigger v1306 build'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify v1305 baseline
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib,re
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          m=re.search(r'<meta\s+content="([^"]+)"\s+name="fc-build"\s*/?>',s[:5000],re.I)
+          if not m or m.group(1)!='v1305 · standard-media-frames':
+              raise SystemExit(f'expected v1305 baseline, found {m.group(1) if m else None}')
+          digest=hashlib.sha256(p.read_bytes()).hexdigest()
+          expected='8db5ed7e1f620e725231f6131080c56f51c8bd0a84d3ea51e48378b6350a2df0'
+          if digest!=expected: raise SystemExit(f'baseline hash mismatch: {digest}')
+          print('baseline OK',digest)
+          PY
+      - name: Apply exact v1306 patch
+        run: |
+          git apply --check .github/v1306.patch
+          git apply .github/v1306.patch
+      - name: Validate v1306
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re,subprocess,tempfile,hashlib
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          m=re.search(r'<meta\s+content="([^"]+)"\s+name="fc-build"\s*/?>',s[:5000],re.I)
+          if not m or m.group(1)!='v1306 · feed-card-motion-vote-dismiss':
+              raise SystemExit(f'bad build meta: {m.group(1) if m else None}')
+          required=[
+              'FC_V1306_VALIDATION',"feedCardWidth:'84%'",
+              'obviousPhysicalChallengerTravel:true',
+              'recordedVoteNoticeDismissible:true','fc-vote-dismiss-v1306',
+              'fcVoteNoticeDismissedV1306',
+              'FC_V1305_VALIDATION','FC_V1304_VALIDATION','FC_V1303_VALIDATION',
+              'FC_V1302_VALIDATION','FC_V1301_VALIDATION',
+              'FC_UPDATE_PARSER_SELFTEST_V1174','updateViaCache'
+          ]
+          for token in required:
+              if token not in s: raise SystemExit(f'missing invariant: {token}')
+          if '#feedContainer .fc-entry-rail-v1079 .fcc-entry-card' not in s:
+              raise SystemExit('feed entry card rule missing')
+          if 'flex:0 0 84%!important' not in s:
+              raise SystemExit('feed card motion width missing')
+          if "sessionStorage.setItem(dismissKey(surface,ch,v),'1')" not in s:
+              raise SystemExit('vote notice dismissal persistence missing')
+          if 'Check for updates' in s:
+              raise SystemExit('manual update UI text returned')
+          scripts=re.findall(r'<script\b(?![^>]*\bsrc=)[^>]*>(.*?)</script>',s,re.I|re.S)
+          with tempfile.TemporaryDirectory() as d:
+              for n,code in enumerate(scripts,1):
+                  f=Path(d)/f's{n}.js'; f.write_text(code,encoding='utf-8')
+                  r=subprocess.run(['node','--check',str(f)],capture_output=True,text=True)
+                  if r.returncode:
+                      print(r.stderr); raise SystemExit(f'inline JS {n} failed')
+          styles=re.findall(r'<style\b[^>]*>(.*?)</style>',s,re.I|re.S)
+          def ok(css):
+              depth=0;i=0;quote=None;comment=False;esc=False
+              while i<len(css):
+                  c=css[i];n=css[i+1] if i+1<len(css) else ''
+                  if comment:
+                      if c=='*' and n=='/': comment=False;i+=2;continue
+                      i+=1;continue
+                  if quote:
+                      if esc: esc=False
+                      elif c=='\\': esc=True
+                      elif c==quote: quote=None
+                      i+=1;continue
+                  if c=='/' and n=='*': comment=True;i+=2;continue
+                  if c in ('"',"'"): quote=c;i+=1;continue
+                  if c=='{': depth+=1
+                  elif c=='}':
+                      depth-=1
+                      if depth<0:return False
+                  i+=1
+              return depth==0
+          bad=[n for n,x in enumerate(styles,1) if not ok(x)]
+          if bad: raise SystemExit(f'CSS brace failure: {bad}')
+          digest=hashlib.sha256(p.read_bytes()).hexdigest()
+          expected='15225a5482a62f0b370328d24930503810d26b1012ff67c3619a8c6873a9698f'
+          if digest!=expected: raise SystemExit(f'output hash mismatch: {digest}')
+          print(f'validated {len(scripts)} inline JS blocks and {len(styles)} CSS blocks')
+          print('sha256',digest)
+          PY
+      - name: Commit v1306
+        run: |
+          git config user.name 'FlamesChallenge Build Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add index.html
+          git commit -m 'Build v1306 feed card motion and vote dismissal'
+          git push
