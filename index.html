@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1312 · immediate-media-handoff" name="fc-build"/>
+<meta content="v1313 · smooth-carousel-height" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Stops outgoing audio/video as soon as a Challenger swipe begins so media never trails behind the card transition." name="fc-whatsnew"/>
+<meta content="Smooths portrait/landscape Challenger height changes during swipes so the feed no longer jumps vertically." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -51213,27 +51213,70 @@ body.theme-light #feedViewerSheet.open{
     const left=rail.scrollLeft||0;
     return cards.reduce((best,card)=>Math.abs(card.offsetLeft-left)<Math.abs(best.offsetLeft-left)?card:best,cards[0]);
   }
+  function cardHeightV1313(card){
+    if(!card) return 0;
+    return Math.ceil(Math.max(card.scrollHeight||0,card.getBoundingClientRect().height||0));
+  }
   function syncRailHeight(rail){
-    if(!rail||rail._fcFrameGestureV1305) return;
+    if(!rail) return;
     const card=activeRailCard(rail);
-    if(!card) return;
-    const h=Math.ceil(Math.max(card.scrollHeight||0,card.getBoundingClientRect().height||0));
+    const h=cardHeightV1313(card);
+    if(h>0) rail.style.height=h+'px';
+  }
+  // v1313 — interpolate the rail height between the two cards currently crossing
+  // the viewport. v1305 jumped to the tallest sibling on touchstart, which made
+  // the whole feed move vertically before the horizontal swipe had even settled.
+  function syncRailHeightDuringSwipeV1313(rail){
+    if(!rail) return;
+    const cards=[...rail.querySelectorAll(':scope > .fcc-entry-card')];
+    if(!cards.length) return;
+    if(cards.length===1){ syncRailHeight(rail); return; }
+    const left=rail.scrollLeft||0;
+    let lo=0;
+    for(let i=0;i<cards.length-1;i++){
+      const a=cards[i].offsetLeft;
+      const b=cards[i+1].offsetLeft;
+      if(left>=a && left<=b){ lo=i; break; }
+      if(left>b) lo=i+1;
+    }
+    const hi=Math.min(cards.length-1,lo+1);
+    if(lo===hi){
+      const h=cardHeightV1313(cards[lo]);
+      if(h>0) rail.style.height=h+'px';
+      return;
+    }
+    const a=cards[lo].offsetLeft;
+    const b=cards[hi].offsetLeft;
+    const span=Math.max(1,b-a);
+    const p=Math.max(0,Math.min(1,(left-a)/span));
+    const h1=cardHeightV1313(cards[lo]);
+    const h2=cardHeightV1313(cards[hi]);
+    const h=Math.round(h1+(h2-h1)*p);
     if(h>0) rail.style.height=h+'px';
   }
   function wireRail(rail){
     if(!rail||rail.dataset.fcFrameHeightWireV1305==='1') return;
     rail.dataset.fcFrameHeightWireV1305='1';
     let timer=0;
+    let raf=0;
     const settle=(delay=90)=>{ clearTimeout(timer); timer=setTimeout(()=>syncRailHeight(rail),delay); };
-    rail.addEventListener('scroll',()=>settle(120),{passive:true});
-    rail.addEventListener('scrollend',()=>settle(0),{passive:true});
-    rail.addEventListener('touchstart',()=>{
-      rail._fcFrameGestureV1305=true;
+    rail.addEventListener('scroll',()=>{
       clearTimeout(timer);
-      const maxH=Math.max(0,...[...rail.querySelectorAll(':scope > .fcc-entry-card')].map(card=>Math.ceil(Math.max(card.scrollHeight||0,card.getBoundingClientRect().height||0))));
-      if(maxH>0) rail.style.height=maxH+'px';
+      if(!raf) raf=requestAnimationFrame(()=>{
+        raf=0;
+        syncRailHeightDuringSwipeV1313(rail);
+      });
+      timer=setTimeout(()=>syncRailHeight(rail),140);
     },{passive:true});
-    const end=()=>{ rail._fcFrameGestureV1305=false; settle(60); };
+    rail.addEventListener('scrollend',()=>{
+      if(raf){ cancelAnimationFrame(raf); raf=0; }
+      settle(0);
+    },{passive:true});
+    // Do not inflate to max sibling height on touchstart. The height now follows
+    // horizontal progress, so landscape→portrait and portrait→landscape remain
+    // stable without clipping the settled card or jumping the page abruptly.
+    rail.addEventListener('touchstart',()=>{ clearTimeout(timer); },{passive:true});
+    const end=()=>settle(60);
     rail.addEventListener('touchend',end,{passive:true});
     rail.addEventListener('touchcancel',end,{passive:true});
     if(typeof ResizeObserver==='function'){
@@ -51812,5 +51855,6 @@ body.fc-v1309-voting-focus #challengeDetailSheet #cdEntriesGrid{margin-top:0!imp
 <script>window.FC_V1310_VALIDATION={build:'v1310',nativeVideoControlsOwnPause:true,iosPauseRestartLoopFixed:true,userPausedVideoStaysUserOwned:true,passivePreviewCannotReclaimPausedVideo:true,v1309VotingCleanupPreserved:true,v1308FeedOnlyRoutingPreserved:true};</script>
 <script>window.FC_V1311_VALIDATION={build:'v1311',oneFullCardAtATime:true,nextCardPeekRemoved:true,numericPositionIndicatorPreserved:true,nativeIOSHorizontalScroll:true,customFeedDragDisabled:true,mandatorySnapPreserved:true,v1310ReliablePausePreserved:true,v1309VotingCleanupPreserved:true,v1308FeedOnlyFlowPreserved:true};</script>
 <script>window.FC_V1312_VALIDATION={build:"v1312",nativeOneCardSwipePreserved:true,outgoingMediaPausesAtScrollStart:true,mediaStartIndexHeldUntilSettle:true,noAudioVideoTrailBetweenChallengers:true,scrollendAndDebounceFallback:true,v1311GeometryPreserved:true,v1310VideoPausePreserved:true,v1309VotingCleanupPreserved:true};</script>
+<script>window.FC_V1313_VALIDATION={build:"v1313",carouselHeightInterpolatesDuringSwipe:true,noMaxHeightJumpOnTouchStart:true,portraitLandscapeTransitionSmoothed:true,nativeOneCardSwipePreserved:true,v1312MediaHandoffPreserved:true,v1311NoPeekPreserved:true,v1310VideoPausePreserved:true};</script>
 </body>
 </html>
