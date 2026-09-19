@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1311 · clean-one-card-swipe" name="fc-build"/>
+<meta content="v1312 · immediate-media-handoff" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Simplified Challenger swiping to one full card at a time with native iPhone scrolling; the numeric position indicator remains the navigation cue." name="fc-whatsnew"/>
+<meta content="Stops outgoing audio/video as soon as a Challenger swipe begins so media never trails behind the card transition." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -33200,12 +33200,40 @@ function _wireEntryDots(root) {
       }
       list.forEach((d, n) => d.classList.toggle('active', n === i));
     };
+    // v1312 — Home/Compete rails are native-scroll in v1311, so the old tactile
+    // controller no longer pauses the outgoing card at gesture start. That left
+    // audio/video playing until the rail crossed the halfway point and update()
+    // selected the next card. Pause the card that OWNED the rail when horizontal
+    // scrolling actually begins; keep that start index fixed until scrolling
+    // settles so the incoming preview is never mistaken for the outgoing one.
+    let mediaSettleTimerV1312 = 0;
+    const beginMediaHandoffV1312 = () => {
+      if (sc._fcMediaScrollStartIndexV1312 != null) return;
+      const cards = sc.querySelectorAll('.fcc-entry-card');
+      const startIndex = Number.isInteger(sc._fcActiveEntryIndexV1278)
+        ? sc._fcActiveEntryIndexV1278
+        : 0;
+      sc._fcMediaScrollStartIndexV1312 = startIndex;
+      fcPauseEntryCardMediaV1278(cards[startIndex]);
+    };
+    const settleMediaHandoffV1312 = () => {
+      clearTimeout(mediaSettleTimerV1312);
+      mediaSettleTimerV1312 = 0;
+      sc._fcMediaScrollStartIndexV1312 = null;
+      update();
+    };
+
     sc.addEventListener('scroll', () => {
+      beginMediaHandoffV1312();
+      clearTimeout(mediaSettleTimerV1312);
+      mediaSettleTimerV1312 = setTimeout(settleMediaHandoffV1312, 140);
       if (sc._dotRaf) return;
       sc._dotRaf = requestAnimationFrame(() => { sc._dotRaf = null; update(); });
     }, { passive: true });
+    sc.addEventListener('scrollend', settleMediaHandoffV1312, { passive: true });
 
-    // v1125 — the rail now follows the finger and settles with resistance.
+    // v1125 — retained for Challenge Detail. v1311 bypasses this controller on
+    // Home/Compete rails so iOS owns the physical swipe and snap.
     _wireTactileEntrySwipeV1125(sc, '.fcc-entry-card', update);
 
     dots.addEventListener('click', e => {
@@ -51783,5 +51811,6 @@ body.fc-v1309-voting-focus #challengeDetailSheet #cdEntriesGrid{margin-top:0!imp
 
 <script>window.FC_V1310_VALIDATION={build:'v1310',nativeVideoControlsOwnPause:true,iosPauseRestartLoopFixed:true,userPausedVideoStaysUserOwned:true,passivePreviewCannotReclaimPausedVideo:true,v1309VotingCleanupPreserved:true,v1308FeedOnlyRoutingPreserved:true};</script>
 <script>window.FC_V1311_VALIDATION={build:'v1311',oneFullCardAtATime:true,nextCardPeekRemoved:true,numericPositionIndicatorPreserved:true,nativeIOSHorizontalScroll:true,customFeedDragDisabled:true,mandatorySnapPreserved:true,v1310ReliablePausePreserved:true,v1309VotingCleanupPreserved:true,v1308FeedOnlyFlowPreserved:true};</script>
+<script>window.FC_V1312_VALIDATION={build:"v1312",nativeOneCardSwipePreserved:true,outgoingMediaPausesAtScrollStart:true,mediaStartIndexHeldUntilSettle:true,noAudioVideoTrailBetweenChallengers:true,scrollendAndDebounceFallback:true,v1311GeometryPreserved:true,v1310VideoPausePreserved:true,v1309VotingCleanupPreserved:true};</script>
 </body>
 </html>
