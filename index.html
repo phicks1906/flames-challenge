@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1316 · post-focus-comment-edit-feed-social" name="fc-build"/>
+<meta content="v1317 · audio-post-clean-expand" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="New posts now open in the feed, comments can be edited, and challenge entries expose likes and comments directly on Home and Compete." name="fc-whatsnew"/>
+<meta content="Audio posts now render and play with the canonical Flames player, and post expansion opens cleanly without the blank flash." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -17314,13 +17314,19 @@ async function openPostView(postId) {
   const sheet = document.getElementById('postSheet');
   const body = document.getElementById('postSheetBody');
   if (!sheet || !body) return;
-  fcOpenImmersiveViewerV1198('post-viewer');
 
+  // v1317 — never expose an empty/stale post sheet for a frame before the new
+  // post has rendered. Cached feed posts render first, then the viewer becomes
+  // visible in the same task. Direct/deep-linked posts still show Loading…
+  // because a network fetch is genuinely required.
+  let openedWhileLoadingV1317 = false;
   let p = (state.posts || []).find(x => x.id === postId);
   if (!p) {
     // Post not in the loaded feed (old or direct link) — fetch it directly
     body.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px 0;">Loading…</div>';
+    fcOpenImmersiveViewerV1198('post-viewer');
     sheet.classList.add('open');
+    openedWhileLoadingV1317 = true;
     const { data, error } = await db.from('posts')
       .select('*, post_type, challenge_id, group_id, author:profiles!posts_user_id_fkey(id, name, avatar)')
       .eq('id', postId)
@@ -17342,11 +17348,16 @@ async function openPostView(postId) {
       if (state.profile && likeRows.some(r => r.user_id === state.profile.id)) state.myPostLikes.add(postId);
       state.postCommentCounts[postId] = commentsRes.count || 0;
     } catch(e) { console.warn('post counts fetch', e); }
-  } else {
-    sheet.classList.add('open');
   }
 
   body.innerHTML = renderPostCard(p, { expanded: true });
+  if (!openedWhileLoadingV1317) {
+    // Force the new body into the layout before the opaque sheet is revealed.
+    // This prevents the one-frame black/old-content blink seen on iPhone.
+    void body.offsetHeight;
+    fcOpenImmersiveViewerV1198('post-viewer');
+    sheet.classList.add('open');
+  }
 
   // Wire interactions inside the sheet (feed wiring is scoped to the feed container)
   body.querySelectorAll('[data-like-post]').forEach(btn => {
@@ -18627,11 +18638,17 @@ function _audioTileHtml(e, options = {}) {
     </div>` : '';
 
 
-  // v1280 — one audio renderer across Home, winners, Challenge Detail and
-  // entry viewers. The artwork is now built from clean layers (brand asset +
-  // CSS atmosphere + live waveform) so no baked play button, EQ or timestamps
-  // can ever show through underneath the real controls.
-  const unifiedModesV1280 = new Set(['card','winner','viewer','detail','winner-results','feed-viewer']);
+  const expandPostId = options.expandPostId ? String(options.expandPostId) : '';
+  const rootAction = expandPostId
+    ? `onclick="openAudioPostFromTileV1189(this,event)" data-audio-expand-post="${escapeHtml(expandPostId)}"`
+    : `onclick="toggleFccAudio(this,event)" onpointerdown="event.stopPropagation()"`;
+
+  // v1317 — standalone audio posts now use the same canonical Scene renderer
+  // as challenge cards. The older post-only Scene composition had drifted away
+  // from the supported audio renderer and could collapse visually on Home even
+  // though audio_url was present. Keep the post-specific interaction contract:
+  // the artwork expands the post, while the play control owns playback.
+  const unifiedModesV1280 = new Set(['card','post','winner','viewer','detail','winner-results','feed-viewer']);
   if (unifiedModesV1280.has(mode) && style === 'scene') {
     const barCountV1280 = 61;
     const unifiedBarsV1280 = Array.from({length:barCountV1280}, (_, i) => {
@@ -18642,7 +18659,7 @@ function _audioTileHtml(e, options = {}) {
       return `<i class="fc-audio-unified-bar-v1280" style="--fc-idle-v1280:${h}%"></i>`;
     }).join('');
     const seekV1280 = controls ? `<input class="fc-audio-seek-v1123 fc-audio-unified-seek-v1280" type="range" min="0" max="0" step="0.1" value="0" aria-label="Seek through audio" oninput="seekFccAudioV1123(this,event)">` : '';
-    return `<div class="fcc-entry-media fcc-fire-eq fc-audio-unified-v1280 fc-audio-scene-v1286 fc-audio-unified-mode-${mode}-v1280${controls ? ' fc-audio-has-controls-v1123' : ''}" data-audio-style="scene" data-audio-layout-v1201="compact" role="group" aria-label="Audio entry · Scene style">
+    return `<div class="fcc-entry-media fcc-fire-eq fc-audio-unified-v1280 fc-audio-scene-v1286 fc-audio-unified-mode-${mode}-v1280${controls ? ' fc-audio-has-controls-v1123' : ''}" data-audio-style="scene" data-audio-layout-v1201="compact" ${rootAction} role="group" aria-label="Audio entry · Scene style">
       ${audio}
       <div class="fc-audio-premium-art-v1277 fc-audio-scene-art-v1286">
         <div class="fc-audio-scene-horizon-v1286" aria-hidden="true"></div>
@@ -18685,11 +18702,6 @@ function _audioTileHtml(e, options = {}) {
     </div>`;
     mainButtonOutside = '';
   }
-
-  const expandPostId = options.expandPostId ? String(options.expandPostId) : '';
-  const rootAction = expandPostId
-    ? `onclick="openAudioPostFromTileV1189(this,event)" data-audio-expand-post="${escapeHtml(expandPostId)}"`
-    : `onclick="toggleFccAudio(this,event)" onpointerdown="event.stopPropagation()"`;
 
   return `<div class="${rootClasses}" data-audio-style="${style}" data-audio-layout-v1201="${audioLayoutV1201}" ${rootAction} role="group" aria-label="Audio entry · ${escapeHtml(EQ_LABELS[style])} style">${audio}${visual}${mainButtonOutside}${controlsHtml}</div>`;
 }
@@ -30100,13 +30112,19 @@ async function openFeedViewer(chId, startEntryId = null) {
   if (fvCounterResetV1193) fvCounterResetV1193.style.display = '';
   if (fvDotsResetV1193) fvDotsResetV1193.style.display = '';
   empty.style.display = 'none';
-  sheet.classList.add('open');
-  // v1302 — this is a feed pop-out, not a destination screen. Keep the
-  // underlying feed visually present while the existing immersive controller
-  // still freezes body scroll and protects nested-viewer depth.
-  document.body.classList.add('fc-feed-popout-active-v1302');
-  fcOpenImmersiveViewerV1198('feed-viewer');
-  fcPositionFeedViewerV1199();
+
+  // v1317 — do not reveal a blank/loading pop-out for one or two frames before
+  // the entry rail exists. Build the next visual state while the feed remains
+  // visible, then reveal it in one paint. Existing/open viewer refreshes keep
+  // their current sheet visible and therefore do not re-run this transition.
+  const revealFeedViewerV1317 = () => {
+    if (!sheet || sheet.classList.contains('open')) return;
+    try { void list.offsetHeight; } catch (_) {}
+    sheet.classList.add('open');
+    document.body.classList.add('fc-feed-popout-active-v1302');
+    fcOpenImmersiveViewerV1198('feed-viewer');
+    fcPositionFeedViewerV1199();
+  };
 
   // Load entries
   try {
@@ -30189,6 +30207,7 @@ async function openFeedViewer(chId, startEntryId = null) {
       list.innerHTML = '';
       empty.textContent = entries.length ? 'No approved entries are available yet.' : 'No entries yet.';
       empty.style.display = 'block';
+      revealFeedViewerV1317();
       return;
     }
 
@@ -30229,6 +30248,10 @@ async function openFeedViewer(chId, startEntryId = null) {
         renderFvStandings(chId, _validVotesV1047, _eligibleVisibleV1047);
       }
     }
+
+    // The first visible frame now contains the real entry rail rather than a
+    // black/loading placeholder, which removes the blink before expansion.
+    revealFeedViewerV1317();
 
     const total = _eligibleVisibleV1047.length;
     // v1308 — the footer action is configured once, and never navigates to the
@@ -30517,6 +30540,7 @@ async function openFeedViewer(chId, startEntryId = null) {
   } catch(err) {
     console.error('feedViewer load', err);
     list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Couldn\'t load entries</div>';
+    revealFeedViewerV1317();
   }
   renderFvChallengersPanel(ch);
   fcPositionFeedViewerV1199();
@@ -51998,6 +52022,38 @@ window.FC_V1316_VALIDATION={
   socialActionsDoNotOpenViewer:true,
   v1315PollRevotePreserved:true,
   v1314HomeCompeteParityPreserved:true
+};
+</script>
+
+<style id="fc-v1317-audio-post-clean-expand-css">
+/* Standalone audio posts use the supported compact 4:5 post stage. The Scene
+   artwork fills that stage; no frame-within-frame or collapsed legacy tile. */
+#feedContainer .fc-audio-post-shell-v1189{display:block!important;max-height:none!important;overflow:hidden!important;background:transparent!important}
+#feedContainer .fc-audio-post-shell-v1189 > .fcc-fire-eq.fc-audio-mode-post-v1123,
+#feedContainer .fc-audio-post-shell-v1189 .fc-audio-unified-mode-post-v1280{position:relative!important;display:flex!important;width:100%!important;height:auto!important;min-height:0!important;max-height:none!important;aspect-ratio:4/5!important;border-radius:18px!important;cursor:zoom-in!important}
+#feedContainer .fc-audio-post-shell-v1189 .fcc-audio-btn{cursor:pointer!important}
+/* The post viewer is painted with its new body before .open is applied. Keep the
+   transition short and continuous rather than flashing an opaque blank sheet. */
+#postSheet.open{animation:fcPostExpandV1317 .18s cubic-bezier(.2,.72,.24,1)!important}
+@keyframes fcPostExpandV1317{from{opacity:.985;transform:scale(.997)}to{opacity:1;transform:scale(1)}}
+@media(prefers-reduced-motion:reduce){#postSheet.open{animation:none!important}}
+</style>
+<script id="fc-v1317-validation-js">
+window.FC_V1317_VALIDATION={
+  build:'v1317',
+  audioPostsUseCanonicalRenderer:true,
+  audioPostMediaVisibleOnFeed:true,
+  audioPostArtworkExpands:true,
+  audioPostPlayControlIndependent:true,
+  audioPostCompactFourByFive:true,
+  cachedPostRendersBeforeSheetOpen:true,
+  postExpansionBlankBlinkRemoved:true,
+  challengePopoutRendersBeforeReveal:true,
+  challengeExpansionLoadingBlinkRemoved:true,
+  directLinkedPostLoadingPreserved:true,
+  v1316PostFocusCommentEditFeedSocialPreserved:true,
+  v1315PollRevotePreserved:true,
+  updateParserPreserved:true
 };
 </script>
 
