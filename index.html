@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1315 · poll-revote-clean-refresh" name="fc-build"/>
+<meta content="v1316 · post-focus-comment-edit-feed-social" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Poll votes can now be changed until close, and the idle pull-refresh arrow no longer sits over the page." name="fc-whatsnew"/>
+<meta content="New posts now open in the feed, comments can be edited, and challenge entries expose likes and comments directly on Home and Compete." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -9875,8 +9875,8 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
 </div>
 <div class="comment-suggest" id="commentMentionBox" style="display:none"></div>
 <div class="reply-banner" id="replyBanner" style="display:none">
-<span>Replying to <strong id="replyBannerName"></strong></span>
-<button aria-label="Cancel reply" onclick="cancelReply()" type="button">✕</button>
+<span id="commentModeLabel">Replying to <strong id="replyBannerName"></strong></span>
+<button aria-label="Cancel comment action" onclick="cancelReply()" type="button">✕</button>
 </div>
 <div class="comment-compose">
 <input autocomplete="off" id="commentInput" maxlength="500" placeholder="Add a comment..." type="text">
@@ -14813,6 +14813,7 @@ async function openComments(type, id) {
   state.commentTarget = { type, id };
   state.currentComments = [];
   state.replyTo = null;
+  state.editingComment = null;
   updateReplyBanner();
   document.getElementById('commentSheetTitle').textContent = 'Comments';
   document.getElementById('commentInput').value = '';
@@ -14827,6 +14828,7 @@ function closeComments() {
   document.body.style.overflow = '';
   state.commentTarget = null;
   state.replyTo = null;
+  state.editingComment = null;
   updateReplyBanner();
 }
 
@@ -14834,7 +14836,7 @@ async function loadComments() {
   const t = state.commentTarget;
   if (!t) return;
   const run = (withParent) => db.from('comments')
-    .select('id, user_id, body, created_at' + (withParent ? ', parent_id' : '') + ', author:profiles!comments_user_id_fkey(id, name, avatar)')
+    .select('id, user_id, body, created_at, edited_at' + (withParent ? ', parent_id' : '') + ', author:profiles!comments_user_id_fkey(id, name, avatar)')
     .eq('target_type', t.type).eq('target_id', t.id)
     .order('created_at', { ascending: true });
   try {
@@ -14878,12 +14880,12 @@ function renderComments() {
       <div class="comment-main">
         <div class="comment-head">
           <span class="comment-name" ${clickable ? `data-open-uid="${a.id}"` : ''}>${escapeHtml(a.name)}</span>
-          <span class="comment-time">${timeAgo(c.created_at)}</span>
+          <span class="comment-time">${timeAgo(c.created_at)}${c.edited_at ? ' · edited' : ''}</span>
         </div>
         <div class="comment-body">${formatBody(c.body)}</div>
         <div class="comment-row-actions">
           <button class="comment-reply-btn" data-reply-id="${c.id}" data-reply-name="${escapeHtml(a.name)}">Reply</button>
-          ${mine ? `<button class="comment-del" data-del-comment="${c.id}">Delete</button>` : `<button class="comment-del" data-report-comment="${c.id}" data-report-text="${escapeHtml((c.body||'').slice(0,200))}">Report</button>`}
+          ${mine ? `<button class="comment-reply-btn" data-edit-comment="${c.id}">Edit</button><button class="comment-del" data-del-comment="${c.id}">Delete</button>` : `<button class="comment-del" data-report-comment="${c.id}" data-report-text="${escapeHtml((c.body||'').slice(0,200))}">Report</button>`}
         </div>
       </div>
     </div>`;
@@ -14897,6 +14899,9 @@ function renderComments() {
   list.querySelectorAll('[data-open-uid]').forEach(el => {
     el.addEventListener('click', () => { closeComments(); openUserProfile(el.dataset.openUid); });
   });
+  list.querySelectorAll('[data-edit-comment]').forEach(btn => {
+    btn.addEventListener('click', () => startEditComment(btn.dataset.editComment));
+  });
   list.querySelectorAll('[data-del-comment]').forEach(btn => {
     btn.addEventListener('click', () => deleteComment(btn.dataset.delComment));
   });
@@ -14909,24 +14914,54 @@ function renderComments() {
 }
 
 function startReply(commentId, name) {
+  state.editingComment = null;
   state.replyTo = { id: commentId, name };
   updateReplyBanner();
   document.getElementById('commentInput').focus();
 }
-function cancelReply() {
+function startEditComment(commentId) {
+  const comment = (state.currentComments || []).find(c => String(c.id) === String(commentId));
+  if (!comment || String(comment.user_id) !== String(state.profile?.id || '')) return;
   state.replyTo = null;
+  state.editingComment = { id: comment.id, body: comment.body || '' };
+  const input = document.getElementById('commentInput');
+  input.value = comment.body || '';
+  updateReplyBanner();
+  input.focus();
+  try { input.setSelectionRange(input.value.length, input.value.length); } catch (_) {}
+}
+function cancelReply() {
+  const wasEditing = !!state.editingComment;
+  state.replyTo = null;
+  state.editingComment = null;
+  if (wasEditing) document.getElementById('commentInput').value = '';
   updateReplyBanner();
 }
 function updateReplyBanner() {
   const banner = document.getElementById('replyBanner');
   if (!banner) return;
-  if (state.replyTo) {
+  const label = document.getElementById('commentModeLabel');
+  const input = document.getElementById('commentInput');
+  const send = document.getElementById('commentSend');
+  if (state.editingComment) {
     banner.style.display = 'flex';
-    document.getElementById('replyBannerName').textContent = state.replyTo.name;
-    document.getElementById('commentInput').placeholder = `Reply to ${state.replyTo.name}…`;
+    if (label) label.textContent = 'Editing comment';
+    input.placeholder = 'Edit comment…';
+    if (send) send.textContent = 'Save';
+  } else if (state.replyTo) {
+    banner.style.display = 'flex';
+    if (label) {
+      label.innerHTML = 'Replying to <strong id="replyBannerName"></strong>';
+      const nameEl = document.getElementById('replyBannerName');
+      if (nameEl) nameEl.textContent = state.replyTo.name;
+    }
+    input.placeholder = `Reply to ${state.replyTo.name}…`;
+    if (send) send.textContent = 'Post';
   } else {
     banner.style.display = 'none';
-    document.getElementById('commentInput').placeholder = 'Add a comment...';
+    if (label) label.textContent = '';
+    input.placeholder = 'Add a comment...';
+    if (send) send.textContent = 'Post';
   }
 }
 
@@ -14938,9 +14973,28 @@ async function postComment() {
   if (!body) return;
   const btn = document.getElementById('commentSend');
   btn.disabled = true;
-  const parentId = state.replyTo?.id || null;
+  const editingId = state.editingComment?.id || null;
+  const parentId = editingId ? null : (state.replyTo?.id || null);
   try {
     if (!await moderateText(body, 'comment')) { btn.disabled = false; return; }
+    if (editingId) {
+      const editedAt = new Date().toISOString();
+      const { data, error } = await db.from('comments')
+        .update({ body, edited_at: editedAt })
+        .eq('id', editingId)
+        .eq('user_id', state.profile.id)
+        .select('id, user_id, body, created_at, edited_at, parent_id')
+        .single();
+      if (error) throw error;
+      const idx = (state.currentComments || []).findIndex(c => String(c.id) === String(editingId));
+      if (idx >= 0) state.currentComments[idx] = { ...state.currentComments[idx], ...data };
+      input.value = '';
+      state.editingComment = null;
+      updateReplyBanner();
+      renderComments();
+      toast('Comment updated');
+      return;
+    }
     const insertObj = { target_type: t.type, target_id: t.id, user_id: state.profile.id, body };
     if (parentId) insertObj.parent_id = parentId;
     const { data, error } = await db.from('comments').insert(insertObj)
@@ -24095,7 +24149,7 @@ function renderChallenges() {
   // Wire card clicks → open challenge detail
   grid.querySelectorAll('.feed-challenge-card[data-chid]').forEach(card => {
     card.addEventListener('click', e => {
-      if (e.target.closest('[data-chc-act],[data-chc-menu],[data-fc-compete-score-v1059]')) return;
+      if (e.target.closest('[data-chc-act],[data-chc-menu],[data-fc-compete-score-v1059],[data-like-entry],[data-comment-entry],[data-show-likes],.flame-btn,.comment-btn')) return;
       const ch = list.find(c => c.id === card.dataset.chid);
       if (ch) fcOpenChallengeSurfaceV1273(ch.id);
     });
@@ -24117,6 +24171,16 @@ function renderChallenges() {
       const ch = list.find(c => c.id === btn.dataset.chcMenu);
       if (ch) openPromote('challenge', ch);
     });
+  });
+  // v1316 — social actions stay on the card. No detail-screen detour required.
+  grid.querySelectorAll('[data-like-entry]').forEach(btn => {
+    btn.addEventListener('click', e => { e.stopPropagation(); toggleEntryLike(btn.dataset.likeEntry, btn); });
+  });
+  grid.querySelectorAll('[data-comment-entry]').forEach(btn => {
+    btn.addEventListener('click', e => { e.stopPropagation(); openComments('entry', btn.dataset.commentEntry); });
+  });
+  grid.querySelectorAll('[data-show-likes]').forEach(el => {
+    el.addEventListener('click', e => { e.stopPropagation(); openLikersSheet(el.dataset.showLikes, el.dataset.showLikesId); });
   });
 
   // Legacy drawer handlers below now match no elements on Compete.
@@ -27300,7 +27364,7 @@ function renderFeed() {
   // Wire entry card taps → open feed viewer (stays on feed)
   c.querySelectorAll('[data-entry-open]').forEach(card => {
     card.addEventListener('click', e => {
-      if (e.target.closest('[data-fcc-vote],.fcc-vote-btn,[data-show-likes],.fcc-fire-eq,audio,video,.fc-video-unified-v1238,.fc-inline-video-play-v1264,.fc-inline-video-expand-v1239')) return;
+      if (e.target.closest('[data-fcc-vote],.fcc-vote-btn,[data-like-entry],[data-comment-entry],[data-show-likes],.flame-btn,.comment-btn,.fcc-fire-eq,audio,video,.fc-video-unified-v1238,.fc-inline-video-play-v1264,.fc-inline-video-expand-v1239')) return;
       e.stopPropagation();
       fcOpenChallengeSurfaceV1273(card.dataset.entryOpen, card.dataset.entryId || null);
     });
@@ -27335,7 +27399,7 @@ function renderFeed() {
       if (moved) return;
       // v802 — the card now has its own primary action and an overflow dot.
       // Both handle their own tap; the card body still opens the viewer.
-      if (e.target.closest('[data-fcc-vote],[data-fcc-submit],.fcc-vote-btn,.fcc-submit-btn,[data-chc-act],[data-chc-menu]')) return;
+      if (e.target.closest('[data-fcc-vote],[data-fcc-submit],.fcc-vote-btn,.fcc-submit-btn,[data-chc-act],[data-chc-menu],[data-like-entry],[data-comment-entry],[data-show-likes],.flame-btn,.comment-btn')) return;
       fcOpenChallengeSurfaceV1273(ch.id);
     });
   });
@@ -27355,6 +27419,13 @@ function renderFeed() {
       const ch = (state.challenges || []).find(x => x.id === btn.dataset.chcMenu);
       if (ch) openPromote('challenge', ch);
     });
+  });
+  // v1316 — challenge-entry likes/comments are first-class feed actions.
+  c.querySelectorAll('[data-like-entry]').forEach(btn => {
+    btn.addEventListener('click', e => { e.stopPropagation(); toggleEntryLike(btn.dataset.likeEntry, btn); });
+  });
+  c.querySelectorAll('[data-comment-entry]').forEach(btn => {
+    btn.addEventListener('click', e => { e.stopPropagation(); openComments('entry', btn.dataset.commentEntry); });
   });
 
   // Wire up post menus (delete own / report others)
@@ -27845,9 +27916,14 @@ function fcEntryRailV1060(ch, entries) {
     const pctV1085 = voteTotalV1085 > 0 ? Math.round((votesV1085 / voteTotalV1085) * 100) : 0;
     const voteLabelV1085 = selectedV1085 ? '✓ Your vote' : (selectedVoteIdV1083 ? 'Change vote' : 'Vote here');
     const voteFooterV1085 = votingV1085 ? `<footer class="fcc-direct-vote-foot-v1085"><button type="button" class="fcc-direct-vote-btn-v1085${selectedV1085 ? ' selected' : ''}" data-fcc-direct-vote-v1085 data-challenge-id="${ch.id}" data-entry-id="${e.id}" ${selectedV1085 ? 'disabled aria-current="true"' : ''} onclick="event.stopPropagation();voteFromCompeteCardV1085(this)">${voteLabelV1085}</button><span class="fcc-direct-vote-total-v1085" data-fcc-direct-total-v1085="${e.id}">${votesV1085} vote${votesV1085 === 1 ? '' : 's'} · ${pctV1085}%</span></footer>` : '';
+    const likeCountV1316 = Number(state.entryLikeCounts?.[e.id] || 0);
+    const likedV1316 = !!state.myEntryLikes?.has(e.id);
+    const likeAttrsV1316 = state.profile ? `data-like-entry="${e.id}"` : 'disabled aria-label="Sign in to like"';
+    const commentCountV1316 = Number(state.entryCommentCounts?.[e.id] || 0);
+    const socialFooterV1316 = `<div class="fcc-entry-social-v1316" data-fcc-social-entry-v1316="${e.id}"><button type="button" class="flame-btn${likedV1316 ? ' liked' : ''}" ${likeAttrsV1316}><span class="flame-icon">🔥</span><span class="flame-count${likeCountV1316 > 0 ? ' likes-tappable' : ''}" ${likeCountV1316 > 0 ? `data-show-likes="entry" data-show-likes-id="${e.id}"` : ''}>${likeCountV1316}</span></button><button type="button" class="comment-btn" data-comment-entry="${e.id}"><span class="comment-icon">💬</span><span class="comment-count">${commentCountV1316}</span></button></div>`;
     const entryTypeV1276 = String(e.media_type || ch?.media_type || '').toLowerCase();
     const audioCardClassV1276 = entryTypeV1276 === 'audio' ? ' fc-entry-card-audio-v1276 fc-entry-card-audio-v1277' : '';
-    return `<article class="fcc-entry-card fc-entry-stage-fixed-v1202${i===0 ? ' fc-active-entry-v1307' : ''}${audioCardClassV1276}${voteClassV1083}" data-entry-open="${ch.id}" data-entry-id="${e.id}" aria-label="Entry ${i+1} of ${entries.length}"><header class="fcc-entry-head-v1079"><span class="fcc-entry-avatar">${av}</span><span class="fcc-entry-name-v1079">${escapeHtml(sub.name || `Entry ${i+1}`)}</span><span class="fcc-entry-position-v1079">${i+1} of ${entries.length}</span></header>${fcEntryCardMediaV1060(e,ch)}${voteFooterV1085}</article>`;
+    return `<article class="fcc-entry-card fc-entry-stage-fixed-v1202${i===0 ? ' fc-active-entry-v1307' : ''}${audioCardClassV1276}${voteClassV1083}" data-entry-open="${ch.id}" data-entry-id="${e.id}" aria-label="Entry ${i+1} of ${entries.length}"><header class="fcc-entry-head-v1079"><span class="fcc-entry-avatar">${av}</span><span class="fcc-entry-name-v1079">${escapeHtml(sub.name || `Entry ${i+1}`)}</span><span class="fcc-entry-position-v1079">${i+1} of ${entries.length}</span></header>${fcEntryCardMediaV1060(e,ch)}${socialFooterV1316}${voteFooterV1085}</article>`;
   }).join('')}</div>${_entryDotsHtml(entries.length)}</div>`;
 }
 
@@ -31605,8 +31681,12 @@ document.getElementById('createPostForm').addEventListener('submit', async e => 
     if (newPost) insertMentions('post', newPost.id, content);
 
     closeCreatePost();
-    // Fire-and-forget refresh so button always unlocks fast
-    loadPosts().then(renderFeed).catch(e => console.error('refresh failed', e));
+    // v1316 — publishing should land on the thing you just published, not restore
+    // whichever screen happened to be underneath the composer. Refresh posts first,
+    // move to Home, then center + highlight the new card (same contract as flyers).
+    await loadPosts();
+    switchView('feed');
+    if (newPost?.id) requestAnimationFrame(() => scrollToPost(newPost.id));
   } catch (err) {
     console.error('[post] error:', err);
     dlog('post', 'ERROR', { msg: String(err && err.message || err).slice(0, 120) });
@@ -51896,6 +51976,27 @@ window.FC_V1315_VALIDATION={
   misleadingIdlePullArrowRemoved:true,
   pullRefreshGesturePreserved:true,
   pullRefreshSpinnerPreserved:true,
+  v1314HomeCompeteParityPreserved:true
+};
+</script>
+<style id="fc-v1316-feed-social-css">
+.fcc-entry-social-v1316{display:flex;align-items:center;gap:10px;padding:10px 12px;border-top:1px solid var(--border);background:var(--surface)}
+.fcc-entry-social-v1316 .flame-btn,.fcc-entry-social-v1316 .comment-btn{min-height:36px}
+.fcc-entry-social-v1316 + .fcc-direct-vote-foot-v1085{border-top:1px solid var(--border)}
+</style>
+<script id="fc-v1316-validation-js">
+window.FC_V1316_VALIDATION={
+  build:'v1316',
+  newPostLandsOnNewPost:true,
+  ownCommentsEditable:true,
+  commentEditUsesUpdateNotDeleteRepost:true,
+  editedCommentStateVisible:true,
+  challengeEntryLikesOnHome:true,
+  challengeEntryCommentsOnHome:true,
+  challengeEntryLikesOnCompete:true,
+  challengeEntryCommentsOnCompete:true,
+  socialActionsDoNotOpenViewer:true,
+  v1315PollRevotePreserved:true,
   v1314HomeCompeteParityPreserved:true
 };
 </script>
