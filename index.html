@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1313 · smooth-carousel-height" name="fc-build"/>
+<meta content="v1314 · home-compete-parity" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Smooths portrait/landscape Challenger height changes during swipes so the feed no longer jumps vertically." name="fc-whatsnew"/>
+<meta content="Makes Home challenge cards match Compete and uses the same calmer native swipe behavior as the expanded viewer." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -27085,7 +27085,7 @@ function renderFeed() {
         // Fallback: fighters not loaded — keep the simple pinned card (gold-treated)
         return `<div class="fcc-challenge-wrap champ-gold" data-cid="${ch.id}" onclick="openChallenge((state.challenges||[]).find(c=>c.id==='${ch.id}'))">
           <div class="feed-challenge-card" style="padding:16px;cursor:pointer;">
-            ${buildChallengeCardShell(ch,'feed')}
+            ${buildChallengeCardShell(ch,'compete')}
           </div>
         </div>`;
       }).join('');
@@ -27323,8 +27323,9 @@ function renderFeed() {
   });
 
   // Wire challenge headers — use pointerup with movement check so scroll is never blocked
-  mixed.filter(item => item.kind === 'challenge').forEach(item => {
-    const ch = item.data;
+  mixed.filter(item => item.kind === 'challenge' || item.kind === 'winner').forEach(item => {
+    const ch = item.kind === 'winner' ? item.data?.challenge : item.data;
+    if (!ch) return;
     const header = c.querySelector(`.fcc-challenge-wrap[data-cid="${ch.id}"] .feed-challenge-card`);
     if (!header) return;
     let startY = 0, startX = 0;
@@ -28428,9 +28429,9 @@ function _fcFeedCategoryIconV1058(category) {
 }
 function renderFeedChallengeCard(ch) {
   const isChampionship = !!(ch.title && ch.title.startsWith('⚡'));
-  return `<div class="fcc-challenge-wrap${isChampionship ? ' champ-gold' : ''}" data-cid="${ch.id}">
+  return `<div class="fcc-challenge-wrap${isChampionship ? ' champ-gold' : ''} fc-home-compete-parity-v1314" data-cid="${ch.id}">
     <div class="feed-challenge-card" data-fcc-cid="${ch.id}">
-      ${buildChallengeCardShell(ch,'feed')}
+      ${buildChallengeCardShell(ch,'compete')}
     </div>
   </div>`;
 }
@@ -28489,43 +28490,19 @@ function renderHofCard(d) {
 }
 
 function renderFeedWinnerCard({ challenge, entry }) {
-  const s=entry.submitter||{name:'Someone',avatar:'🔥',id:null};
-  const isMine=s.id===state.profile?.id;
-  const clickable=s.id&&!isMine;
-  const userAttr=clickable?`data-user-id="${s.id}" class="user-clickable"`:'';
-  const plus=needsFollowPlus(s.id)?' <span class="user-plus">+</span>':'';
-  const badges=(typeof renderLadderChip==='function'&&s.id)?renderLadderChip(s.id,{showSpark:true,size:17}):'';
-  let mediaHtml='';
-  if(entry.media_type==='photo'&&entry.media_url){
-    mediaHtml=`<img src="${escapeHtml(entry.media_url)}" alt="Winning entry" loading="lazy" data-entry-open="${challenge.id}" data-entry-id="${entry.id}">`;
-  }else if(entry.media_type==='video'&&entry.media_url){
-    mediaHtml=`<div class="fc-winner-video-v1058 fc-video-unified-v1238" data-entry-open="${challenge.id}" data-entry-id="${entry.id}" aria-label="Winning video"><video data-src="${escapeHtml(entry.media_url)}" ${_videoPosterAttr(entry.media_url,entry.poster_url)} muted playsinline preload="none" data-lazy-video tabindex="-1" aria-label="Winning video"></video><button type="button" class="fcc-play-overlay fc-card-play-overlay-v1238 fc-inline-video-play-v1264" aria-label="Play winning video">▶</button><button type="button" class="fc-inline-video-expand-v1239" aria-label="Open full-size video">⛶</button></div>`;
-  }else if(entry.media_type==='audio'&&entry.media_url){
-    mediaHtml=`<div class="fc-winner-audio-v1123" data-entry-open="${challenge.id}" data-entry-id="${entry.id}">${_audioTileHtml(entry,{mode:'winner',controls:false})}</div>`;
-  }else{
-    mediaHtml=`<div class="fc-winner-text-v1058" data-entry-open="${challenge.id}" data-entry-id="${entry.id}"><span aria-hidden="true">${_fcFeedCategoryIconV1058(challenge.category)}</span>${entry.caption?`<p>${escapeHtml(entry.caption)}</p>`:''}</div>`;
-  }
-  const score=(state.boostByChallenge||{})[challenge.id];
-  const scoreHtml=score&&Number(score.total_boost)>0?`<div class="fc-winner-score-v1058"><strong>+${Number(score.total_boost)} Championship Score</strong><span>${Number(score.opponent_pts||0)} Opponent + ${Number(score.vote_pts||0)} Turnout</span></div>`:'';
-  return `<article class="feed-activity-card winner fc-winner-card-v1058 fc-complete-challenge-v1304" data-cid="${challenge.id}">
-    <header class="fc-winner-head-v1058 fc-winner-head-v1304">
-      <div class="fc-winner-state-v1304">
-        <div class="fc-winner-mark-v1304" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M4 7.5 7.3 11 12 5l4.7 6L20 7.5l-1.6 9H5.6L4 7.5Z"></path><path d="M6.2 19h11.6"></path></svg></div>
-        <div class="fc-winner-state-copy-v1304"><strong>Challenge complete</strong><small>Winner · ${escapeHtml(challenge.category||'Other')}</small></div>
-      </div>
-      <time>${timeAgo(challenge.voting_end)}</time>
-    </header>
-    <div class="fc-winner-body-v1058">
-      <div class="fc-winner-identity-v1058">
-        <div class="fc-winner-avatar-v1058" ${userAttr}>${avatarInner(s.avatar)}</div>
-        <div class="fc-winner-person-v1058"><strong ${userAttr}>${escapeHtml(s.name)}${isMine?' <em>(you)</em>':''}${plus}</strong>${badges?`<div class="fc-winner-badges-v1058">${badges}</div>`:''}</div>
-      </div>
-      <h3>${escapeHtml(challenge.title)}</h3>
-      ${scoreHtml}
+  // v1314 — Home no longer switches to a separate winner-card language after a
+  // challenge closes. The same competition card used on Compete remains the
+  // source of truth: full-fill entry rail, Final status, and View result bar.
+  // Results/winner detail still lives in the existing feed overlay after tap.
+  const ch = { ...challenge, computedStatus: 'closed' };
+  const isChampionship = !!(ch.is_championship || (ch.title && ch.title.startsWith('⚡')));
+  return `<div class="fcc-challenge-wrap${isChampionship ? ' champ-gold' : ''} fc-home-compete-parity-v1314 fc-home-final-v1314" data-cid="${ch.id}">
+    <div class="feed-challenge-card" data-fcc-cid="${ch.id}">
+      ${buildChallengeCardShell(ch,'compete')}
     </div>
-    <div class="fc-winner-media-v1058">${mediaHtml}</div>
-  </article>`;
+  </div>`;
 }
+
 
 
 // ── UPLOAD WITH PROGRESS ─────────────────────────────────────────────────────
@@ -41920,8 +41897,8 @@ body.fc-insights-unavailable-v1081 .pm-tile[onclick*="openCreatorInsightsV1048"]
   min-width:100%!important;
   width:100%!important;
   height:auto!important;
-  scroll-snap-align:start!important;
-  scroll-snap-stop:always!important;
+  scroll-snap-align:center!important;
+  scroll-snap-stop:normal!important;
   will-change:auto!important;
 }
 .fc-entry-rail-v1079 .fcc-entry-media,
@@ -50994,7 +50971,7 @@ body:not(:has(#submitEntrySheet.open)):has(#feedViewerSheet.open) #feedViewerShe
   gap:0!important;
   scroll-snap-type:x mandatory!important;
   overscroll-behavior-x:contain!important;
-  touch-action:pan-x pan-y pinch-zoom!important;
+  touch-action:auto!important;
 }
 #feedContainer .fc-entry-rail-v1079 .fcc-entry-card,
 #challengesGrid .fc-entry-rail-v1079 .fcc-entry-card{
@@ -51258,25 +51235,22 @@ body.theme-light #feedViewerSheet.open{
     if(!rail||rail.dataset.fcFrameHeightWireV1305==='1') return;
     rail.dataset.fcFrameHeightWireV1305='1';
     let timer=0;
-    let raf=0;
-    const settle=(delay=90)=>{ clearTimeout(timer); timer=setTimeout(()=>syncRailHeight(rail),delay); };
-    rail.addEventListener('scroll',()=>{
+    let gestureV1314=false;
+    const settle=(delay=90)=>{
       clearTimeout(timer);
-      if(!raf) raf=requestAnimationFrame(()=>{
-        raf=0;
-        syncRailHeightDuringSwipeV1313(rail);
-      });
-      timer=setTimeout(()=>syncRailHeight(rail),140);
+      timer=setTimeout(()=>{ if(!gestureV1314) syncRailHeight(rail); },delay);
+    };
+    // v1314 — mirror the expanded viewer: do not change rail height underneath
+    // the finger. Native iOS owns the horizontal gesture; height updates only
+    // after the snap settles. This removes the extra resistance/jump when
+    // reversing direction, especially when returning from card 2 to card 1.
+    rail.addEventListener('scroll',()=>settle(140),{passive:true});
+    rail.addEventListener('scrollend',()=>settle(0),{passive:true});
+    rail.addEventListener('touchstart',()=>{
+      gestureV1314=true;
+      clearTimeout(timer);
     },{passive:true});
-    rail.addEventListener('scrollend',()=>{
-      if(raf){ cancelAnimationFrame(raf); raf=0; }
-      settle(0);
-    },{passive:true});
-    // Do not inflate to max sibling height on touchstart. The height now follows
-    // horizontal progress, so landscape→portrait and portrait→landscape remain
-    // stable without clipping the settled card or jumping the page abruptly.
-    rail.addEventListener('touchstart',()=>{ clearTimeout(timer); },{passive:true});
-    const end=()=>settle(60);
+    const end=()=>{ gestureV1314=false; settle(70); };
     rail.addEventListener('touchend',end,{passive:true});
     rail.addEventListener('touchcancel',end,{passive:true});
     if(typeof ResizeObserver==='function'){
@@ -51856,5 +51830,44 @@ body.fc-v1309-voting-focus #challengeDetailSheet #cdEntriesGrid{margin-top:0!imp
 <script>window.FC_V1311_VALIDATION={build:'v1311',oneFullCardAtATime:true,nextCardPeekRemoved:true,numericPositionIndicatorPreserved:true,nativeIOSHorizontalScroll:true,customFeedDragDisabled:true,mandatorySnapPreserved:true,v1310ReliablePausePreserved:true,v1309VotingCleanupPreserved:true,v1308FeedOnlyFlowPreserved:true};</script>
 <script>window.FC_V1312_VALIDATION={build:"v1312",nativeOneCardSwipePreserved:true,outgoingMediaPausesAtScrollStart:true,mediaStartIndexHeldUntilSettle:true,noAudioVideoTrailBetweenChallengers:true,scrollendAndDebounceFallback:true,v1311GeometryPreserved:true,v1310VideoPausePreserved:true,v1309VotingCleanupPreserved:true};</script>
 <script>window.FC_V1313_VALIDATION={build:"v1313",carouselHeightInterpolatesDuringSwipe:true,noMaxHeightJumpOnTouchStart:true,portraitLandscapeTransitionSmoothed:true,nativeOneCardSwipePreserved:true,v1312MediaHandoffPreserved:true,v1311NoPeekPreserved:true,v1310VideoPausePreserved:true};</script>
+
+<style id="fc-v1314-home-compete-parity-css">
+/* v1314 — Home challenge cards now use the Compete card component exactly.
+   Preserve the Compete geometry the member approved; only normalize the rail
+   physics so Home/Compete feel like the smoother expanded viewer. */
+#feedContainer .fc-home-compete-parity-v1314 .feed-challenge-card{
+  padding:0!important;
+}
+#feedContainer .fc-home-compete-parity-v1314 .fcc-entries-scroll,
+#challengesGrid .fcc-entries-scroll{
+  scroll-behavior:auto!important;
+  scroll-snap-type:x mandatory!important;
+  touch-action:auto!important;
+  -webkit-overflow-scrolling:touch!important;
+  overscroll-behavior-x:contain!important;
+}
+#feedContainer .fc-home-compete-parity-v1314 .fcc-entry-card,
+#challengesGrid .fcc-entry-card{
+  scroll-snap-align:center!important;
+  scroll-snap-stop:normal!important;
+}
+</style>
+<script>
+window.FC_V1314_VALIDATION={
+  build:'v1314',
+  homeUsesCompeteChallengeShell:true,
+  homeClosedCardsUseCompeteFinalShell:true,
+  homeKeepsViewResultEnterChallengeBar:true,
+  homeAndCompeteFullFillMediaPreserved:true,
+  expandedViewerRoutingPreserved:true,
+  nativeIOSSwipe:true,
+  reverseSwipeResistanceReduced:true,
+  railHeightFrozenDuringGesture:true,
+  railHeightUpdatesAfterSettle:true,
+  v1313MediaFramesPreserved:true,
+  v1312ImmediateMediaHandoffPreserved:true,
+  v1310NativeVideoPausePreserved:true
+};
+</script>
 </body>
 </html>
