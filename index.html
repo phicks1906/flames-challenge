@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1314 · home-compete-parity" name="fc-build"/>
+<meta content="v1315 · poll-revote-clean-refresh" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Makes Home challenge cards match Compete and uses the same calmer native swipe behavior as the expanded viewer." name="fc-whatsnew"/>
+<meta content="Poll votes can now be changed until close, and the idle pull-refresh arrow no longer sits over the page." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -17904,6 +17904,7 @@ function renderPolls() {
     const voted = userVote !== undefined;
     const ended = pollEnded(poll);
     const reveal = voted || ended;
+    const locked = ended;
 
     const card = document.createElement('article');
     card.className = 'poll-card' + (voted ? ' voted' : '');
@@ -17929,7 +17930,7 @@ function renderPolls() {
     optionsWithCounts.forEach((opt, idx) => {
       const btn = document.createElement('button');
       btn.className = 'poll-option' + (userVote === idx ? ' voted' : '');
-      btn.disabled = reveal;
+      btn.disabled = locked;
       const pct = totalVotes ? Math.round((opt.votes / totalVotes) * 100) : 0;
       btn.innerHTML = `<span class="fill" style="width:${reveal ? pct : 0}%"></span><span class="text">${escapeHtml(opt.label)}</span><span class="pct">${pct}%</span>`;
       if (!ended) btn.onclick = () => castVote(poll.id, idx);
@@ -17945,13 +17946,14 @@ function renderPolls() {
 
 async function castVote(pollId, optionIdx) {
   if (!state.profile) return;
-  if (state.myVotes[pollId] !== undefined) return;
+  const previousVote = state.myVotes[pollId];
+  if (previousVote === optionIdx) {
+    toast('That is already your vote');
+    return;
+  }
 
-  // v756 — refuse before touching optimistic state. The DB already blocks this
-  // (RLS policy votes_block_after_close), but with no client guard the user got
-  // a full "voted" animation and then a raw Postgres error 1.2s later. Check
-  // live rather than trusting the render: a poll can end while the card sits
-  // on screen.
+  // Keep the close guard on every vote and re-vote. A poll can close while
+  // its card is sitting on screen.
   const pollForGuard = (state.polls || []).find(p => p.id === pollId);
   if (pollForGuard && pollEnded(pollForGuard)) {
     toast('🏁 This poll has ended');
@@ -17962,49 +17964,47 @@ async function castVote(pollId, optionIdx) {
 
   try { navigator.vibrate && navigator.vibrate(10); } catch(e) {}
 
-  // Optimistic — mark voted but don't reveal results yet
+  // Optimistic state. On a change, move the existing ballot instead of
+  // adding another ballot to the visible count.
   state.myVotes[pollId] = optionIdx;
   if (!state.voteCountsByPoll[pollId]) state.voteCountsByPoll[pollId] = {};
-  state.voteCountsByPoll[pollId][optionIdx] = (state.voteCountsByPoll[pollId][optionIdx] || 0) + 1;
-
-  // Dramatic pause — show a "counting..." state for 1.2s before revealing
-  const pollCard = document.querySelector(`.poll-card[data-pid="${pollId}"]`);
-  if (pollCard) {
-    pollCard.classList.add('poll-counting');
-    pollCard.querySelector('.poll-options')?.querySelectorAll('button').forEach(b => b.disabled = true);
+  const counts = state.voteCountsByPoll[pollId];
+  if (previousVote !== undefined) {
+    counts[previousVote] = Math.max(0, (counts[previousVote] || 0) - 1);
   }
-
-  await new Promise(res => setTimeout(res, 1200));
+  counts[optionIdx] = (counts[optionIdx] || 0) + 1;
 
   renderPolls();
+  updateFeedPollCardInPlace(pollId);
+  setTimeout(() => injectPollTopAnswer(pollId), 40);
 
-  // After renderPolls re-renders, inject the top answer card
-  setTimeout(() => injectPollTopAnswer(pollId), 50);
-
-  const { error: voteError } = await db.from('votes').insert({
+  const { error: voteError } = await db.from('votes').upsert({
     poll_id: pollId,
     user_id: state.profile.id,
     option_index: optionIdx,
-  });
+  }, { onConflict: 'poll_id,user_id' });
 
   if (voteError) {
-    delete state.myVotes[pollId];
-    state.voteCountsByPoll[pollId][optionIdx] = Math.max(0, state.voteCountsByPoll[pollId][optionIdx] - 1);
+    counts[optionIdx] = Math.max(0, (counts[optionIdx] || 0) - 1);
+    if (previousVote !== undefined) {
+      state.myVotes[pollId] = previousVote;
+      counts[previousVote] = (counts[previousVote] || 0) + 1;
+    } else {
+      delete state.myVotes[pollId];
+    }
     renderPolls();
-    // Don't show raw Postgres/RLS text to users. The close-window policy is the
-    // expected rejection here (poll ended between render and tap), so name it.
+    updateFeedPollCardInPlace(pollId);
     const _msg = voteError.message || '';
     if (/votes_block_after_close|row-level security/i.test(_msg)) {
       toast('🏁 This poll closed before your vote landed');
-      updateFeedPollCardInPlace(pollId);
     } else {
-      toast('Vote failed — try again');
+      toast(previousVote !== undefined ? 'Vote change failed — try again' : 'Vote failed — try again');
       console.warn('castVote', voteError);
     }
     return;
   }
 
-  toast('Vote recorded — you can change it until voting ends.');
+  toast(previousVote !== undefined ? 'Vote changed' : 'Vote recorded — you can change it until voting ends.');
 }
 
 function injectPollTopAnswer(pollId) {
@@ -27511,20 +27511,7 @@ function renderFeed() {
     });
   });
   // Wire up feed poll cards — tap to go to polls view
-  c.querySelectorAll('.feed-poll-card').forEach(card => {
-    card.addEventListener('click', () => jumpToPoll(card.dataset.pid));
-    // Wire inline vote buttons
-    card.querySelectorAll('[data-feed-poll-vote]').forEach(btn => {
-      btn.addEventListener('click', e => {
-        e.stopPropagation();
-        const [pollId, idx] = btn.dataset.feedPollVote.split(':');
-        castVote(pollId, parseInt(idx));
-        // Reveal results in this card only — re-rendering the whole feed snapped
-        // the user back to the top.
-        setTimeout(() => updateFeedPollCardInPlace(pollId), 300);
-      });
-    });
-  });
+  c.querySelectorAll('.feed-poll-card').forEach(card => wireFeedPollCardV1315(card));
 
   // Wire up activity card clicks (entry / winner events → open the challenge)
   c.querySelectorAll('.feed-activity-card').forEach(card => {
@@ -31262,7 +31249,22 @@ function wireWinnerReveals() {
 
 function triggerCurtainReveal() {}
 
-// Re-render a single feed poll card after voting (keeps scroll position; preserves the tap-to-polls handler).
+// Wire a feed poll card in one place so a card replaced after the first vote
+// stays interactive for vote changes too.
+function wireFeedPollCardV1315(card) {
+  if (!card || card.dataset.fcPollWiredV1315 === '1') return;
+  card.dataset.fcPollWiredV1315 = '1';
+  card.addEventListener('click', () => jumpToPoll(card.dataset.pid));
+  card.querySelectorAll('[data-feed-poll-vote]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const [pollId, idx] = btn.dataset.feedPollVote.split(':');
+      castVote(pollId, parseInt(idx, 10));
+    });
+  });
+}
+
+// Re-render a single feed poll card after voting without moving the feed.
 function updateFeedPollCardInPlace(pollId) {
   const poll = (state.polls || []).find(p => p.id === pollId);
   const oldCard = document.querySelector(`.feed-poll-card[data-pid="${pollId}"]`);
@@ -31271,7 +31273,7 @@ function updateFeedPollCardInPlace(pollId) {
   tmp.innerHTML = renderFeedPollCard(poll);
   const newCard = tmp.firstElementChild;
   if (!newCard) return;
-  newCard.addEventListener('click', () => jumpToPoll(newCard.dataset.pid));
+  wireFeedPollCardV1315(newCard);
   oldCard.replaceWith(newCard);
 }
 
@@ -31280,7 +31282,8 @@ function renderFeedPollCard(poll) {
   const userVote = state.myVotes[poll.id];
   const voted = userVote !== undefined;
   const ended = pollEnded(poll); // v756 — was never checked here; ended polls rendered tappable
-  const locked = voted || ended;  // show results + disable options in both cases
+  const reveal = voted || ended;
+  const locked = ended;
   const options = (poll.options || []).map((opt, i) => {
     const votes = (opt.seed_votes || 0) + (counts[i] || 0);
     return { label: opt.label, votes, i };
@@ -31290,10 +31293,10 @@ function renderFeedPollCard(poll) {
   const optionsHtml = options.map(o => {
     const pct = total ? Math.round((o.votes / total) * 100) : 0;
     const isVoted = userVote === o.i;
-    return `<button class="feed-poll-opt${isVoted ? ' voted' : ''}" ${locked ? 'disabled' : `data-feed-poll-vote="${poll.id}:${o.i}"`}>
-      <span class="feed-poll-fill" style="width:${locked ? pct : 0}%"></span>
+    return `<button class="feed-poll-opt${isVoted ? ' voted' : ''}" ${locked ? 'disabled' : `data-feed-poll-vote="${poll.id}:${o.i}"`} aria-pressed="${isVoted ? 'true' : 'false'}">
+      <span class="feed-poll-fill" style="width:${reveal ? pct : 0}%"></span>
       <span class="feed-poll-label">${escapeHtml(o.label)}</span>
-      ${locked ? `<span class="feed-poll-pct">${pct}%</span>` : ''}
+      ${reveal ? `<span class="feed-poll-pct">${pct}%</span>` : ''}
     </button>`;
   }).join('');
 
@@ -31307,8 +31310,8 @@ function renderFeedPollCard(poll) {
     </div>
     <div class="feed-poll-question">${escapeHtml(poll.question)}</div>
     <div class="feed-poll-options">${optionsHtml}</div>
-    ${locked
-      ? `<div class="feed-poll-footer">👥 ${formatNum(total)} votes${ended && !voted ? ' · voting closed' : ''} · tap to see all polls</div>`
+    ${reveal
+      ? `<div class="feed-poll-footer">👥 ${formatNum(total)} votes${ended ? ' · voting closed' : voted ? ' · tap another answer to change' : ''}</div>`
       : '<div class="feed-poll-footer">Tap an option to vote</div>'}
   </div>`;
 }
@@ -51869,5 +51872,33 @@ window.FC_V1314_VALIDATION={
   v1310NativeVideoPausePreserved:true
 };
 </script>
+<style id="fc-v1315-poll-revote-refresh-css">
+/* The old pull-refresh arrow looked like a tappable control even though it was
+   only a gesture indicator. Keep pull-to-refresh itself, but only surface the
+   indicator while an actual refresh is running or reporting its result. */
+#fcPullRefreshV1282{display:none!important}
+body.fc-ptr-refreshing-v1282 #fcPullRefreshV1282,
+body.fc-ptr-done-v1282 #fcPullRefreshV1282,
+body.fc-ptr-error-v1282 #fcPullRefreshV1282{display:grid!important;opacity:1!important;transform:translate3d(-50%,0,0) scale(1)!important}
+.poll-card.voted:not(.poll-ended) .poll-option:not(:disabled),
+.feed-poll-card .feed-poll-opt[data-feed-poll-vote]{cursor:pointer}
+</style>
+<script id="fc-v1315-validation-js">
+window.FC_V1315_VALIDATION={
+  build:'v1315',
+  pollRevoteUntilClose:true,
+  pollVoteUsesUpsert:true,
+  pollCountsMoveInsteadOfDuplicate:true,
+  pollPageOptionsRemainInteractiveAfterVote:true,
+  feedPollOptionsRemainInteractiveAfterVote:true,
+  replacedFeedPollRewired:true,
+  closedPollsRemainLocked:true,
+  misleadingIdlePullArrowRemoved:true,
+  pullRefreshGesturePreserved:true,
+  pullRefreshSpinnerPreserved:true,
+  v1314HomeCompeteParityPreserved:true
+};
+</script>
+
 </body>
 </html>
