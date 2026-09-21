@@ -21,7 +21,7 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1317 · audio-post-clean-expand" name="fc-build"/>
+<meta content="v1318 · entry-arrows-discover-post-focus" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
 <meta content="Audio posts now render and play with the canonical Flames player, and post expansion opens cleanly without the blank flash." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
@@ -27919,7 +27919,10 @@ function fcEntryRailV1060(ch, entries) {
   const statusV1085 = ch.computedStatus || computeChallengeStatus(ch);
   const votingV1085 = isVotingPhase(statusV1085);
   const voteTotalV1085 = entries.reduce((sum, e) => sum + Number(state.feedVoteCounts?.[e.id] || 0), 0);
-  return `<div class="fcc-entries-wrap fc-entry-rail-v1060 fc-entry-rail-v1079"><div class="fcc-entries-scroll">${entries.map((e,i) => {
+  const entryNavV1318 = entries.length > 1
+    ? `<button type="button" class="fcc-entry-nav-v1318 prev" aria-label="Previous Challenger">‹</button><button type="button" class="fcc-entry-nav-v1318 next" aria-label="Next Challenger">›</button>`
+    : '';
+  return `<div class="fcc-entries-wrap fc-entry-rail-v1060 fc-entry-rail-v1079">${entryNavV1318}<div class="fcc-entries-scroll">${entries.map((e,i) => {
     const sub = e.submitter || {};
     const av = sub.avatar && /^https?:/.test(sub.avatar) ? `<img src="${escapeHtml(sub.avatar)}" alt="">` : escapeHtml((sub.name || '?').charAt(0).toUpperCase());
     const selectedV1085 = selectedVoteIdV1083 && String(selectedVoteIdV1083) === String(e.id);
@@ -31709,8 +31712,24 @@ document.getElementById('createPostForm').addEventListener('submit', async e => 
     // whichever screen happened to be underneath the composer. Refresh posts first,
     // move to Home, then center + highlight the new card (same contract as flyers).
     await loadPosts();
+    // v1318 — publishing from Discover/Following must reveal the new post itself.
+    // Force Discover (where all public posts belong), force a fresh feed render even
+    // when Home was already the current view, then seek the card after layout settles.
+    state.feedTab = 'discover';
+    document.querySelectorAll('.feed-tab').forEach(x => x.classList.toggle('active', x.dataset.feedtab === 'discover'));
+    state._fcDirtyViewsV1118 = state._fcDirtyViewsV1118 || {};
+    state._fcDirtyViewsV1118.feed = true;
     switchView('feed');
-    if (newPost?.id) requestAnimationFrame(() => scrollToPost(newPost.id));
+    renderFeed();
+    if (newPost?.id) {
+      let triesV1318 = 0;
+      const focusNewPostV1318 = () => {
+        const card = document.querySelector(`.post-card[data-pid="${newPost.id}"]`);
+        if (card) { scrollToPost(newPost.id); return; }
+        if (++triesV1318 < 12) setTimeout(focusNewPostV1318, 40);
+      };
+      requestAnimationFrame(() => requestAnimationFrame(focusNewPostV1318));
+    }
   } catch (err) {
     console.error('[post] error:', err);
     dlog('post', 'ERROR', { msg: String(err && err.message || err).slice(0, 120) });
@@ -33262,8 +33281,11 @@ function _wireEntryDots(root) {
   root.querySelectorAll('.fcc-entries-scroll').forEach(sc => {
     if (sc.dataset.dotsWired) return;
     sc.dataset.dotsWired = '1';
-    const dots = sc.parentElement ? sc.parentElement.querySelector('.fcc-dots') : null;
+    const wrapV1318 = sc.parentElement;
+    const dots = wrapV1318 ? wrapV1318.querySelector('.fcc-dots') : null;
     if (!dots) return;
+    const prevV1318 = wrapV1318?.querySelector('.fcc-entry-nav-v1318.prev') || null;
+    const nextV1318 = wrapV1318?.querySelector('.fcc-entry-nav-v1318.next') || null;
     // Measure the real step from the DOM (card width + gap) rather than
     // assuming 8px: the two surfaces have different padding, and a hard-coded
     // step is exactly how these two renderers drifted apart before.
@@ -33283,6 +33305,8 @@ function _wireEntryDots(root) {
         sc._fcActiveEntryIndexV1278 = i;
       }
       list.forEach((d, n) => d.classList.toggle('active', n === i));
+      if (prevV1318) prevV1318.disabled = i <= 0;
+      if (nextV1318) nextV1318.disabled = i >= cards.length - 1;
     };
     // v1312 — Home/Compete rails are native-scroll in v1311, so the old tactile
     // controller no longer pauses the outgoing card at gesture start. That left
@@ -33326,6 +33350,17 @@ function _wireEntryDots(root) {
       const st = step();
       if (st) sc.scrollTo({ left: (+d.dataset.i || 0) * st, behavior: fcMotionBehaviorV1100() });
     });
+    const stepByArrowV1318 = dir => {
+      const st = step(); if (!st) return;
+      const cards = sc.querySelectorAll('.fcc-entry-card');
+      const current = Math.max(0, Math.min(cards.length - 1, Math.round(sc.scrollLeft / st)));
+      const target = Math.max(0, Math.min(cards.length - 1, current + dir));
+      if (target === current) return;
+      fcPauseEntryCardMediaV1278(cards[current]);
+      sc.scrollTo({ left: target * st, behavior: 'smooth' });
+    };
+    prevV1318?.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); stepByArrowV1318(-1); });
+    nextV1318?.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); stepByArrowV1318(1); });
     update();
   });
 }
@@ -52054,6 +52089,49 @@ window.FC_V1317_VALIDATION={
   v1316PostFocusCommentEditFeedSocialPreserved:true,
   v1315PollRevotePreserved:true,
   updateParserPreserved:true
+};
+</script>
+
+
+<style id="fc-v1318-entry-arrows-css">
+/* v1318 — the media itself must be a valid horizontal swipe start. Older audio
+   surfaces were explicitly pan-y, which is why members had to grab the words/header. */
+.fc-entry-rail-v1079 .fcc-entry-media,
+.fc-entry-rail-v1079 .fc-audio-premium-v1277,
+.fc-entry-rail-v1079 .fc-audio-unified-v1280,
+.fc-entry-rail-v1079 .fc-audio-scene-v1286,
+.fc-entry-rail-v1079 .fc-video-unified-v1238{touch-action:pan-x pan-y!important}
+.fc-entry-rail-v1079.fcc-entries-wrap{position:relative!important}
+.fcc-entry-nav-v1318{
+  position:absolute!important;top:50%!important;z-index:45!important;
+  width:42px!important;height:42px!important;min-width:42px!important;padding:0!important;
+  border-radius:50%!important;border:1px solid rgba(255,255,255,.18)!important;
+  background:rgba(8,6,5,.78)!important;color:#fff!important;
+  display:grid!important;place-items:center!important;
+  font:500 34px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif!important;
+  box-shadow:0 8px 22px rgba(0,0,0,.32)!important;
+  transform:translateY(-50%)!important;cursor:pointer!important;
+  -webkit-tap-highlight-color:transparent!important;backdrop-filter:blur(8px);
+}
+.fcc-entry-nav-v1318.prev{left:8px!important}.fcc-entry-nav-v1318.next{right:8px!important}
+.fcc-entry-nav-v1318:active:not(:disabled){transform:translateY(-50%) scale(.94)!important}
+.fcc-entry-nav-v1318:disabled{opacity:.16!important;pointer-events:none!important}
+body.theme-light .fcc-entry-nav-v1318{background:rgba(20,18,16,.72)!important;border-color:rgba(255,255,255,.25)!important}
+@media(max-width:420px){.fcc-entry-nav-v1318{width:38px!important;height:38px!important;min-width:38px!important;font-size:30px!important}}
+</style>
+<script id="fc-v1318-validation-js">
+window.FC_V1318_VALIDATION={
+  build:'v1318',
+  visiblePreviousNextEntryControls:true,
+  horizontalSwipeStartsOnMedia:true,
+  audioMediaNoLongerPanYOnly:true,
+  oneCardGeometryPreserved:true,
+  numericPositionPreserved:true,
+  discoverPublishForcesFreshRender:true,
+  discoverPublishCentersNewPost:true,
+  followingPublishReturnsToDiscoverNewPost:true,
+  v1317AudioPostPreserved:true,
+  v1316CommentEditAndFeedSocialPreserved:true
 };
 </script>
 
