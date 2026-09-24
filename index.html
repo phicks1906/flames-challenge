@@ -21,7 +21,7 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1322 · single-entry-cta" name="fc-build"/>
+<meta content="v1323 · feed-first-video-surface" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
 <meta content="Removed the redundant Challenge Complete banner so completed challenges move directly from the winner to Final Results." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
@@ -24240,15 +24240,12 @@ function renderChallenges() {
     });
   });
 
-  // v1238 — Home and Compete now use one video/entry viewer contract.
-  // This removes the old split where Compete opened Entry Viewer while Home
-  // opened Feed Viewer, producing different sizing, sound, and overlay behavior.
+  // v1323 — feed-first competition surface. Entry cards no longer navigate to
+  // the challenge pop-out just because the member taps the card body. Media,
+  // voting, likes and comments are owned by the card; the orange challenge CTA
+  // remains the explicit route for Enter / View result / other challenge actions.
   grid.querySelectorAll('[data-entry-open]').forEach(card => {
-    card.addEventListener('click', e => {
-      if (e.target.closest('[data-fcc-vote],.fcc-vote-btn,[data-show-likes],.fcc-fire-eq,audio[controls],.fc-video-unified-v1238,.fc-inline-video-play-v1264,.fc-inline-video-expand-v1239,video')) return;
-      e.stopPropagation();
-      fcOpenChallengeSurfaceV1273(card.dataset.entryOpen, card.dataset.entryId || null);
-    });
+    card.dataset.fcFeedFirstV1323 = '1';
   });
 
 }
@@ -27386,13 +27383,11 @@ function renderFeed() {
     if (row) row.style.display = 'none';
   }
 
-  // Wire entry card taps → open feed viewer (stays on feed)
+  // v1323 — entry interaction stays on Home. A neutral card-body tap does not
+  // open the second challenge surface; explicit media/social/vote/CTA controls
+  // own their actions directly on the feed.
   c.querySelectorAll('[data-entry-open]').forEach(card => {
-    card.addEventListener('click', e => {
-      if (e.target.closest('[data-fcc-vote],.fcc-vote-btn,[data-like-entry],[data-comment-entry],[data-show-likes],.flame-btn,.comment-btn,.fcc-fire-eq,audio,video,.fc-video-unified-v1238,.fc-inline-video-play-v1264,.fc-inline-video-expand-v1239')) return;
-      e.stopPropagation();
-      fcOpenChallengeSurfaceV1273(card.dataset.entryOpen, card.dataset.entryId || null);
-    });
+    card.dataset.fcFeedFirstV1323 = '1';
   });
 
   // Wire flyer CTA buttons → open feed viewer
@@ -27422,10 +27417,10 @@ function renderFeed() {
     header.addEventListener('pointerup', e => {
       const moved = Math.abs(e.clientY - startY) > 8 || Math.abs(e.clientX - startX) > 8;
       if (moved) return;
-      // v802 — the card now has its own primary action and an overflow dot.
-      // Both handle their own tap; the card body still opens the viewer.
-      if (e.target.closest('[data-fcc-vote],[data-fcc-submit],.fcc-vote-btn,.fcc-submit-btn,[data-chc-act],[data-chc-menu],[data-like-entry],[data-comment-entry],[data-show-likes],.flame-btn,.comment-btn')) return;
-      fcOpenChallengeSurfaceV1273(ch.id);
+      // v1323 — no implicit navigation from the challenge body. This prevents a
+      // video/media tap from flashing the feed and then opening the old pop-out.
+      // Members use the visible controls and the orange challenge CTA instead.
+      if (e.target.closest('[data-fcc-vote],[data-fcc-submit],.fcc-vote-btn,.fcc-submit-btn,[data-chc-act],[data-chc-menu],[data-like-entry],[data-comment-entry],[data-show-likes],.flame-btn,.comment-btn,audio,video,.fc-video-unified-v1238,.fc-inline-video-play-v1264,.fc-inline-video-expand-v1239')) return;
     });
   });
 
@@ -27914,12 +27909,12 @@ function fcEntryCardMediaV1060(e, ch) {
     // image icon; the video itself can still supply the short feed preview.
     return `<div class="fcc-entry-media fcc-video-thumb fc-entry-stage-v1060 fc-entry-video-v1079 fc-video-unified-v1238 fc-standard-media-stage-v1305"
       data-fc-frame-v1305="portrait" data-fc-media-src-v1305="${escapeHtml(e.media_url || '')}"
-      data-video-entry-v1238="true" aria-label="Open ${escapeHtml(label)}'s video">
+      data-video-entry-v1238="true" aria-label="${escapeHtml(label)}'s video entry">
       <video data-src="${escapeHtml(e.media_url || '')}" ${_videoPosterAttr(e.media_url || '', e.poster_url || '')}
         muted playsinline preload="none" data-lazy-video tabindex="-1"
         aria-hidden="true"></video>
       <button type="button" class="fcc-play-overlay fc-card-play-overlay-v1238 fc-inline-video-play-v1264" aria-label="Play video">▶</button>
-      <button type="button" class="fc-inline-video-expand-v1239" aria-label="Open full-size video">⛶</button>
+      <button type="button" class="fc-inline-video-expand-v1239" aria-label="Expand video">⛶</button>
     </div>`;
   }
   return `<div class="fcc-entry-media fc-entry-stage-v1060 fc-standard-media-stage-v1305" data-fc-frame-v1305="portrait" data-fc-media-src-v1305="${escapeHtml(e.media_url || url)}"><img class="fc-entry-contain-v1060 fc-entry-fill-v1305" src="${escapeHtml(url)}" alt="${escapeHtml(label)}'s entry" loading="lazy"></div>`;
@@ -30098,22 +30093,13 @@ async function openFeedViewer(chId, startEntryId = null) {
   const phase  = challengePhase(status);
   title.textContent = ch.title;
   meta.textContent  = phase.label;
-  // Ember journey — icon-node lifecycle bar (replaces the gray subtitle)
+  // v1323 — the media/results pop-out no longer repeats the full Enter → Vote →
+  // Winner lifecycle tracker. The feed card and its CTA already communicate the
+  // actionable phase; keep only the compact phase text in the viewer header.
   const pb = document.getElementById('fvPhaseBanner');
   if (pb) {
-    // v649: use the same 'fvj-detail' variant everywhere else in the app uses
-    // (rounded corners, real margin) instead of the plain edge-to-edge tracker
-    // that was unique to this sheet — that inconsistency is very likely the
-    // actual source of the reported artifact, not something to patch around.
-    const jHtml = emberJourneyHTML(ch, status, 'fvj-detail');
-    if (jHtml) {
-      pb.innerHTML = jHtml;
-      pb.style.display = 'block';
-      meta.textContent = ''; // journey replaces the subtitle — no double status
-    } else {
-      pb.innerHTML = '';
-      pb.style.display = 'none';
-    }
+    pb.innerHTML = '';
+    pb.style.display = 'none';
   }
   // Will update button after entries load — set placeholder for now
   btn.textContent = '📋 View Details';
@@ -49723,6 +49709,51 @@ document.addEventListener('pointerdown', function(event) {
     video.load();
   }
 
+  function expandInlineChallengeVideoV1323(media) {
+    const video = media?.querySelector?.('video');
+    if (!video) return false;
+
+    // Expansion belongs to the feed video itself — never route through the
+    // challenge viewer just to get a larger player. Preserve the current time
+    // and playback state so expand feels like the same video growing in place.
+    video.dataset.fcInlineUserPlayV1263 = '1';
+    pauseOtherMediaV1239(video);
+    ensureInlineSourceV1239(video);
+    video.controls = true;
+    video.setAttribute('controls','');
+    video.playsInline = true;
+    video.setAttribute('playsinline','');
+    video.removeAttribute('muted');
+    video.defaultMuted = false;
+    video.muted = false;
+    video.volume = 1;
+    media.classList.add('has-played-v1239');
+    media.querySelector('.fc-card-play-overlay-v1238')?.classList.add('is-hidden-v1239');
+
+    try {
+      // iPhone Safari's native video fullscreen is the most reliable path.
+      if (typeof video.webkitEnterFullscreen === 'function') {
+        video.webkitEnterFullscreen();
+        return true;
+      }
+      if (typeof video.requestFullscreen === 'function') {
+        const p = video.requestFullscreen();
+        if (p?.catch) p.catch(()=>{});
+        return true;
+      }
+      if (typeof media.requestFullscreen === 'function') {
+        const p = media.requestFullscreen();
+        if (p?.catch) p.catch(()=>{});
+        return true;
+      }
+    } catch (_) {}
+
+    // A browser without fullscreen support still gets the real inline player;
+    // importantly, it does not fall back to opening the challenge pop-out.
+    playInlineV1239(media);
+    return false;
+  }
+
   async function playInlineV1239(media) {
     const video = media.querySelector('video');
     if (!video) return;
@@ -49780,8 +49811,9 @@ document.addEventListener('pointerdown', function(event) {
       }
 
       const card = expand.closest('[data-entry-open]');
-      if (card && typeof openFeedViewer === 'function') {
-        fcOpenChallengeSurfaceV1273(card.dataset.entryOpen, card.dataset.entryId || null);
+      if (card) {
+        const media = expand.closest('.fc-video-unified-v1238');
+        if (media) expandInlineChallengeVideoV1323(media);
       }
       return;
     }
@@ -49841,7 +49873,8 @@ document.addEventListener('pointerdown', function(event) {
 
   window.FC_INLINE_VIDEO_V1239 = {
     playInline: playInlineV1239,
-    pauseOthers: pauseOtherMediaV1239
+    pauseOthers: pauseOtherMediaV1239,
+    expandChallengeVideoV1323: expandInlineChallengeVideoV1323
   };
 })();
 </script>
@@ -52165,5 +52198,30 @@ window.FC_V1318_VALIDATION={
 </script>
 
 <script>window.FC_V1319_VALIDATION={build:'v1319',redundantChallengeCompleteBannerRemoved:true,winnerFlowsDirectlyToFinalResults:true,v1318Preserved:true};</script>
+
+<style id="fc-v1323-feed-first-video-css">
+/* v1323 — challenge videos are real feed controls, not links to a second screen. */
+#feedContainer .fcc-entry-card[data-fc-feed-first-v1323="1"],
+#challengesGrid .fcc-entry-card[data-fc-feed-first-v1323="1"]{cursor:default!important}
+#feedContainer .fc-video-unified-v1238,
+#challengesGrid .fc-video-unified-v1238{cursor:pointer!important}
+#feedViewerSheet #fvPhaseBanner{display:none!important}
+</style>
+<script id="fc-v1323-validation">
+window.FC_V1323_VALIDATION={
+  build:'v1323',
+  videoPlayStaysOnFeed:true,
+  videoExpandUsesNativeFullscreen:true,
+  videoExpandDoesNotOpenFeedViewer:true,
+  neutralEntryTapDoesNotOpenSecondSurface:true,
+  neutralChallengeBodyTapDoesNotOpenSecondSurface:true,
+  viewerLifecycleTrackerRemoved:true,
+  orangeChallengeCtaPreserved:true,
+  directVoteControlsPreserved:true,
+  socialControlsPreserved:true,
+  v1322SingleEntryCtaPreserved:true,
+  updateViaCache:true
+};
+</script>
 </body>
 </html>
