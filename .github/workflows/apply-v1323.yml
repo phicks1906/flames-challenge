@@ -1,0 +1,117 @@
+name: Apply v1323 feed first video surface
+on:
+  push:
+    branches: [main]
+    paths: ['.github/v1323.trigger']
+permissions:
+  contents: write
+jobs:
+  build:
+    if: github.event.head_commit.message == 'Trigger v1323 build'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify v1322 baseline
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib,re
+          p=Path('index.html'); s=p.read_text(encoding='utf-8')
+          m=re.search(r'<meta\s+content="([^"]+)"\s+name="fc-build"\s*/?>',s[:8000],re.I)
+          if not m or m.group(1)!='v1322 · single-entry-cta':
+              raise SystemExit(f'expected v1322 baseline, found {m.group(1) if m else None}')
+          d=hashlib.sha256(p.read_bytes()).hexdigest()
+          if d!='eb55d91cb22557a89497f93e8db8f93ba47d599d7bf5f00e44fb567fa231c3f9':
+              raise SystemExit(f'baseline hash mismatch: {d}')
+          print('baseline OK',d)
+          PY
+      - name: Apply exact v1323 patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import base64,gzip
+          data=Path('.github/v1323.patch.gz.b64').read_text().strip()
+          Path('/tmp/v1323.patch').write_bytes(gzip.decompress(base64.b64decode(data)))
+          PY
+          git apply --check /tmp/v1323.patch
+          git apply /tmp/v1323.patch
+      - name: Validate v1323
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re,subprocess,tempfile,hashlib
+          p=Path('index.html'); s=p.read_text(encoding='utf-8')
+          m=re.findall(r'<meta\s+content="([^"]+)"\s+name="fc-build"\s*/?>',s[:8000],re.I)
+          if m!=['v1323 · feed-first-video-surface']:
+              raise SystemExit(f'bad build meta: {m}')
+          required=[
+            'FC_V1323_VALIDATION',
+            'videoPlayStaysOnFeed:true',
+            'videoExpandUsesNativeFullscreen:true',
+            'videoExpandDoesNotOpenFeedViewer:true',
+            'neutralEntryTapDoesNotOpenSecondSurface:true',
+            'neutralChallengeBodyTapDoesNotOpenSecondSurface:true',
+            'viewerLifecycleTrackerRemoved:true',
+            'orangeChallengeCtaPreserved:true',
+            'directVoteControlsPreserved:true',
+            'socialControlsPreserved:true',
+            'expandInlineChallengeVideoV1323',
+            'webkitEnterFullscreen',
+            'FC_V1322_VALIDATION',
+            'updateViaCache'
+          ]
+          for t in required:
+              if t not in s: raise SystemExit(f'missing invariant: {t}')
+          inline=s[s.index('<script id="fc-v1239-inline-feed-video-js">'):s.index('</script>',s.index('<script id="fc-v1239-inline-feed-video-js">'))]
+          if 'fcOpenChallengeSurfaceV1273(card.dataset.entryOpen' in inline:
+              raise SystemExit('expand still routes through challenge viewer')
+          if 'Check for updates' in s:
+              raise SystemExit('manual update UI returned')
+          scripts=re.findall(r'<script\b(?![^>]*\bsrc=)[^>]*>(.*?)</script>',s,re.I|re.S)
+          with tempfile.TemporaryDirectory() as d:
+              for i,code in enumerate(scripts,1):
+                  f=Path(d)/f's{i}.js'; f.write_text(code,encoding='utf-8')
+                  r=subprocess.run(['node','--check',str(f)],capture_output=True,text=True)
+                  if r.returncode:
+                      print(r.stderr); raise SystemExit(f'inline JS {i} failed')
+          styles=re.findall(r'<style\b[^>]*>(.*?)</style>',s,re.I|re.S)
+          def ok(css):
+              depth=0;i=0;quote=None;comment=False;esc=False
+              while i<len(css):
+                  c=css[i];n=css[i+1] if i+1<len(css) else ''
+                  if comment:
+                      if c=='*' and n=='/': comment=False;i+=2;continue
+                      i+=1;continue
+                  if quote:
+                      if esc: esc=False
+                      elif c=='\\': esc=True
+                      elif c==quote: quote=None
+                      i+=1;continue
+                  if c=='/' and n=='*': comment=True;i+=2;continue
+                  if c in ('"',"'"): quote=c;i+=1;continue
+                  if c=='{': depth+=1
+                  elif c=='}':
+                      depth-=1
+                      if depth<0:return False
+                  i+=1
+              return depth==0 and quote is None and not comment
+          bad=[i for i,x in enumerate(styles,1) if not ok(x)]
+          if bad: raise SystemExit(f'CSS brace failure: {bad}')
+          d=hashlib.sha256(p.read_bytes()).hexdigest()
+          if d!='65053825e89434a02aa675346d067dfeb04bac3968a7ecee1abdb93ab1a76b1d':
+              raise SystemExit(f'output hash mismatch: {d}')
+          print(f'validated {len(scripts)} inline JS blocks and {len(styles)} CSS blocks')
+          print('sha256',d)
+          PY
+      - name: Commit v1323
+        run: |
+          git config user.name 'FlamesChallenge Build Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add index.html
+          git commit -m 'Build v1323 feed first video surface'
+          git push
