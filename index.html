@@ -21,7 +21,7 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1321 · compact-horizontal-live-shelf" name="fc-build"/>
+<meta content="v1322 · single-entry-cta" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
 <meta content="Removed the redundant Challenge Complete banner so completed challenges move directly from the winner to Final Results." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
@@ -34976,6 +34976,7 @@ document.addEventListener('click', async (e) => {
 
   window.fcRenderHomeLiveShelf=renderHomeLiveShelf;
   window.FC_V1321_VALIDATION={build:'v1321',horizontalLiveNowShelf:true,compactLiveCardCopy:true,liveNowSwipe:true,liveNowArrowControls:true,liveNowMoreCandidates:true,discoverFollowingPositionPreserved:true,v1319CleanerFinalResultsPreserved:true};
+  window.FC_V1322_VALIDATION={build:'v1322',singleEntryPrimaryCta:true,briefEnterCtaRemoved:true,persistentSubmitBarPreserved:true,askEmberRemainsSecondary:true,editReplaceResultsPreserved:true};
 
   function compactHomeProgress(){
     const card=document.querySelector('#feedView .heat-check');
@@ -41039,6 +41040,7 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
 .fc-challenge-brief-v1054{margin:10px 0 8px;padding:12px 13px;border:1px solid var(--border);border-radius:15px;background:var(--surface);box-shadow:var(--shadow-card)}
 .fc-challenge-brief-top-v1054{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.fc-challenge-brief-state-v1054{font-size:9px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;color:var(--ember)}.fc-challenge-brief-time-v1054{font-size:10px;font-weight:800;color:var(--text-muted);white-space:nowrap}.fc-challenge-brief-v1054 strong{display:block;margin-top:3px;font-size:15px;line-height:1.2;color:var(--text)}.fc-challenge-brief-v1054 p{margin:5px 0 0;font-size:11.5px;line-height:1.42;color:var(--text-dim)}
 .fc-challenge-actions-v1054{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}.fc-challenge-actions-v1054 button{appearance:none;min-height:36px;padding:8px 10px;border:1px solid var(--border-bright);border-radius:11px;background:var(--surface-2);color:var(--text);font-size:10.5px;font-weight:800}.fc-challenge-actions-v1054 button.primary{border-color:transparent;background:linear-gradient(135deg,var(--ember),#ff392b);color:#fff}.fc-challenge-actions-v1054 button.help{color:var(--ember-bright)}
+#challengeDetailSheet #fcChallengeBriefV1054 .fc-challenge-actions-solo-v1322{justify-content:flex-end!important}#challengeDetailSheet #fcChallengeBriefV1054 .fc-challenge-actions-solo-v1322 [data-v1054-action="ember"]{min-width:132px}
 #challengeDetailSheet #fcChallengeInfoV1043.fc-v1054-rule-panel{margin:7px 0 9px!important}#challengeDetailSheet #fcChallengeInfoV1043.fc-v1054-rule-panel>summary{display:none!important}#challengeDetailSheet #fcChallengeInfoV1043.fc-v1054-rule-panel:not([open]){display:none!important}
 #challengeDetailSheet .cd-entries-header{display:none!important}#challengeDetailSheet .cd-entry-nav{margin:10px 0 8px!important;padding:8px 10px!important;min-height:54px!important}.cd-entry-nav-status span{display:none!important}.cd-entry-nav-status strong{font-size:13px!important}
 #challengeDetailSheet #cdSubmitBtnWrap{padding:6px 0!important}#challengeDetailSheet #cdAddEntryBtn{min-height:43px!important}
@@ -41081,10 +41083,13 @@ body.theme-light .fc-score-metric-v1032,body.theme-light .fc-score-cutoff-v1032,
     document.getElementById('fcChallengeBriefV1054')?.remove();
     const status=computeChallengeStatus(ch),d=statusCopy(ch,status),box=document.createElement('section');box.id='fcChallengeBriefV1054';box.className='fc-challenge-brief-v1054';
     if(status==='submitting'&&ch.is_public!==false&&!ch.is_championship){const approved=(state.currentEntries||[]).filter(e=>!e.moderation_status||e.moderation_status==='clear'||e.moderation_status==='approved');const mine=approved.some(e=>e.user_id===state.profile?.id);const ids=[...new Set(approved.map(e=>e.user_id).filter(id=>id&&(!mine||id!==state.profile?.id)))];const value=ids.reduce((n,id)=>n+Number(getLadderStatus(id)?.points||0),0);d.p+=` Current field value: ${value} Opponent Point${value===1?'':'s'} before turnout.`;}
-    let primary='';if(d.primary==='edit')primary='<button class="primary" data-v1054-action="edit">Edit entry</button>';else if(d.primary==='replace')primary='<button class="primary" data-v1054-action="replace">Replace entry</button>';else if(d.primary==='champ_submit')primary='<button class="primary" data-v1054-action="champ-submit">Submit entry</button>';else if(d.primary==='enter')primary='<button class="primary" data-v1054-action="enter">Enter challenge</button>';else if(d.primary==='results')primary='<button class="primary" data-v1054-action="results">View results</button>';
+    // v1322 — entry submission has one primary CTA. The persistent
+    // "+ Submit your entry" bar above the entries is the source of truth;
+    // do not repeat Enter/Submit inside this status brief.
+    let primary='';if(d.primary==='edit')primary='<button class="primary" data-v1054-action="edit">Edit entry</button>';else if(d.primary==='replace')primary='<button class="primary" data-v1054-action="replace">Replace entry</button>';else if(d.primary==='results')primary='<button class="primary" data-v1054-action="results">View results</button>';
     const pendingReview=d.k==='Video under review';
     const insights=(!pendingReview&&(ch.creator_id===state.profile?.id||ch.creator?.id===state.profile?.id))?'':'';
-    box.innerHTML=`<div class="fc-challenge-brief-top-v1054"><div><div class="fc-challenge-brief-state-v1054">${esc(d.k)}</div><strong>${esc(d.h)}</strong></div><div class="fc-challenge-brief-time-v1054">${esc(d.t)}</div></div><p>${esc(d.p)}</p><div class="fc-challenge-actions-v1054${d.primary?'':' fc-challenge-actions-solo-v1255'}">${primary}${insights}<button class="help" data-v1054-action="ember">Ask Ember</button></div>`;
+    box.innerHTML=`<div class="fc-challenge-brief-top-v1054"><div><div class="fc-challenge-brief-state-v1054">${esc(d.k)}</div><strong>${esc(d.h)}</strong></div><div class="fc-challenge-brief-time-v1054">${esc(d.t)}</div></div><p>${esc(d.p)}</p><div class="fc-challenge-actions-v1054${primary?'':' fc-challenge-actions-solo-v1322'}">${primary}${insights}<button class="help" data-v1054-action="ember">Ask Ember</button></div>`;
     hero.insertAdjacentElement('afterend',box);
     box.querySelector('[data-v1054-action="edit"]')?.addEventListener('click',()=>openSubmitEntry(d.mine));
     box.querySelector('[data-v1054-action="replace"]')?.addEventListener('click',()=>openSubmitEntry(d.mine));
