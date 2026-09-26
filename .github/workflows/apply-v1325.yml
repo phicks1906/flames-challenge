@@ -1,0 +1,133 @@
+name: Apply v1325 cinematic Spotlight flyer
+on:
+  push:
+    branches: [main]
+    paths: ['.github/v1325.trigger']
+permissions:
+  contents: write
+jobs:
+  build:
+    if: github.event.head_commit.message == 'Trigger v1325 build'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify v1324 production baseline
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib,re
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          m=re.search(r'<meta\s+content="([^"]+)"\s+name="fc-build"\s*/?>',s[:10000],re.I)
+          if not m or m.group(1)!='v1324 · spotlight-flyer-template':
+              raise SystemExit(f'expected v1324 baseline, found {m.group(1) if m else None}')
+          d=hashlib.sha256(p.read_bytes()).hexdigest()
+          if d!='cf0c733fe5b667240aeb282a07fbed334e3417bc3dc10c655889e0f14f28290a':
+              raise SystemExit(f'baseline hash mismatch: {d}')
+          print('baseline OK',d)
+          PY
+      - name: Build v1325 from exact override parts
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          old_build='<meta content="v1324 · spotlight-flyer-template" name="fc-build"/>'
+          new_build='<meta content="v1325 · cinematic-spotlight-flyer" name="fc-build"/>'
+          old_news='<meta content="Added the Spotlight flyer style with featured submission media and competitor identity." name="fc-whatsnew"/>'
+          new_news='<meta content="Rebuilt Spotlight as a cinematic black-and-gold flyer with the approved Crowned F, real entrant identity, and correctly sourced video stills." name="fc-whatsnew"/>'
+          if s.count(old_build)!=1:
+              raise SystemExit(f'expected one v1324 build tag, found {s.count(old_build)}')
+          if s.count(old_news)!=1:
+              raise SystemExit(f'expected one v1324 whatsnew tag, found {s.count(old_news)}')
+          s=s.replace(old_build,new_build,1).replace(old_news,new_news,1)
+          override=Path('.github/v1325_override1.js').read_text(encoding='utf-8')+Path('.github/v1325_override2.js').read_text(encoding='utf-8')
+          marker='<script id="fc-v1324-validation">'
+          if marker not in s:
+              raise SystemExit('v1324 validation marker missing')
+          inject='<script id="fc-v1325-cinematic-spotlight">\n'+override+'\n</script>\n'
+          s=s.replace(marker,inject+marker,1)
+          p.write_text(s,encoding='utf-8')
+          PY
+      - name: Validate v1325
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re,subprocess,tempfile,hashlib
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          builds=re.findall(r'<meta\s+content="([^"]+)"\s+name="fc-build"\s*/?>',s[:10000],re.I)
+          if builds!=['v1325 · cinematic-spotlight-flyer']:
+              raise SystemExit(f'bad build meta: {builds}')
+          required=[
+            'FC_V1325_VALIDATION',
+            'cinematicSpotlightRenderer:true',
+            'canonicalCrownedF:true',
+            'spotlightUsesFeaturedSubmission:true',
+            'spotlightPrefersBunnyPreview:true',
+            'spotlightUsesEntryIdentity:true',
+            'spotlightIsFourByFive:true',
+            'otherFlyerStylesPreserved:true',
+            'fc-v1325-cinematic-spotlight',
+            '--fc-approved-crowned-f',
+            'updateViaCache'
+          ]
+          for t in required:
+              if t not in s:
+                  raise SystemExit(f'missing invariant: {t}')
+          if 'Check for updates' in s:
+              raise SystemExit('manual update UI returned')
+          scripts=re.findall(r'<script\b(?![^>]*\bsrc=)[^>]*>(.*?)</script>',s,re.I|re.S)
+          with tempfile.TemporaryDirectory() as d:
+              for i,code in enumerate(scripts,1):
+                  f=Path(d)/f's{i}.js'
+                  f.write_text(code,encoding='utf-8')
+                  r=subprocess.run(['node','--check',str(f)],capture_output=True,text=True)
+                  if r.returncode:
+                      print(r.stderr)
+                      raise SystemExit(f'inline JS {i} failed')
+          styles=re.findall(r'<style\b[^>]*>(.*?)</style>',s,re.I|re.S)
+          def balanced(css):
+              depth=0;i=0;quote=None;comment=False;esc=False
+              while i<len(css):
+                  c=css[i];n=css[i+1] if i+1<len(css) else ''
+                  if comment:
+                      if c=='*' and n=='/':
+                          comment=False;i+=2;continue
+                      i+=1;continue
+                  if quote:
+                      if esc: esc=False
+                      elif c=='\\': esc=True
+                      elif c==quote: quote=None
+                      i+=1;continue
+                  if c=='/' and n=='*':
+                      comment=True;i+=2;continue
+                  if c in ('"',"'"):
+                      quote=c;i+=1;continue
+                  if c=='{': depth+=1
+                  elif c=='}':
+                      depth-=1
+                      if depth<0:return False
+                  i+=1
+              return depth==0 and quote is None and not comment
+          bad=[i for i,x in enumerate(styles,1) if not balanced(x)]
+          if bad:
+              raise SystemExit(f'CSS structural failure: {bad}')
+          d=hashlib.sha256(p.read_bytes()).hexdigest()
+          if d!='42747277660c134a57f3260a8ed841bffe8a7ee2d1e2d4c7e0ee3ca851bbd947':
+              raise SystemExit(f'output hash mismatch: {d}')
+          print(f'validated {len(scripts)} inline JS blocks and {len(styles)} CSS blocks')
+          print('sha256',d)
+          PY
+      - name: Commit v1325
+        run: |
+          git config user.name 'FlamesChallenge Build Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add index.html
+          git commit -m 'Build v1325 cinematic Spotlight flyer'
+          git push
