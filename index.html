@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1323 · feed-first-video-surface" name="fc-build"/>
+<meta content="v1324 · spotlight-flyer-template" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Removed the redundant Challenge Complete banner so completed challenges move directly from the winner to Final Results." name="fc-whatsnew"/>
+<meta content="Added the Spotlight flyer style with featured submission media and competitor identity." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -5816,7 +5816,7 @@ body.theme-light .champ-ticker {
 /* v797 step 2 — four visual thumbnails in a row. Each shows the real template
    so the difference is legible without tapping through all four. */
 .promote-styles {
-  display: grid; grid-template-columns: repeat(4, 1fr);
+  display: grid; grid-template-columns: repeat(5, minmax(0,1fr));
   gap: 8px; margin-top: 12px;
 }
 .promote-styles .pstyle {
@@ -9947,6 +9947,7 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
 <img alt="" data-fthumb="news" loading="lazy" src=""/><span>Chronicle</span></button>
 <button class="pstyle" data-fstyle="tearoff" onclick="setFlyerStyle('tearoff')">
 <img alt="" data-fthumb="tearoff" loading="lazy" src=""/><span>Tear-off</span></button>
+<button class="pstyle" data-fstyle="spotlight" onclick="setFlyerStyle('spotlight')"><img alt="" data-fthumb="spotlight" loading="lazy" src=""/><span>Spotlight</span></button>
 </div>
 <div class="promote-media-source-v1186" id="promoteMediaSourceV1186">
   <div class="promote-media-source-head-v1186">
@@ -16511,6 +16512,9 @@ async function _drawClassicFlyer(ctx, W, H, opts) {
   }
 }
 
+/* v1324 Spotlight: actual featured media + entrant identity. */
+async function _drawSpotlightFlyerV1324(c,W,H,o){const it=promoteState?.item||state.promoteItem||{},p=promoteState?.heroAutoProfileV1324||it.creator||state.profile||{},T=String(promoteState?.sourceMediaType||it.media_type||'video').toUpperCase(),E='#ff6a1f',X='#fff',F='Anton,Impact,sans-serif',S='"DM Sans",sans-serif';c.fillStyle='#030303';c.fillRect(0,0,W,H);c.strokeStyle=E;c.lineWidth=6;c.strokeRect(14,14,W-28,H-28);c.strokeStyle=X;c.lineWidth=3;c.strokeRect(34,34,W-68,H-68);c.textAlign='center';c.fillStyle=E;c.font=`${_fitText(c,'FLAMES CHALLENGE',W-100,120,F,'')}px ${F}`;c.fillText('FLAMES CHALLENGE',W/2,175);c.fillStyle=X;c.font=`800 50px ${S}`;c.fillText(T,W/2,245);let vis=it.is_public?'PUBLIC CHALLENGE':'PRIVATE CHALLENGE';c.font=`800 30px ${S}`;c.strokeStyle=X;c.lineWidth=3;_roundRect(c,W/2-245,275,490,55,27);c.stroke();c.fillText(vis,W/2,313);let h={x:48,y:355,w:W-96,h:690};c.fillStyle='#111';c.fillRect(h.x,h.y,h.w,h.h);if(o.heroImage)_paintHero(c,o.heroImage,h.x,h.y,h.w,h.h,o.heroFit,o.heroFocus);c.strokeStyle=X;c.lineWidth=4;c.strokeRect(h.x,h.y,h.w,h.h);let g=c.createLinearGradient(0,760,0,1045);g.addColorStop(0,'transparent');g.addColorStop(1,'rgba(0,0,0,.95)');c.fillStyle=g;c.fillRect(h.x,760,h.w,285);if(T==='VIDEO'){c.fillStyle='rgba(0,0,0,.65)';c.beginPath();c.arc(W/2,660,90,0,Math.PI*2);c.fill();c.strokeStyle=X;c.stroke();c.fillStyle=X;c.beginPath();c.moveTo(W/2-20,615);c.lineTo(W/2-20,705);c.lineTo(W/2+50,660);c.closePath();c.fill();}let a=p.avatar&&/^(https?:|data:|blob:)/.test(p.avatar)?await loadImageForFlyer(p.avatar).catch(()=>null):null;c.save();c.beginPath();c.arc(150,935,82,0,Math.PI*2);c.clip();if(a)_paintHero(c,a,68,853,164,164,'fill',{x:.5,y:.35});else{c.fillStyle='#181818';c.fillRect(68,853,164,164);c.fillStyle=X;c.font=`700 70px ${S}`;c.fillText((p.name||'?')[0].toUpperCase(),150,962);}c.restore();c.strokeStyle=X;c.lineWidth=5;c.beginPath();c.arc(150,935,82,0,Math.PI*2);c.stroke();let n=String(p.name||o.creatorName||'CHALLENGER');if(!n.startsWith('@')&&!n.includes(' '))n='@'+n;c.textAlign='left';c.fillStyle=X;c.font=`${_fitText(c,n.toUpperCase(),520,64,F,'')}px ${F}`;c.fillText(n.toUpperCase(),270,945);c.fillStyle=E;c.font=`700 32px ${S}`;c.fillText(T==='IMAGE'?'Photo Entry':T[0]+T.slice(1).toLowerCase()+' Entry',272,995);c.fillStyle='#080808';c.fillRect(45,1080,W-90,255);c.strokeStyle=X;c.strokeRect(45,1080,W-90,255);let title=String(o.title||it.title||'CHALLENGE').toUpperCase();c.textAlign='center';c.fillStyle=X;c.font=`${_fitText(c,title,560,44,F,'')}px ${F}`;c.fillText(title,535,1150);let d=o.deadlineDate||'OPEN';c.fillStyle=E;c.font=`700 56px ${F}`;c.textAlign='left';c.fillText(String(d).toUpperCase(),230,1245);let count=0;try{count=_cardEntriesFor(it).length}catch(e){count=Number(state.entryCounts?.[it.id]||0)}c.fillStyle='#050505';c.fillRect(W-235,1110,165,190);c.strokeStyle=X;c.strokeRect(W-235,1110,165,190);c.textAlign='center';c.fillStyle=E;c.font=`700 68px ${F}`;c.fillText(String(count),W-153,1190);c.fillStyle=X;c.font=`700 25px ${F}`;c.fillText(count===1?'ENTRY':'ENTRIES',W-153,1235);c.fillText('COMPETING',W-153,1272);}
+
 async function generateFlyer(opts) {
   try { await document.fonts.ready; } catch (e) {}
   const W = 1080, H = 1620;
@@ -16519,6 +16523,8 @@ async function generateFlyer(opts) {
   const ctx = cv.getContext('2d');
 
   const hasHero = !!opts.heroImage;
+
+  if(opts.style==='spotlight'){cv.width=1122;cv.height=1402;await _drawSpotlightFlyerV1324(ctx,1122,1402,opts);const dataUrl=cv.toDataURL('image/png');const blob=await new Promise(r=>cv.toBlob(r,'image/png'));return {dataUrl,blob};}
 
   // v792 — paper templates are 1080×1349, not 1620. Size the canvas to match.
   if (opts.style === 'news' || opts.style === 'tearoff') {
@@ -16618,7 +16624,7 @@ async function openPromote(type, item) {
     ? (item.creator?.name || (item.creator_id === state.profile?.id ? state.profile?.name : null))
     : state.profile?.name) || 'A CHALLENGER';
   promoteState = {
-    type, id: item.id, link, shareText, blob: null, opts,
+    type, id: item.id, item, link, shareText, blob: null, opts,
     style: 'ember',
     heroUserUrl: null, heroAutoUrl: null,
     sourceMediaType: String(item.media_type || '').toLowerCase(),
@@ -16626,7 +16632,8 @@ async function openPromote(type, item) {
       ember: 'detected',
       wanted: 'artwork',
       news: 'artwork',
-      tearoff: 'artwork'
+      tearoff: 'artwork',
+      spotlight: 'detected'
     },
     renderTokenV1184: 0,
     shareId: shareIdV1048, analyticsGeneratedTracked: false,
@@ -16672,7 +16679,7 @@ async function openPromote(type, item) {
       // story it can't be recalled — so it must never carry content that hasn't
       // passed review. Nothing here filtered that before.
       const { data } = await db.from('entries')
-        .select('id, media_url, media_type, poster_url, moderation_status')
+        .select('id, user_id, media_url, media_type, poster_url, moderation_status')
         .eq('challenge_id', item.id)
         .in('media_type', ['image', 'video'])
         .or('moderation_status.is.null,moderation_status.eq.clear,moderation_status.eq.approved')
@@ -16706,7 +16713,9 @@ async function openPromote(type, item) {
         } catch (e) {}
         if (chosen && chosen._heroUrl && promoteState && !promoteState.heroUserUrl) {
           promoteState.heroAutoUrl = chosen._heroUrl;
+          promoteState.heroAutoMetaV1324 = chosen;
           promoteState.sourceMediaType = String(chosen.media_type || promoteState.sourceMediaType || '').toLowerCase();
+          if(chosen.user_id){try{promoteState.heroAutoProfileV1324=String(chosen.user_id)===String(state.profile?.id)?state.profile:(await db.from('profiles').select('id,name,avatar').eq('id',chosen.user_id).maybeSingle()).data||null;}catch(e){}}
           updatePromoteMediaSourceV1186();
           // Only re-render if the user has ALREADY generated a flyer (so we swap the
           // hero in). If they haven't generated yet, just stash it for later.
@@ -16814,6 +16823,7 @@ function wireFlyerThumbs() {
   if (_fthumbsWired) return;
   _fthumbsWired = true;
   document.querySelectorAll('#promoteStyles img[data-fthumb]').forEach(img => {
+    if(img.dataset.fthumb==='spotlight'){img.src='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 100"><rect width="80" height="100" fill="%23000"/><rect x="2" y="2" width="76" height="96" fill="none" stroke="%23ff6a1f"/><text x="40" y="15" fill="%23ff6a1f" text-anchor="middle" font-size="9">FLAMES</text><rect x="8" y="24" width="64" height="52" fill="%23111" stroke="white"/><circle cx="40" cy="50" r="10" fill="%23000" stroke="white"/><path d="M37 44l9 6-9 6z" fill="white"/></svg>');return;}
     img.src = FLYER_ASSET_BASE + `flyer-thumb-${img.dataset.fthumb}.webp`;
     img.onerror = () => { img.style.display = 'none'; };  // label still reads fine
   });
@@ -16896,7 +16906,7 @@ function setFlyerStyle(style) {
   // because those formats are editorial announcements, not quote posters.
   const paper = style === 'news' || style === 'tearoff';
   const hypeWrap = document.getElementById('promoteHype')?.closest('div');
-  if (hypeWrap) hypeWrap.style.display = paper ? 'none' : '';
+  if (hypeWrap) hypeWrap.style.display = (paper || style === 'spotlight') ? 'none' : '';
   const addBtn = document.getElementById('promoteAddPhotoBtn');
   if (addBtn) addBtn.style.display = '';
   const remBtn = document.getElementById('promoteRemovePhotoBtn');
@@ -52223,5 +52233,6 @@ window.FC_V1323_VALIDATION={
   updateViaCache:true
 };
 </script>
+<script id="fc-v1324-validation">window.FC_V1324_VALIDATION={build:'v1324',spotlightFlyerAdded:true,spotlightUsesFeaturedSubmission:true,spotlightUsesEntryIdentity:true,v1323Preserved:true};</script>
 </body>
 </html>
