@@ -1,0 +1,37 @@
+--- a/index.html
++++ b/index.html
+@@ -21,9 +21,9 @@
+      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
+      this tag; bump it HERE and nowhere else.
+      fc-whatsnew is the one line shown in the update prompt. -->
+-<meta content="v1324 · spotlight-flyer-template" name="fc-build"/>
++<meta content="v1325 · cinematic-spotlight-flyer" name="fc-build"/>
+ <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
+-<meta content="Added the Spotlight flyer style with featured submission media and competitor identity." name="fc-whatsnew"/>
++<meta content="Rebuilt Spotlight as a cinematic black-and-gold flyer with the approved Crowned F, real entrant identity, and correctly sourced video stills." name="fc-whatsnew"/>
+ <!-- v1011 CANONICAL BRAND ASSET:
+      The primary logo is the approved Crowned F extracted from the approved
+      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
+@@ -16513,7 +16513,107 @@
+ }
+ 
+ /* v1324 Spotlight: actual featured media + entrant identity. */
+-async function _drawSpotlightFlyerV1324(c,W,H,o){const it=promoteState?.item||state.promoteItem||{},p=promoteState?.heroAutoProfileV1324||it.creator||state.profile||{},T=String(promoteState?.sourceMediaType||it.media_type||'video').toUpperCase(),E='#ff6a1f',X='#fff',F='Anton,Impact,sans-serif',S='"DM Sans",sans-serif';c.fillStyle='#030303';c.fillRect(0,0,W,H);c.strokeStyle=E;c.lineWidth=6;c.strokeRect(14,14,W-28,H-28);c.strokeStyle=X;c.lineWidth=3;c.strokeRect(34,34,W-68,H-68);c.textAlign='center';c.fillStyle=E;c.font=`${_fitText(c,'FLAMES CHALLENGE',W-100,120,F,'')}px ${F}`;c.fillText('FLAMES CHALLENGE',W/2,175);c.fillStyle=X;c.font=`800 50px ${S}`;c.fillText(T,W/2,245);let vis=it.is_public?'PUBLIC CHALLENGE':'PRIVATE CHALLENGE';c.font=`800 30px ${S}`;c.strokeStyle=X;c.lineWidth=3;_roundRect(c,W/2-245,275,490,55,27);c.stroke();c.fillText(vis,W/2,313);let h={x:48,y:355,w:W-96,h:690};c.fillStyle='#111';c.fillRect(h.x,h.y,h.w,h.h);if(o.heroImage)_paintHero(c,o.heroImage,h.x,h.y,h.w,h.h,o.heroFit,o.heroFocus);c.strokeStyle=X;c.lineWidth=4;c.strokeRect(h.x,h.y,h.w,h.h);let g=c.createLinearGradient(0,760,0,1045);g.addColorStop(0,'transparent');g.addColorStop(1,'rgba(0,0,0,.95)');c.fillStyle=g;c.fillRect(h.x,760,h.w,285);if(T==='VIDEO'){c.fillStyle='rgba(0,0,0,.65)';c.beginPath();c.arc(W/2,660,90,0,Math.PI*2);c.fill();c.strokeStyle=X;c.stroke();c.fillStyle=X;c.beginPath();c.moveTo(W/2-20,615);c.lineTo(W/2-20,705);c.lineTo(W/2+50,660);c.closePath();c.fill();}let a=p.avatar&&/^(https?:|data:|blob:)/.test(p.avatar)?await loadImageForFlyer(p.avatar).catch(()=>null):null;c.save();c.beginPath();c.arc(150,935,82,0,Math.PI*2);c.clip();if(a)_paintHero(c,a,68,853,164,164,'fill',{x:.5,y:.35});else{c.fillStyle='#181818';c.fillRect(68,853,164,164);c.fillStyle=X;c.font=`700 70px ${S}`;c.fillText((p.name||'?')[0].toUpperCase(),150,962);}c.restore();c.strokeStyle=X;c.lineWidth=5;c.beginPath();c.arc(150,935,82,0,Math.PI*2);c.stroke();let n=String(p.name||o.creatorName||'CHALLENGER');if(!n.startsWith('@')&&!n.includes(' '))n='@'+n;c.textAlign='left';c.fillStyle=X;c.font=`${_fitText(c,n.toUpperCase(),520,64,F,'')}px ${F}`;c.fillText(n.toUpperCase(),270,945);c.fillStyle=E;c.font=`700 32px ${S}`;c.fillText(T==='IMAGE'?'Photo Entry':T[0]+T.slice(1).toLowerCase()+' Entry',272,995);c.fillStyle='#080808';c.fillRect(45,1080,W-90,255);c.strokeStyle=X;c.strokeRect(45,1080,W-90,255);let title=String(o.title||it.title||'CHALLENGE').toUpperCase();c.textAlign='center';c.fillStyle=X;c.font=`${_fitText(c,title,560,44,F,'')}px ${F}`;c.fillText(title,535,1150);let d=o.deadlineDate||'OPEN';c.fillStyle=E;c.font=`700 56px ${F}`;c.textAlign='left';c.fillText(String(d).toUpperCase(),230,1245);let count=0;try{count=_cardEntriesFor(it).length}catch(e){count=Number(state.entryCounts?.[it.id]||0)}c.fillStyle='#050505';c.fillRect(W-235,1110,165,190);c.strokeStyle=X;c.strokeRect(W-235,1110,165,190);c.textAlign='center';c.fillStyle=E;c.font=`700 68px ${F}`;c.fillText(String(count),W-153,1190);c.fillStyle=X;c.font=`700 25px ${F}`;c.fillText(count===1?'ENTRY':'ENTRIES',W-153,1235);c.fillText('COMPETING',W-153,1272);}
++function _spotlightGoldGradientV1325(ctx,x1,y1,x2,y2){
++  const g=ctx.createLinearGradient(x1,y1,x2,y2);
++  g.addColorStop(0,'#fff0a6');
++  g.addColorStop(.28,'#e7bd58');
++  g.addColorStop(.60,'#b97b18');
++  g.addColorStop(.83,'#f2cc68');
++  g.addColorStop(1,'#fff6c4');
++  return g;
++}
++function _spotlightCrownUrlV1325(){
++  try{
++    const raw=getComputedStyle(document.documentElement).getPropertyValue('--fc-approved-crowned-f').trim();
++    const m=raw.match(/^url\(["']?(.*?)["']?\)$/);
++    return m?m[1]:'';
++  }catch(_){return '';}
++}
++function _spotlightProfileV1325(it){return promoteState?.heroAutoProfileV1324||it?.creator||state.profile||{};}
++function _spotlightNameV1325(it,o){let n=String(_spotlightProfileV1325(it)?.name||o?.creatorName||'CHALLENGER').trim();if(!n)n='CHALLENGER';if(!n.startsWith('@')&&!n.includes(' '))n='@'+n;return n.toUpperCase();}
