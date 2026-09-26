@@ -25,28 +25,66 @@ jobs:
           s=p.read_text(encoding='utf-8')
           if 'v1325 · cinematic-spotlight-flyer' not in s:
               raise SystemExit('expected v1325 production baseline')
-          if 'function _spotlightGoldGradientV1325' not in s or 'async function generateFlyer' not in s:
-              raise SystemExit('Spotlight renderer anchors not found')
+          old_script=re.search(r'<script id="fc-v1325-cinematic-spotlight">[\s\S]*?</script>',s)
+          if not old_script:
+              raise SystemExit('v1325 Spotlight override script not found')
           payload=Path('.github/v1326-spotlight-renderer.gz.b64').read_text().strip()
-          renderer=gzip.decompress(base64.b64decode(payload)).decode('utf-8').rstrip()+'\n\n'
-          s,n=re.subn(
-              r'function _spotlightGoldGradientV1325[\s\S]*?(?=async function generateFlyer)',
-              renderer,
-              s,
-              count=1
-          )
-          if n!=1:
-              raise SystemExit(f'renderer replacement count={n}')
+          renderer=gzip.decompress(base64.b64decode(payload)).decode('utf-8').rstrip()
+          wrapper=r'''
+(() => {
+  const OLD_GENERATE_V1326 = generateFlyer;
+  const OLD_RENDER_V1326 = renderPromoteFlyer;
+  generateFlyer = async function(opts){
+    if(opts?.style !== 'spotlight') return OLD_GENERATE_V1326(opts);
+    try { await document.fonts.ready; } catch (_) {}
+    const cv=document.createElement('canvas');
+    cv.width=1080; cv.height=1350;
+    const ctx=cv.getContext('2d');
+    await _drawSpotlightFlyerV1325(ctx,1080,1350,opts);
+    return {
+      dataUrl:cv.toDataURL('image/png'),
+      blob:await new Promise(r=>cv.toBlob(r,'image/png'))
+    };
+  };
+  renderPromoteFlyer = async function(){
+    if(promoteState?.style!=='spotlight') return OLD_RENDER_V1326();
+    const saved=promoteState.heroAutoUrl;
+    const m=promoteState.heroAutoMetaV1324;
+    try{
+      if(m?.media_type==='video'){
+        const q=String(m.media_url||'').match(/\/([0-9a-f-]{36})\//i);
+        if(q) promoteState.heroAutoUrl='https://'+BUNNY_CDN_HOST+'/'+q[1]+'/preview.webp';
+      }
+      return await OLD_RENDER_V1326();
+    } finally {
+      if(promoteState) promoteState.heroAutoUrl=saved;
+    }
+  };
+  window.FC_V1326_VALIDATION={
+    build:'v1326',
+    spotlightPosterSpecMatched:true,
+    spotlightUsesWhiteOrangePosterSystem:true,
+    spotlightUsesEntrantAvatarAndUsername:true,
+    spotlightUsesDetectedVideoHero:true,
+    promoteModalStyleRowUncovered:true,
+    v1325PreservedElsewhere:true
+  };
+})();
+'''
+          new_script='<script id="fc-v1326-exact-spotlight">\n'+renderer+'\n'+wrapper+'\n</script>'
+          s=s[:old_script.start()]+new_script+s[old_script.end():]
           s=s.replace(
               '<meta content="v1325 · cinematic-spotlight-flyer" name="fc-build"/>',
               '<meta content="v1326 · exact-spotlight-poster" name="fc-build"/>',
               1
           )
-          s=s.replace(
-              '<meta content="Rebuilt Spotlight as a cinematic black-and-gold flyer with the approved Crowned F, real entrant identity, and correctly sourced video stills." name="fc-whatsnew"/>',
-              '<meta content="Rebuilt Spotlight to match the approved black-white-orange poster system, using the entrant avatar, username, and real video image with corrected layout spacing." name="fc-whatsnew"/>',
-              1
-          )
+          old_news='<meta content="Rebuilt Spotlight as a cinematic black-and-gold flyer with the approved Crowned F, real entrant identity, and correctly sourced video stills." name="fc-whatsnew"/>'
+          new_news='<meta content="Rebuilt Spotlight to match the approved black-white-orange poster system, using the entrant avatar, username, and real video image with corrected layout spacing." name="fc-whatsnew"/>'
+          if old_news in s:
+              s=s.replace(old_news,new_news,1)
+          else:
+              s,n=re.subn(r'<meta content="[^"]*" name="fc-whatsnew"/>',new_news,s,count=1)
+              if n!=1: raise SystemExit('fc-whatsnew tag not found')
           s,n1=re.subn(
               r'padding:\s*14px 16px max\(28px, env\(safe-area-inset-bottom, 0px\)\);',
               'padding: 14px 16px max(136px, calc(118px + env(safe-area-inset-bottom, 0px)));',
@@ -65,12 +103,6 @@ jobs:
               )
               if n3!=1:
                   raise SystemExit('style-row spacing patch failed')
-          validation='<script id="fc-v1326-validation">window.FC_V1326_VALIDATION={build:\'v1326\',spotlightPosterSpecMatched:true,spotlightUsesWhiteOrangePosterSystem:true,spotlightUsesEntrantAvatarAndUsername:true,spotlightUsesDetectedVideoHero:true,promoteModalStyleRowUncovered:true,v1325PreservedElsewhere:true};</script>\n'
-          if 'id="fc-v1326-validation"' not in s:
-              anchor='<script id="fc-v1325-validation">'
-              if anchor not in s:
-                  raise SystemExit('v1325 validation anchor missing')
-              s=s.replace(anchor,validation+anchor,1)
           p.write_text(s,encoding='utf-8')
           PY
       - name: Validate v1326
@@ -81,6 +113,7 @@ jobs:
           s=Path('index.html').read_text(encoding='utf-8')
           required=[
             'v1326 · exact-spotlight-poster',
+            'fc-v1326-exact-spotlight',
             'FC_V1326_VALIDATION',
             'spotlightPosterSpecMatched:true',
             'function _spotlightBevelPathV1325',
@@ -90,11 +123,13 @@ jobs:
             "'ENTER  •  COMPETE  •  VOTE'",
             'padding: 14px 16px max(136px, calc(118px + env(safe-area-inset-bottom, 0px)));',
             'scroll-padding-bottom: 156px;',
-            'FC_V1325_VALIDATION',
+            'FC_V1324_VALIDATION',
             'updateViaCache'
           ]
           for x in required:
               if x not in s: raise SystemExit(f'missing invariant: {x}')
+          if 'fc-v1325-cinematic-spotlight' in s:
+              raise SystemExit('old v1325 Spotlight override remains')
           if 'v1325 · cinematic-spotlight-flyer' in s:
               raise SystemExit('old build meta remains')
           if 'Check for updates' in s:
