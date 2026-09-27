@@ -1,0 +1,97 @@
+name: Apply v1333 Spotlight footer date fit
+on:
+  push:
+    branches: [main]
+    paths: ['.github/v1333.trigger']
+permissions:
+  contents: write
+jobs:
+  build:
+    if: github.event.head_commit.message == 'Trigger v1333 build'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify exact v1332 production baseline
+        run: |
+          test "$(git hash-object index.html)" = "1b821bb0121c55719a17917cf68b27e40dafeae6"
+          grep -Fq 'v1332 · spotlight-inline-feed-video' index.html
+      - name: Apply exact v1333 patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import base64,gzip
+          payload=Path('.github/v1333.patch.gz.b64').read_text().strip()
+          Path('/tmp/v1333.patch').write_bytes(gzip.decompress(base64.b64decode(payload)))
+          PY
+          git apply --whitespace=nowarn /tmp/v1333.patch
+          test "$(git hash-object index.html)" = "4faa9750be34ed9b9e12e6fab91ba6a796fbefe2"
+      - name: Validate v1333
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re,subprocess,tempfile,hashlib
+          s=Path('index.html').read_text(encoding='utf-8')
+          required=[
+            'v1333 · spotlight-footer-date-fit',
+            'FC_V1333_VALIDATION',
+            'spotlightFooterDateFitsMeasuredSlot:true',
+            'spotlightFooterDividerAtApprovedX:true',
+            'spotlightInlineFeedVideoPreserved:true',
+            'spotlightVideoPlaysInlineOnFeed:true',
+            'footerDividerX=foot.x+480',
+            'updateViaCache'
+          ]
+          for x in required:
+              if x not in s: raise SystemExit(f'missing invariant: {x}')
+          if 'v1332 · spotlight-inline-feed-video' in s:
+              raise SystemExit('v1332 build meta remains active')
+          if 'Check for updates' in s:
+              raise SystemExit('manual update UI returned')
+          scripts=re.findall(r'<script\b(?![^>]*\bsrc=)[^>]*>(.*?)</script>',s,re.I|re.S)
+          with tempfile.TemporaryDirectory() as d:
+              for i,code in enumerate(scripts,1):
+                  f=Path(d)/f's{i}.js';f.write_text(code,encoding='utf-8')
+                  r=subprocess.run(['node','--check',str(f)],capture_output=True,text=True)
+                  if r.returncode:
+                      print(r.stderr);raise SystemExit(f'inline JS {i} failed')
+          styles=re.findall(r'<style\b[^>]*>(.*?)</style>',s,re.I|re.S)
+          def ok(css):
+              depth=0;i=0;quote=None;comment=False;esc=False
+              while i<len(css):
+                  c=css[i];n=css[i+1] if i+1<len(css) else ''
+                  if comment:
+                      if c=='*' and n=='/':comment=False;i+=2;continue
+                      i+=1;continue
+                  if quote:
+                      if esc:esc=False
+                      elif c=='\\':esc=True
+                      elif c==quote:quote=None
+                      i+=1;continue
+                  if c=='/' and n=='*':comment=True;i+=2;continue
+                  if c in ('"',"'"):quote=c;i+=1;continue
+                  if c=='{':depth+=1
+                  elif c=='}':
+                      depth-=1
+                      if depth<0:return False
+                  i+=1
+              return depth==0 and quote is None and not comment
+          bad=[i for i,x in enumerate(styles,1) if not ok(x)]
+          if bad: raise SystemExit(f'CSS validation failed: {bad}')
+          digest=hashlib.sha256(Path('index.html').read_bytes()).hexdigest()
+          if digest!='f8be1cff34b1706d8715508ae6d2311b362a7774e1323e7d2d275b1477e0b2c9': raise SystemExit('output sha256 mismatch: '+digest)
+          print(f'validated {len(scripts)} inline JS blocks and {len(styles)} CSS blocks')
+          print('sha256',digest)
+          PY
+      - name: Commit v1333
+        run: |
+          git config user.name 'FlamesChallenge Build Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git rm -f .github/v1333.patch.gz.b64 .github/workflows/apply-v1333.yml .github/v1333.trigger
+          git add index.html
+          git commit -m 'Build v1333 Spotlight footer date fit'
+          git push
