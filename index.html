@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1331 · spotlight-play-and-count-spacing" name="fc-build"/>
+<meta content="v1332 · spotlight-inline-feed-video" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Fixed the Spotlight entries badge count/flame overlap and restored one-tap deliberate playback from the flyer play button without changing the approved mock icon artwork." name="fc-whatsnew"/>
+<meta content="Spotlight video now plays inline in the feed using the same shared deliberate-play system as other video cards, and the entries badge count no longer overlaps the flame." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -16888,9 +16888,14 @@ async function _drawSpotlightFlyerV1328(c,W,H,o){
   if(mockIcons?.badgeFlame)c.drawImage(mockIcons.badgeFlame,968,1154,31,43);
   else _spotlightDrawFlameV1329(c,box.x+box.w/2,box.y+43,.48);
   c.save();
-  c.textAlign='center'; c.textBaseline='alphabetic';
-  c.fillStyle=ORANGE2; c.font=`700 58px ${HEAD}`; c.fillText(String(count),box.x+box.w/2,box.y+116);
-  c.fillStyle=WHITE; c.font=`800 21px ${SANS}`; c.fillText(count===1?'ENTRY':'ENTRIES',box.x+box.w/2,box.y+155); c.fillText('COMPETING',box.x+box.w/2,box.y+181);
+  c.textAlign='center'; c.textBaseline='top';
+  // v1332 — the approved mock leaves a clear gap between flame and count.
+  // Use explicit top positions instead of alphabetic baselines so single- and
+  // multi-digit counts never rise into the flame artwork.
+  const countText=String(count);
+  const countSize=_fitText(c,countText,box.w-38,56,HEAD,'');
+  c.fillStyle=ORANGE2; c.font=`700 ${countSize}px ${HEAD}`; c.fillText(countText,box.x+box.w/2,box.y+80);
+  c.fillStyle=WHITE; c.font=`800 20px ${SANS}`; c.fillText(count===1?'ENTRY':'ENTRIES',box.x+box.w/2,box.y+139); c.fillText('COMPETING',box.x+box.w/2,box.y+165);
   c.restore();
 }
 
@@ -17800,12 +17805,12 @@ async function openPostView(postId) {
   body.querySelectorAll('[data-share-post]').forEach(btn => {
     btn.addEventListener('click', e => { e.stopPropagation(); copyPostLink(btn.dataset.sharePost); });
   });
-  // v1331 — the baked Spotlight play icon now owns deliberate video playback.
-  body.querySelectorAll('[data-flyer-video-play-v1331]').forEach(btn => {
+  // v1332 — keep the same inline behavior if a flyer post is shown in Post View.
+  body.querySelectorAll('[data-flyer-video-play-v1332]').forEach(btn => {
     btn.addEventListener('click', e => {
       e.preventDefault();
-      e.stopPropagation();
-      fcPlayFlyerVideoV1331(btn.dataset.flyerVideoPlayV1331, btn.dataset.flyerVideoChV1331);
+      e.stopImmediatePropagation();
+      fcPlayFlyerVideoV1332(btn);
     });
   });
   // Flyer posts carry challenge CTA buttons — wire them to open the challenge viewer
@@ -27810,13 +27815,13 @@ function renderFeed() {
     card.dataset.fcFeedFirstV1323 = '1';
   });
 
-  // v1331 — a real button sits over the baked Spotlight play circle. It starts
-  // the featured entry immediately instead of routing the tap to Challenge Details.
-  c.querySelectorAll('[data-flyer-video-play-v1331]').forEach(btn => {
+  // v1332 — Spotlight uses the same inline deliberate-play system as every
+  // other feed video. Play stays on Home; only the explicit CTA opens details.
+  c.querySelectorAll('[data-flyer-video-play-v1332]').forEach(btn => {
     btn.addEventListener('click', e => {
       e.preventDefault();
-      e.stopPropagation();
-      fcPlayFlyerVideoV1331(btn.dataset.flyerVideoPlayV1331, btn.dataset.flyerVideoChV1331);
+      e.stopImmediatePropagation();
+      fcPlayFlyerVideoV1332(btn);
     });
   });
 
@@ -28150,7 +28155,7 @@ function renderPostCard(p, options = {}) {
 // empty black by design; v716 found the hero query was filtering to
 // media_type = image, so video challenges never got a hero — which removed the
 // only reason to shrink it.
-function fcFeaturedFlyerVideoEntryV1331(ch) {
+function fcFeaturedFlyerVideoEntryV1332(ch) {
   if (!ch) return null;
   const entries = (typeof fcEntriesForChallengeV1060 === 'function' ? fcEntriesForChallengeV1060(ch) : [])
     .filter(e => e && String(e.media_type || ch.media_type || '').toLowerCase() === 'video' && e.media_url)
@@ -28161,16 +28166,37 @@ function fcFeaturedFlyerVideoEntryV1331(ch) {
     .sort((a,b) => (b.votes - a.votes) || (a.index - b.index))[0].entry;
 }
 
-function fcPlayFlyerVideoV1331(entryId, chId) {
-  if (!entryId || !chId || typeof openEntryViewer !== 'function') return;
-  // openEntryViewer renders synchronously when the feed entry is already cached.
-  // That keeps video.play() inside the same user gesture on iOS, which is the
-  // part the static baked flyer play icon was missing.
-  openEntryViewer(entryId, chId);
-  const video = document.querySelector('#entryViewerSheet #evMedia video');
-  if (!video) return;
+function fcPlayFlyerVideoV1332(trigger) {
+  const stage = trigger?.closest?.('.flyer-stage');
+  const media = stage?.querySelector?.('.fc-flyer-inline-video-v1332');
+  const video = media?.querySelector?.('video');
+  if (!stage || !media || !video) return;
+
+  // v1332 — Spotlight follows the exact feed-video contract used everywhere
+  // else: the user stays on Home, the real video appears inside the flyer hero,
+  // and the shared deliberate-play initializer owns sound, controls, HLS/source
+  // setup, competing-media cleanup, preview suppression and playback cleanup.
+  trigger.hidden = true;
+  trigger.setAttribute('aria-hidden','true');
+  media.classList.add('is-active-v1332');
+  media.setAttribute('aria-hidden','false');
+
+  const shared = window.FC_INLINE_VIDEO_V1239?.playInline;
+  if (typeof shared === 'function') {
+    const p = shared(media);
+    if (p && typeof p.catch === 'function') p.catch(() => {});
+    return;
+  }
+
+  // Defensive inline fallback only. Never route Spotlight play to a viewer.
   try {
+    const src = video.dataset.src;
+    if (!video.currentSrc && !video.getAttribute('src') && src) {
+      video.src = src;
+      video.load();
+    }
     if (typeof fcPauseCompetingMediaV1200 === 'function') fcPauseCompetingMediaV1200(video);
+    video.dataset.fcInlineUserPlayV1263 = '1';
     video.controls = true;
     video.setAttribute('controls','');
     video.playsInline = true;
@@ -28179,6 +28205,7 @@ function fcPlayFlyerVideoV1331(entryId, chId) {
     video.defaultMuted = false;
     video.muted = false;
     video.volume = 1;
+    media.classList.add('is-playing-v1239','has-played-v1239');
     window._userAudioActive = true;
     const p = video.play();
     if (p && typeof p.catch === 'function') p.catch(() => {});
@@ -28196,7 +28223,7 @@ function renderFlyerCard(p) {
 
   // Find linked challenge
   const ch = p.challenge_id ? state.challenges.find(c => c.id === p.challenge_id) : null;
-  const flyerVideoEntryV1331 = ch ? fcFeaturedFlyerVideoEntryV1331(ch) : null;
+  const flyerVideoEntryV1332 = ch ? fcFeaturedFlyerVideoEntryV1332(ch) : null;
   const chStatus = ch ? computeChallengeStatus(ch) : null;
   const isChampFlyerV1272 = !!(ch && isChampionshipCh(ch));
   const champLaunchV1272 = isChampFlyerV1272
@@ -28250,7 +28277,13 @@ function renderFlyerCard(p) {
             ? `<video data-src="${escapeHtml(p.media_url)}" muted playsinline preload="none" data-lazy-video class="flyer-stage-fg" style="object-fit:cover!important"></video>
                <div style="position:absolute;inset:0;display:grid;place-items:center;font-size:34px;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.6);pointer-events:none">▶</div>`
             : `<div class="flyer-stage-fg" style="display:grid;place-items:center;font-size:40px;background:linear-gradient(160deg,#2a130a,#7a2d10)">🔥</div>`}
-        ${flyerVideoEntryV1331 ? `<button type="button" class="fc-flyer-video-play-v1331" data-flyer-video-play-v1331="${escapeHtml(flyerVideoEntryV1331.id)}" data-flyer-video-ch-v1331="${escapeHtml(ch.id)}" aria-label="Play featured challenge video"></button>` : ''}
+        ${flyerVideoEntryV1332 ? `
+          <div class="fc-flyer-inline-video-v1332 fc-video-unified-v1238" data-entry-open="${escapeHtml(flyerVideoEntryV1332.id)}" data-flyer-inline-video-v1332="${escapeHtml(flyerVideoEntryV1332.id)}" aria-hidden="true">
+            <video data-src="${escapeHtml(flyerVideoEntryV1332.media_url || '')}" ${_videoPosterAttr(flyerVideoEntryV1332.media_url || '', flyerVideoEntryV1332.poster_url || '')}
+              muted playsinline preload="none" tabindex="-1" aria-label="Featured challenge video"></video>
+            <button type="button" class="fc-inline-video-expand-v1239" aria-label="Expand video">⛶</button>
+          </div>
+          <button type="button" class="fc-flyer-video-play-v1332" data-flyer-video-play-v1332="${escapeHtml(flyerVideoEntryV1332.id)}" aria-label="Play featured challenge video"></button>` : ''}
         ${isChampFlyerV1272 && champMonthLabelV1272 ? `<div class="fc-champ-flyer-month-corrector-v1272">${escapeHtml(champMonthLabelV1272)} · ${escapeHtml(String(ch.category || '').toUpperCase())}</div>` : ''}
       </div>
       <div class="flyer-card-body">
@@ -52691,10 +52724,38 @@ window.FC_V1323_VALIDATION={
 };
 </script>
 <script id="fc-v1330-validation">window.FC_V1330_VALIDATION={build:'v1330',spotlightUsesLiteralApprovedMockCrest:true,spotlightUsesLiteralApprovedMockCalendar:true,spotlightUsesLiteralApprovedMockBadgeFlame:true,spotlightFooterGeometryPreserved:true,spotlightMediaBehaviorPreserved:true,automaticUpdaterPreserved:true};</script>
-<style id="fc-v1331-spotlight-play-hotspot">
-/* v1331 — transparent hit target aligned to the baked 1122×1402 Spotlight play circle.
-   The artwork stays pixel-identical; only interaction is added. */
-.flyer-stage .fc-flyer-video-play-v1331{
+<style id="fc-v1332-spotlight-inline-video">
+/* v1332 — the baked Spotlight poster remains the idle state. On deliberate
+   play, the actual entry video replaces only the measured hero image area.
+   This is the same inline feed player used by challenge/video-post cards. */
+.flyer-stage .fc-flyer-inline-video-v1332{
+  position:absolute!important;
+  left:3.386%!important;
+  top:25.321%!important;
+  width:93.226%!important;
+  height:52.710%!important;
+  display:none!important;
+  overflow:hidden!important;
+  z-index:6!important;
+  background:#000!important;
+  clip-path:polygon(1.15% 0,98.85% 0,100% 1.62%,100% 98.38%,98.85% 100%,1.15% 100%,0 98.38%,0 1.62%)!important;
+  -webkit-clip-path:polygon(1.15% 0,98.85% 0,100% 1.62%,100% 98.38%,98.85% 100%,1.15% 100%,0 98.38%,0 1.62%)!important;
+}
+.flyer-stage .fc-flyer-inline-video-v1332.is-active-v1332{
+  display:block!important;
+}
+.flyer-stage .fc-flyer-inline-video-v1332 video{
+  width:100%!important;
+  height:100%!important;
+  object-fit:cover!important;
+  background:#000!important;
+}
+.flyer-stage .fc-flyer-inline-video-v1332 .fc-inline-video-expand-v1239{
+  top:10px!important;
+  right:10px!important;
+}
+/* Transparent hit target aligned to the play circle baked into the poster. */
+.flyer-stage .fc-flyer-video-play-v1332{
   position:absolute!important;
   left:50%!important;
   top:50%!important;
@@ -52709,12 +52770,12 @@ window.FC_V1323_VALIDATION={
   opacity:0!important;
   cursor:pointer!important;
   pointer-events:auto!important;
-  z-index:5!important;
+  z-index:7!important;
   -webkit-tap-highlight-color:transparent!important;
   touch-action:manipulation!important;
 }
 </style>
-<script id="fc-v1331-validation">window.FC_V1331_VALIDATION={build:'v1331',spotlightBadgeCountSeparatedFromFlame:true,spotlightFlyerPlayHotspot:true,spotlightPlayUsesDeliberateVideo:true,spotlightExactMockIconsPreserved:true,threeSecondPreviewsPreserved:true,automaticUpdaterPreserved:true};</script>
+<script id="fc-v1332-validation">window.FC_V1332_VALIDATION={build:'v1332',spotlightVideoPlaysInlineOnFeed:true,spotlightPlayDoesNotOpenEntryViewer:true,spotlightUsesSharedInlineVideoInitializer:true,spotlightHeroVideoUsesMeasuredPosterBounds:true,spotlightBadgeFlameCountSeparated:true,spotlightExactMockIconsPreserved:true,threeSecondPreviewsPreserved:true,automaticUpdaterPreserved:true};</script>
 <script id="fc-v1329-validation">window.FC_V1329_VALIDATION={build:'v1329',spotlightUsesLandscapePreviewFirst:true,spotlightRestoresVideoDuration:true,spotlightFooterLayoutPreserved:true,spotlightLaurelFlameCrestRefined:true,spotlightCalendarGridIconRefined:true,spotlightEntriesFlameRefined:true,promoteModalStyleRowUncovered:true};</script>
 <script id="fc-v1325-validation">window.FC_V1325_VALIDATION={build:'v1325',cinematicSpotlightRenderer:true,canonicalCrownedF:true,spotlightUsesFeaturedSubmission:true,spotlightPrefersBunnyPreview:true,spotlightUsesEntryIdentity:true,spotlightIsFourByFive:true,otherFlyerStylesPreserved:true};</script>
 <script id="fc-v1324-validation">window.FC_V1324_VALIDATION={build:'v1324',spotlightFlyerAdded:true,spotlightUsesFeaturedSubmission:true,spotlightUsesEntryIdentity:true,v1323Preserved:true};</script>
