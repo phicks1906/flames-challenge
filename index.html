@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1327 · measured-spotlight-poster" name="fc-build"/>
+<meta content="v1328 · matched-spotlight-hero-footer" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Rebuilt Spotlight again from measured target specs: corrected masthead spacing, hero proportions, avatar sizing, footer layout, and dynamic video poster sourcing." name="fc-whatsnew"/>
+<meta content="Matched Spotlight more closely to the approved target: corrected landscape video still selection, restored duration, enlarged play treatment, and rebuilt the footer hierarchy, emblem, date, tagline, and entries badge." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -16538,10 +16538,35 @@ function _spotlightCountV1325(it){try{const e=it&&typeof _cardEntriesFor==='func
 function _spotlightPhaseV1325(it,o){const status=String(it?.computedStatus||computeChallengeStatus?.(it)||o?.phase||'').toLowerCase();if(status==='voting')return 'VOTE';if(status==='closed')return 'WINNER';return 'ENTER';}
 function _spotlightDateV1325(it,o){if(o?.deadlineDate)return String(o.deadlineDate).toUpperCase();const status=String(it?.computedStatus||computeChallengeStatus?.(it)||o?.phase||'').toLowerCase();const d=status==='voting'?it?.voting_end:it?.submission_deadline;if(!d)return 'OPEN';try{return new Date(d).toLocaleDateString(undefined,{month:'short',day:'numeric'}).toUpperCase();}catch(_){return 'OPEN';}}
 function _spotlightDurationV1325(it){
-  const n=Number(it?.duration_seconds??it?.media_duration_seconds??it?.media_duration??it?.duration??it?.length_seconds??it?.seconds);
-  if(!Number.isFinite(n)||n<=0)return '';
+  const meta=promoteState?.heroAutoMetaV1324||{};
+  const candidates=[
+    promoteState?.spotlightDurationV1328,
+    meta?.duration_seconds,meta?.media_duration_seconds,meta?.media_duration,meta?.duration,meta?.length_seconds,meta?.seconds,
+    it?.duration_seconds,it?.media_duration_seconds,it?.media_duration,it?.duration,it?.length_seconds,it?.seconds
+  ];
+  let n=0;
+  for(const raw of candidates){const v=Number(raw);if(Number.isFinite(v)&&v>0){n=v;break;}}
+  if(!n)return '';
   const total=Math.round(n),m=Math.floor(total/60),s=String(total%60).padStart(2,'0');
   return `${String(m).padStart(2,'0')}:${s}`;
+}
+function _spotlightReadVideoDurationV1328(url){
+  return new Promise(resolve=>{
+    if(!url){resolve(0);return;}
+    const v=document.createElement('video');
+    let finished=false;
+    const finish=value=>{
+      if(finished)return;finished=true;clearTimeout(timer);
+      const n=Number(value);resolve(Number.isFinite(n)&&n>0?n:0);
+      try{v.pause();v.removeAttribute('src');v.load();}catch(_){}
+    };
+    const timer=setTimeout(()=>finish(0),5000);
+    v.preload='metadata';v.muted=true;v.playsInline=true;
+    v.onloadedmetadata=()=>finish(v.duration);
+    v.ondurationchange=()=>{if(Number.isFinite(v.duration)&&v.duration>0)finish(v.duration);};
+    v.onerror=()=>finish(0);
+    try{v.src=url;v.load();}catch(_){finish(0);}
+  });
 }
 function _spotlightRoundRectFillV1325(ctx,x,y,w,h,r,fill,stroke,width){ctx.save();_roundRect(ctx,x,y,w,h,r);if(fill){ctx.fillStyle=fill;ctx.fill();}if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=width||1;ctx.stroke();}ctx.restore();}
 function _spotlightBevelPathV1325(ctx,x,y,w,h,cut){
@@ -16650,7 +16675,67 @@ function _spotlightDrawFlameOnlyV1327(c,cx,cy,s,color){
   c.closePath();c.fill();
   c.restore();
 }
-async function _drawSpotlightFlyerV1325(c,W,H,o){
+function _spotlightDrawFooterEmblemV1328(c,cx,cy,s){
+  c.save();
+  const ORANGE='#ff6d19';
+  c.strokeStyle=ORANGE;c.fillStyle=ORANGE;c.lineCap='round';c.lineJoin='round';c.lineWidth=3.4*s;
+  const drawBranch=dir=>{
+    c.beginPath();
+    c.moveTo(cx+dir*8*s,cy+66*s);
+    c.bezierCurveTo(cx+dir*39*s,cy+53*s,cx+dir*68*s,cy+6*s,cx+dir*72*s,cy-53*s);
+    c.stroke();
+    for(let i=0;i<7;i++){
+      const t=(i+.42)/7;
+      const x=cx+dir*(18+54*t+9*Math.sin(t*Math.PI))*s;
+      const y=cy+(52-108*t)*s;
+      const rot=dir*(.72-.42*t);
+      c.save();c.translate(x,y);c.rotate(rot);
+      c.beginPath();c.ellipse(0,0,7.2*s,17.5*s,0,0,Math.PI*2);c.fill();c.restore();
+    }
+  };
+  drawBranch(-1);drawBranch(1);
+  c.lineWidth=3*s;
+  c.beginPath();c.moveTo(cx-15*s,cy+66*s);c.lineTo(cx+18*s,cy+78*s);c.stroke();
+  c.beginPath();c.moveTo(cx+15*s,cy+66*s);c.lineTo(cx-18*s,cy+78*s);c.stroke();
+
+  const g=c.createLinearGradient(cx,cy-64*s,cx,cy+42*s);
+  g.addColorStop(0,'#ff3318');g.addColorStop(.42,'#ff6d19');g.addColorStop(.76,'#ffab21');g.addColorStop(1,'#ffd65a');
+  c.fillStyle=g;
+  c.beginPath();
+  c.moveTo(cx,cy-66*s);
+  c.bezierCurveTo(cx+18*s,cy-38*s,cx+39*s,cy-29*s,cx+40*s,cy+2*s);
+  c.bezierCurveTo(cx+41*s,cy+34*s,cx+19*s,cy+47*s,cx,cy+49*s);
+  c.bezierCurveTo(cx-24*s,cy+46*s,cx-43*s,cy+27*s,cx-40*s,cy+1*s);
+  c.bezierCurveTo(cx-37*s,cy-23*s,cx-16*s,cy-34*s,cx,cy-66*s);
+  c.closePath();c.fill();
+  c.fillStyle='#140703';
+  c.beginPath();
+  c.moveTo(cx,cy-30*s);
+  c.bezierCurveTo(cx+16*s,cy-11*s,cx+18*s,cy+5*s,cx+7*s,cy+24*s);
+  c.bezierCurveTo(cx+3*s,cy+32*s,cx-4*s,cy+32*s,cx-10*s,cy+24*s);
+  c.bezierCurveTo(cx-21*s,cy+7*s,cx-14*s,cy-8*s,cx,cy-30*s);
+  c.closePath();c.fill();
+  const ig=c.createLinearGradient(cx,cy-16*s,cx,cy+23*s);
+  ig.addColorStop(0,'#fff08a');ig.addColorStop(1,'#ff7a19');
+  c.fillStyle=ig;
+  c.beginPath();
+  c.moveTo(cx,cy-18*s);
+  c.bezierCurveTo(cx+9*s,cy-6*s,cx+12*s,cy+8*s,cx+3*s,cy+23*s);
+  c.bezierCurveTo(cx-5*s,cy+21*s,cx-10*s,cy+12*s,cx-8*s,cy+4*s);
+  c.bezierCurveTo(cx-6*s,cy-4*s,cx-1*s,cy-9*s,cx,cy-18*s);
+  c.closePath();c.fill();
+  c.restore();
+}
+function _spotlightDrawFooterTaglineV1328(c,x,y,SANS,WHITE,ORANGE,maxW){
+  const parts=[['ENTER',WHITE],['•',ORANGE],['COMPETE',WHITE],['•',ORANGE],['VOTE',WHITE]];
+  let px=25;
+  const widthAt=size=>{c.font=`800 ${size}px ${SANS}`;return parts.reduce((sum,p,i)=>sum+c.measureText(p[0]).width+(i?14:0),0);};
+  while(px>18&&widthAt(px)>maxW)px--;
+  c.font=`800 ${px}px ${SANS}`;c.textAlign='left';c.textBaseline='alphabetic';
+  let dx=x;
+  parts.forEach((part,i)=>{if(i)dx+=14;c.fillStyle=part[1];c.fillText(part[0],dx,y);dx+=c.measureText(part[0]).width;});
+}
+async function _drawSpotlightFlyerV1328(c,W,H,o){
   const it=promoteState?.item||state.promoteItem||{};
   const p=_spotlightProfileV1325(it);
   const ORANGE='#ff6d19', ORANGE2='#ff8a26', WHITE='#f7f4ef', OFFWHITE='#efe9e1', BLACK='#010101';
@@ -16669,25 +16754,28 @@ async function _drawSpotlightFlyerV1325(c,W,H,o){
   c.save();
   c.textAlign='center'; c.textBaseline='alphabetic';
   const brand='FLAMES CHALLENGE';
-  const brandSize=_fitText(c,brand,W-128,138,HEAD,'');
+  const brandSize=_fitText(c,brand,W-148,142,HEAD,'');
   c.font=`${brandSize}px ${HEAD}`;
   c.lineWidth=4.5; c.strokeStyle=ORANGE;
-  c.strokeText(brand,W/2,156);
+  c.strokeText(brand,W/2,196);
   c.restore();
 
   const media=_spotlightMediaLabelV1325(it);
   c.fillStyle=OFFWHITE;
-  _trackedText(c,media,W/2,256,82,HEAD,'',17);
-  _spotlightDrawArrowLineV1325(c,98,W/2-190,228,1,ORANGE);
-  _spotlightDrawArrowLineV1325(c,W/2+190,W-98,228,-1,ORANGE);
+  _trackedText(c,media,W/2,265,46,HEAD,'',10);
+  _spotlightDrawArrowLineV1325(c,126,W/2-205,240,1,ORANGE);
+  _spotlightDrawArrowLineV1325(c,W/2+205,W-127,240,-1,ORANGE);
 
   const vis=_spotlightVisibilityV1325(it);
-  const pill={w:604,h:64,x:(W-604)/2,y:276};
-  _spotlightRoundRectFillV1325(c,pill.x,pill.y,pill.w,pill.h,32,'#000000',WHITE,4);
+  const pill={w:522,h:58,x:(W-522)/2,y:279};
+  _spotlightRoundRectFillV1325(c,pill.x,pill.y,pill.w,pill.h,29,'#000000',WHITE,4);
   c.fillStyle=OFFWHITE; c.textAlign='center'; c.textBaseline='middle'; c.font=`800 27px ${SANS}`;
   c.fillText(vis,W/2,pill.y+pill.h/2+1);
 
-  const hero={x:32,y:376,w:W-64,h:710};
+  // v1328 — measured against the approved 1122×1402 target: the hero begins
+  // immediately below the visibility pill and runs lower, instead of leaving
+  // the oversized black gap that compressed the lower third in v1327.
+  const hero={x:32,y:349,w:W-64,h:751};
   _spotlightStrokeBevelV1325(c,hero.x,hero.y,hero.w,hero.h,17,WHITE,4,'#010101');
   if(o.heroImage)_spotlightPaintHeroV1325(c,o.heroImage,hero.x+6,hero.y+6,hero.w-12,hero.h-12,o.heroFocus);
   else {
@@ -16703,74 +16791,78 @@ async function _drawSpotlightFlyerV1325(c,W,H,o){
   c.restore();
 
   if(media==='VIDEO'){
-    const cx=W/2, cy=hero.y+hero.h*.52, r=77;
+    const cx=W/2, cy=hero.y+hero.h*.469, r=103;
     c.save();
     c.beginPath(); c.arc(cx,cy,r,0,Math.PI*2);
     c.fillStyle='rgba(0,0,0,.56)'; c.fill();
-    c.lineWidth=5; c.strokeStyle='rgba(255,255,255,.92)'; c.stroke();
-    c.beginPath(); c.moveTo(cx-17,cy-31); c.lineTo(cx-17,cy+31); c.lineTo(cx+37,cy); c.closePath();
+    c.lineWidth=5; c.strokeStyle='rgba(255,255,255,.94)'; c.stroke();
+    c.beginPath(); c.moveTo(cx-23,cy-41); c.lineTo(cx-23,cy+41); c.lineTo(cx+49,cy); c.closePath();
     c.fillStyle=WHITE; c.fill();
     c.restore();
   }
 
   let avImg=null; const avUrl=p?.avatar||p?.avatar_url||'';
   if(avUrl&&/^(https?:|data:|blob:)/.test(avUrl)){try{avImg=await loadImageForFlyer(avUrl);}catch(_){}}
-  const av={size:174,x:64,y:hero.y+hero.h-213};
+  const av={size:172,x:79,y:hero.y+hero.h-190};
   c.save(); c.beginPath(); c.arc(av.x+av.size/2,av.y+av.size/2,av.size/2,0,Math.PI*2); c.clip();
   if(avImg)_paintHero(c,avImg,av.x,av.y,av.size,av.size,'fill',{x:.5,y:.32});
   else {
     const ag=c.createLinearGradient(av.x,av.y,av.x,av.y+av.size); ag.addColorStop(0,'#19130e'); ag.addColorStop(1,'#050403');
     c.fillStyle=ag; c.fillRect(av.x,av.y,av.size,av.size);
-    c.fillStyle=WHITE; c.font=`700 74px ${SANS}`; c.textAlign='center'; c.textBaseline='middle';
+    c.fillStyle=WHITE; c.font=`700 72px ${SANS}`; c.textAlign='center'; c.textBaseline='middle';
     c.fillText((_spotlightNameV1325(it,o).replace('@','')[0]||'F'),av.x+av.size/2,av.y+av.size/2+2);
   }
   c.restore();
-  c.lineWidth=5.5; c.strokeStyle=WHITE; c.beginPath(); c.arc(av.x+av.size/2,av.y+av.size/2,av.size/2+3.5,0,Math.PI*2); c.stroke();
+  c.lineWidth=6; c.strokeStyle=WHITE; c.beginPath(); c.arc(av.x+av.size/2,av.y+av.size/2,av.size/2+4,0,Math.PI*2); c.stroke();
 
   const name=_spotlightNameV1325(it,o);
   c.save();
   c.textAlign='left'; c.textBaseline='alphabetic';
   c.lineWidth=6; c.strokeStyle='rgba(0,0,0,.55)'; c.fillStyle=WHITE;
-  const nameSize=_fitText(c,name,540,76,HEAD,''); c.font=`${nameSize}px ${HEAD}`;
-  const nx=av.x+av.size+26, ny=hero.y+hero.h-92;
+  const nameSize=_fitText(c,name,540,64,HEAD,''); c.font=`${nameSize}px ${HEAD}`;
+  const nx=av.x+av.size+26, ny=hero.y+hero.h-80;
   c.strokeText(name,nx,ny); c.fillText(name,nx,ny);
-  c.fillStyle=ORANGE; c.font=`800 33px ${SANS}`; c.fillText(_spotlightEntryLabelV1325(it),nx,hero.y+hero.h-42);
+  c.fillStyle=ORANGE; c.font=`800 42px ${SANS}`; c.fillText(_spotlightEntryLabelV1325(it),nx,hero.y+hero.h-40);
   c.restore();
 
   const dur=_spotlightDurationV1325(it);
   if(dur){
     c.save();
-    c.textAlign='center'; c.textBaseline='middle'; c.font=`700 58px ${HEAD}`;
-    const dw=Math.max(150,c.measureText(dur).width+44), dh=96, dx=hero.x+hero.w-dw-44, dy=hero.y+hero.h-dh-42;
-    _spotlightRoundRectFillV1325(c,dx,dy,dw,dh,18,'rgba(0,0,0,.88)',WHITE,4);
-    c.fillStyle=WHITE; c.fillText(dur,dx+dw/2,dy+dh/2+4);
+    c.textAlign='center'; c.textBaseline='middle'; c.font=`700 47px ${HEAD}`;
+    const dw=Math.max(146,c.measureText(dur).width+32), dh=64, dx=hero.x+hero.w-dw-42, dy=hero.y+hero.h-dh-42;
+    _spotlightRoundRectFillV1325(c,dx,dy,dw,dh,14,'rgba(0,0,0,.88)',WHITE,4);
+    c.fillStyle=WHITE; c.fillText(dur,dx+dw/2,dy+dh/2+3);
     c.restore();
   }
 
-  const foot={x:32,y:1125,w:W-64,h:245};
+  // v1328 — rebuild the footer as the target's three-part composition instead
+  // of shrinking every element to make the v1327 right badge fit.
+  const foot={x:32,y:1113,w:W-64,h:226};
   _spotlightStrokeBevelV1325(c,foot.x,foot.y,foot.w,foot.h,18,WHITE,4,'#010101');
-  const emblemCx=foot.x+95, emblemCy=foot.y+125;
-  _spotlightDrawLaurelV1325(c,emblemCx,emblemCy,1.18,ORANGE2);
+  _spotlightDrawFooterEmblemV1328(c,foot.x+111,foot.y+121,1);
 
   const footerTitle=`${it?.is_public?'PUBLIC':'PRIVATE'} ${media} CHALLENGE`;
   c.save();
   c.textAlign='left'; c.textBaseline='alphabetic'; c.fillStyle=WHITE;
-  c.font=`700 44px ${HEAD}`; c.fillText(footerTitle,foot.x+226,foot.y+78);
-  _spotlightDrawCalendarV1325(c,foot.x+226,foot.y+108,41,ORANGE2);
-  c.fillStyle=ORANGE2; c.font=`700 70px ${HEAD}`; c.fillText(_spotlightDateV1325(it,o),foot.x+282,foot.y+153);
-  c.strokeStyle='rgba(255,255,255,.38)'; c.lineWidth=2; c.beginPath(); c.moveTo(foot.x+486,foot.y+93); c.lineTo(foot.x+486,foot.y+173); c.stroke();
-  c.fillStyle=OFFWHITE; c.font=`800 26px ${SANS}`; c.fillText('ENTER  •  COMPETE  •  VOTE',foot.x+516,foot.y+149);
+  const titleX=foot.x+226, titleMax=(foot.x+foot.w-206)-titleX;
+  const titleSize=_fitText(c,footerTitle,titleMax,58,HEAD,'');
+  c.font=`${titleSize}px ${HEAD}`; c.fillText(footerTitle,titleX,foot.y+78);
+  _spotlightDrawCalendarV1325(c,foot.x+218,foot.y+111,48,ORANGE2);
+  c.fillStyle=ORANGE2; c.font=`700 70px ${HEAD}`; c.fillText(_spotlightDateV1325(it,o),foot.x+282,foot.y+171);
+  c.strokeStyle='rgba(255,255,255,.7)'; c.lineWidth=2; c.beginPath(); c.moveTo(foot.x+470,foot.y+101); c.lineTo(foot.x+470,foot.y+184); c.stroke();
+  _spotlightDrawFooterTaglineV1328(c,foot.x+500,foot.y+165,SANS,OFFWHITE,ORANGE2,330);
   c.restore();
 
-  const count=_spotlightCountV1325(it), box={x:foot.x+foot.w-170,y:foot.y+18,w:140,h:195};
+  const count=_spotlightCountV1325(it), box={x:foot.x+foot.w-195,y:foot.y+16,w:178,h:198};
   _spotlightStrokeBevelV1325(c,box.x,box.y,box.w,box.h,16,WHITE,4,null);
-  _spotlightDrawFlameOnlyV1327(c,box.x+box.w/2,box.y+33,.88,ORANGE2);
+  _spotlightDrawFlameOnlyV1327(c,box.x+box.w/2,box.y+34,1.02,ORANGE2);
   c.save();
   c.textAlign='center'; c.textBaseline='alphabetic';
-  c.fillStyle=ORANGE2; c.font=`700 66px ${HEAD}`; c.fillText(String(count),box.x+box.w/2,box.y+114);
-  c.fillStyle=WHITE; c.font=`800 21px ${SANS}`; c.fillText(count===1?'ENTRY':'ENTRIES',box.x+box.w/2,box.y+152); c.fillText('COMPETING',box.x+box.w/2,box.y+176);
+  c.fillStyle=ORANGE2; c.font=`700 72px ${HEAD}`; c.fillText(String(count),box.x+box.w/2,box.y+116);
+  c.fillStyle=WHITE; c.font=`800 21px ${SANS}`; c.fillText(count===1?'ENTRY':'ENTRIES',box.x+box.w/2,box.y+155); c.fillText('COMPETING',box.x+box.w/2,box.y+181);
   c.restore();
 }
+
 async function generateFlyer(opts) {
   try { await document.fonts.ready; } catch (e) {}
   const W = 1080, H = 1620;
@@ -16780,7 +16872,7 @@ async function generateFlyer(opts) {
 
   const hasHero = !!opts.heroImage;
 
-  if(opts.style==='spotlight'){cv.width=1122;cv.height=1402;await _drawSpotlightFlyerV1325(ctx,1122,1402,opts);const dataUrl=cv.toDataURL('image/png');const blob=await new Promise(r=>cv.toBlob(r,'image/png'));return {dataUrl,blob};}
+  if(opts.style==='spotlight'){cv.width=1122;cv.height=1402;await _drawSpotlightFlyerV1328(ctx,1122,1402,opts);const dataUrl=cv.toDataURL('image/png');const blob=await new Promise(r=>cv.toBlob(r,'image/png'));return {dataUrl,blob};}
 
   // v792 — paper templates are 1080×1349, not 1620. Size the canvas to match.
   if (opts.style === 'news' || opts.style === 'tearoff') {
@@ -16971,9 +17063,18 @@ async function openPromote(type, item) {
         } catch (e) {}
         if (chosen && chosen._heroUrl && promoteState && !promoteState.heroUserUrl) {
           promoteState.heroAutoUrl = chosen._heroUrl || chosen._spotlightHeroUrlV1325;
-          promoteState.spotlightHeroAutoUrlV1325 = chosen._heroUrl || chosen._spotlightHeroUrlV1325;
+          promoteState.spotlightHeroAutoUrlV1325 = chosen._spotlightHeroUrlV1325 || chosen._heroUrl;
           promoteState.heroAutoMetaV1324 = chosen;
           promoteState.sourceMediaType = String(chosen.media_type || promoteState.sourceMediaType || '').toLowerCase();
+          promoteState.spotlightDurationV1328 = 0;
+          if(chosen.media_type==='video'&&chosen.media_url){
+            const durationStateV1328=promoteState;
+            _spotlightReadVideoDurationV1328(chosen.media_url).then(seconds=>{
+              if(!seconds||!promoteState||promoteState!==durationStateV1328||promoteState.id!==item.id)return;
+              promoteState.spotlightDurationV1328=seconds;
+              if(promoteState.flyerGenerated&&(promoteState.style||'ember')==='spotlight')renderPromoteFlyer();
+            }).catch(()=>{});
+          }
           if(chosen.user_id){try{promoteState.heroAutoProfileV1324=String(chosen.user_id)===String(state.profile?.id)?state.profile:(await db.from('profiles').select('id,name,avatar').eq('id',chosen.user_id).maybeSingle()).data||null;}catch(e){}}
           updatePromoteMediaSourceV1186();
           // Only re-render if the user has ALREADY generated a flyer (so we swap the
@@ -17231,7 +17332,7 @@ async function renderPromoteFlyer() {
   const heroSrc = mediaSourceV1186 === 'custom'
     ? stateRefV1184.heroUserUrl
     : mediaSourceV1186 === 'detected'
-      ? (_style === 'spotlight' ? (stateRefV1184.heroAutoUrl || stateRefV1184.spotlightHeroAutoUrlV1325) : stateRefV1184.heroAutoUrl)
+      ? (_style === 'spotlight' ? (stateRefV1184.spotlightHeroAutoUrlV1325 || stateRefV1184.heroAutoUrl) : stateRefV1184.heroAutoUrl)
       : null;
   // v800 — hand the painter the user's fit mode and focal point.
   opts.heroFit = stateRefV1184.heroFit || 'fill';
@@ -52503,7 +52604,7 @@ window.FC_V1323_VALIDATION={
   updateViaCache:true
 };
 </script>
-<script id="fc-v1327-validation">window.FC_V1327_VALIDATION={build:'v1327',spotlightPosterSpecMatched:true,spotlightUsesWhiteOrangePosterSystem:true,spotlightUsesEntrantAvatarAndUsername:true,spotlightUsesDetectedVideoHero:true,spotlightUsesMeasuredLayout:true,promoteModalStyleRowUncovered:true};</script>
+<script id="fc-v1328-validation">window.FC_V1328_VALIDATION={build:'v1328',spotlightUsesLandscapePreviewFirst:true,spotlightRestoresVideoDuration:true,spotlightPlayTreatmentEnlarged:true,spotlightFooterRebuiltToTarget:true,spotlightFooterBadgeWidened:true,spotlightFooterEmblemRebuilt:true,promoteModalStyleRowUncovered:true};</script>
 <script id="fc-v1325-validation">window.FC_V1325_VALIDATION={build:'v1325',cinematicSpotlightRenderer:true,canonicalCrownedF:true,spotlightUsesFeaturedSubmission:true,spotlightPrefersBunnyPreview:true,spotlightUsesEntryIdentity:true,spotlightIsFourByFive:true,otherFlyerStylesPreserved:true};</script>
 <script id="fc-v1324-validation">window.FC_V1324_VALIDATION={build:'v1324',spotlightFlyerAdded:true,spotlightUsesFeaturedSubmission:true,spotlightUsesEntryIdentity:true,v1323Preserved:true};</script>
 </body>
