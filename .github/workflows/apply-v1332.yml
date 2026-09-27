@@ -1,0 +1,108 @@
+name: Apply v1332 Spotlight inline feed video
+on:
+  push:
+    branches: [main]
+    paths: ['.github/v1332.trigger']
+permissions:
+  contents: write
+jobs:
+  build:
+    if: github.event.head_commit.message == 'Trigger v1332 build'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify exact v1331 production baseline
+        run: |
+          test "$(git hash-object index.html)" = "7a8468daf6735dd61494a6b5a4ea9025dd9d72f5"
+          grep -Fq 'v1331 · spotlight-play-and-count-spacing' index.html
+      - name: Apply exact v1332 patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import base64,gzip
+          payload=Path('.github/v1332.patch.gz.b64').read_text().strip()
+          Path('/tmp/v1332.patch').write_bytes(gzip.decompress(base64.b64decode(payload)))
+          PY
+          git apply -p2 --whitespace=nowarn /tmp/v1332.patch
+          test "$(git hash-object index.html)" = "1b821bb0121c55719a17917cf68b27e40dafeae6"
+      - name: Validate v1332
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re,subprocess,tempfile,hashlib
+          s=Path('index.html').read_text(encoding='utf-8')
+          required=[
+            'v1332 · spotlight-inline-feed-video',
+            'FC_V1332_VALIDATION',
+            'fcPlayFlyerVideoV1332',
+            'fc-flyer-inline-video-v1332 fc-video-unified-v1238',
+            'spotlightVideoPlaysInlineOnFeed:true',
+            'spotlightPlayDoesNotOpenEntryViewer:true',
+            'spotlightUsesSharedInlineVideoInitializer:true',
+            'spotlightBadgeFlameCountSeparated:true',
+            'spotlightUsesLiteralApprovedMockCrest:true',
+            'spotlightUsesLiteralApprovedMockCalendar:true',
+            'spotlightUsesLiteralApprovedMockBadgeFlame:true',
+            'updateViaCache'
+          ]
+          for x in required:
+              if x not in s: raise SystemExit(f'missing invariant: {x}')
+          if 'v1331 · spotlight-play-and-count-spacing' in s:
+              raise SystemExit('v1331 build meta remains active')
+          if 'Check for updates' in s:
+              raise SystemExit('manual update UI returned')
+          m=re.search(r'function fcPlayFlyerVideoV1332\(trigger\) \{(.*?)\n\}',s,re.S)
+          if not m: raise SystemExit('Spotlight play function missing')
+          body=m.group(1)
+          if 'openEntryViewer' in body: raise SystemExit('Spotlight play still routes to entry viewer')
+          if 'FC_INLINE_VIDEO_V1239' not in body or 'playInline' not in body:
+              raise SystemExit('Spotlight play is not using the shared inline initializer')
+          scripts=re.findall(r'<script\b(?![^>]*\bsrc=)[^>]*>(.*?)</script>',s,re.I|re.S)
+          with tempfile.TemporaryDirectory() as d:
+              for i,code in enumerate(scripts,1):
+                  f=Path(d)/f's{i}.js'; f.write_text(code,encoding='utf-8')
+                  r=subprocess.run(['node','--check',str(f)],capture_output=True,text=True)
+                  if r.returncode:
+                      print(r.stderr); raise SystemExit(f'inline JS {i} failed')
+          styles=re.findall(r'<style\b[^>]*>(.*?)</style>',s,re.I|re.S)
+          def ok(css):
+              depth=0;i=0;quote=None;comment=False;esc=False
+              while i<len(css):
+                  c=css[i];n=css[i+1] if i+1<len(css) else ''
+                  if comment:
+                      if c=='*' and n=='/':comment=False;i+=2;continue
+                      i+=1;continue
+                  if quote:
+                      if esc:esc=False
+                      elif c=='\\':esc=True
+                      elif c==quote:quote=None
+                      i+=1;continue
+                  if c=='/' and n=='*':comment=True;i+=2;continue
+                  if c in ('"',"'"):quote=c;i+=1;continue
+                  if c=='{':depth+=1
+                  elif c=='}':
+                      depth-=1
+                      if depth<0:return False
+                  i+=1
+              return depth==0 and quote is None and not comment
+          bad=[i for i,x in enumerate(styles,1) if not ok(x)]
+          if bad: raise SystemExit(f'CSS validation failed: {bad}')
+          digest=hashlib.sha256(Path('index.html').read_bytes()).hexdigest()
+          if digest!='8b4401889216ca4b020a4891f056306b9f8dc612782818a2a6ac5560fc327919':
+              raise SystemExit('output sha256 mismatch: '+digest)
+          print(f'validated {len(scripts)} inline JS blocks and {len(styles)} CSS blocks')
+          print('sha256',digest)
+          PY
+      - name: Commit v1332
+        run: |
+          git config user.name 'FlamesChallenge Build Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git rm -f .github/v1332.patch.gz.b64 .github/workflows/apply-v1332.yml .github/v1332.trigger
+          git add index.html
+          git commit -m 'Build v1332 Spotlight inline feed video'
+          git push
