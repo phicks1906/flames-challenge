@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1332 · spotlight-inline-feed-video" name="fc-build"/>
+<meta content="v1333 · spotlight-footer-date-fit" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Spotlight video now plays inline in the feed using the same shared deliberate-play system as other video cards, and the entries badge count no longer overlaps the flame." name="fc-whatsnew"/>
+<meta content="Fixed Spotlight footer date typography so dates such as SEP 23 fit the approved mock slot without clipping the divider; v1332 inline feed video playback is preserved." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -16878,9 +16878,14 @@ async function _drawSpotlightFlyerV1328(c,W,H,o){
   c.font=`${titleSize}px ${HEAD}`; c.fillText(footerTitle,titleX,foot.y+78);
   if(mockIcons?.calendar)c.drawImage(mockIcons.calendar,249,1237,55,60);
   else _spotlightDrawCalendarV1329(c,foot.x+218,foot.y+111,52,ORANGE2);
-  c.fillStyle=ORANGE2; c.font=`700 70px ${HEAD}`; c.fillText(_spotlightDateV1325(it,o),foot.x+282,foot.y+171);
-  c.strokeStyle='rgba(255,255,255,.7)'; c.lineWidth=2; c.beginPath(); c.moveTo(foot.x+470,foot.y+101); c.lineTo(foot.x+470,foot.y+184); c.stroke();
-  _spotlightDrawFooterTaglineV1328(c,foot.x+500,foot.y+165,SANS,OFFWHITE,ORANGE2,330);
+  // v1333 — match the approved mock's measured date slot. The date is dynamic,
+  // so fit it to the 170px text lane instead of assuming every month/day has
+  // the same width. The divider sits at the target's measured x=512.
+  const footerDate=_spotlightDateV1325(it,o), footerDividerX=foot.x+480, footerDateX=foot.x+282;
+  const footerDateSize=_fitText(c,footerDate,footerDividerX-footerDateX-28,68,HEAD,'');
+  c.fillStyle=ORANGE2; c.font=`${footerDateSize}px ${HEAD}`; c.fillText(footerDate,footerDateX,foot.y+181);
+  c.strokeStyle='rgba(255,255,255,.7)'; c.lineWidth=2; c.beginPath(); c.moveTo(footerDividerX,foot.y+101); c.lineTo(footerDividerX,foot.y+184); c.stroke();
+  _spotlightDrawFooterTaglineV1328(c,footerDividerX+28,foot.y+165,SANS,OFFWHITE,ORANGE2,330);
   c.restore();
 
   const count=_spotlightCountV1325(it), box={x:foot.x+foot.w-195,y:foot.y+16,w:178,h:198};
@@ -52776,6 +52781,7 @@ window.FC_V1323_VALIDATION={
 }
 </style>
 <script id="fc-v1332-validation">window.FC_V1332_VALIDATION={build:'v1332',spotlightVideoPlaysInlineOnFeed:true,spotlightPlayDoesNotOpenEntryViewer:true,spotlightUsesSharedInlineVideoInitializer:true,spotlightHeroVideoUsesMeasuredPosterBounds:true,spotlightBadgeFlameCountSeparated:true,spotlightExactMockIconsPreserved:true,threeSecondPreviewsPreserved:true,automaticUpdaterPreserved:true};</script>
+<script id="fc-v1333-validation">window.FC_V1333_VALIDATION={build:'v1333',spotlightFooterDateFitsMeasuredSlot:true,spotlightFooterDividerAtApprovedX:true,spotlightInlineFeedVideoPreserved:true,spotlightExactMockIconsPreserved:true,automaticUpdaterPreserved:true};</script>
 <script id="fc-v1329-validation">window.FC_V1329_VALIDATION={build:'v1329',spotlightUsesLandscapePreviewFirst:true,spotlightRestoresVideoDuration:true,spotlightFooterLayoutPreserved:true,spotlightLaurelFlameCrestRefined:true,spotlightCalendarGridIconRefined:true,spotlightEntriesFlameRefined:true,promoteModalStyleRowUncovered:true};</script>
 <script id="fc-v1325-validation">window.FC_V1325_VALIDATION={build:'v1325',cinematicSpotlightRenderer:true,canonicalCrownedF:true,spotlightUsesFeaturedSubmission:true,spotlightPrefersBunnyPreview:true,spotlightUsesEntryIdentity:true,spotlightIsFourByFive:true,otherFlyerStylesPreserved:true};</script>
 <script id="fc-v1324-validation">window.FC_V1324_VALIDATION={build:'v1324',spotlightFlyerAdded:true,spotlightUsesFeaturedSubmission:true,spotlightUsesEntryIdentity:true,v1323Preserved:true};</script>
