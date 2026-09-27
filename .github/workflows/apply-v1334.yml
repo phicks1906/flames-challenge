@@ -1,0 +1,100 @@
+name: Apply v1334 Spotlight badge count fit
+on:
+  push:
+    branches: [main]
+    paths: ['.github/v1334.trigger']
+permissions:
+  contents: write
+jobs:
+  build:
+    if: github.event.head_commit.message == 'Trigger v1334 build'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify exact v1333 production baseline
+        run: |
+          test "$(git hash-object index.html)" = "4faa9750be34ed9b9e12e6fab91ba6a796fbefe2"
+          grep -Fq 'v1333 · spotlight-footer-date-fit' index.html
+      - name: Apply exact v1334 patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import base64,gzip
+          payload=Path('.github/v1334.patch.gz.b64').read_text().strip()
+          Path('/tmp/v1334.patch').write_bytes(gzip.decompress(base64.b64decode(payload)))
+          PY
+          git apply --whitespace=nowarn /tmp/v1334.patch
+          test "$(git hash-object index.html)" = "4dd132640206be234cf99850fd0f1c0a5bd91def"
+      - name: Validate v1334
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re,subprocess,tempfile,hashlib,concurrent.futures
+          s=Path('index.html').read_text(encoding='utf-8')
+          required=[
+            'v1334 · spotlight-badge-count-fit',
+            'FC_V1334_VALIDATION',
+            'spotlightBadgeCountLabelSeparated:true',
+            'spotlightFooterDateFitPreserved:true',
+            'spotlightInlineFeedVideoPreserved:true',
+            'updateViaCache'
+          ]
+          for x in required:
+              if x not in s: raise SystemExit(f'missing invariant: {x}')
+          if 'Check for updates' in s: raise SystemExit('manual update UI returned')
+          scripts=re.findall(r'<script\\b(?![^>]*\\bsrc=)[^>]*>(.*?)</script>',s,re.I|re.S)
+          with tempfile.TemporaryDirectory() as d:
+              files=[]
+              for i,code in enumerate(scripts,1):
+                  f=Path(d)/f's{i}.js'; f.write_text(code,encoding='utf-8'); files.append((i,str(f)))
+              def check(item):
+                  i,f=item
+                  r=subprocess.run(['node','--check',f],capture_output=True,text=True)
+                  return i,r.returncode,r.stderr
+              with concurrent.futures.ThreadPoolExecutor(max_workers=24) as ex:
+                  results=list(ex.map(check,files))
+              bad=[x for x in results if x[1]!=0]
+              if bad:
+                  print(bad[0][2]); raise SystemExit(f'inline JS {bad[0][0]} failed')
+          styles=re.findall(r'<style\\b[^>]*>(.*?)</style>',s,re.I|re.S)
+          def ok(css):
+              depth=0;i=0;quote=None;comment=False;esc=False
+              while i<len(css):
+                  c=css[i];n=css[i+1] if i+1<len(css) else ''
+                  if comment:
+                      if c=='*' and n=='/':comment=False;i+=2;continue
+                      i+=1;continue
+                  if quote:
+                      if esc:esc=False
+                      elif c=='\\\\':esc=True
+                      elif c==quote:quote=None
+                      i+=1;continue
+                  if c=='/' and n=='*':comment=True;i+=2;continue
+                  if c in ('"',"'"):quote=c;i+=1;continue
+                  if c=='{':depth+=1
+                  elif c=='}':
+                      depth-=1
+                      if depth<0:return False
+                  i+=1
+              return depth==0 and quote is None and not comment
+          bad=[i for i,x in enumerate(styles,1) if not ok(x)]
+          if bad: raise SystemExit(f'CSS validation failed: {bad}')
+          digest=hashlib.sha256(Path('index.html').read_bytes()).hexdigest()
+          if digest!='07847b3e69349b0e9982fb331870d03a29361e36a63c0730bb38b63185d763ae':
+              raise SystemExit('output sha256 mismatch: '+digest)
+          print(f'validated {len(scripts)} inline JS blocks and {len(styles)} CSS blocks')
+          print('sha256',digest)
+          PY
+      - name: Commit v1334
+        run: |
+          git config user.name 'FlamesChallenge Build Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git rm -f .github/v1334.patch.gz.b64 .github/workflows/apply-v1334.yml .github/v1334.trigger
+          git add index.html
+          git commit -m 'Build v1334 Spotlight badge count fit'
+          git push
