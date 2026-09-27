@@ -60,14 +60,14 @@ jobs:
               if x not in s: raise SystemExit(f'missing invariant: {x}')
           if 'v1326 · exact-spotlight-poster' in s: raise SystemExit('v1326 build meta remains')
           if 'Check for updates' in s: raise SystemExit('manual update UI returned')
-          scripts=re.findall(r'<script\\b(?![^>]*\\bsrc=)[^>]*>(.*?)</script>',s,re.I|re.S)
+          scripts=re.findall(r'<script\b(?![^>]*\bsrc=)[^>]*>(.*?)</script>',s,re.I|re.S)
           with tempfile.TemporaryDirectory() as d:
               for i,code in enumerate(scripts,1):
                   f=Path(d)/f's{i}.js';f.write_text(code,encoding='utf-8')
                   r=subprocess.run(['node','--check',str(f)],capture_output=True,text=True)
                   if r.returncode:
                       print(r.stderr);raise SystemExit(f'inline JS {i} failed')
-          styles=re.findall(r'<style\\b[^>]*>(.*?)</style>',s,re.I|re.S)
+          styles=re.findall(r'<style\b[^>]*>(.*?)</style>',s,re.I|re.S)
           def ok(css):
               depth=0;i=0;quote=None;comment=False;esc=False
               while i<len(css):
@@ -77,7 +77,7 @@ jobs:
                       i+=1;continue
                   if quote:
                       if esc:esc=False
-                      elif c=='\\\\':esc=True
+                      elif c=='\\':esc=True
                       elif c==quote:quote=None
                       i+=1;continue
                   if c=='/' and n=='*':comment=True;i+=2;continue
@@ -100,6 +100,7 @@ jobs:
         run: |
           git config user.name 'FlamesChallenge Build Bot'
           git config user.email 'actions@users.noreply.github.com'
+          git rm -f .github/v1327-exact-patch.gz.b64 .github/workflows/apply-v1327-exact.yml .github/v1327.trigger
           git add index.html
           git commit -m 'Build v1327 measured Spotlight poster'
           git push
