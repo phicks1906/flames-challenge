@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1328 · matched-spotlight-hero-footer" name="fc-build"/>
+<meta content="v1329 · refined-spotlight-footer-icons" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Matched Spotlight more closely to the approved target: corrected landscape video still selection, restored duration, enlarged play treatment, and rebuilt the footer hierarchy, emblem, date, tagline, and entries badge." name="fc-whatsnew"/>
+<meta content="Refined Spotlight footer iconography to match the approved target: rebuilt the laurel/flame crest, calendar grid icon, and entries flame while preserving the v1328 layout and media fixes." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -16648,82 +16648,91 @@ function _spotlightDrawLaurelV1325(c,cx,cy,s,color){
   c.closePath();c.fill();
   c.restore();
 }
-function _spotlightDrawCalendarV1325(c,x,y,size,color){
+function _spotlightDrawCalendarV1329(c,x,y,size,color){
   c.save();
-  c.strokeStyle=color;c.lineWidth=3;c.lineJoin='round';c.lineCap='round';
-  c.strokeRect(x,y,size,size*.84);
-  c.beginPath();c.moveTo(x,y+size*.26);c.lineTo(x+size,y+size*.26);c.stroke();
-  c.beginPath();c.moveTo(x+size*.22,y-3);c.lineTo(x+size*.22,y+size*.12);c.moveTo(x+size*.78,y-3);c.lineTo(x+size*.78,y+size*.12);c.stroke();
+  c.strokeStyle=color; c.fillStyle=color; c.lineWidth=4.2; c.lineJoin='round'; c.lineCap='round';
+  const w=size, h=size*.88, r=5;
+  c.beginPath();
+  c.moveTo(x+r,y); c.lineTo(x+w-r,y); c.quadraticCurveTo(x+w,y,x+w,y+r);
+  c.lineTo(x+w,y+h-r); c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  c.lineTo(x+r,y+h); c.quadraticCurveTo(x,y+h,x,y+h-r);
+  c.lineTo(x,y+r); c.quadraticCurveTo(x,y,x+r,y); c.closePath(); c.stroke();
+  c.beginPath(); c.moveTo(x,y+size*.25); c.lineTo(x+w,y+size*.25); c.stroke();
+  // Target-style binder tabs.
+  for(const bx of [x+w*.24,x+w*.76]){
+    c.beginPath(); c.moveTo(bx,y-7); c.lineTo(bx,y+size*.11); c.stroke();
+  }
+  // Small date squares make the icon read as a calendar instead of an empty box.
+  const cell=5.5, gap=7.4, sx=x+w*.25, sy=y+size*.42;
+  for(let row=0;row<2;row++){
+    for(let col=0;col<3;col++){
+      c.fillRect(sx+col*(cell+gap),sy+row*(cell+gap),cell,cell);
+    }
+  }
   c.restore();
 }
-
-function _spotlightDrawFlameOnlyV1327(c,cx,cy,s,color){
+function _spotlightFlamePathV1329(c,cx,cy,s){
+  c.beginPath();
+  c.moveTo(cx+2*s,cy-48*s);
+  c.bezierCurveTo(cx+14*s,cy-33*s,cx+17*s,cy-18*s,cx+12*s,cy-7*s);
+  c.bezierCurveTo(cx+24*s,cy-16*s,cx+37*s,cy-5*s,cx+36*s,cy+12*s);
+  c.bezierCurveTo(cx+35*s,cy+35*s,cx+20*s,cy+49*s,cx,cy+52*s);
+  c.bezierCurveTo(cx-24*s,cy+48*s,cx-38*s,cy+31*s,cx-36*s,cy+10*s);
+  c.bezierCurveTo(cx-35*s,cy-5*s,cx-22*s,cy-20*s,cx-10*s,cy-29*s);
+  c.bezierCurveTo(cx-11*s,cy-13*s,cx-6*s,cy-2*s,cx,cy+3*s);
+  c.bezierCurveTo(cx+8*s,cy-8*s,cx+8*s,cy-27*s,cx+2*s,cy-48*s);
+  c.closePath();
+}
+function _spotlightDrawFlameV1329(c,cx,cy,s){
   c.save();
-  const grad=c.createLinearGradient(cx,cy-20*s,cx,cy+22*s);
-  grad.addColorStop(0,'#ffd27a');grad.addColorStop(.45,color);grad.addColorStop(1,'#ff4316');
-  c.fillStyle=grad;
+  const outer=c.createLinearGradient(cx,cy-50*s,cx,cy+52*s);
+  outer.addColorStop(0,'#ff2e18'); outer.addColorStop(.45,'#ff6d19'); outer.addColorStop(1,'#ff9e20');
+  c.fillStyle=outer; _spotlightFlamePathV1329(c,cx,cy,s); c.fill();
+  // Gold middle tongue.
+  c.fillStyle='#ffc33b';
   c.beginPath();
-  c.moveTo(cx,cy-22*s);
-  c.bezierCurveTo(cx+19*s,cy-10*s,cx+22*s,cy+10*s,cx,cy+24*s);
-  c.bezierCurveTo(cx-22*s,cy+10*s,cx-20*s,cy-10*s,cx,cy-22*s);
-  c.closePath();c.fill();
-  c.fillStyle='#150802';
+  c.moveTo(cx,cy-24*s);
+  c.bezierCurveTo(cx+12*s,cy-10*s,cx+16*s,cy+1*s,cx+11*s,cy+15*s);
+  c.bezierCurveTo(cx+7*s,cy+27*s,cx-1*s,cy+34*s,cx-9*s,cy+25*s);
+  c.bezierCurveTo(cx-18*s,cy+15*s,cx-12*s,cy+2*s,cx,cy-24*s);
+  c.closePath(); c.fill();
+  // Dark center with a small warm core, matching the target's illustrated flame.
+  c.fillStyle='#130704';
   c.beginPath();
-  c.moveTo(cx,cy-6*s);
-  c.bezierCurveTo(cx+8*s,cy+1*s,cx+9*s,cy+8*s,cx,cy+14*s);
-  c.bezierCurveTo(cx-9*s,cy+8*s,cx-8*s,cy+1*s,cx,cy-6*s);
-  c.closePath();c.fill();
+  c.moveTo(cx,cy-7*s);
+  c.bezierCurveTo(cx+8*s,cy+2*s,cx+10*s,cy+11*s,cx+4*s,cy+21*s);
+  c.bezierCurveTo(cx-2*s,cy+29*s,cx-10*s,cy+20*s,cx-10*s,cy+11*s);
+  c.bezierCurveTo(cx-10*s,cy+5*s,cx-5*s,cy-1*s,cx,cy-7*s);
+  c.closePath(); c.fill();
+  c.fillStyle='#ffe15a';
+  c.beginPath(); c.ellipse(cx,cy+15*s,3.6*s,7*s,0,0,Math.PI*2); c.fill();
   c.restore();
 }
-function _spotlightDrawFooterEmblemV1328(c,cx,cy,s){
+function _spotlightDrawFooterEmblemV1329(c,cx,cy,s){
   c.save();
   const ORANGE='#ff6d19';
-  c.strokeStyle=ORANGE;c.fillStyle=ORANGE;c.lineCap='round';c.lineJoin='round';c.lineWidth=3.4*s;
+  c.strokeStyle=ORANGE; c.fillStyle=ORANGE; c.lineCap='round'; c.lineJoin='round';
   const drawBranch=dir=>{
+    c.lineWidth=3*s;
     c.beginPath();
-    c.moveTo(cx+dir*8*s,cy+66*s);
-    c.bezierCurveTo(cx+dir*39*s,cy+53*s,cx+dir*68*s,cy+6*s,cx+dir*72*s,cy-53*s);
+    c.moveTo(cx+dir*6*s,cy+67*s);
+    c.bezierCurveTo(cx+dir*34*s,cy+56*s,cx+dir*62*s,cy+16*s,cx+dir*67*s,cy-50*s);
     c.stroke();
-    for(let i=0;i<7;i++){
-      const t=(i+.42)/7;
-      const x=cx+dir*(18+54*t+9*Math.sin(t*Math.PI))*s;
-      const y=cy+(52-108*t)*s;
-      const rot=dir*(.72-.42*t);
-      c.save();c.translate(x,y);c.rotate(rot);
-      c.beginPath();c.ellipse(0,0,7.2*s,17.5*s,0,0,Math.PI*2);c.fill();c.restore();
+    // More, narrower leaves — the target reads as a real laurel, not large petals.
+    for(let i=0;i<9;i++){
+      const t=(i+.35)/9;
+      const x=cx+dir*(18+48*t+9*Math.sin(t*Math.PI))*s;
+      const y=cy+(51-103*t)*s;
+      const ang=dir*(.92-.48*t);
+      c.save(); c.translate(x,y); c.rotate(ang);
+      c.beginPath(); c.ellipse(0,0,4.7*s,12.8*s,0,0,Math.PI*2); c.fill(); c.restore();
     }
   };
-  drawBranch(-1);drawBranch(1);
-  c.lineWidth=3*s;
-  c.beginPath();c.moveTo(cx-15*s,cy+66*s);c.lineTo(cx+18*s,cy+78*s);c.stroke();
-  c.beginPath();c.moveTo(cx+15*s,cy+66*s);c.lineTo(cx-18*s,cy+78*s);c.stroke();
-
-  const g=c.createLinearGradient(cx,cy-64*s,cx,cy+42*s);
-  g.addColorStop(0,'#ff3318');g.addColorStop(.42,'#ff6d19');g.addColorStop(.76,'#ffab21');g.addColorStop(1,'#ffd65a');
-  c.fillStyle=g;
-  c.beginPath();
-  c.moveTo(cx,cy-66*s);
-  c.bezierCurveTo(cx+18*s,cy-38*s,cx+39*s,cy-29*s,cx+40*s,cy+2*s);
-  c.bezierCurveTo(cx+41*s,cy+34*s,cx+19*s,cy+47*s,cx,cy+49*s);
-  c.bezierCurveTo(cx-24*s,cy+46*s,cx-43*s,cy+27*s,cx-40*s,cy+1*s);
-  c.bezierCurveTo(cx-37*s,cy-23*s,cx-16*s,cy-34*s,cx,cy-66*s);
-  c.closePath();c.fill();
-  c.fillStyle='#140703';
-  c.beginPath();
-  c.moveTo(cx,cy-30*s);
-  c.bezierCurveTo(cx+16*s,cy-11*s,cx+18*s,cy+5*s,cx+7*s,cy+24*s);
-  c.bezierCurveTo(cx+3*s,cy+32*s,cx-4*s,cy+32*s,cx-10*s,cy+24*s);
-  c.bezierCurveTo(cx-21*s,cy+7*s,cx-14*s,cy-8*s,cx,cy-30*s);
-  c.closePath();c.fill();
-  const ig=c.createLinearGradient(cx,cy-16*s,cx,cy+23*s);
-  ig.addColorStop(0,'#fff08a');ig.addColorStop(1,'#ff7a19');
-  c.fillStyle=ig;
-  c.beginPath();
-  c.moveTo(cx,cy-18*s);
-  c.bezierCurveTo(cx+9*s,cy-6*s,cx+12*s,cy+8*s,cx+3*s,cy+23*s);
-  c.bezierCurveTo(cx-5*s,cy+21*s,cx-10*s,cy+12*s,cx-8*s,cy+4*s);
-  c.bezierCurveTo(cx-6*s,cy-4*s,cx-1*s,cy-9*s,cx,cy-18*s);
-  c.closePath();c.fill();
+  drawBranch(-1); drawBranch(1);
+  c.lineWidth=3.2*s;
+  c.beginPath(); c.moveTo(cx-17*s,cy+66*s); c.lineTo(cx+15*s,cy+76*s); c.stroke();
+  c.beginPath(); c.moveTo(cx+17*s,cy+66*s); c.lineTo(cx-15*s,cy+76*s); c.stroke();
+  _spotlightDrawFlameV1329(c,cx,cy-1*s,.93*s);
   c.restore();
 }
 function _spotlightDrawFooterTaglineV1328(c,x,y,SANS,WHITE,ORANGE,maxW){
@@ -16839,7 +16848,7 @@ async function _drawSpotlightFlyerV1328(c,W,H,o){
   // of shrinking every element to make the v1327 right badge fit.
   const foot={x:32,y:1113,w:W-64,h:226};
   _spotlightStrokeBevelV1325(c,foot.x,foot.y,foot.w,foot.h,18,WHITE,4,'#010101');
-  _spotlightDrawFooterEmblemV1328(c,foot.x+111,foot.y+121,1);
+  _spotlightDrawFooterEmblemV1329(c,foot.x+111,foot.y+121,1);
 
   const footerTitle=`${it?.is_public?'PUBLIC':'PRIVATE'} ${media} CHALLENGE`;
   c.save();
@@ -16847,7 +16856,7 @@ async function _drawSpotlightFlyerV1328(c,W,H,o){
   const titleX=foot.x+226, titleMax=(foot.x+foot.w-206)-titleX;
   const titleSize=_fitText(c,footerTitle,titleMax,58,HEAD,'');
   c.font=`${titleSize}px ${HEAD}`; c.fillText(footerTitle,titleX,foot.y+78);
-  _spotlightDrawCalendarV1325(c,foot.x+218,foot.y+111,48,ORANGE2);
+  _spotlightDrawCalendarV1329(c,foot.x+218,foot.y+111,52,ORANGE2);
   c.fillStyle=ORANGE2; c.font=`700 70px ${HEAD}`; c.fillText(_spotlightDateV1325(it,o),foot.x+282,foot.y+171);
   c.strokeStyle='rgba(255,255,255,.7)'; c.lineWidth=2; c.beginPath(); c.moveTo(foot.x+470,foot.y+101); c.lineTo(foot.x+470,foot.y+184); c.stroke();
   _spotlightDrawFooterTaglineV1328(c,foot.x+500,foot.y+165,SANS,OFFWHITE,ORANGE2,330);
@@ -16855,7 +16864,7 @@ async function _drawSpotlightFlyerV1328(c,W,H,o){
 
   const count=_spotlightCountV1325(it), box={x:foot.x+foot.w-195,y:foot.y+16,w:178,h:198};
   _spotlightStrokeBevelV1325(c,box.x,box.y,box.w,box.h,16,WHITE,4,null);
-  _spotlightDrawFlameOnlyV1327(c,box.x+box.w/2,box.y+34,1.02,ORANGE2);
+  _spotlightDrawFlameV1329(c,box.x+box.w/2,box.y+43,.48);
   c.save();
   c.textAlign='center'; c.textBaseline='alphabetic';
   c.fillStyle=ORANGE2; c.font=`700 72px ${HEAD}`; c.fillText(String(count),box.x+box.w/2,box.y+116);
@@ -52604,7 +52613,7 @@ window.FC_V1323_VALIDATION={
   updateViaCache:true
 };
 </script>
-<script id="fc-v1328-validation">window.FC_V1328_VALIDATION={build:'v1328',spotlightUsesLandscapePreviewFirst:true,spotlightRestoresVideoDuration:true,spotlightPlayTreatmentEnlarged:true,spotlightFooterRebuiltToTarget:true,spotlightFooterBadgeWidened:true,spotlightFooterEmblemRebuilt:true,promoteModalStyleRowUncovered:true};</script>
+<script id="fc-v1329-validation">window.FC_V1329_VALIDATION={build:'v1329',spotlightUsesLandscapePreviewFirst:true,spotlightRestoresVideoDuration:true,spotlightFooterLayoutPreserved:true,spotlightLaurelFlameCrestRefined:true,spotlightCalendarGridIconRefined:true,spotlightEntriesFlameRefined:true,promoteModalStyleRowUncovered:true};</script>
 <script id="fc-v1325-validation">window.FC_V1325_VALIDATION={build:'v1325',cinematicSpotlightRenderer:true,canonicalCrownedF:true,spotlightUsesFeaturedSubmission:true,spotlightPrefersBunnyPreview:true,spotlightUsesEntryIdentity:true,spotlightIsFourByFive:true,otherFlyerStylesPreserved:true};</script>
 <script id="fc-v1324-validation">window.FC_V1324_VALIDATION={build:'v1324',spotlightFlyerAdded:true,spotlightUsesFeaturedSubmission:true,spotlightUsesEntryIdentity:true,v1323Preserved:true};</script>
 </body>
