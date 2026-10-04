@@ -20,17 +20,38 @@ jobs:
         run: |
           test "$(git hash-object index.html)" = "4dd132640206be234cf99850fd0f1c0a5bd91def"
           grep -Fq 'v1334 · spotlight-badge-count-fit' index.html
-      - name: Apply exact v1335 patch from repository history
+      - name: Apply exact v1335 manifest from repository history
         run: |
           git show 9773e9d6c3c35141dc527173cd27011d55cb140a:.github/v1335.patch.gz.b64 > /tmp/v1335.patch.gz.b64
           python - <<'PY'
           from pathlib import Path
-          import base64,gzip
-          data=Path('/tmp/v1335.patch.gz.b64').read_text().strip()
-          Path('/tmp/v1335.patch').write_bytes(gzip.decompress(base64.b64decode(data)))
+          import base64,gzip,json
+          payload=Path('/tmp/v1335.patch.gz.b64').read_text().strip()
+          ops=json.loads(gzip.decompress(base64.b64decode(payload)).decode('utf-8'))
+          p=Path('index.html')
+          src=p.read_bytes().splitlines(keepends=True)
+          out=[]
+          cursor=1
+          for n,o in enumerate(ops,1):
+              i1,i2=int(o['i1']),int(o['i2'])
+              if i1<cursor:
+                  raise SystemExit(f'overlap at op {n}')
+              out.extend(src[cursor-1:i1-1])
+              old=base64.b64decode(o.get('old_b64',''))
+              new=base64.b64decode(o.get('new_b64',''))
+              if o['tag']!='insert':
+                  actual=b''.join(src[i1-1:i2])
+                  if actual!=old:
+                      raise SystemExit(f'baseline mismatch at op {n}')
+                  cursor=i2+1
+              else:
+                  if i2!=i1-1 or old:
+                      raise SystemExit(f'invalid insert op {n}')
+                  cursor=i1
+              out.append(new)
+          out.extend(src[cursor-1:])
+          p.write_bytes(b''.join(out))
           PY
-          git apply --check /tmp/v1335.patch
-          git apply /tmp/v1335.patch
           test "$(git hash-object index.html)" = "ffb16b853da27b2fbb5166b223516dbb997ed4b6"
       - name: Validate exact v1335
         run: |
