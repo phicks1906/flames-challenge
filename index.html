@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1336 · audio-composer-preview-parity" name="fc-build"/>
+<meta content="v1337 · created-item-focus-and-centered-video-transport" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Fixed new audio post previews so the composer uses the same current Scene player as posted audio, including the centered FlamesChallenge treatment." name="fc-whatsnew"/>
+<meta content="After creating from +, FlamesChallenge now lands on the item you just made; challenge feed videos also use a smaller centered transport while keeping Challenger arrows and fullscreen." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -14816,6 +14816,36 @@ function scrollToPost(postId) {
   setTimeout(() => card.classList.remove('post-highlight'), 2600);
 }
 
+
+function fcFocusCreatedChallengeEntryV1337(challengeId, entryId = null) {
+  if (!challengeId) return;
+  switchView('challenges');
+  let attemptsV1337 = 0;
+  const focusV1337 = () => {
+    const escChV1337 = window.CSS?.escape ? CSS.escape(String(challengeId)) : String(challengeId).replace(/"/g,'\\"');
+    const wrapV1337 = document.querySelector(`#challengesGrid .fcc-challenge-wrap[data-cid="${escChV1337}"]`);
+    if (!wrapV1337) {
+      if (++attemptsV1337 < 16) setTimeout(focusV1337, 55);
+      return;
+    }
+    try { wrapV1337.scrollIntoView({ behavior: fcMotionBehaviorV1100(), block:'center' }); } catch (_) {}
+    wrapV1337.classList.remove('fc-created-focus-v1337');
+    void wrapV1337.offsetWidth;
+    wrapV1337.classList.add('fc-created-focus-v1337');
+    setTimeout(() => wrapV1337.classList.remove('fc-created-focus-v1337'), 2600);
+    if (!entryId) return;
+    const escEntryV1337 = window.CSS?.escape ? CSS.escape(String(entryId)) : String(entryId).replace(/"/g,'\\"');
+    const cardV1337 = wrapV1337.querySelector(`.fcc-entry-card[data-entry-id="${escEntryV1337}"]`);
+    const railV1337 = cardV1337?.closest('.fcc-entries-scroll');
+    if (cardV1337 && railV1337) {
+      try { railV1337.scrollTo({ left:cardV1337.offsetLeft, behavior:'auto' }); } catch (_) { railV1337.scrollLeft = cardV1337.offsetLeft; }
+      cardV1337.classList.add('fc-created-entry-focus-v1337');
+      setTimeout(() => cardV1337.classList.remove('fc-created-entry-focus-v1337'), 2600);
+    }
+  };
+  requestAnimationFrame(() => requestAnimationFrame(focusV1337));
+}
+
 /* ---------- COMMENTS (posts + entries) ---------- */
 async function openComments(type, id) {
   if (!state.profile) { toast('Sign in to comment'); return; }
@@ -24169,8 +24199,9 @@ async function submitPoll() {
   btn.disabled = true;
   btn.textContent = 'Posting...';
 
+  const newPollIdV1337 = crypto.randomUUID();
   const { error } = await db.from('polls').insert({
-    id: crypto.randomUUID(),
+    id: newPollIdV1337,
     question,
     options: options.map(label => ({ label, seed_votes: 0 })),
     hours_remaining: pollState.duration,
@@ -24189,7 +24220,7 @@ async function submitPoll() {
   const { data } = await db.from('polls').select('*').order('created_at', { ascending: false });
   if (data) state.polls = data;
   renderPolls();
-  switchView('polls');
+  jumpToPoll(newPollIdV1337);
 }
 // ── End Create Poll ──────────────────────────────────────────────────────────
 
@@ -24371,13 +24402,10 @@ document.getElementById('createChallengeForm').addEventListener('submit', async 
     state.cFilter = 'mine';
     document.querySelectorAll('#chTabs .ch-tab').forEach(x => x.classList.toggle('active', x.dataset.cfilter === 'mine'));
     switchView('challenges');
-    // After creation — open promote modal with flyer pre-generated
-    if (ccState.visibility === 'public') {
-      const fullCh = { ...chData, creator: { name: state.profile?.name, avatar: state.profile?.avatar } };
-      await openPromote('challenge', fullCh);
-      // No auto-generation. The promote modal shows a "Generate flyer" button;
-      // the user decides whether they want one.
-    }
+    if (typeof renderChallenges === 'function') renderChallenges();
+    // v1337 — + creation must land on the thing just created. Public challenges
+    // no longer divert straight into Promote; Promote remains available from the card.
+    fcFocusCreatedChallengeEntryV1337(chData.id, creatorEntryId || null);
   } catch (err) {
     console.error(err);
     if (uploadedAssetV1101) {
@@ -28530,6 +28558,11 @@ function fcEntryCardMediaV1060(e, ch) {
         muted playsinline preload="none" data-lazy-video tabindex="-1"
         aria-hidden="true"></video>
       <button type="button" class="fcc-play-overlay fc-card-play-overlay-v1238 fc-inline-video-play-v1264" aria-label="Play video">▶</button>
+      <div class="fc-feed-video-transport-v1337" aria-label="Video controls">
+        <button type="button" class="fc-feed-video-jump-v1337" aria-label="Rewind 10 seconds" onclick="fcFeedVideoSeekV1337(this,-10,event)"><span>↶</span><b>10</b></button>
+        <button type="button" class="fc-feed-video-toggle-v1337" aria-label="Pause video" onclick="fcFeedVideoToggleV1337(this,event)">Ⅱ</button>
+        <button type="button" class="fc-feed-video-jump-v1337" aria-label="Forward 10 seconds" onclick="fcFeedVideoSeekV1337(this,10,event)"><b>10</b><span>↷</span></button>
+      </div>
       <button type="button" class="fc-inline-video-expand-v1239" aria-label="Expand video">⛶</button>
     </div>`;
   }
@@ -50388,8 +50421,10 @@ document.addEventListener('pointerdown', function(event) {
     video.defaultMuted = false;
     video.muted = false;
     video.volume = 1;
-    video.controls = true;
-    video.setAttribute('controls','');
+    const centeredFeedTransportV1337 = !!media.querySelector('.fc-feed-video-transport-v1337');
+    video.controls = !centeredFeedTransportV1337;
+    if (centeredFeedTransportV1337) video.removeAttribute('controls');
+    else video.setAttribute('controls','');
     video.playsInline = true;
     video.setAttribute('playsinline','');
 
@@ -52916,5 +52951,84 @@ window.FC_V1323_VALIDATION={
 </style>
 <script id="fc-v1335-validation">window.FC_V1335_VALIDATION={build:'v1335',newSpotlightTemplate1024x1536:true,whoWillWinMasthead:true,simplifiedSpotlightFooter:true,isolatedEntriesBadge:true,dynamicHeroAndEntrantPreserved:true,spotlightInlineFeedVideoPreserved:true,otherFlyerStylesPreserved:true,peopleYouFollowExplanationRemoved:true,automaticUpdaterPreserved:true};</script>
 <script id="fc-v1336-validation">window.FC_V1336_VALIDATION={build:'v1336',audioComposerPreviewUsesUnifiedScenePlayer:true,postedAudioRendererPreserved:true,spotlightV1335Preserved:true,peopleYouFollowExplanationStillRemoved:true,automaticUpdaterPreserved:true};</script>
+<style id="fc-v1337-created-focus-video-transport-css">
+/* v1337 — keep Challenger arrows, but center a smaller transport inside the media. */
+.fc-entry-rail-v1079 .fc-video-unified-v1238 .fc-feed-video-transport-v1337{
+  position:absolute!important;left:50%!important;top:50%!important;z-index:8!important;
+  transform:translate(-50%,-50%)!important;display:none!important;align-items:center!important;
+  justify-content:center!important;gap:12px!important;pointer-events:none!important;
+}
+.fc-entry-rail-v1079 .fc-video-unified-v1238.has-played-v1239 .fc-feed-video-transport-v1337{
+  display:flex!important;
+}
+.fc-feed-video-transport-v1337 button{
+  pointer-events:auto!important;-webkit-tap-highlight-color:transparent!important;color:#fff!important;
+  border:1px solid rgba(255,255,255,.20)!important;background:rgba(10,10,10,.58)!important;
+  backdrop-filter:blur(7px)!important;-webkit-backdrop-filter:blur(7px)!important;
+  box-shadow:0 7px 20px rgba(0,0,0,.28)!important;
+}
+.fc-feed-video-jump-v1337{
+  width:38px!important;height:38px!important;min-width:38px!important;border-radius:50%!important;
+  display:flex!important;align-items:center!important;justify-content:center!important;gap:1px!important;
+  font:700 11px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif!important;
+}
+.fc-feed-video-jump-v1337 span{font-size:18px!important;line-height:1!important}.fc-feed-video-jump-v1337 b{font-size:10px!important;line-height:1!important}
+.fc-feed-video-toggle-v1337{
+  width:48px!important;height:48px!important;min-width:48px!important;border-radius:50%!important;
+  display:grid!important;place-items:center!important;font:800 22px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif!important;
+}
+.fc-feed-video-transport-v1337 button:active{transform:scale(.92)!important}
+.fcc-challenge-wrap.fc-created-focus-v1337{animation:fcCreatedFocusV1337 2.4s ease-out!important}
+.fc-created-entry-focus-v1337{box-shadow:inset 0 0 0 2px rgba(255,106,44,.86),0 0 28px rgba(255,106,44,.20)!important}
+@keyframes fcCreatedFocusV1337{0%{box-shadow:0 0 0 3px rgba(255,106,44,.78),0 0 36px rgba(255,106,44,.30)}100%{box-shadow:0 0 0 0 rgba(255,106,44,0)}}
+</style>
+<script id="fc-v1337-created-focus-video-transport-js">
+(function(){
+  'use strict';
+  function mediaFromV1337(el){ return el?.closest?.('.fc-video-unified-v1238') || null; }
+  function syncV1337(video){
+    const media=video?.closest?.('.fc-video-unified-v1238');
+    const btn=media?.querySelector?.('.fc-feed-video-toggle-v1337');
+    if(!btn) return;
+    const paused=video.paused || video.ended;
+    btn.textContent=paused?'▶':'Ⅱ';
+    btn.setAttribute('aria-label',paused?'Play video':'Pause video');
+  }
+  window.fcFeedVideoSeekV1337=function(button,delta,event){
+    event?.preventDefault?.();event?.stopPropagation?.();
+    const media=mediaFromV1337(button),video=media?.querySelector?.('video');
+    if(!video) return;
+    const duration=Number.isFinite(video.duration)?video.duration:Infinity;
+    try{video.currentTime=Math.max(0,Math.min(duration,(video.currentTime||0)+Number(delta||0)));}catch(_){}
+  };
+  window.fcFeedVideoToggleV1337=async function(button,event){
+    event?.preventDefault?.();event?.stopPropagation?.();
+    const media=mediaFromV1337(button),video=media?.querySelector?.('video');
+    if(!video) return;
+    video.dataset.fcInlineUserPlayV1263='1';
+    video.controls=false;video.removeAttribute('controls');video.playsInline=true;video.setAttribute('playsinline','');
+    video.removeAttribute('muted');video.defaultMuted=false;video.muted=false;video.volume=1;
+    if(video.paused||video.ended){
+      document.querySelectorAll('audio,video').forEach(el=>{
+        if(el!==video && !el.paused){try{el.pause();}catch(_){}}
+      });
+      media.classList.add('has-played-v1239','is-playing-v1239');
+      media.querySelector('.fc-card-play-overlay-v1238')?.classList.add('is-hidden-v1239');
+      try{await video.play();}catch(_){media.classList.remove('is-playing-v1239');}
+    }else video.pause();
+    syncV1337(video);
+  };
+  ['play','pause','ended'].forEach(type=>document.addEventListener(type,e=>{
+    if(e.target?.tagName==='VIDEO') syncV1337(e.target);
+  },true));
+})();
+window.FC_V1337_VALIDATION={
+  build:'v1337',plusCreatedItemFocus:true,postFocusPreserved:true,audioVideoTextPostFocusPreserved:true,
+  pollFocusExact:true,challengeCreatorEntryFocusExact:true,publicChallengeNoLongerDivertsToPromote:true,
+  challengerArrowsPreserved:true,centeredSmallerFeedVideoTransport:true,fullscreenPreserved:true,
+  audioComposerV1336Preserved:true,automaticUpdaterPreserved:true
+};
+</script>
+
 </body>
 </html>
