@@ -20,18 +20,19 @@ jobs:
         run: |
           test "$(git hash-object index.html)" = "4dd132640206be234cf99850fd0f1c0a5bd91def"
           grep -Fq 'v1334 · spotlight-badge-count-fit' index.html
-      - name: Apply exact v1335 patch
+      - name: Apply exact v1335 patch from repository history
         run: |
+          git show 9773e9d6c3c35141dc527173cd27011d55cb140a:.github/v1335.patch.gz.b64 > /tmp/v1335.patch.gz.b64
           python - <<'PY'
           from pathlib import Path
           import base64,gzip
-          data=Path('.github/v1335.patch.gz.b64').read_text().strip()
+          data=Path('/tmp/v1335.patch.gz.b64').read_text().strip()
           Path('/tmp/v1335.patch').write_bytes(gzip.decompress(base64.b64decode(data)))
           PY
           git apply --check /tmp/v1335.patch
           git apply /tmp/v1335.patch
           test "$(git hash-object index.html)" = "ffb16b853da27b2fbb5166b223516dbb997ed4b6"
-      - name: Validate v1335
+      - name: Validate exact v1335
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -40,16 +41,11 @@ jobs:
           if 'v1335 · new-spotlight-template' not in s[:10000]:
               raise SystemExit('bad v1335 build meta')
           required=[
-            'FC_V1335_VALIDATION',
-            'newSpotlightTemplate1024x1536:true',
-            'whoWillWinMasthead:true',
-            'simplifiedSpotlightFooter:true',
-            'isolatedEntriesBadge:true',
-            'dynamicHeroAndEntrantPreserved:true',
-            'spotlightInlineFeedVideoPreserved:true',
-            'otherFlyerStylesPreserved:true',
-            'peopleYouFollowExplanationRemoved:true',
-            'automaticUpdaterPreserved:true',
+            'FC_V1335_VALIDATION','newSpotlightTemplate1024x1536:true',
+            'whoWillWinMasthead:true','simplifiedSpotlightFooter:true',
+            'isolatedEntriesBadge:true','dynamicHeroAndEntrantPreserved:true',
+            'spotlightInlineFeedVideoPreserved:true','otherFlyerStylesPreserved:true',
+            'peopleYouFollowExplanationRemoved:true','automaticUpdaterPreserved:true',
             'updateViaCache','fcPlayFlyerVideoV1332','playInlineV1239'
           ]
           for x in required:
@@ -109,7 +105,7 @@ jobs:
         run: |
           git config user.name 'FlamesChallenge Build Bot'
           git config user.email 'actions@users.noreply.github.com'
-          git rm -f .github/v1335.patch.gz.b64 .github/v1335.trigger
+          git rm -f .github/v1335.trigger
           git show 11f1a3c8d422d865ae6669b50b76b53c0e7753f7:.github/workflows/apply-v1326.yml > .github/workflows/apply-v1326.yml
           git add index.html .github/workflows/apply-v1326.yml
           git commit -m 'Build v1335 new Spotlight template'
