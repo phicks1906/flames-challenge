@@ -1,13 +1,13 @@
-name: Apply v1326 exact Spotlight poster
+name: Apply v1337 created item focus and video transport
 on:
   push:
     branches: [main]
-    paths: ['.github/v1326.trigger']
+    paths: ['.github/v1337.trigger']
 permissions:
   contents: write
 jobs:
   build:
-    if: github.event.head_commit.message == 'Trigger v1326 build'
+    if: github.event.head_commit.message == 'Trigger v1337 build'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,98 +16,71 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Apply v1326 changes to production
+      - name: Verify exact v1336 production baseline
+        run: |
+          test "$(git hash-object index.html)" = "ea5c1d04be39532bae23b796b3040f76db3e2206"
+          grep -Fq 'v1336 · audio-composer-preview-parity' index.html
+      - name: Apply exact v1337 manifest
+        run: |
+          python .github/v1337_apply.py
+          test "$(git hash-object index.html)" = "badedd89d19714bc5db9105588cdd5b36365dcb5"
+      - name: Validate exact v1337
         run: |
           python - <<'PY'
           from pathlib import Path
-          import base64,gzip,re
-          p=Path('index.html')
-          s=p.read_text(encoding='utf-8')
-          if 'v1325 · cinematic-spotlight-flyer' not in s:
-              raise SystemExit('expected v1325 production baseline')
-          old_script=re.search(r'<script id="fc-v1325-cinematic-spotlight">[\s\S]*?</script>',s)
-          if not old_script:
-              raise SystemExit('v1325 Spotlight override script not found')
-          payload=Path('.github/v1326-spotlight-renderer.gz.b64').read_text().strip()
-          renderer=gzip.decompress(base64.b64decode(payload)).decode('utf-8').rstrip()
-          wrapper=Path('.github/v1326-wrapper.js').read_text(encoding='utf-8').rstrip()
-          new_script='<script id="fc-v1326-exact-spotlight">\n'+renderer+'\n'+wrapper+'\n</script>'
-          s=s[:old_script.start()]+new_script+s[old_script.end():]
-          s=s.replace(
-              '<meta content="v1325 · cinematic-spotlight-flyer" name="fc-build"/>',
-              '<meta content="v1326 · exact-spotlight-poster" name="fc-build"/>',
-              1
-          )
-          old_news='<meta content="Rebuilt Spotlight as a cinematic black-and-gold flyer with the approved Crowned F, real entrant identity, and correctly sourced video stills." name="fc-whatsnew"/>'
-          new_news='<meta content="Rebuilt Spotlight to match the approved black-white-orange poster system, using the entrant avatar, username, and real video image with corrected layout spacing." name="fc-whatsnew"/>'
-          if old_news in s:
-              s=s.replace(old_news,new_news,1)
-          else:
-              s,n=re.subn(r'<meta content="[^"]*" name="fc-whatsnew"/>',new_news,s,count=1)
-              if n!=1: raise SystemExit('fc-whatsnew tag not found')
-          s,n1=re.subn(
-              r'padding:\s*14px 16px max\(28px, env\(safe-area-inset-bottom, 0px\)\);',
-              'padding: 14px 16px max(136px, calc(118px + env(safe-area-inset-bottom, 0px)));',
-              s,
-              count=1
-          )
-          s,n2=re.subn(r'scroll-padding-bottom:\s*32px;', 'scroll-padding-bottom: 156px;', s, count=1)
-          if n1!=1 or n2!=1:
-              raise SystemExit(f'promote body spacing patch failed n1={n1} n2={n2}')
-          if 'gap: 8px; margin-top: 12px; padding-bottom: 18px;' not in s:
-              s,n3=re.subn(
-                  r'(\.promote-styles\s*\{[\s\S]*?gap:\s*8px;\s*margin-top:\s*12px;)',
-                  lambda m: m.group(1)+' padding-bottom: 18px;',
-                  s,
-                  count=1
-              )
-              if n3!=1:
-                  raise SystemExit('style-row spacing patch failed')
-          p.write_text(s,encoding='utf-8')
-          PY
-      - name: Validate v1326
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          import re,subprocess,tempfile,hashlib
-          s=Path('index.html').read_text(encoding='utf-8')
+          import re,subprocess,tempfile,hashlib,concurrent.futures
+          p=Path('index.html'); s=p.read_text(encoding='utf-8')
           required=[
-            'v1326 · exact-spotlight-poster',
-            'fc-v1326-exact-spotlight',
-            'FC_V1326_VALIDATION',
-            'spotlightPosterSpecMatched:true',
-            'function _spotlightBevelPathV1325',
-            'function _spotlightDrawLaurelV1325',
-            'function _spotlightDrawCalendarV1325',
-            "const brand='FLAMES CHALLENGE'",
-            "'ENTER  •  COMPETE  •  VOTE'",
-            'padding: 14px 16px max(136px, calc(118px + env(safe-area-inset-bottom, 0px)));',
-            'scroll-padding-bottom: 156px;',
-            'FC_V1324_VALIDATION',
+            'v1337 · created-item-focus-and-centered-video-transport',
+            'FC_V1337_VALIDATION',
+            'plusCreatedItemFocus:true',
+            'pollFocusExact:true',
+            'challengeCreatorEntryFocusExact:true',
+            'publicChallengeNoLongerDivertsToPromote:true',
+            'centeredSmallerFeedVideoTransport:true',
+            'challengerArrowsPreserved:true',
+            'fullscreenPreserved:true',
+            'audioComposerV1336Preserved:true',
+            'jumpToPoll(newPollIdV1337)',
+            'fcFocusCreatedChallengeEntryV1337(chData.id, creatorEntryId || null)',
+            'fcFeedVideoSeekV1337',
+            'fcFeedVideoToggleV1337',
+            'fcc-entry-nav-v1318',
+            'fc-inline-video-expand-v1239',
+            "new Set(['card','post','winner','viewer','detail','winner-results','feed-viewer','preview'])",
             'updateViaCache'
           ]
           for x in required:
-              if x not in s: raise SystemExit(f'missing invariant: {x}')
-          if 'fc-v1325-cinematic-spotlight' in s:
-              raise SystemExit('old v1325 Spotlight override remains')
-          if 'v1325 · cinematic-spotlight-flyer' in s:
-              raise SystemExit('old build meta remains')
+              if x not in s: raise SystemExit('missing invariant: '+x)
+          if "await openPromote('challenge', fullCh);" in s:
+              raise SystemExit('old challenge promote diversion remains')
+          if 'Orange rings mean someone you follow is competing now. Tap their photo to view the challenge or vote.' in s:
+              raise SystemExit('People You Follow explanation returned')
           if 'Check for updates' in s:
               raise SystemExit('manual update UI returned')
+          if s.count("mode:'preview'") != 2:
+              raise SystemExit('unexpected audio preview call count')
           scripts=re.findall(r'<script\b(?![^>]*\bsrc=)[^>]*>(.*?)</script>',s,re.I|re.S)
           with tempfile.TemporaryDirectory() as d:
+              files=[]
               for i,code in enumerate(scripts,1):
-                  f=Path(d)/f's{i}.js';f.write_text(code,encoding='utf-8')
-                  r=subprocess.run(['node','--check',str(f)],capture_output=True,text=True)
-                  if r.returncode:
-                      print(r.stderr);raise SystemExit(f'inline JS {i} failed')
+                  f=Path(d)/f's{i}.js'; f.write_text(code,encoding='utf-8'); files.append((i,str(f)))
+              def check(item):
+                  i,f=item
+                  r=subprocess.run(['node','--check',f],capture_output=True,text=True)
+                  return i,r.returncode,r.stderr
+              with concurrent.futures.ThreadPoolExecutor(max_workers=24) as ex:
+                  results=list(ex.map(check,files))
+              bad=[x for x in results if x[1]!=0]
+              if bad:
+                  print(bad[0][2]); raise SystemExit(f'inline JS {bad[0][0]} failed')
           styles=re.findall(r'<style\b[^>]*>(.*?)</style>',s,re.I|re.S)
           def ok(css):
               depth=0;i=0;quote=None;comment=False;esc=False
               while i<len(css):
                   c=css[i];n=css[i+1] if i+1<len(css) else ''
                   if comment:
-                      if c=='*' and n=='/':comment=False;i+=2;continue
+                      if c=='*' and n=='/': comment=False;i+=2;continue
                       i+=1;continue
                   if quote:
                       if esc:esc=False
@@ -124,13 +97,23 @@ jobs:
               return depth==0 and quote is None and not comment
           bad=[i for i,x in enumerate(styles,1) if not ok(x)]
           if bad: raise SystemExit(f'CSS validation failed: {bad}')
-          print(f'validated {len(scripts)} inline JS blocks and {len(styles)} CSS blocks')
-          print('sha256',hashlib.sha256(Path('index.html').read_bytes()).hexdigest())
+          if len(scripts)!=142 or len(styles)!=148:
+              raise SystemExit(f'unexpected block counts: js={len(scripts)} css={len(styles)}')
+          data=p.read_bytes()
+          if len(data)!=4449842:
+              raise SystemExit('output byte length mismatch')
+          digest=hashlib.sha256(data).hexdigest()
+          if digest!='3a536b9439bc220f7485f407774dba569066a1878808267ba194bb35cbd58bee':
+              raise SystemExit('output sha256 mismatch: '+digest)
+          print(f'validated {len(scripts)} JS and {len(styles)} CSS blocks')
+          print('sha256',digest)
           PY
-      - name: Commit v1326
+      - name: Commit v1337 and restore helper
         run: |
           git config user.name 'FlamesChallenge Build Bot'
           git config user.email 'actions@users.noreply.github.com'
-          git add index.html
-          git commit -m 'Build v1326 exact Spotlight poster'
+          git rm -f .github/v1337.trigger
+          git show 78e9d6d63bb0003ab3b391ce8ff4b021960388b3:.github/workflows/apply-v1326.yml > .github/workflows/apply-v1326.yml
+          git add index.html .github/workflows/apply-v1326.yml
+          git commit -m 'Build v1337 created item focus and video transport'
           git push
