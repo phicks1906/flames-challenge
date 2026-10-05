@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1340 · promote-style-picker-visible" name="fc-build"/>
+<meta content="v1341 · flyer-entry-aware-action" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Moved the flyer style picker above the preview so all style choices remain clear of the action bar." name="fc-whatsnew"/>
+<meta content="Flyer buttons recognize existing entrants and open their entry instead of inviting them to enter again." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -28024,7 +28024,8 @@ function renderFeed() {
   c.querySelectorAll('[data-flyer-viewer]').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
-      fcOpenChallengeSurfaceV1273(btn.dataset.flyerViewer);
+      if (btn.dataset.flyerEntry) openFeedViewer(btn.dataset.flyerViewer, btn.dataset.flyerEntry);
+      else fcOpenChallengeSurfaceV1273(btn.dataset.flyerViewer);
     });
   });
 
@@ -28438,9 +28439,14 @@ function renderFlyerCard(p) {
   }
   const isOpen = chStatus === 'submitting';
   const isVoting = chStatus === 'voting';
+  // v1341 — the linked challenge state belongs to the current viewer, not the flyer author.
+  const flyerEnteredV1341 = !!(ch && fcCardHasEntered(ch));
+  const flyerOwnEntryV1341 = flyerEnteredV1341 ? fcCardMyEntry(ch) : null;
+  const flyerOwnEntryIdV1341 = flyerOwnEntryV1341?.id ||
+    (flyerEnteredV1341 ? (state.myRecord || []).find(r => r.challenge?.id === ch.id && r.result !== 'not_entered')?.myEntryId : null);
   const ctaText = isChampFlyerV1272
     ? (isVoting ? '🗳️ Vote in Championship' : '👑 View Championship')
-    : isOpen ? '🔥 Enter this Challenge'
+    : isOpen ? (flyerEnteredV1341 ? 'View your entry' : '🔥 Enter this Challenge')
     : isVoting ? '🗳️ Vote Now'
     : ch ? '👀 View Challenge'
     : null;
@@ -28485,7 +28491,7 @@ function renderFlyerCard(p) {
         <div class="flyer-preview-cat">${escapeHtml(ch.category || '')}</div>
         <div class="flyer-card-title">${escapeHtml(ch.title)}</div>
         ${countdown ? `<div class="flyer-preview-meta">${countdown}</div>` : ''}
-        <button class="btn btn-primary flyer-preview-cta${isChampFlyerV1272 ? ' fc-champ-flyer-cta-v1272' : ''}" data-flyer-viewer="${ch.id}">${ctaText}</button>
+        <button class="btn btn-primary flyer-preview-cta${isChampFlyerV1272 ? ' fc-champ-flyer-cta-v1272' : ''}" data-flyer-viewer="${ch.id}"${!isChampFlyerV1272 && isOpen && flyerEnteredV1341 && flyerOwnEntryIdV1341 ? ` data-flyer-entry="${escapeHtml(flyerOwnEntryIdV1341)}"` : ''}>${ctaText}</button>
       </div>`
       : `<div class="flyer-card-body">
            <div class="flyer-card-title">Challenge unavailable</div>
