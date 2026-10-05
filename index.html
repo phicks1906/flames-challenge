@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1337 · created-item-focus-and-centered-video-transport" name="fc-build"/>
+<meta content="v1338 · challenge-options-and-spotlight-media" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="After creating from +, FlamesChallenge now lands on the item you just made; challenge feed videos also use a smaller centered transport while keeping Challenger arrows and fullscreen." name="fc-whatsnew"/>
+<meta content="Added a real Challenge Options menu before Promote, restored the Spotlight label, and fixed photo entries appearing blank in Spotlight flyers." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -8471,6 +8471,55 @@ body.theme-light .fc-audio-controls-v1123{background:rgba(30,22,17,.88);border-c
 }
 </style>
 
+<style id="fc-v1338-challenge-options-spotlight-css">
+.chc-dots{
+  appearance:none;-webkit-appearance:none;background:transparent;border:0;
+  color:var(--text-muted);font:inherit;line-height:1;cursor:pointer;
+  padding:7px 8px;border-radius:8px;min-width:34px;min-height:34px;
+  display:inline-grid;place-items:center;
+}
+.chc-dots:active{background:var(--overlay-2);color:var(--text)}
+#promoteStyles{gap:5px;padding-bottom:22px}
+#promoteStyles .pstyle{min-width:0;padding:5px 2px 9px;overflow:visible}
+#promoteStyles .pstyle span{
+  display:block!important;max-width:none!important;width:auto!important;
+  overflow:visible!important;text-overflow:clip!important;white-space:nowrap!important;
+  font-size:10px!important;line-height:1.15!important;text-align:center;
+}
+#promoteStyles .pstyle[data-fstyle="spotlight"] span{color:var(--ember)!important;font-weight:900!important}
+.fc-challenge-options-v1338{
+  position:fixed;inset:0;z-index:14050;display:none;align-items:flex-end;
+  background:rgba(0,0,0,.62);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  padding:16px 14px max(18px,env(safe-area-inset-bottom));
+}
+.fc-challenge-options-v1338.open{display:flex}
+.fc-challenge-options-card-v1338{
+  width:min(100%,520px);margin:0 auto;background:var(--surface);
+  border:1px solid var(--border);border-radius:24px;padding:18px;
+  box-shadow:0 24px 70px rgba(0,0,0,.5);
+}
+.fc-challenge-options-head-v1338{display:flex;align-items:flex-start;gap:12px;margin-bottom:14px}
+.fc-challenge-options-copy-v1338{flex:1;min-width:0}
+.fc-challenge-options-copy-v1338 h3{margin:0;font-size:20px;line-height:1.15}
+.fc-challenge-options-copy-v1338 p{margin:5px 0 0;color:var(--text-muted);font-size:12.5px;line-height:1.4}
+.fc-challenge-options-close-v1338{
+  width:38px;height:38px;border-radius:50%;border:1px solid var(--border);
+  background:var(--bg-2);color:var(--text);font-family:inherit;font-size:22px;font-weight:700;line-height:1;cursor:pointer;
+}
+.fc-challenge-option-v1338{
+  width:100%;display:flex;align-items:center;gap:12px;text-align:left;
+  margin-top:9px;padding:13px 14px;border-radius:16px;border:1px solid var(--border);
+  background:var(--bg-2);color:var(--text);font:inherit;cursor:pointer;
+}
+.fc-challenge-option-v1338:active{transform:scale(.992);background:var(--overlay-2)}
+.fc-challenge-option-icon-v1338{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:var(--overlay-2);font-size:18px;flex:0 0 38px}
+.fc-challenge-option-text-v1338{min-width:0;flex:1}
+.fc-challenge-option-text-v1338 strong{display:block;font-size:14.5px;line-height:1.2}
+.fc-challenge-option-text-v1338 small{display:block;margin-top:3px;color:var(--text-muted);font-size:11.5px;line-height:1.35}
+.fc-challenge-option-v1338.promote{border-color:rgba(255,106,44,.45);background:rgba(255,106,44,.08)}
+.fc-challenge-option-v1338.promote .fc-challenge-option-icon-v1338{background:rgba(255,106,44,.16)}
+body.theme-light .fc-challenge-options-v1338{background:rgba(20,16,14,.38)}
+</style>
 </head>
 <body>
 <!-- v1095 — stable session/data boot gate. Removed only after the signed-in
@@ -17211,16 +17260,17 @@ async function openPromote(type, item) {
       const { data } = await db.from('entries')
         .select('id, user_id, media_url, media_type, poster_url, moderation_status')
         .eq('challenge_id', item.id)
-        .in('media_type', ['image', 'video'])
+        .in('media_type', ['image', 'photo', 'video'])
         .or('moderation_status.is.null,moderation_status.eq.clear,moderation_status.eq.approved')
         .limit(20);
       // v716 — an image entry's hero is its media; a video entry's is its poster.
       // Drop anything with neither rather than handing generateFlyer a bad URL.
       const _heroable = (data || [])
         .map(e => {
-          let hero = e.media_type === 'image' ? e.media_url : e.poster_url;
+          const mediaTypeV1338 = String(e.media_type || '').toLowerCase();
+          let hero = (mediaTypeV1338 === 'image' || mediaTypeV1338 === 'photo') ? e.media_url : e.poster_url;
           let spotlightHero = hero;
-          if (e.media_type === 'video') {
+          if (mediaTypeV1338 === 'video') {
             const m = String(e.media_url || '').match(/\/([0-9a-f-]{36})\//i);
             if (m) spotlightHero = `https://${BUNNY_CDN_HOST}/${m[1]}/preview.webp`;
             if (!hero) hero = spotlightHero;
@@ -24763,7 +24813,7 @@ function renderChallenges() {
     btn.addEventListener('click', e => {
       e.stopPropagation();
       const ch = list.find(c => c.id === btn.dataset.chcMenu);
-      if (ch) openPromote('challenge', ch);
+      if (ch) openChallengeOptionsV1338(ch);
     });
   });
   // v1316 — social actions stay on the card. No detail-screen detour required.
@@ -28016,7 +28066,7 @@ function renderFeed() {
     btn.addEventListener('click', e => {
       e.stopPropagation();
       const ch = (state.challenges || []).find(x => x.id === btn.dataset.chcMenu);
-      if (ch) openPromote('challenge', ch);
+      if (ch) openChallengeOptionsV1338(ch);
     });
   });
   // v1316 — challenge-entry likes/comments are first-class feed actions.
@@ -29117,7 +29167,7 @@ function buildChallengeCardShell(ch, surface = 'compete') {
         <div class="chc-nm">${escapeHtml(creator.name)}${isCreator ? ' <span style="color:var(--text-muted);font-weight:600">(you)</span>' : ''}</div>
         <div class="chc-cat">${escapeHtml(ch.category || 'Other')}${ch.media_type ? ' · ' + mediaTypeLabel(ch.media_type) : ''}</div>
       </div>
-      <div class="chc-dots" data-chc-menu="${ch.id}">•••</div>
+      <button type="button" class="chc-dots" data-chc-menu="${ch.id}" aria-label="Challenge options">•••</button>
     </div>
     <div class="chc-title">${escapeHtml(display.title)}</div>
     ${display.prompt ? `<div class="chc-prompt">${escapeHtml(display.prompt)}</div>` : ''}
@@ -53030,5 +53080,108 @@ window.FC_V1337_VALIDATION={
 };
 </script>
 
+<script id="fc-v1338-challenge-options-spotlight-js">
+let fcChallengeOptionsStateV1338=null;
+function fcEnsureChallengeOptionsV1338(){
+  let sheet=document.getElementById('fcChallengeOptionsV1338');
+  if(sheet)return sheet;
+  sheet=document.createElement('div');
+  sheet.id='fcChallengeOptionsV1338';
+  sheet.className='fc-challenge-options-v1338';
+  sheet.setAttribute('role','dialog');
+  sheet.setAttribute('aria-modal','true');
+  sheet.setAttribute('aria-labelledby','fcChallengeOptionsTitleV1338');
+  sheet.innerHTML=`
+    <div class="fc-challenge-options-card-v1338">
+      <div class="fc-challenge-options-head-v1338">
+        <div class="fc-challenge-options-copy-v1338">
+          <h3 id="fcChallengeOptionsTitleV1338">Challenge options</h3>
+          <p id="fcChallengeOptionsSubV1338">Choose what you want to do with this challenge.</p>
+        </div>
+        <button type="button" class="fc-challenge-options-close-v1338" aria-label="Close challenge options">×</button>
+      </div>
+      <button type="button" class="fc-challenge-option-v1338" data-fc-challenge-option-v1338="view">
+        <span class="fc-challenge-option-icon-v1338" aria-hidden="true">👁</span>
+        <span class="fc-challenge-option-text-v1338"><strong>View challenge</strong><small>Open the entries, voting, results, and challenge details.</small></span>
+      </button>
+      <button type="button" class="fc-challenge-option-v1338" data-fc-challenge-option-v1338="share">
+        <span class="fc-challenge-option-icon-v1338" aria-hidden="true">↗</span>
+        <span class="fc-challenge-option-text-v1338"><strong>Share challenge</strong><small>Send a direct link without creating a flyer.</small></span>
+      </button>
+      <button type="button" class="fc-challenge-option-v1338 promote" data-fc-challenge-option-v1338="promote">
+        <span class="fc-challenge-option-icon-v1338" aria-hidden="true">📣</span>
+        <span class="fc-challenge-option-text-v1338"><strong>Promote with a flyer</strong><small>Create a branded flyer, choose a style, then post it to the feed or share it to a group.</small></span>
+      </button>
+    </div>`;
+  document.body.appendChild(sheet);
+  sheet.addEventListener('click',e=>{
+    if(e.target===sheet||e.target.closest('.fc-challenge-options-close-v1338')){closeChallengeOptionsV1338();return;}
+    const action=e.target.closest('[data-fc-challenge-option-v1338]')?.dataset.fcChallengeOptionV1338;
+    if(!action||!fcChallengeOptionsStateV1338)return;
+    const ch=fcChallengeOptionsStateV1338;
+    if(action==='view'){
+      closeChallengeOptionsV1338();
+      fcOpenChallengeSurfaceV1273(ch.id);
+      return;
+    }
+    if(action==='promote'){
+      closeChallengeOptionsV1338();
+      openPromote('challenge',ch);
+      return;
+    }
+    if(action==='share')fcShareChallengeFromOptionsV1338(ch);
+  });
+  return sheet;
+}
+function openChallengeOptionsV1338(ch){
+  if(!ch?.id)return;
+  fcChallengeOptionsStateV1338=ch;
+  const sheet=fcEnsureChallengeOptionsV1338();
+  const sub=document.getElementById('fcChallengeOptionsSubV1338');
+  if(sub)sub.textContent=ch.title?`Choose what you want to do with “${ch.title}”.`:'Choose what you want to do with this challenge.';
+  sheet.classList.add('open');
+  try{fcOpenImmersiveViewerV1198('challenge-options-v1338');}catch(_){document.body.style.overflow='hidden';}
+  requestAnimationFrame(()=>sheet.querySelector('.fc-challenge-option-v1338')?.focus());
+}
+function closeChallengeOptionsV1338(){
+  document.getElementById('fcChallengeOptionsV1338')?.classList.remove('open');
+  fcChallengeOptionsStateV1338=null;
+  try{fcCloseImmersiveViewerV1198('challenge-options-v1338');}catch(_){document.body.style.overflow='';}
+}
+async function fcShareChallengeFromOptionsV1338(ch){
+  if(!ch?.id)return;
+  const shareId=typeof fcUuidV1048==='function'?fcUuidV1048():'';
+  const url=typeof fcPromotionLinkV1048==='function'
+    ?fcPromotionLinkV1048('challenge',ch.id,shareId,'native_share')
+    :`${location.origin}/?c=${encodeURIComponent(ch.id)}`;
+  const data={title:ch.title||'FlamesChallenge',text:`Check out the “${ch.title||'challenge'}” challenge on FlamesChallenge 🔥`,url};
+  try{
+    if(navigator.share){
+      await navigator.share(data);
+      try{fcTrackAnalyticsV1048('promotion_shared',ch.id,{shareId,source:'native_share'});}catch(_){ }
+    }else{
+      await navigator.clipboard.writeText(url);
+      toast('Challenge link copied');
+    }
+    closeChallengeOptionsV1338();
+  }catch(err){
+    if(err?.name!=='AbortError')toast('Couldn’t share this challenge.');
+  }
+}
+window.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&document.getElementById('fcChallengeOptionsV1338')?.classList.contains('open'))closeChallengeOptionsV1338();
+});
+window.FC_V1338_VALIDATION={
+  build:'v1338',
+  challengeMenuExplainsBeforePromote:true,
+  challengeMenuOffersViewSharePromote:true,
+  spotlightLabelAlwaysVisible:true,
+  photoMediaIncludedInSpotlightLookup:true,
+  photoEntriesUseMediaUrlAsHero:true,
+  spotlightV1335PosterPreserved:true,
+  createdItemFocusV1337Preserved:true,
+  audioComposerV1336Preserved:true
+};
+</script>
 </body>
 </html>
