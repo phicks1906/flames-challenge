@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1343 · light-theme-live-carousel-arrows" name="fc-build"/>
+<meta content="v1344 · challenge-entry-limits" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Live challenge carousel arrows use light surfaces and readable icons in light mode." name="fc-whatsnew"/>
+<meta content="Choose 10, 20, 30, or Unlimited entries. Entry limits include a Championship Score explanation." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -9173,6 +9173,14 @@ body.theme-light .fc-challenge-options-v1338{background:rgba(20,16,14,.38)}
 </div>
 <div class="cc-visibility-help" id="ccVisibilityHelp">Visible in Live Challenges. Any member can enter and vote.</div>
 </div>
+<div class="cc-field" id="ccEntryLimitField">
+<label for="ccEntryLimit">Maximum entries</label>
+<select id="ccEntryLimit" aria-describedby="ccEntryLimitHelp ccEntryScoreHelp" style="width:100%;min-height:48px;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);font:inherit">
+<option value="10">10</option><option value="20">20</option><option value="30">30</option><option value="" selected>Unlimited</option>
+</select>
+<div class="cc-visibility-help" id="ccEntryLimitHelp">Includes your entry if you compete. Locked when launched. Reaching the limit does not change the entry or voting deadlines.</div>
+<div class="cc-visibility-help" id="ccEntryScoreHelp">Smaller entry limits mean fewer opponents available to defeat, which can reduce the winner’s Championship Score potential. Opponent strength still matters, and voter turnout is not limited.</div>
+</div>
 <div class="cc-field" id="ccInviteField" style="display:none">
 <label>Invite participants</label>
 <div class="cc-section-label cc-invite-heading">Your groups <button class="btn btn-ghost btn-sm" onclick="openInlineGroupEditor()" type="button">+ New group</button></div>
@@ -11288,9 +11296,40 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 window.addEventListener('pageshow', () => checkForUpdate(true));
 window.addEventListener('online', () => checkForUpdate(true));
 
-// Max entries allowed per challenge. Keeps voting scannable and every entry meaningful.
-// When reached, the challenge shows "Challenge full" and the submit path is blocked.
-const MAX_ENTRIES_PER_CHALLENGE = 20;
+// v1344 — creator-selected capacity; Unlimited is null. The database is authoritative.
+function fcEntryLimitV1344(ch) {
+  if (ch?.is_championship) return null;
+  if (ch?.entry_limit === null) return null;
+  const n = Number(ch?.entry_limit ?? 20);
+  return [10,20,30].includes(n) ? n : 20;
+}
+function fcCapacityCountV1344(entries) {
+  return (entries || []).filter(e => Number(e.sd_round || 0) === 0 && String(e.moderation_status || 'clear').toLowerCase() !== 'rejected').length;
+}
+function fcKnownCapacityV1344(ch, entries) {
+  const rows = new Map();
+  [...(state.challengeEntriesV1060 || []), ...(state.feedEntries || []), ...(state.currentEntries || []), ...(entries || [])].forEach(e => {
+    if (String(e.challenge_id || '') === String(ch?.id)) rows.set(e.id,e);
+  });
+  return fcCapacityCountV1344([...rows.values()]);
+}
+function fcChallengeFullV1344(ch, entries) {
+  const limit = fcEntryLimitV1344(ch);
+  const count = typeof entries === 'number' ? entries : fcKnownCapacityV1344(ch,entries);
+  return limit !== null && count >= limit;
+}
+function fcCapacityLabelV1344(ch, count) {
+  const limit = fcEntryLimitV1344(ch);
+  return limit === null ? 'Unlimited entries' : `${count} of ${limit} spots filled${count >= limit ? ' · Full' : ''}`;
+}
+async function fcCheckCapacityV1344(ch, editingEntry) {
+  if (ch?.is_championship || fcSuddenDeathEntryStateV1295(ch).active) return true;
+  if (editingEntry && String(editingEntry.moderation_status || 'clear').toLowerCase() !== 'rejected') return true;
+  if (fcEntryLimitV1344(ch) === null) return true;
+  const {data,error} = await db.from('entries').select('id,sd_round,moderation_status').eq('challenge_id',ch.id);
+  if (error) throw new Error('Could not check available entry spots. Please try again.');
+  return !fcChallengeFullV1344(ch,data || []);
+}
 
 // Theme: dark (default) or light. Applied ASAP to avoid flash on load.
 const THEME_KEY = 'fc_theme';
@@ -24418,7 +24457,8 @@ document.getElementById('createChallengeForm').addEventListener('submit', async 
 
     btn.textContent = 'Creating...';
     const rpcResult = await fcDbMutationV1101(
-      db.rpc('fc_create_challenge_v1101', {
+      db.rpc('fc_create_challenge_v1344', {
+        p_entry_limit: document.getElementById('ccEntryLimit').value === '' ? null : Number(document.getElementById('ccEntryLimit').value),
         p_title: title,
         p_rules: rules || null,
         p_category: ccState.category,
@@ -25460,7 +25500,7 @@ function renderChallengeDetail() {
   const enteredThisRound = detailState?.enteredThisRound ?? (state.profile && state.currentEntries.some(e =>
     e.user_id === myId && e.moderation_status !== 'rejected' && (isSdSub ? (e.sd_round || 0) === sdRound : true)));
   const userHasEntered = detailState?.userHasEntered ?? enteredThisRound;
-  const challengeFull = detailState?.challengeFull ?? (state.currentEntries.length >= MAX_ENTRIES_PER_CHALLENGE);
+  const challengeFull = detailState?.challengeFull ?? fcChallengeFullV1344(ch, state.currentEntries);
   const amTiedPlayer = detailState?.amTiedPlayer ?? (isSdSub && Array.isArray(ch.sd_user_ids) && ch.sd_user_ids.includes(myId));
   const canEnter = detailState?.canEnter ?? (state.profile && !userHasEntered && (
     (status === 'submitting' && !challengeFull) ||
@@ -25474,7 +25514,7 @@ function renderChallengeDetail() {
   if (cdFullNote) {
     const showFull = status === 'submitting' && challengeFull && !userHasEntered;
     cdFullNote.style.display = showFull ? 'block' : 'none';
-    if (showFull) cdFullNote.textContent = `🚫 Challenge full — ${MAX_ENTRIES_PER_CHALLENGE} entries max`;
+    if (showFull) cdFullNote.textContent = `Challenge full — ${fcEntryLimitV1344(ch)} entries max`;
   }
 
   // ── Sudden Death entry visibility ────────────────────────────────────────────
@@ -26321,6 +26361,13 @@ async function openSubmitEntry(entryToEdit = null) {
     entryToEdit = await fcRefreshOwnEntryForChallengeV1288(ch);
   }
 
+  try {
+    if (!await fcCheckCapacityV1344(ch, entryToEdit)) {
+      toast(`This challenge is full (${fcEntryLimitV1344(ch)} entries max).`);
+      if (seState.standaloneContextV1275) fcClearStandaloneEntryContextV1275(ch.id);
+      return;
+    }
+  } catch (error) { toast(error.message); return; }
   seState.editingEntry = entryToEdit;
 
   // Reset form
@@ -26328,6 +26375,10 @@ async function openSubmitEntry(entryToEdit = null) {
   clearSubmitEntryPreview();
   document.getElementById('seError').classList.remove('show');
   fcSyncEntryRulesAckV1212(ch);
+  let capacityNote=document.getElementById('seCapacityV1344');
+  if(!capacityNote){capacityNote=document.createElement('div');capacityNote.id='seCapacityV1344';capacityNote.className='cc-visibility-help';document.getElementById('submitEntryForm').prepend(capacityNote);}
+  capacityNote.hidden=!!ch.is_championship || sdEntryStateV1295.active;
+  capacityNote.textContent=fcCapacityLabelV1344(ch,fcKnownCapacityV1344(ch)) + '. The limit includes the creator’s entry.';
 
   const isText = ch.media_type === 'text';
   document.getElementById('seUploadField').style.display = isText ? 'none' : 'block';
@@ -26713,12 +26764,10 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
         return;
       }
     } catch (dupErr) { console.warn('dup entry check', dupErr); /* non-fatal — DB constraint still guards */ }
-    // Entry cap backstop: block if challenge already at MAX_ENTRIES_PER_CHALLENGE.
+    // Check fresh capacity before upload; the database serializes the final spot.
     try {
-      const { count: entryCount } = await db.from('entries')
-        .select('id', { count: 'exact', head: true }).eq('challenge_id', ch.id);
-      if (!_sdSubmitting && typeof entryCount === 'number' && entryCount >= MAX_ENTRIES_PER_CHALLENGE) {
-        errBox.textContent = `This challenge is full (${MAX_ENTRIES_PER_CHALLENGE} entries max). No more entries can be added.`;
+      if (!_sdSubmitting && !await fcCheckCapacityV1344(ch, seState.editingEntry)) {
+        errBox.textContent = `This challenge is full (${fcEntryLimitV1344(ch)} entries max). No more entries can be added.`;
         errBox.classList.add('show');
         btn.disabled = false;
         btn.removeAttribute('aria-busy');
@@ -26726,7 +26775,11 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
         seState.submitInFlightV1274 = false;
         return;
       }
-    } catch (capErr) { console.warn('entry cap check', capErr); /* non-fatal */ }
+    } catch (capErr) {
+      errBox.textContent = capErr.message; errBox.classList.add('show');
+      btn.disabled=false; btn.removeAttribute('aria-busy'); btn.textContent=orig;
+      seState.submitInFlightV1274=false; return;
+    }
   }
 
   // Block exact-duplicate media in this challenge (same file submitted twice).
@@ -28956,6 +29009,7 @@ function fcCardAction(ch, status) {
     }
     if (isCreator) return { label:'Promote challenge', mode:'promote' };
     if (entered) return { label:'Edit your entry', mode:'edit' };
+    if (fcChallengeFullV1344(ch)) return { label:'Challenge full · View', mode:'view', ghost:true };
     return { label:'Enter challenge', mode:'enter' };
   }
   if (isVotingPhase(status)) {
@@ -29180,7 +29234,7 @@ function buildChallengeCardShell(ch, surface = 'compete') {
     </div>
     <div class="chc-title">${escapeHtml(display.title)}</div>
     ${display.prompt ? `<div class="chc-prompt">${escapeHtml(display.prompt)}</div>` : ''}
-    ${mediaHtml}`;
+    ${mediaHtml}${!isChampionship ? `<div class="fc-entry-capacity-v1344" style="padding:10px 16px;color:var(--text-muted);font-size:13px">${escapeHtml(fcCapacityLabelV1344(ch,fcKnownCapacityV1344(ch,cardEntries)))}</div>` : ''}`;
 
   if(surface==='compete'){
     const statusParts = myPreparing
@@ -31812,6 +31866,7 @@ function fcFeedViewerDetailsMetaV1308(ch, status, entries, votes) {
   if (creator) rows.push(`<span><b>Created by</b> ${escapeHtml(creator)}</span>`);
   if (ch?.category) rows.push(`<span><b>Category</b> ${escapeHtml(ch.category)}</span>`);
   rows.push(`<span><b>${entryCount === 1 ? 'Entry' : 'Entries'}</b> ${entryCount}</span>`);
+  if (!ch.is_championship) rows.push(`<span><b>Capacity</b> ${escapeHtml(fcCapacityLabelV1344(ch,fcKnownCapacityV1344(ch,entries)))}</span>`);
   if (isVotingPhase(status) || status === 'closed') rows.push(`<span><b>${voteCount === 1 ? 'Ballot' : 'Ballots'}</b> ${voteCount}</span>`);
   return rows.join('');
 }
@@ -31868,6 +31923,9 @@ function fcConfigureFeedViewerActionV1308(ch, status, entries) {
   if (status === 'submitting') {
     if (!mine && ch.is_championship && !canEnterChampionship(ch)) {
       btn.textContent = 'Challenge Details';
+      btn.dataset.fcFvActionV1308 = 'details';
+    } else if (!mine && fcChallengeFullV1344(ch, entries)) {
+      btn.textContent = 'Challenge full · View details';
       btn.dataset.fcFvActionV1308 = 'details';
     } else if (!mine) {
       btn.textContent = '🔥 Enter Challenge';
@@ -35012,7 +35070,7 @@ document.addEventListener('click', async (e) => {
     steps[1].querySelector('.cc-step-body').prepend(self);
     uxMove(2,[document.getElementById('ccUploadField'),document.getElementById('ccTextField'),document.getElementById('ccCaptionField')]);
     uxMove(3,[document.getElementById('ccSuddenDeathCheck')?.closest('.cc-field'),document.getElementById('ccEnterPills')?.closest('.cc-field'),document.getElementById('ccVotePills')?.closest('.cc-field'),document.getElementById('ccScheduleSummary'),document.getElementById('ccCustomDatesToggle'),document.getElementById('ccCustomDates')]);
-    uxMove(4,[document.getElementById('ccVisPills')?.closest('.cc-field'),document.getElementById('ccInviteField'),document.getElementById('ccError'),document.querySelector('#createChallengeForm .cc-submit-area')]);
+    uxMove(4,[document.getElementById('ccVisPills')?.closest('.cc-field'),document.getElementById('ccEntryLimitField'),document.getElementById('ccInviteField'),document.getElementById('ccError'),document.querySelector('#createChallengeForm .cc-submit-area')]);
     original.filter(n=>n.parentNode===form).forEach(n=>steps[3].querySelector('.cc-step-body').appendChild(n));
     steps.forEach((sec,i)=>{
       const a=sec.querySelector('.cc-step-actions');
@@ -35521,6 +35579,7 @@ document.addEventListener('click', async (e) => {
       }
       if(mine) return {label:'Promote challenge',run:()=>openPromote('challenge',ch)};
       if(entry) return {label:'Edit your entry',run:()=>{state.currentChallenge=ch;openSubmitEntry(entry);}};
+      if(fcChallengeFullV1344(ch)) return {label:'Challenge full · View',run:()=>openChallenge(ch)};
       return {label:'Enter challenge',run:()=>{state.currentChallenge=ch;openSubmitEntry();}};
     }
     if(status==='voting'||status==='sudden_death') return {label:fcHasVoted(ch)?'View voting':'Vote now',run:()=>openChallenge(ch)};
@@ -35641,10 +35700,10 @@ document.addEventListener('click', async (e) => {
       const copy=fcSplitTitle(ch), count=fcEntryCount(ch);
       const end=s==='submitting'?ch.submission_deadline:ch.voting_end;
       const timing=end?fcCountdown(end):'';
-      const statusParts=[`${count} entr${count===1?'y':'ies'}`];
+      const statusParts=[ch.is_championship ? `${count} entr${count===1?'y':'ies'}` : fcCapacityLabelV1344(ch,fcKnownCapacityV1344(ch))];
       if(timing)statusParts.push(timing);
       const statusCopy=statusParts.join(' · ');
-      const actionLabel=s==='submitting'?'Enter':(s==='sudden_death'?'Vote':(/^vote now$/i.test(String(action.label||''))?'Vote':String(action.label||'Open')));
+      const actionLabel=s==='submitting'?(fcChallengeFullV1344(ch)?'Full · View':(/Edit/.test(action.label)?'Edit':(/Promote/.test(action.label)?'Promote':'Enter'))):(s==='sudden_death'?'Vote':(/^vote now$/i.test(String(action.label||''))?'Vote':String(action.label||'Open')));
       return `<article class="fc-home-live-card" data-live-id="${escapeHtml(ch.id)}">
         <div class="fc-home-live-media">${fcMedia(ch)}</div>
         <div class="fc-home-live-copy">
@@ -36050,7 +36109,7 @@ window.fcPublicFeedDiagnostics = function(){
   window.uxCcBack=function(){uxCcShowStep(step-1)};
 
   function draftData(){
-    return {v:DRAFT_VERSION,savedAt:Date.now(),title:byId('ccTitle')?.value||'',rules:byId('ccRules')?.value||'',caption:byId('ccCaption')?.value||'',textEntry:byId('ccTextEntry')?.value||'',category:ccState.category,mediaType:ccState.mediaType,visibility:ccState.visibility,competeSelf:ccState.competeSelf!==false,suddenDeath:!!byId('ccSuddenDeathCheck')?.checked,subDeadline:byId('ccSubDeadline')?.value||'',votingEnd:byId('ccVotingEnd')?.value||'',enterHours:selectedHours('ccEnterPills',72),voteHours:selectedHours('ccVotePills',48),hadFile:!!ccState.file,step};
+    return {v:DRAFT_VERSION,savedAt:Date.now(),title:byId('ccTitle')?.value||'',rules:byId('ccRules')?.value||'',caption:byId('ccCaption')?.value||'',textEntry:byId('ccTextEntry')?.value||'',category:ccState.category,mediaType:ccState.mediaType,visibility:ccState.visibility,entryLimit:byId('ccEntryLimit')?.value||'',competeSelf:ccState.competeSelf!==false,suddenDeath:!!byId('ccSuddenDeathCheck')?.checked,subDeadline:byId('ccSubDeadline')?.value||'',votingEnd:byId('ccVotingEnd')?.value||'',enterHours:selectedHours('ccEnterPills',72),voteHours:selectedHours('ccVotePills',48),hadFile:!!ccState.file,step};
   }
   function saveDraft(){if(restoring||!state.profile)return;try{localStorage.setItem(draftKey(),JSON.stringify(draftData()));status('Draft saved on this device.','saved')}catch(e){status('Draft could not be saved.')}}
   function queueSave(){clearTimeout(saveTimer);status('Saving draft…');saveTimer=setTimeout(saveDraft,350)}
@@ -36059,6 +36118,7 @@ window.fcPublicFeedDiagnostics = function(){
     let d=null;try{d=JSON.parse(localStorage.getItem(draftKey())||'null')}catch(e){}
     if(!d||d.v!==DRAFT_VERSION||Date.now()-Number(d.savedAt||0)>7*86400000)return false;
     restoring=true;
+    byId('ccEntryLimit').value=['10','20','30'].includes(String(d.entryLimit))?String(d.entryLimit):'';
     byId('ccTitle').value=d.title||'';byId('ccRules').value=d.rules||'';byId('ccCaption').value=d.caption||'';byId('ccTextEntry').value=d.textEntry||'';
     ccState.category=d.category||'Photography';ccState.mediaType=d.mediaType||'photo';ccState.visibility=d.visibility||'public';ccState.competeSelf=d.competeSelf!==false;
     document.querySelectorAll('#ccCategoryPills [data-cat]').forEach(b=>b.classList.toggle('selected',b.dataset.cat===ccState.category));
@@ -36082,7 +36142,7 @@ window.fcPublicFeedDiagnostics = function(){
     const visibility=ccState.visibility==='private'?'Invited people':'Public community';
     const entryType=({photo:'Photo',video:'Video',audio:'Audio',text:'Text'})[ccState.mediaType]||ccState.mediaType;
     const close=formatDate(byId('ccSubDeadline')?.value),vote=formatDate(byId('ccVotingEnd')?.value);
-    box.innerHTML=`<div class="cc-launch-preview-head"><div class="cc-launch-preview-kicker">FINAL PREVIEW</div><h3>${escapeHtml(title)}</h3><div class="cc-launch-preview-meta">${escapeHtml(ccState.category)} · ${escapeHtml(entryType)} · ${escapeHtml(visibility)}</div></div><div class="cc-launch-preview-body"><div class="cc-launch-preview-stat"><span>Creator role</span><b>${escapeHtml(role)}</b></div><div class="cc-launch-preview-stat"><span>Tie rule</span><b>${byId('ccSuddenDeathCheck')?.checked?'Sudden death':'Standard result'}</b></div><div class="cc-launch-preview-stat"><span>Entries close</span><b>${escapeHtml(close)}</b></div><div class="cc-launch-preview-stat"><span>Voting ends</span><b>${escapeHtml(vote)}</b></div>${rules?`<div class="cc-launch-preview-rules"><strong>Rules:</strong> ${escapeHtml(rules)}</div>`:''}</div>`;
+    box.innerHTML=`<div class="cc-launch-preview-head"><div class="cc-launch-preview-kicker">FINAL PREVIEW</div><h3>${escapeHtml(title)}</h3><div class="cc-launch-preview-meta">${escapeHtml(ccState.category)} · ${escapeHtml(entryType)} · ${escapeHtml(visibility)}</div></div><div class="cc-launch-preview-body"><div class="cc-launch-preview-stat"><span>Creator role</span><b>${escapeHtml(role)}</b></div><div class="cc-launch-preview-stat"><span>Maximum entries</span><b>${byId('ccEntryLimit')?.value || 'Unlimited'}</b></div><div class="cc-launch-preview-stat"><span>Tie rule</span><b>${byId('ccSuddenDeathCheck')?.checked?'Sudden death':'Standard result'}</b></div><div class="cc-launch-preview-stat"><span>Entries close</span><b>${escapeHtml(close)}</b></div><div class="cc-launch-preview-stat"><span>Voting ends</span><b>${escapeHtml(vote)}</b></div>${rules?`<div class="cc-launch-preview-rules"><strong>Rules:</strong> ${escapeHtml(rules)}</div>`:''}</div>`;
   }
   function videoDuration(file){
     const statusEl=byId('ccVideoTrimStatus');if(!statusEl||!file||ccState.mediaType!=='video'){if(statusEl)statusEl.style.display='none';return}
@@ -36410,7 +36470,7 @@ window.fcPublicFeedDiagnostics = function(){
     const hasPrivatePendingEntry = !!myEntry && MOD_PENDING.has(myModeration);
     const enteredThisRound = !!myEntry;
     const hasOwnRowV1288 = !!myEntryAnyV1288;
-    const challengeFull = allEntries.length >= MAX_ENTRIES_PER_CHALLENGE;
+    const challengeFull = fcChallengeFullV1344(ch, allEntries);
     const amTiedPlayer = isSdSubmitting && Array.isArray(ch.sd_user_ids) && ch.sd_user_ids.includes(myId);
     const canEnter = !!state.profile && !hasOwnRowV1288 && (
       (status === 'submitting' && !challengeFull) ||
@@ -53192,5 +53252,6 @@ window.FC_V1338_VALIDATION={
   audioComposerV1336Preserved:true
 };
 </script>
+<script>window.FC_V1344_VALIDATION={build:"v1344",freeEntryLimits:[10,20,30,null],unlimitedDefault:true,scoringExplanationVisible:true,capacityEnforcedInDatabase:true,creatorEntryCounts:true,championshipsExempt:true,capLockedAtLaunch:true};</script>
 </body>
 </html>
