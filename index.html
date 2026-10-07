@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1348 · ember-audio-spotlight" name="fc-build"/>
+<meta content="v1349 · competition-highlights" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Audio Spotlight flyers now feature Ember wearing headphones, with the entrant’s name and avatar preserved." name="fc-whatsnew"/>
+<meta content="Home now highlights close races, deadlines, winners, champions, and admin-selected features." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -8817,12 +8817,12 @@ body.theme-light .fc-challenge-options-v1338{background:rgba(20,16,14,.38)}
 <div class="fc-home-live-kicker">LIVE NOW</div>
 <h2 id="fcHomeLiveTitle">Enter or vote now</h2>
 </div>
-<button class="fc-home-live-all" onclick="switchView('challenges')" type="button">View all →</button>
+<div style="display:flex;align-items:center;gap:12px"><button type="button" id="fcHighlightManageV1349" onclick="fcOpenHighlightAdminV1349()" hidden>Manage</button><button class="fc-home-live-all" onclick="switchView('challenges')" type="button">Compete →</button></div>
 </div>
 <div class="fc-home-live-scroller">
-<button aria-label="Previous live challenge" class="fc-home-live-nav prev" data-home-live-nav="prev" onclick="stepHomeLiveShelf(-1)" type="button">‹</button>
+<button aria-label="Previous highlight" class="fc-home-live-nav prev" data-home-live-nav="prev" onclick="stepHomeLiveShelf(-1)" type="button">‹</button>
 <div class="fc-home-live-list" id="fcHomeLiveList"></div>
-<button aria-label="Next live challenge" class="fc-home-live-nav next" data-home-live-nav="next" onclick="stepHomeLiveShelf(1)" type="button">›</button>
+<button aria-label="Next highlight" class="fc-home-live-nav next" data-home-live-nav="next" onclick="stepHomeLiveShelf(1)" type="button">›</button>
 </div>
 </section>
 <div class="heat-check">
@@ -34416,6 +34416,8 @@ async function renderAdminOverview() {
         <div class="admin-stat"><div class="admin-stat-num">${(votesRes.count || 0) + (pollVotesRes.count || 0)}</div><div class="admin-stat-lbl">Votes (all)</div></div>
       </div>
     `;
+    panel.insertAdjacentHTML('beforeend','<div id="fcHighlightAdminV1349"></div>');
+    await fcRenderHighlightAdminV1349();
   } catch (err) {
     panel.innerHTML = '<div class="admin-error">Error: ' + escapeHtml(err.message || String(err)) + '</div>';
   }
@@ -35767,7 +35769,7 @@ document.addEventListener('click', async (e) => {
 
   window.stepHomeLiveShelf=function(dir){
     const list=document.getElementById('fcHomeLiveList');
-    const card=list?.querySelector('.fc-home-live-card');
+    const card=list?.querySelector('.fc-highlight-card, .fc-home-live-card');
     if(!list||!card) return;
     const css=getComputedStyle(list);
     const gap=parseFloat(css.gap||css.columnGap||'9')||9;
@@ -35777,6 +35779,7 @@ document.addEventListener('click', async (e) => {
   };
 
   function renderHomeLiveShelf(){
+    if(typeof fcRenderHighlightsV1349==='function'){wireHomeLiveShelfV1321(document.getElementById('fcHomeLiveList'));return fcRenderHighlightsV1349();}
     const shelf=document.getElementById('fcHomeLive'), list=document.getElementById('fcHomeLiveList');
     if(!shelf||!list||!state.profile) return;
     wireHomeLiveShelfV1321(list);
@@ -53351,5 +53354,154 @@ window.FC_V1338_VALIDATION={
 </script>
 <script>window.FC_V1344_VALIDATION={build:"v1344",freeEntryLimits:[10,20,30,null],unlimitedDefault:true,scoringExplanationVisible:true,capacityEnforcedInDatabase:true,creatorEntryCounts:true,championshipsExempt:true,capLockedAtLaunch:true};</script>
 <script>window.FC_V1345_VALIDATION={build:"v1345",darkAuthFieldsIndependentOfTheme:true,autofillDarkFieldPaint:true,readableAutofillText:true,passwordToggleReadable:true,nativeAutofillPreserved:true,v1344EntryLimitsPreserved:true};</script>
+<style id="fc-v1349-highlights-css">
+/* v1349 — readable swipe cards; theme variables remain authoritative. */
+#feedView #fcHomeLive.fc-highlights-v1349{padding:14px!important}
+#fcHomeLive.fc-highlights-v1349 .fc-home-live-head{align-items:center;gap:12px}
+#fcHomeLive.fc-highlights-v1349 h2{font-size:18px!important;line-height:1.2!important}
+#fcHomeLive.fc-highlights-v1349 .fc-home-live-kicker{font-size:10px!important}
+#fcHomeLive.fc-highlights-v1349 .fc-home-live-list{display:flex!important;align-items:stretch!important;gap:12px!important;overflow-x:auto!important;scroll-snap-type:x mandatory!important;padding:3px 1px 9px!important;scrollbar-width:none}
+#fcHomeLive.fc-highlights-v1349 .fc-home-live-list::-webkit-scrollbar{display:none}
+#fcHomeLive.fc-highlights-v1349 .fc-home-live-nav{top:79px!important;transform:none!important}
+#fcHomeLive .fc-highlight-card{flex:0 0 min(76vw,250px);width:min(76vw,250px);min-width:0;scroll-snap-align:start;overflow:hidden;border:1px solid var(--border);border-radius:16px;background:var(--surface-2);color:var(--text);display:flex;flex-direction:column}
+#fcHomeLive .fc-highlight-art{height:142px;position:relative;overflow:hidden;background:#0d0b09}
+#fcHomeLive .fc-highlight-art img{width:100%;height:100%;object-fit:cover;display:block}
+#fcHomeLive .fc-highlight-art::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.4),transparent 65%);pointer-events:none}
+#fcHomeLive .fc-highlight-kind{position:absolute;z-index:1;top:10px;left:10px;max-width:calc(100% - 20px);border:1px solid rgba(255,122,0,.6);background:rgba(9,7,5,.9);color:#ffae6d;border-radius:6px;padding:5px 7px;font:800 10px/1.2 var(--font-body);letter-spacing:.06em}
+#fcHomeLive .fc-highlight-art-fallback{height:100%;display:flex;align-items:center;justify-content:center;gap:12px;background:radial-gradient(ellipse at center,#43230c,#0d0b09);color:#ffb963}
+#fcHomeLive .fc-highlight-art-fallback svg{width:50px;height:50px;flex-shrink:0}
+#fcHomeLive .fc-highlight-art-fallback span{font:800 15px/1.2 var(--font-body);max-width:125px}
+#fcHomeLive .fc-highlight-copy{padding:12px;display:flex;flex-direction:column;gap:7px;flex:1;min-width:0}
+#fcHomeLive .fc-highlight-category{font:700 10px/1.2 var(--font-body);letter-spacing:.07em;text-transform:uppercase;color:var(--text-muted)}
+#fcHomeLive .fc-highlight-copy h3{font:800 17px/1.22 var(--font-body);color:var(--text);margin:0;overflow-wrap:anywhere}
+#fcHomeLive .fc-highlight-copy p{font:500 12px/1.45 var(--font-body);color:var(--text-dim);margin:0;overflow-wrap:anywhere}
+#fcHomeLive .fc-highlight-action,#fcHomeLive .fc-highlight-copy summary{margin-top:auto;border:0;background:none;color:var(--ember);font:800 13px/1.3 var(--font-body);text-align:left;padding:8px 0 1px;min-height:36px;cursor:pointer}
+#fcHomeLive .fc-highlight-copy details{margin-top:auto}#fcHomeLive .fc-highlight-copy details p{padding-top:7px}
+#fcHomeLive .fc-highlight-empty{font:500 13px/1.5 var(--font-body);color:var(--text-muted)}
+#fcHighlightManageV1349{border:0;background:none;color:var(--text-muted);font:700 12px/1.3 var(--font-body);cursor:pointer;padding:8px 0}#fcHighlightManageV1349[hidden]{display:none!important}
+#fcHighlightAdminV1349{border:1px solid var(--border);border-radius:18px;background:var(--surface-2);padding:18px;margin-top:18px;color:var(--text)}
+#fcHighlightAdminV1349 h3{margin:0 0 8px;font-size:20px}#fcHighlightAdminV1349 p{font-size:13px;line-height:1.45;color:var(--text-dim)}
+#fcHighlightAdminV1349 label{display:block;margin:14px 0 6px;font-size:13px;font-weight:700}
+#fcHighlightAdminV1349 input,#fcHighlightAdminV1349 select,#fcHighlightAdminV1349 textarea{display:block;width:100%;box-sizing:border-box;min-width:0;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);font:400 16px/1.4 var(--font-body)}
+#fcHighlightAdminV1349 textarea{min-height:96px;resize:vertical}.fc-highlight-admin-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+@media(max-width:390px){#fcHomeLive.fc-highlights-v1349 h2{font-size:16px!important}#feedView #fcHomeLive.fc-highlights-v1349{padding:12px!important}}
+</style>
+<script id="fc-v1349-highlights-js">
+/* v1349 — public, current competition news. Frozen result rows alone name winners. */
+const fcHighlightsV1349={entries:[],votes:[],results:[],winners:[],pin:null,complete:false,stamp:0,busy:null,rows:[]};
+function fcHighlightStatusV1349(ch){return String(computeChallengeStatus(ch)||ch.status||'').toLowerCase();}
+function fcHighlightAllowedV1349(e){return e && (!e.moderation_status||['clear','approved'].includes(String(e.moderation_status).toLowerCase()));}
+function fcHighlightTimeV1349(end,now=Date.now()){
+ const n=Math.max(1,Math.ceil((Date.parse(end)-now)/60000));return n>=1440?`${Math.ceil(n/1440)} days`:n>=60?`${Math.floor(n/60)}h ${n%60}m`:`${n}m`;
+}
+function fcHighlightChoicesV1349(){return (state.challenges||[]).filter(c=>c.is_public===true);}
+async function fcLoadHighlightsV1349(force=false){
+ const h=fcHighlightsV1349;if(!state.profile)return;if(h.busy)return h.busy;if(!force&&Date.now()-h.stamp<90000)return;
+ const uid=state.profile.id;
+ h.busy=(async()=>{
+  const active=fcHighlightChoicesV1349().filter(c=>['voting','sudden_death'].includes(fcHighlightStatusV1349(c))).sort((a,b)=>Date.parse(a.voting_end)-Date.parse(b.voting_end)).slice(0,24);
+  const ids=active.map(c=>c.id),cutoff=new Date(Date.now()-7*86400000).toISOString();
+  const first=await Promise.allSettled([
+   db.from('challenge_results').select('challenge_id,resolved_at,winner_count,is_public,is_championship,valid_ballots,resolution').eq('is_public',true).gte('resolved_at',cutoff).order('resolved_at',{ascending:false}).limit(30),
+   db.from('home_highlight_features').select('*').eq('id',1).maybeSingle(),
+   ids.length?db.from('entry_votes').select('entry_id,challenge_id,voter_id,sd_round,created_at',{count:'exact'}).in('challenge_id',ids).order('created_at',{ascending:false}).limit(10000):Promise.resolve({data:[],count:0})
+  ]);
+  if(state.profile?.id!==uid)return;
+  const read=i=>first[i].status==='fulfilled'&&!first[i].value.error?first[i].value:null;
+  const results=read(0),pin=read(1),votes=read(2);
+  h.results=results?.data||[];h.pin=pin?.data||null;h.votes=votes?.data||[];
+  h.complete=!!votes&&votes.count===h.votes.length;
+  const allIds=[...new Set([...ids,...h.results.map(r=>r.challenge_id),h.pin?.challenge_id].filter(Boolean))];
+  const next=await Promise.allSettled([
+   allIds.length?db.from('entries').select('id,challenge_id,user_id,media_type,media_url,poster_url,caption,sd_round,moderation_status,submitter:profiles!entries_user_id_fkey(id,name,avatar)',{count:'exact'}).in('challenge_id',allIds).or('moderation_status.is.null,moderation_status.eq.clear,moderation_status.eq.approved').limit(3000):Promise.resolve({data:[],count:0}),
+   h.results.length?db.from('challenge_result_winners').select('challenge_id,entry_id,user_id,vote_count,is_co_winner').in('challenge_id',h.results.map(r=>r.challenge_id)):Promise.resolve({data:[]})
+  ]);
+  if(state.profile?.id!==uid)return;
+  const entries=next[0].status==='fulfilled'&&!next[0].value.error?next[0].value:null;
+  h.entries=entries?.data||[];h.complete=h.complete&&!!entries&&entries.count===h.entries.length;
+  h.winners=next[1].status==='fulfilled'&&!next[1].value.error?next[1].value.data||[]:[];h.stamp=Date.now();
+ })().catch(e=>{h.complete=false;h.pin=null;h.results=[];h.winners=[];h.stamp=Date.now();console.warn('Highlights refresh',e);}).finally(()=>{h.busy=null;fcRenderHighlightsV1349();});
+ return h.busy;
+}
+function fcBuildHighlightsV1349(now=Date.now()){
+ const h=fcHighlightsV1349,challenges=fcHighlightChoicesV1349(),byId=new Map(challenges.map(c=>[String(c.id),c]));const rows=[];
+ const pin=h.pin;
+ if(pin&&Date.parse(pin.expires_at)>now){
+  const ch=pin.challenge_id?byId.get(String(pin.challenge_id)):null,e=pin.entry_id?h.entries.find(e=>e.id===pin.entry_id):null;
+  if((!pin.challenge_id||ch)&&(!pin.entry_id||fcHighlightAllowedV1349(e)))rows.push({key:'feature',kind:pin.entry_id?'FEATURED ENTRY':pin.challenge_id?'FEATURED CHALLENGE':'ANNOUNCEMENT',headline:pin.headline,detail:pin.detail,ch,e,action:e?'View entry':ch?'View challenge':'Read update',priority:1000,person:e?.user_id});
+ }
+ for(const result of h.results){
+  const ch=byId.get(String(result.challenge_id));if(!ch||fcHighlightStatusV1349(ch)!=='closed'||Date.parse(result.resolved_at)<=now-7*86400000||Date.parse(result.resolved_at)>now)continue;
+  const winners=h.winners.filter(w=>w.challenge_id===ch.id);if(!winners.length||winners.length!==Number(result.winner_count))continue;
+  const winner=winners[0],entry=h.entries.find(e=>e.id===winner.entry_id);if(!fcHighlightAllowedV1349(entry))continue;
+  const name=entry.submitter?.name||'A competitor',shared=winners.length>1;
+  rows.push({key:'result-'+ch.id,kind:ch.is_championship?'CHAMPION':'RECENT WIN',headline:shared?`${winners.length} co-winners crowned`:ch.is_championship?`${name} takes the crown`:`${name} wins`,detail:ch.title,ch,e:entry,person:winner.user_id,action:shared?'View results':'See winning entry',priority:ch.is_championship?140:100+(Date.parse(result.resolved_at)>now-86400000?10:0)});
+ }
+ for(const ch of challenges){
+  const status=fcHighlightStatusV1349(ch),end=ch.voting_end,remaining=Date.parse(end)-now;
+  if(!['voting','sudden_death'].includes(status)||!Number.isFinite(remaining)||remaining<=0)continue;
+  const sealed=typeof ballotsSealed==='function'&&ballotsSealed(ch,status);
+  const round=ch.sd_phase==='voting'?Number(ch.sd_round||0):0;
+  const entries=h.entries.filter(e=>e.challenge_id===ch.id&&Number(e.sd_round||0)===round&&fcHighlightAllowedV1349(e));
+  const tally=new Map(entries.map(e=>[e.id,0])),seen=new Set();
+  h.votes.filter(v=>v.challenge_id===ch.id&&Number(v.sd_round||0)===round).forEach(v=>{if(!seen.has(v.voter_id)&&tally.has(v.entry_id)){seen.add(v.voter_id);tally.set(v.entry_id,tally.get(v.entry_id)+1);}});
+  const ranked=entries.slice().sort((a,b)=>(tally.get(b.id)||0)-(tally.get(a.id)||0));const first=ranked[0],total=[...tally.values()].reduce((a,b)=>a+b,0),top=first?tally.get(first.id):0,second=ranked[1]?tally.get(ranked[1].id):0;
+  const canDescribe=!sealed&&h.complete&&now-h.stamp<180000&&ranked.length>=2&&total>0;
+  let kind='VOTING CLOSES',headline=`Voting ends in ${fcHighlightTimeV1349(end,now)}`,detail=ch.title,priority=remaining<24*3600000?90:30;
+  if(canDescribe&&top===second){kind='TIED RACE';headline=`Tied with ${fcHighlightTimeV1349(end,now)} left`;detail=`${top} vote${top===1?'':'s'} each at the top · ${ch.title}`;priority=120;}
+  else if(canDescribe&&top-second<=2){kind='CLOSE RACE';headline=`${top-second} vote${top-second===1?'':'s'} separates the top two`;detail=`${fcHighlightTimeV1349(end,now)} left · ${ch.title}`;priority=115;}
+  else if(canDescribe){kind='LEADING NOW';headline=`${first.submitter?.name||'A competitor'} leads`;detail=`${top} of ${total} votes · ${fcHighlightTimeV1349(end,now)} left`;priority=70;}
+  rows.push({key:'live-'+ch.id,kind,headline,detail,ch,e:!sealed?first:null,person:!sealed?first?.user_id:null,action:'Vote',priority});
+ }
+ // When there is no vote/result news, invite discovery without an invented highlight.
+ if(!rows.length){const c=challenges.filter(ch=>fcHighlightStatusV1349(ch)==='submitting'&&Date.parse(ch.submission_deadline)>now).sort((a,b)=>Date.parse(a.submission_deadline)-Date.parse(b.submission_deadline));for(const ch of c.slice(0,10))rows.push({key:'open-'+ch.id,kind:'OPEN CHALLENGE',headline:ch.title,detail:`Entries close in ${fcHighlightTimeV1349(ch.submission_deadline,now)}`,ch,action:'View challenge',priority:10,person:ch.creator_id});}
+ rows.sort((a,b)=>b.priority-a.priority||a.key.localeCompare(b.key));const picked=[],used=new Set(),cats=new Set(),people=new Set();
+ for(let pass=0;pass<2&&picked.length<5;pass++)for(const row of rows){if(picked.length>=5)break;if(used.has(row.key)||(row.ch&&picked.some(r=>r.ch?.id===row.ch.id)))continue;if(pass===0&&((row.ch&&cats.has(row.ch.category))||(row.person&&people.has(row.person))))continue;if(row.person&&picked.filter(r=>r.person===row.person).length>=2)continue;picked.push(row);used.add(row.key);if(row.ch)cats.add(row.ch.category);if(row.person)people.add(row.person);}
+ return picked;
+}
+function fcHighlightArtworkV1349(row){
+ const e=row.e;let url='';if(fcHighlightAllowedV1349(e)){if(['photo','image'].includes(e.media_type))url=e.media_url;else if(e.media_type==='video')url=e.poster_url;else if(e.media_type==='audio')url=_SPOTLIGHT_AUDIO_EMBER_V1348;}
+ if(!url&&row.ch&&String(row.ch.media_type).toLowerCase()==='audio')url=_SPOTLIGHT_AUDIO_EMBER_V1348;
+ if(url&&/^(https?:|data:image\/)/i.test(url))return `<img src="${escapeHtml(url)}" alt="" loading="lazy">`;
+ return `<div class="fc-highlight-art-fallback"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 6 4 5 4-7 4 7 4-5-2 13H6z" fill="none" stroke="currentColor" stroke-width="1.3"/></svg><span>${escapeHtml(row.ch?.category||'FlamesChallenge')}</span></div>`;
+}
+function fcRenderHighlightsV1349(){
+ const shelf=document.getElementById('fcHomeLive'),list=document.getElementById('fcHomeLiveList');if(!shelf||!list||!state.profile)return;
+ const rows=fcBuildHighlightsV1349();fcHighlightsV1349.rows=rows;
+ document.getElementById('fcHomeLiveTitle').textContent='Competition highlights';const kicker=shelf.querySelector('.fc-home-live-kicker');if(kicker)kicker.textContent='HIGHLIGHTS';
+ const manage=document.getElementById('fcHighlightManageV1349');if(manage)manage.hidden=!isAdmin();
+ shelf.style.display=rows.length||isAdmin()?'block':'none';shelf.classList.add('fc-highlights-v1349');
+ const html=rows.map(row=>`<article class="fc-highlight-card" data-highlight-key="${escapeHtml(row.key)}"><div class="fc-highlight-art">${fcHighlightArtworkV1349(row)}<span class="fc-highlight-kind">${escapeHtml(row.kind)}</span></div><div class="fc-highlight-copy"><div class="fc-highlight-category">${escapeHtml(row.ch?.category||'Platform update')}</div><h3>${escapeHtml(row.headline)}</h3>${row.ch?`<p>${escapeHtml(row.detail)}</p><button type="button" class="fc-highlight-action" data-highlight-open="${escapeHtml(row.key)}">${escapeHtml(row.action)} →</button>`:`<details><summary>Read update →</summary><p>${escapeHtml(row.detail||row.headline)}</p></details>`}</div></article>`).join('')||'<p class="fc-highlight-empty">Competition updates will appear here when there’s activity.</p>';
+ if(list.__fcHighlightMarkupV1349!==html){const left=list.scrollLeft,expanded=new Set([...list.querySelectorAll('details[open]')].map(e=>e.closest('[data-highlight-key]')?.dataset.highlightKey));list.__fcHighlightMarkupV1349=html;list.innerHTML=html;list.scrollLeft=left;list.querySelectorAll('[data-highlight-key]').forEach(e=>{if(expanded.has(e.dataset.highlightKey)){const detail=e.querySelector('details');if(detail)detail.open=true;}});}
+ if(!list.dataset.highlightWiredV1349){list.dataset.highlightWiredV1349='1';list.addEventListener('click',e=>{const button=e.target.closest('[data-highlight-open]');if(!button)return;const row=fcHighlightsV1349.rows.find(r=>r.key===button.dataset.highlightOpen);if(!row?.ch)return;e.preventDefault();if(row.e&&['See winning entry','View entry'].includes(row.action))openEntryViewer(row.e.id,row.ch.id);else openChallenge(row.ch);});}
+ requestAnimationFrame(()=>list.__fcHomeLiveUpdateV1321?.());fcLoadHighlightsV1349();
+}
+function fcHighlightLocalDateV1349(time){const d=new Date(time);return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);}
+async function fcRenderHighlightAdminV1349(){
+ if(!isAdmin())return;const host=document.getElementById('fcHighlightAdminV1349');if(!host)return;await fcLoadHighlightsV1349(true);if(!host.isConnected)return;
+ const pin=fcHighlightsV1349.pin,choices=fcHighlightChoicesV1349().slice().sort((a,b)=>String(a.title).localeCompare(String(b.title)));
+ host.innerHTML=`<h3>Featured highlight</h3><p>Feature an entry or publish a short announcement. One slot, up to seven days.</p><label for="fcHighlightTargetV1349">Challenge</label><select id="fcHighlightTargetV1349"><option value="">Platform announcement</option>${choices.map(c=>`<option value="${escapeHtml(c.id)}" ${pin?.challenge_id===c.id?'selected':''}>${escapeHtml(c.title)} · ${escapeHtml(c.category)}</option>`).join('')}</select><label for="fcHighlightEntryV1349">Entry (optional)</label><select id="fcHighlightEntryV1349"></select><label for="fcHighlightHeadlineV1349">Headline</label><input id="fcHighlightHeadlineV1349" maxlength="80" value="${escapeHtml(pin?.headline||'')}" placeholder="One short headline"><label for="fcHighlightDetailV1349">Details</label><textarea id="fcHighlightDetailV1349" maxlength="240" placeholder="Why this matters now">${escapeHtml(pin?.detail||'')}</textarea><label for="fcHighlightExpiryV1349">Show until</label><input type="datetime-local" id="fcHighlightExpiryV1349" value="${fcHighlightLocalDateV1349(pin&&Date.parse(pin.expires_at)>Date.now()?pin.expires_at:Date.now()+2*86400000)}"><div class="fc-highlight-admin-actions"><button class="btn primary" id="fcHighlightSaveV1349" type="button">Save featured highlight</button><button class="btn ghost" id="fcHighlightRemoveV1349" type="button" ${pin?'':'hidden'}>Remove feature</button></div><p role="status" id="fcHighlightAdminStatusV1349"></p>`;
+ host.querySelector('#fcHighlightTargetV1349').addEventListener('change',()=>fcHighlightAdminEntriesV1349());host.querySelector('#fcHighlightSaveV1349').addEventListener('click',()=>fcSaveHighlightV1349(false));host.querySelector('#fcHighlightRemoveV1349').addEventListener('click',()=>fcSaveHighlightV1349(true));await fcHighlightAdminEntriesV1349(pin?.entry_id);
+}
+async function fcHighlightAdminEntriesV1349(selected=''){
+ const chId=document.getElementById('fcHighlightTargetV1349')?.value,select=document.getElementById('fcHighlightEntryV1349');if(!select)return;select.disabled=true;select.innerHTML='<option value="">Whole challenge</option>';if(!chId){select.innerHTML='<option value="">Not applicable</option>';return;}
+ const {data,error}=await db.from('entries').select('id,user_id,caption,moderation_status,submitter:profiles!entries_user_id_fkey(id,name)').eq('challenge_id',chId).or('moderation_status.is.null,moderation_status.eq.clear,moderation_status.eq.approved');if(document.getElementById('fcHighlightTargetV1349')?.value!==chId)return;
+ if(error){document.getElementById('fcHighlightAdminStatusV1349').textContent='Could not load entries. You can feature the whole challenge.';return;}
+ select.innerHTML='<option value="">Whole challenge</option>'+ (data||[]).map(e=>`<option value="${escapeHtml(e.id)}" ${e.id===selected?'selected':''}>${escapeHtml(e.submitter?.name||'Competitor')}${e.caption?' · '+escapeHtml(e.caption.slice(0,45)):''}</option>`).join('');select.disabled=false;
+}
+async function fcSaveHighlightV1349(remove=false){
+ if(!isAdmin())return;const status=document.getElementById('fcHighlightAdminStatusV1349'),button=document.getElementById('fcHighlightSaveV1349'),removeBtn=document.getElementById('fcHighlightRemoveV1349');if(!status||!button)return;
+ const headline=document.getElementById('fcHighlightHeadlineV1349').value.trim(),detail=document.getElementById('fcHighlightDetailV1349').value.trim(),expiry=new Date(document.getElementById('fcHighlightExpiryV1349').value).getTime();
+ if(!remove&&(!headline||!Number.isFinite(expiry)||expiry<=Date.now()||expiry>Date.now()+7*86400000)){status.textContent='Enter a headline and an expiry within the next seven days.';return;}
+ const payload=remove?{expires_at:new Date(Date.now()-1000).toISOString(),updated_by:state.profile.id,updated_at:new Date().toISOString()}:{id:1,headline,detail,challenge_id:document.getElementById('fcHighlightTargetV1349').value||null,entry_id:document.getElementById('fcHighlightEntryV1349').value||null,expires_at:new Date(expiry).toISOString(),updated_by:state.profile.id,updated_at:new Date().toISOString()};
+ button.disabled=true;removeBtn.disabled=true;status.textContent='Saving…';
+ try{const {data,error}=remove?await db.from('home_highlight_features').update(payload).eq('id',1).select('*').single():await db.from('home_highlight_features').upsert(payload,{onConflict:'id'}).select('*').single();if(error||!data)throw error||new Error('No saved record returned');fcHighlightsV1349.pin=data;status.textContent=remove?'Feature removed.':'Featured highlight saved.';removeBtn.hidden=false;await fcLoadHighlightsV1349(true);}
+ catch(e){status.textContent='Could not save: '+(e.message||'Please try again.');}finally{button.disabled=false;removeBtn.disabled=false;}
+}
+window.fcRenderHomeLiveShelf=fcRenderHighlightsV1349;
+window.fcOpenHighlightAdminV1349=function(){if(!isAdmin())return;switchView('admin');setTimeout(()=>document.getElementById('fcHighlightAdminV1349')?.scrollIntoView({behavior:'smooth',block:'start'}),500);};
+setInterval(()=>{if(document.visibilityState==='visible'&&state.profile){fcRenderHighlightsV1349();}},60000);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&state.profile){fcHighlightsV1349.complete=false;fcLoadHighlightsV1349(true);}});
+</script>
 </body>
 </html>
