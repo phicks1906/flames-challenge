@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1346 · readable-entry-caption-prompt" name="fc-build"/>
+<meta content="v1347 · creator-poll-edit" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="The entry caption prompt fits fully on narrow screens." name="fc-whatsnew"/>
+<meta content="Creators can edit a posted poll before the first vote; existing votes stay protected." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -9250,6 +9250,7 @@ body.theme-light .fc-challenge-options-v1338{background:rgba(20,16,14,.38)}
 <button class="cc-pill" onclick="setCpDuration(168,this)" type="button">1 week</button>
 </div>
 </div>
+<div id="cpEditHelpV1347" class="cc-visibility-help" hidden>Question and answers can be edited before the first vote. The original voting deadline stays unchanged.</div>
 <div class="cc-error" id="cpError"></div>
 <button class="btn btn-primary" id="cpSubmitBtn" onclick="submitPoll()" style="width:100%;margin-top:8px;" type="button">🗳️ Post poll</button>
 </form>
@@ -18673,6 +18674,7 @@ function renderPolls() {
     card.innerHTML = `
       <div class="poll-meta">
         <span class="poll-time">${pollTimeLabel(poll)}</span>
+        ${fcPollEditButtonV1347(poll)}
         ${voted ? '<span class="poll-voted-tag">✓ Voted</span>' : ''}
       </div>
       <h3 class="poll-question">${escapeHtml(poll.question)}</h3>
@@ -18697,6 +18699,8 @@ function renderPolls() {
       if (!ended) btn.onclick = () => castVote(poll.id, idx);
       optsBox.appendChild(btn);
     });
+    const edit=card.querySelector('[data-poll-edit-v1347]');
+    if(edit) edit.onclick=e=>{e.stopPropagation();openEditPollV1347(poll.id);};
     card.querySelector('.share-btn').onclick = (e) => { e.stopPropagation(); sharePoll(poll); };
     grid.appendChild(card);
   });
@@ -24247,11 +24251,16 @@ function showCcError(msg) {
 }
 
 // ── Create Poll ──────────────────────────────────────────────────────────────
-const pollState = { options: ['', ''], duration: 48 };
+const pollState = { options: ['', ''], duration: 48, editingId: null };
 
 function openCreatePoll() {
   if (!state.profile) return;
   if (!getFlag('fc_flag_polls')) { toast('Polls are currently disabled.'); return; }
+  pollState.editingId = null;
+  document.querySelector('#createPollSheet h2').textContent = 'New Poll';
+  document.getElementById('cpSubmitBtn').textContent = '🗳️ Post poll';
+  document.getElementById('cpDurationPills').closest('.cc-field').hidden = false;
+  document.getElementById('cpEditHelpV1347').hidden = true;
   pollState.options = ['', ''];
   pollState.duration = 48;
   document.getElementById('cpQuestion').value = '';
@@ -24298,6 +24307,52 @@ function cpRemoveOption(i) {
   renderCpOptions();
 }
 
+function fcOwnsPollV1347(poll) {
+  return !!state.profile?.id && String(poll.creator_id || '') === String(state.profile.id);
+}
+function fcPollHasVotesV1347(poll) {
+  return Object.values(state.voteCountsByPoll[poll.id] || {}).some(n => Number(n)>0) ||
+    (poll.options || []).some(o => Number(o.seed_votes || 0)>0);
+}
+function fcPollEditButtonV1347(poll) {
+  if (!fcOwnsPollV1347(poll)) return '';
+  return `<button type="button" class="btn btn-ghost btn-sm" data-poll-edit-v1347="${escapeHtml(poll.id)}" aria-label="Edit poll" style="min-height:36px;flex-shrink:0">Edit poll</button>`;
+}
+async function openEditPollV1347(id) {
+  const poll=(state.polls || []).find(p=>p.id===id);
+  if (!poll || !fcOwnsPollV1347(poll)) return;
+  if (!getFlag('fc_flag_polls')) { toast('Polls are currently disabled.'); return; }
+  if (pollEnded(poll)) { toast('This poll has ended and cannot be edited.'); return; }
+  if (fcPollHasVotesV1347(poll)) { toast('Voting has started. The question and answers are locked to preserve existing votes.'); return; }
+  try {
+    const {count,error}=await db.from('votes').select('id',{count:'exact',head:true}).eq('poll_id',id);
+    if(error) throw error;
+    if(count>0){toast('Voting has started. The question and answers are locked to preserve existing votes.');return;}
+    openCreatePoll();
+    pollState.editingId=id;
+    pollState.options=(poll.options || []).map(o=>o.label);
+    pollState.duration=poll.hours_remaining;
+    document.getElementById('cpQuestion').value=poll.question;
+    document.querySelector('#createPollSheet h2').textContent='Edit Poll';
+    document.getElementById('cpSubmitBtn').textContent='Save changes';
+    document.getElementById('cpDurationPills').closest('.cc-field').hidden=true;
+    document.getElementById('cpEditHelpV1347').hidden=false;
+    renderCpOptions();
+  } catch(error) { toast('Could not open the poll editor. Please try again.'); }
+}
+async function fcSavePollEditV1347(question,options,btn,errEl) {
+  const id=pollState.editingId;
+  btn.disabled=true;btn.textContent='Saving...';
+  try {
+    const {data,error}=await db.from('polls').update({question,options:options.map(label=>({label,seed_votes:0}))}).eq('id',id).eq('creator_id',state.profile.id).select('*').single();
+    if(error) throw error;
+    if(!data) throw new Error('The poll could not be saved.');
+    const i=state.polls.findIndex(p=>p.id===id);if(i>=0)state.polls[i]=data;
+    closeCreatePoll();renderPolls();updateFeedPollCardInPlace(id);toast('Poll updated!');
+  } catch(error) { errEl.textContent=error.message || 'Could not save the poll.'; }
+  finally { btn.disabled=false;btn.textContent='Save changes'; }
+}
+
 async function submitPoll() {
   if (!state.profile) return;
   const question = document.getElementById('cpQuestion').value.trim();
@@ -24308,6 +24363,7 @@ async function submitPoll() {
   if (options.length < 2) { errEl.textContent = 'Add at least 2 options.'; return; }
 
   const btn = document.getElementById('cpSubmitBtn');
+  if (pollState.editingId) { await fcSavePollEditV1347(question,options,btn,errEl); return; }
   btn.disabled = true;
   btn.textContent = 'Posting...';
 
@@ -32130,6 +32186,8 @@ function wireFeedPollCardV1315(card) {
   if (!card || card.dataset.fcPollWiredV1315 === '1') return;
   card.dataset.fcPollWiredV1315 = '1';
   card.addEventListener('click', () => jumpToPoll(card.dataset.pid));
+  const edit=card.querySelector('[data-poll-edit-v1347]');
+  if(edit) edit.addEventListener('click',e=>{e.stopPropagation();openEditPollV1347(card.dataset.pid);});
   card.querySelectorAll('[data-feed-poll-vote]').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
@@ -32181,6 +32239,7 @@ function renderFeedPollCard(poll) {
       <span style="display:flex;align-items:center;gap:8px;">
         ${voted ? '<span class="poll-voted-tag">✓ Voted</span>' : ''}
         <span class="feed-poll-time">${pollTimeLabel(poll)}</span>
+        ${fcPollEditButtonV1347(poll)}
       </span>
     </div>
     <div class="feed-poll-question">${escapeHtml(poll.question)}</div>
