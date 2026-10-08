@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1353 · immediate-highlight-hydration" name="fc-build"/>
+<meta content="v1354 · open-highlight-media" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Highlights refresh as soon as challenge data arrives instead of waiting on an early incomplete load." name="fc-whatsnew"/>
+<meta content="Open challenge highlights show an eligible photo or video preview instead of an unnecessary crown placeholder." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -53458,7 +53458,8 @@ async function fcLoadHighlightsV1349(force=false){
   const results=read(0),pin=read(1),votes=read(2);
   h.results=results?.data||[];h.pin=pin?.data||null;h.votes=votes?.data||[];
   h.complete=!!votes&&votes.count===h.votes.length;
-  const allIds=[...new Set([...ids,...h.results.map(r=>r.challenge_id),h.pin?.challenge_id].filter(Boolean))];
+  const openIds=fcHighlightChoicesV1349().filter(c=>fcHighlightStatusV1349(c)==='submitting'&&Date.parse(c.submission_deadline)>Date.now()).sort((a,b)=>Date.parse(a.submission_deadline)-Date.parse(b.submission_deadline)).slice(0,24).map(c=>c.id);
+  const allIds=[...new Set([...ids,...openIds,...h.results.map(r=>r.challenge_id),h.pin?.challenge_id].filter(Boolean))];
   const next=await Promise.allSettled([
    allIds.length?db.from('entries').select('id,challenge_id,user_id,media_type,media_url,poster_url,caption,sd_round,moderation_status,submitter:profiles!entries_user_id_fkey(id,name,avatar)',{count:'exact'}).in('challenge_id',allIds).or('moderation_status.is.null,moderation_status.eq.clear,moderation_status.eq.approved').limit(3000):Promise.resolve({data:[],count:0}),
    h.results.length?db.from('challenge_result_winners').select('challenge_id,entry_id,user_id,vote_count,is_co_winner').in('challenge_id',h.results.map(r=>r.challenge_id)):Promise.resolve({data:[]})
@@ -53501,13 +53502,21 @@ function fcBuildHighlightsV1349(now=Date.now()){
   rows.push({key:'live-'+ch.id,kind,headline,detail,ch,e:!sealed?first:null,person:!sealed?first?.user_id:null,action:'Vote',priority});
  }
  // Fill spare slots with real public open challenges, below race/result news.
- {const c=challenges.filter(ch=>fcHighlightStatusV1349(ch)==='submitting'&&Date.parse(ch.submission_deadline)>now).sort((a,b)=>Date.parse(a.submission_deadline)-Date.parse(b.submission_deadline));for(const ch of c)rows.push({key:'open-'+ch.id,kind:'OPEN CHALLENGE',headline:ch.title,detail:`Entries close in ${fcHighlightTimeV1349(ch.submission_deadline,now)}`,ch,action:'View challenge',priority:10,person:ch.creator_id});}
+ {const c=challenges.filter(ch=>fcHighlightStatusV1349(ch)==='submitting'&&Date.parse(ch.submission_deadline)>now).sort((a,b)=>Date.parse(a.submission_deadline)-Date.parse(b.submission_deadline));for(const ch of c){const e=h.entries.filter(e=>e.challenge_id===ch.id&&Number(e.sd_round||0)===0&&fcHighlightAllowedV1349(e)&&fcHighlightMediaUrlV1354(e)).sort((a,b)=>Number(b.user_id===ch.creator_id)-Number(a.user_id===ch.creator_id)||String(a.id).localeCompare(String(b.id)))[0];rows.push({key:'open-'+ch.id,kind:'OPEN CHALLENGE',headline:ch.title,detail:`Entries close in ${fcHighlightTimeV1349(ch.submission_deadline,now)}`,ch,e,action:'View challenge',priority:10,person:ch.creator_id});}}
  rows.sort((a,b)=>b.priority-a.priority||a.key.localeCompare(b.key));const picked=[],used=new Set(),cats=new Set(),people=new Set();
  for(let pass=0;pass<3&&picked.length<5;pass++)for(const row of rows){if(picked.length>=5)break;if(used.has(row.key)||(row.ch&&picked.some(r=>r.ch?.id===row.ch.id)))continue;if(pass===0&&((row.ch&&cats.has(row.ch.category))||(row.person&&people.has(row.person))))continue;if(pass<2&&row.person&&picked.filter(r=>r.person===row.person).length>=2)continue;picked.push(row);used.add(row.key);if(row.ch)cats.add(row.ch.category);if(row.person)people.add(row.person);}
  return picked;
 }
+function fcHighlightMediaUrlV1354(e){
+ if(!fcHighlightAllowedV1349(e))return '';
+ const type=String(e.media_type||'').toLowerCase();
+ if(['photo','image'].includes(type))return e.media_url||'';
+ if(type==='video')return e.poster_url||(typeof _bunnyPreviewUrl==='function'?_bunnyPreviewUrl(e.media_url||''):'')||'';
+ if(type==='audio')return _SPOTLIGHT_AUDIO_EMBER_V1348;
+ return '';
+}
 function fcHighlightArtworkV1349(row){
- const e=row.e;let url='';if(fcHighlightAllowedV1349(e)){if(['photo','image'].includes(e.media_type))url=e.media_url;else if(e.media_type==='video')url=e.poster_url;else if(e.media_type==='audio')url=_SPOTLIGHT_AUDIO_EMBER_V1348;}
+ const e=row.e;let url=fcHighlightMediaUrlV1354(e);
  if(!url&&row.ch&&String(row.ch.media_type).toLowerCase()==='audio')url=_SPOTLIGHT_AUDIO_EMBER_V1348;
  if(url&&/^(https?:|data:image\/)/i.test(url))return `<img src="${escapeHtml(url)}" alt="" loading="lazy">`;
  return `<div class="fc-highlight-art-fallback"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 6 4 5 4-7 4 7 4-5-2 13H6z" fill="none" stroke="currentColor" stroke-width="1.3"/></svg><span>${escapeHtml(row.ch?.category||'FlamesChallenge')}</span></div>`;
