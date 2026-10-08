@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1352 · media-and-guidelines-persistence" name="fc-build"/>
+<meta content="v1353 · immediate-highlight-hydration" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Highlights show complete artwork above slim actions. Guideline acceptance now syncs to your account." name="fc-whatsnew"/>
+<meta content="Highlights refresh as soon as challenge data arrives instead of waiting on an early incomplete load." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -53438,8 +53438,12 @@ function fcHighlightTimeV1349(end,now=Date.now()){
  const n=Math.max(1,Math.ceil((Date.parse(end)-now)/60000));return n>=1440?`${Math.ceil(n/1440)} days`:n>=60?`${Math.floor(n/60)}h ${n%60}m`:`${n}m`;
 }
 function fcHighlightChoicesV1349(){return (state.challenges||[]).filter(c=>c.is_public===true);}
+function fcHighlightSourceKeyV1353(){
+ return String(state.profile?.id||'')+'|'+fcHighlightChoicesV1349().map(c=>[c.id,fcHighlightStatusV1349(c),c.sd_phase||'',c.sd_round||0,c.submission_deadline||'',c.voting_end||''].join(':')).sort().join('|');
+}
 async function fcLoadHighlightsV1349(force=false){
- const h=fcHighlightsV1349;if(!state.profile)return;if(h.busy)return h.busy;if(!force&&Date.now()-h.stamp<90000)return;
+ const h=fcHighlightsV1349;if(!state.profile)return;const sourceKey=fcHighlightSourceKeyV1353();if(h.busy)return h.busy;if(!force&&h.sourceKey===sourceKey&&Date.now()-h.stamp<90000)return;
+ if(h.sourceKey!==sourceKey)h.complete=false;
  const uid=state.profile.id;
  h.busy=(async()=>{
   const active=fcHighlightChoicesV1349().filter(c=>['voting','sudden_death'].includes(fcHighlightStatusV1349(c))).sort((a,b)=>Date.parse(a.voting_end)-Date.parse(b.voting_end)).slice(0,24);
@@ -53449,7 +53453,7 @@ async function fcLoadHighlightsV1349(force=false){
    db.from('home_highlight_features').select('*').eq('id',1).maybeSingle(),
    ids.length?db.from('entry_votes').select('entry_id,challenge_id,voter_id,sd_round,created_at',{count:'exact'}).in('challenge_id',ids).order('created_at',{ascending:false}).limit(10000):Promise.resolve({data:[],count:0})
   ]);
-  if(state.profile?.id!==uid)return;
+  if(state.profile?.id!==uid||fcHighlightSourceKeyV1353()!==sourceKey)return;
   const read=i=>first[i].status==='fulfilled'&&!first[i].value.error?first[i].value:null;
   const results=read(0),pin=read(1),votes=read(2);
   h.results=results?.data||[];h.pin=pin?.data||null;h.votes=votes?.data||[];
@@ -53459,11 +53463,11 @@ async function fcLoadHighlightsV1349(force=false){
    allIds.length?db.from('entries').select('id,challenge_id,user_id,media_type,media_url,poster_url,caption,sd_round,moderation_status,submitter:profiles!entries_user_id_fkey(id,name,avatar)',{count:'exact'}).in('challenge_id',allIds).or('moderation_status.is.null,moderation_status.eq.clear,moderation_status.eq.approved').limit(3000):Promise.resolve({data:[],count:0}),
    h.results.length?db.from('challenge_result_winners').select('challenge_id,entry_id,user_id,vote_count,is_co_winner').in('challenge_id',h.results.map(r=>r.challenge_id)):Promise.resolve({data:[]})
   ]);
-  if(state.profile?.id!==uid)return;
+  if(state.profile?.id!==uid||fcHighlightSourceKeyV1353()!==sourceKey)return;
   const entries=next[0].status==='fulfilled'&&!next[0].value.error?next[0].value:null;
   h.entries=entries?.data||[];h.complete=h.complete&&!!entries&&entries.count===h.entries.length;
-  h.winners=next[1].status==='fulfilled'&&!next[1].value.error?next[1].value.data||[]:[];h.stamp=Date.now();
- })().catch(e=>{h.complete=false;h.pin=null;h.results=[];h.winners=[];h.stamp=Date.now();console.warn('Highlights refresh',e);}).finally(()=>{h.busy=null;fcRenderHighlightsV1349();});
+  h.winners=next[1].status==='fulfilled'&&!next[1].value.error?next[1].value.data||[]:[];h.stamp=Date.now();h.sourceKey=sourceKey;
+ })().catch(e=>{if(state.profile?.id===uid&&fcHighlightSourceKeyV1353()===sourceKey){h.complete=false;h.pin=null;h.results=[];h.winners=[];h.stamp=Date.now();h.sourceKey=sourceKey;}console.warn('Highlights refresh',e);}).finally(()=>{h.busy=null;fcRenderHighlightsV1349();});
  return h.busy;
 }
 function fcBuildHighlightsV1349(now=Date.now()){
