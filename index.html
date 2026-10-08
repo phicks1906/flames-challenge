@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1351 · artwork-first-highlights" name="fc-build"/>
+<meta content="v1352 · media-and-guidelines-persistence" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Highlight cards now show one useful label on the artwork and only Vote or View in a slim footer." name="fc-whatsnew"/>
+<meta content="Highlights show complete artwork above slim actions. Guideline acceptance now syncs to your account." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -12387,33 +12387,68 @@ function closeGuidelines() {
 
 const GUIDELINES_ACK_KEY = 'fc_guidelines_ack_v1';
 
+function fcGuidelinesLocalKeyV1352() {
+  const uid = state.session?.user?.id;
+  return uid ? GUIDELINES_ACK_KEY + ':' + uid : null;
+}
+function fcGuidelinesAcceptedAtV1352() {
+  const remote = state.profile?.guidelines_ack_at || state.session?.user?.user_metadata?.fc_guidelines_ack_v1;
+  if (remote) return remote;
+  const key = fcGuidelinesLocalKeyV1352();
+  if (!key) return null;
+  try { return localStorage.getItem(key); } catch (_) { return null; }
+}
 function guidelinesAcked() {
-  if (state.profile && state.profile.guidelines_ack_at) return true;
-  if (localStorage.getItem(GUIDELINES_ACK_KEY)) return true;
-  return false;
+  return !!fcGuidelinesAcceptedAtV1352();
+}
+let fcGuidelinesSaveV1352 = null;
+async function fcSaveGuidelinesV1352(at) {
+  if (fcGuidelinesSaveV1352) return fcGuidelinesSaveV1352;
+  const uid = state.session?.user?.id;
+  if (!uid || !at) return false;
+  // Account preference only; never used for authentication or authorization.
+  fcGuidelinesSaveV1352 = (async () => {
+    try {
+      const {data,error} = await fcWithTimeoutV1099(db.auth.updateUser({data:{fc_guidelines_ack_v1:at}}),12000,'Save guidelines acceptance');
+      if (error || data?.user?.id !== uid || !data.user.user_metadata?.fc_guidelines_ack_v1) throw error || new Error('Acceptance was not saved');
+      if (state.session?.user?.id === uid) state.session.user = data.user;
+      try { localStorage.setItem(GUIDELINES_ACK_KEY + ':' + uid,at); } catch (_) {}
+      return true;
+    } catch (e) { console.warn('Guidelines acceptance save failed',e); return false; }
+  })().finally(() => { fcGuidelinesSaveV1352 = null; });
+  return fcGuidelinesSaveV1352;
 }
 
 // One-time gate: show guidelines to anyone who hasn't agreed yet.
 // Returns true if it was shown (so the caller can hold the tour back).
 function maybeShowGuidelines() {
-  if (!state.profile || guidelinesAcked()) return false;
+  if (!state.profile) return false;
+  const key = fcGuidelinesLocalKeyV1352();
+  // Move the old browser acknowledgement to this account once, then retire it.
+  try {
+    if (key && localStorage.getItem(GUIDELINES_ACK_KEY)) {
+      if (!localStorage.getItem(key)) localStorage.setItem(key,new Date().toISOString());
+      localStorage.removeItem(GUIDELINES_ACK_KEY);
+    }
+  } catch (_) {}
+  const at = fcGuidelinesAcceptedAtV1352();
+  if (at) {
+    if (!state.session?.user?.user_metadata?.fc_guidelines_ack_v1) void fcSaveGuidelinesV1352(at);
+    return false;
+  }
   openGuidelines();
   return true;
 }
 
 // Record agreement — localStorage always, DB best-effort — then continue.
 async function acknowledgeGuidelines() {
-  const wasUnacked = !(state.profile && state.profile.guidelines_ack_at);
-  localStorage.setItem(GUIDELINES_ACK_KEY, '1');
+  const wasUnacked = !guidelinesAcked();
+  const at = fcGuidelinesAcceptedAtV1352() || new Date().toISOString();
+  const key = fcGuidelinesLocalKeyV1352();
+  try { if (key) localStorage.setItem(key,at); } catch (_) {}
   closeGuidelines();
-  if (state.profile) {
-    state.profile.guidelines_ack_at = new Date().toISOString();
-    try {
-      await db.from('profiles')
-        .update({ guidelines_ack_at: state.profile.guidelines_ack_at })
-        .eq('id', state.profile.id);
-    } catch (e) { /* column may not exist yet — localStorage covers it */ }
-  }
+  const saved = await fcSaveGuidelinesV1352(at);
+  if (!saved) toast('Agreement remembered here. Account sync will retry when you reopen the app.');
   // A brand-new user who just agreed should now get the welcome tour.
   if (wasUnacked) maybeStartTour();
 }
@@ -53369,8 +53404,8 @@ window.FC_V1338_VALIDATION={
 #fcHomeLive.fc-highlights-v1349 .fc-home-live-head{padding-right:0}
 #fcHomeLive.fc-highlights-v1349:has(.fc-home-live-nav:not([hidden])) .fc-home-live-head{padding-right:52px}
 #fcHomeLive .fc-highlight-card{width:100%;min-width:0;box-sizing:border-box;scroll-snap-align:start;overflow:hidden;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);color:var(--text);display:flex;flex-direction:column}
-#fcHomeLive .fc-highlight-art{height:40px;flex:0 0 40px;position:relative;overflow:hidden;background:#0d0b09}
-#fcHomeLive .fc-highlight-art img{width:100%;height:100%;object-fit:cover;display:block}
+#fcHomeLive .fc-highlight-art{height:auto;aspect-ratio:16/10;flex:none;position:relative;overflow:hidden;background:#0d0b09}
+#fcHomeLive .fc-highlight-art img{width:100%;height:100%;object-fit:contain;display:block}
 #fcHomeLive .fc-highlight-art::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.4),transparent 65%);pointer-events:none}
 #fcHomeLive .fc-highlight-kind{position:absolute;z-index:1;top:4px;left:4px;max-width:calc(100% - 8px);box-sizing:border-box;background:rgba(9,7,5,.9);color:#ffae6d;border-radius:4px;padding:3px 4px;font:800 9px/1.15 var(--font-body)}
 #fcHomeLive .fc-highlight-art-fallback{height:100%;display:flex;align-items:center;justify-content:center;gap:12px;background:radial-gradient(ellipse at center,#43230c,#0d0b09);color:#ffb963}
