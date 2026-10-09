@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1354 · open-highlight-media" name="fc-build"/>
+<meta content="v1355 · tiebreaker-terminology" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Open challenge highlights show an eligible photo or video preview instead of an unnecessary crown placeholder." name="fc-whatsnew"/>
+<meta content="Tiebreaker wording now appears throughout competition screens and guidance. The competition rules are unchanged." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -6730,7 +6730,7 @@ html[data-theme="light"] body .fc-home-live-nav{background:var(--surface);border
 </style>
 <style id="fc-v1009-brand-restraint-css">
 /* Ordinary interface surfaces use functional icons. Arena branding is reserved
-   for championship, head-to-head, sudden-death, and winner moments. */
+   for championship, head-to-head, tiebreaker, and winner moments. */
 .fc-arena-hero{display:none!important}
 .fc-arena-nav{display:grid!important}
 .fc-arena-nav img{display:none!important}
@@ -9173,7 +9173,7 @@ body.theme-light .fc-challenge-options-v1338{background:rgba(20,16,14,.38)}
 </div>
 <div class="cc-field">
 <div class="cc-toggle-row">
-<div><strong>Sudden death on a tie</strong><span>If voting ends tied, only the tied entrants submit new work. The entries stay hidden until they reveal together for a fresh vote. If the runoff ties again, the tied finalists are co-winners.</span></div>
+<div><strong>Tiebreaker on a tie</strong><span>If voting ends tied, only the tied entrants submit new work. The entries stay hidden until they reveal together for a fresh vote. If the runoff ties again, the tied finalists are co-winners.</span></div>
 <label class="cc-switch"><input id="ccSuddenDeathCheck" type="checkbox"/><span id="ccSuddenDeathSlider"></span></label>
 </div>
 </div>
@@ -13622,7 +13622,7 @@ async function loadLeaderboardCoreV1101() {
     });
 
     // v1102: participation is challenge-wide, not final-round-only. A member
-    // eliminated in an earlier sudden-death round still has one decided result
+    // eliminated in an earlier tiebreaker round still has one decided result
     // for that challenge. Rejected entries never create participation.
     const entriesByChallenge = {};
     const finalEntriesByChallenge = {};
@@ -14071,6 +14071,9 @@ function renderNotifBadge() {
   }
 }
 
+function fcTiebreakerCopyV1355(text) {
+  return String(text || '').split(/("[^"\n]*"|“[^”\n]*”)/g).map((part, i) => i % 2 ? part : part.replace(/sudden[ -]death/gi, word => word === word.toUpperCase() ? 'TIEBREAKER' : /^[A-Z]/.test(word) ? 'Tiebreaker' : 'tiebreaker')).join('');
+}
 async function loadNotifications() {
   if (!state.profile) return;
   const me = state.profile.id;
@@ -14128,7 +14131,7 @@ async function loadNotifications() {
   // 4. Votes — now event-driven (server outbox → notifications table,
   //    read in source #5 below). Client derivation removed.
 
-  // 5. Pushed / event-driven notifications (challenge invites, sudden death,
+  // 5. Pushed / event-driven notifications (challenge invites, tiebreaker,
   //    championship won, qualified, etc.). Private-challenge invites now arrive
   //    here via the server-side outbox worker (actor_id = inviter, target via
   //    target_type/target_id). Display text is derived client-side by type so we
@@ -14158,6 +14161,7 @@ async function loadNotifications() {
         (n.target_type === 'poll') ? { kind: 'polls', id: n.target_id } :
         n.challenge_id ? { kind: 'challenge', id: n.challenge_id } : null;
       let ntext = NOTIF_TEXT[n.type] || n.message || '';
+      if (n.type === 'sudden_death') ntext = fcTiebreakerCopyV1355(ntext);
       if (n.type === 'comment') ntext = (n.target_type === 'post') ? 'commented on your post' : 'commented on your entry';
       notifs.push({
         type: n.type,
@@ -14623,7 +14627,7 @@ function computeChallengeStatusFromCh(ch, entryCount) {
   if (subEnd && now < subEnd) return 'submitting';
   // v773 — a challenge needs an OPPONENT, not just an entrant. The old guard
   // was `< 1` everywhere: it caught empty challenges but let a lone entrant
-  // with one vote book a real win over nobody. Sudden Death is exempt (its
+  // with one vote book a real win over nobody. Tiebreaker is exempt (its
   // sole-survivor walkover is deliberate — those players met in an earlier round).
   const _soloFloor = (ch.sd_round || 0) > 0 ? 1 : 2;
   if (voteEnd && now < voteEnd) return entryCount < _soloFloor ? 'voided' : 'voting';
@@ -20406,7 +20410,7 @@ function isChampionshipCh(ch) {
 // Sealed ballots: championship votes stay hidden until the challenge closes.
 function ballotsSealed(ch, status) {
   // v1025 — FlamesChallenge is a live race. Championship and regular tallies
-  // stay visible during voting; only sudden-death SUBMISSIONS are concealed.
+  // stay visible during voting; only tiebreaker SUBMISSIONS are concealed.
   return false;
 }
 // "2x champion" / "First final" line under a fighter's name
@@ -20580,8 +20584,8 @@ function saveHofLog() { /* no-op: replaced by Supabase insert */ }
 
 // Scan closed championship challenges and crown the winner
 async function detectRegularSuddenDeath() {
-  // Regular challenges that opted into sudden death: if voting closed tied, trigger a
-  // 48h runoff among the tied entries. Reuses the championship sudden-death mechanism
+  // Regular challenges that opted into tiebreaker: if voting closed tied, trigger a
+  // 48h runoff among the tied entries. Reuses the championship tiebreaker mechanism
   // (vote reset + flag + extend + notify) minus the HOF/championship-email parts.
   if (!isAdmin() || !state.profile) return;
   const now = new Date();
@@ -20612,7 +20616,7 @@ async function detectRegularSuddenDeath() {
       const topEntries = entries.filter(e => (tally[e.id] || 0) === max);
       if (topEntries.length < 2) continue; // no tie — normal winner logic handles it
 
-      // ── Tie → trigger sudden death ──
+      // ── Tie → trigger tiebreaker ──
       const tiedIds = topEntries.map(e => e.id);
       const tiedUserIds = [...new Set(topEntries.map(e => e.user_id).filter(Boolean))];
       const names = topEntries.map(e => e.submitter?.name || 'Someone').join(' vs ');
@@ -20637,11 +20641,11 @@ async function detectRegularSuddenDeath() {
       const notifRows = [
         ...tiedUserIds.map(uid => ({
           user_id: uid, type: 'sudden_death', challenge_id: ch.id, created_at: sdNow,
-          message: `⚡ Sudden Death! "${title}" is tied. A new 48-hour vote is open — compete to win!`,
+          message: `⚡ Tiebreaker! "${title}" is tied. A new 48-hour vote is open — compete to win!`,
         })),
         ...followerIds.map(uid => ({
           user_id: uid, type: 'sudden_death', challenge_id: ch.id, created_at: sdNow,
-          message: `⚡ Sudden Death! "${title}" is tied: ${names}. Vote now to decide the winner!`,
+          message: `⚡ Tiebreaker! "${title}" is tied: ${names}. Vote now to decide the winner!`,
         })),
         ...previousVoterIds.map(uid => ({
           user_id: uid, type: 'sudden_death', challenge_id: ch.id, created_at: sdNow,
@@ -20654,9 +20658,9 @@ async function detectRegularSuddenDeath() {
       }
 
       await loadChallenges();
-      toast(`⚡ SUDDEN DEATH — "${title}" is tied! ${names} — 48 hours to decide!`);
-      console.log(`[sudden-death] "${title}" tied. Votes reset. Notified ${notifRows.length} users.`);
-    } catch (e) { console.warn('regular sudden death', e); }
+      toast(`⚡ TIEBREAKER — "${title}" is tied! ${names} — 48 hours to decide!`);
+      console.log(`[tiebreaker] "${title}" tied. Votes reset. Notified ${notifRows.length} users.`);
+    } catch (e) { console.warn('regular tiebreaker', e); }
   }
 }
 
@@ -20707,8 +20711,8 @@ async function detectChampionshipWinners() {
       // ── Tie detected ──────────────────────────────────────────────────────
       if (topEntries.length > 1) {
         if (ch.sudden_death) {
-          // Already in sudden death and still tied — record co-champions then stop
-          console.log(`[championship] ${meta.category} — still tied after sudden death, recording co-champions`);
+          // Already in tiebreaker and still tied — record co-champions then stop
+          console.log(`[championship] ${meta.category} — still tied after tiebreaker, recording co-champions`);
           for (const tied of topEntries) {
             const sub = tied.submitter || {};
             await db.from('hall_of_fame').insert({
@@ -20722,9 +20726,9 @@ async function detectChampionshipWinners() {
               avatar: sub.avatar || '🔥', category: meta.category, month: meta.month,
               wins: poolMax, challengeId, fromChampionship: true });
           }
-          toast(`⚡ ${meta.category} Championship: Co-Champions crowned after sudden death!`);
+          toast(`⚡ ${meta.category} Championship: Co-Champions crowned after tiebreaker!`);
         } else {
-          // First tie — full sudden death sequence
+          // First tie — full tiebreaker sequence
           const newVoteEnd = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
           const tiedIds = topEntries.map(e => e.id);
           const names = topEntries.map(e => e.submitter?.name || 'Unknown').join(' vs ');
@@ -20735,15 +20739,15 @@ async function detectChampionshipWinners() {
             votes.map(v => v.voter_id).filter(id => id && !tiedUserIds.includes(id))
           )];
 
-          // 2. Delete all existing votes — clean slate for sudden death
+          // 2. Delete all existing votes — clean slate for tiebreaker
           const { error: delErr } = await db.from('entry_votes').delete().eq('challenge_id', challengeId);
-          if (delErr) { console.warn('sudden death vote reset', delErr); continue; }
+          if (delErr) { console.warn('tiebreaker vote reset', delErr); continue; }
 
           // 3. Flag the challenge and extend voting
           const { error: sdErr } = await db.from('challenges').update({
             voting_end: newVoteEnd, sudden_death: true, sudden_death_entry_ids: tiedIds,
           }).eq('id', challengeId);
-          if (sdErr) { console.warn('sudden death update', sdErr); continue; }
+          if (sdErr) { console.warn('tiebreaker update', sdErr); continue; }
 
           // 4. Get followers of the tied players
           const { data: followRows } = await db.from('follows')
@@ -20757,11 +20761,11 @@ async function detectChampionshipWinners() {
           const notifRows = [
             ...tiedUserIds.map(uid => ({
               user_id: uid, type: 'sudden_death', challenge_id: challengeId, created_at: sdNow,
-              message: `⚡ Sudden Death! The ${meta.category} Championship is tied. A new 48-hour vote is open — compete for the title!`,
+              message: `⚡ Tiebreaker! The ${meta.category} Championship is tied. A new 48-hour vote is open — compete for the title!`,
             })),
             ...followerIds.map(uid => ({
               user_id: uid, type: 'sudden_death', challenge_id: challengeId, created_at: sdNow,
-              message: `⚡ Sudden Death! The ${meta.category} Championship is tied: ${names}. Vote now to decide the champion!`,
+              message: `⚡ Tiebreaker! The ${meta.category} Championship is tied: ${names}. Vote now to decide the champion!`,
             })),
             ...previousVoterIds.map(uid => ({
               user_id: uid, type: 'sudden_death', challenge_id: challengeId, created_at: sdNow,
@@ -20770,19 +20774,19 @@ async function detectChampionshipWinners() {
           ];
           if (notifRows.length) {
             db.from('notifications').insert(notifRows)
-              .then(({ error: nErr }) => { if (nErr) console.warn('sudden death notifs', nErr); });
+              .then(({ error: nErr }) => { if (nErr) console.warn('tiebreaker notifs', nErr); });
           }
 
           // 6. Email to tied players (fire and forget)
           db.functions.invoke('send-championship-email', {
             body: { type: 'sudden_death', userIds: tiedUserIds,
               category: meta.category, month: meta.month, challengeId }
-          }).catch(e => console.warn('sudden death email', e));
+          }).catch(e => console.warn('tiebreaker email', e));
 
           // 7. Refresh local state
           await loadChallenges();
-          toast(`⚡ SUDDEN DEATH — ${meta.category} Championship is tied! ${names} — 48 hours to decide!`);
-          console.log(`[championship] ${meta.category} — SUDDEN DEATH triggered. Votes reset. Notified ${notifRows.length} users.`);
+          toast(`⚡ TIEBREAKER — ${meta.category} Championship is tied! ${names} — 48 hours to decide!`);
+          console.log(`[championship] ${meta.category} — TIEBREAKER triggered. Votes reset. Notified ${notifRows.length} users.`);
         }
         continue; // don't crown anyone yet
       }
@@ -24761,7 +24765,7 @@ async function loadChallenges(opts = {}) {
 function computeChallengeStatus(ch) {
   const now = new Date();
 
-  // ── Sudden Death takes precedence over the normal window ──────────────────
+  // ── Tiebreaker takes precedence over the normal window ──────────────────
   // sd_phase 'submitting' = tied players submitting fresh hidden entries
   // sd_phase 'voting'     = new entries revealed, everyone votes
   if (ch.sd_phase === 'submitting') {
@@ -24795,17 +24799,17 @@ function computeChallengeStatus(ch) {
 }
 
 // Single source of truth for "can votes be cast right now": the live voting
-// window OR a sudden-death runoff. NOT during submitting/closed/voided. Used by
+// window OR a tiebreaker runoff. NOT during submitting/closed/voided. Used by
 // every vote gate and guard so the rule can never drift between surfaces again.
 function isVotingPhase(stat) { return stat === 'voting' || stat === 'sudden_death'; }
-// True while tied players are submitting their fresh sudden-death entries.
+// True while tied players are submitting their fresh tiebreaker entries.
 function isSdSubmitting(stat) { return stat === 'sd_submitting'; }
 function challengePhase(stat) {
   return ({
     submitting:    { label: 'OPEN TO ENTER',         cls: 'submitting' },
-    sd_submitting: { label: '⚡ SUDDEN DEATH — SUBMIT', cls: 'voting' },
+    sd_submitting: { label: '⚡ TIEBREAKER — SUBMIT', cls: 'voting' },
     voting:        { label: 'VOTE NOW',               cls: 'voting' },
-    sudden_death:  { label: '⚡ SUDDEN DEATH — VOTE',  cls: 'voting' },
+    sudden_death:  { label: '⚡ TIEBREAKER — VOTE',  cls: 'voting' },
     championship_pending:{ label:'CROWN AT 8 PM ET', cls:'closed' },
     closed:        { label: 'DECIDED',                cls: 'closed' },
     voided:        { label: 'NO CONTEST',             cls: 'voided' },
@@ -25376,7 +25380,7 @@ function cardPhaseBannerHTML(ch, status) {
     next = ch.submission_deadline ? `🗳️ Voting in ${formatCountdown(ch.submission_deadline)}` : '🗳️ Voting next';
     f1 = _phaseProgress(ch.created_at, ch.submission_deadline);
   } else if (ps.key === 'vote') {
-    cls = 'vote'; left = ps.isSD ? '⚡ Sudden Death' : 'Vote Now'; live = 2;
+    cls = 'vote'; left = ps.isSD ? '⚡ Tiebreaker' : 'Vote Now'; live = 2;
     const t = status === 'sd_submitting' ? ch.sd_submit_end : ch.voting_end;
     next = t ? `🏆 Winner in ${formatCountdown(t)}` : '🏆 Winner next';
     f1 = 1; f2 = _phaseProgress(ch.submission_deadline, ch.voting_end);
@@ -25413,7 +25417,7 @@ function emberJourneyHTML(ch, status, extraClass = '') {
   }
   let wrap, s1 = '', s2 = '', s3 = '', cd1 = '', cd2 = '', cd3 = '';
   let midIcon = '🗳️', midLabel = 'Vote';
-  if (ps.isSD) { midIcon = '⚡'; midLabel = 'Sudden Death'; }
+  if (ps.isSD) { midIcon = '⚡'; midLabel = 'Tiebreaker'; }
   if (ps.key === 'enter') {
     wrap = 'enter'; s1 = 'live';
     cd1 = ch.submission_deadline ? formatCountdown(ch.submission_deadline) : '';
@@ -25617,7 +25621,7 @@ function renderChallengeDetail() {
   }
 
   // Submit button visibility
-  // During Sudden Death submitting, only the tied users may submit, and only a
+  // During Tiebreaker submitting, only the tied users may submit, and only a
   // fresh (this-round) entry. The normal "already entered" check looks at the
   // current round's entries, not the original ones.
   const myId = state.profile?.id;
@@ -25646,7 +25650,7 @@ function renderChallengeDetail() {
     if (showFull) cdFullNote.textContent = `Challenge full — ${fcEntryLimitV1344(ch)} entries max`;
   }
 
-  // ── Sudden Death entry visibility ────────────────────────────────────────────
+  // ── Tiebreaker entry visibility ────────────────────────────────────────────
   //  submitting → hide ALL entries (blind round); voting → only this round's entries
   const sdVisibleEntries = detailState?.visibleEntries || (() => {
     if (ch.sd_phase === 'submitting') return [];
@@ -25712,7 +25716,7 @@ function renderChallengeDetail() {
       String(e.moderation_status || '').toLowerCase() === 'rejected'
     );
     const _emptyMsg = ch.sd_phase === 'submitting'
-      ? '🔒 Sudden Death in progress — entries are hidden until voting opens.'
+      ? '🔒 Tiebreaker in progress — entries are hidden until voting opens.'
       : _hasRejectedEntryV1288
       ? 'Your entry was not approved. Replace it before entries close to resubmit.'
       : _hasPrivatePendingEntry
@@ -26101,13 +26105,13 @@ function renderChallengeResults() {
 
   // Vote totals remain useful for the final standings display, but winner status
   // comes only from challenge_result_winners.
-  // Sudden Death: final standings come from the FINAL round only.
+  // Tiebreaker: final standings come from the FINAL round only.
   const _finalR = Number(authoritativeResultV1101.final_round ?? ch.sd_round ?? 0);
   const _eligibleResultEntries = state.currentEntries.filter(e => e.moderation_status !== 'rejected');
   const _finalRoundEntries = _finalR > 0
     ? _eligibleResultEntries.filter(e => Number(e.sd_round || 0) === _finalR)
     : _eligibleResultEntries;
-  // A no-submission sudden-death resolution has durable co-winners but no
+  // A no-submission tiebreaker resolution has durable co-winners but no
   // final-round entry rows. Use each winner's latest eligible prior entry only
   // for identity/media display; the winner status still comes exclusively from
   // challenge_result_winners.
@@ -26310,7 +26314,7 @@ function fcEntryWindowClosedV1267(ch) {
   return Number.isFinite(ts) && ts <= Date.now();
 }
 
-// v1295 — a sudden-death submission is a fresh challenge round. The original
+// v1295 — a tiebreaker submission is a fresh challenge round. The original
 // entry window and round-0 entry are not authoritative while tied finalists are
 // submitting new hidden work. Centralize that state so the editor, cache lookup,
 // and deadline UI cannot disagree again.
@@ -26405,12 +26409,12 @@ async function openSubmitEntry(entryToEdit = null) {
 
   const sdEntryStateV1295 = fcSuddenDeathEntryStateV1295(ch);
   if (sdEntryStateV1295.active && !sdEntryStateV1295.tied) {
-    toast('Sudden Death entry is limited to the tied finalists.');
+    toast('Tiebreaker entry is limited to the tied finalists.');
     if (seState.standaloneContextV1275) fcClearStandaloneEntryContextV1275(ch.id);
     return;
   }
   if (sdEntryStateV1295.active && !sdEntryStateV1295.open) {
-    toast('Sudden Death submission window has closed.');
+    toast('Tiebreaker submission window has closed.');
     if (seState.standaloneContextV1275) fcClearStandaloneEntryContextV1275(ch.id);
     return;
   }
@@ -26476,7 +26480,7 @@ async function openSubmitEntry(entryToEdit = null) {
       (!sdEntryStateV1295.active || Number(e.sd_round || 0) === sdEntryStateV1295.round);
     entryToEdit = (state.currentEntries || []).find(_mine) || (state.feedEntries || []).find(_mine) || null;
   }
-  // A round-0 object supplied by an older card must never turn a sudden-death
+  // A round-0 object supplied by an older card must never turn a tiebreaker
   // submission into an edit of the original entry.
   if (sdEntryStateV1295.active && entryToEdit &&
       Number(entryToEdit.sd_round || 0) !== sdEntryStateV1295.round) {
@@ -26550,7 +26554,7 @@ async function openSubmitEntry(entryToEdit = null) {
   fcSyncEntryModerationBannerV1288(ch, entryToEdit);
   if (entryToEdit) {
     document.querySelector('#submitEntrySheet h2').textContent = sdEntryStateV1295.active
-      ? 'Edit Sudden-Death Entry'
+      ? 'Edit Tiebreaker Entry'
       : (entryModerationV1288 === 'rejected' ? 'Replace Your Entry' : 'Edit Your Entry');
     if (submitBtn) {
       submitBtn.disabled = false;
@@ -26576,21 +26580,21 @@ async function openSubmitEntry(entryToEdit = null) {
       document.getElementById('seUploadZone').classList.add('has-file');
     }
   } else {
-    document.querySelector('#submitEntrySheet h2').textContent = sdEntryStateV1295.active ? 'Sudden-Death Entry' : 'Your Entry';
+    document.querySelector('#submitEntrySheet h2').textContent = sdEntryStateV1295.active ? 'Tiebreaker Entry' : 'Your Entry';
     fcSyncEntryModerationBannerV1288(ch, null);
     if (submitBtn) submitBtn.textContent = sdEntryStateV1295.active ? 'Submit New Entry' : 'Submit Entry';
   }
 
-  // v1295 — the active sudden-death window replaces the original entry deadline
+  // v1295 — the active tiebreaker window replaces the original entry deadline
   // for tied finalists. Do not disable a current-round edit just because round 0
   // closed days earlier.
   if (sdEntryStateV1295.active && !sdEntryStateV1295.open) {
     const error = document.getElementById('seError');
     if (error) {
-      error.textContent = 'Sudden Death submission window has closed.';
+      error.textContent = 'Tiebreaker submission window has closed.';
       error.classList.add('show');
     }
-    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Sudden Death Closed'; }
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Tiebreaker Closed'; }
   } else if (!sdEntryStateV1295.active && entryToEdit && ch.is_championship && fcEntryWindowClosedV1267(ch)) {
     const error = document.getElementById('seError');
     if (error) {
@@ -26829,7 +26833,7 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
     try { errBox.scrollIntoView({behavior:fcMotionBehaviorV1100(),block:'center'}); } catch (_) {}
     return;
   }
-  // Normal deadline gate — but Sudden Death submission happens AFTER the original
+  // Normal deadline gate — but Tiebreaker submission happens AFTER the original
   // deadline, so bypass it when this user is a tied player in the submitting phase.
   const _sdStateV1295 = fcSuddenDeathEntryStateV1295(ch);
   const _sdSubmitting = _sdStateV1295.active && _sdStateV1295.tied;
@@ -26844,7 +26848,7 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
     return;
   }
   if (_sdSubmitting && ch.sd_submit_end && new Date(ch.sd_submit_end) <= new Date()) {
-    errBox.textContent = 'Sudden Death submission window has closed.'; errBox.classList.add('show'); return;
+    errBox.textContent = 'Tiebreaker submission window has closed.'; errBox.classList.add('show'); return;
   }
 
   const orig = btn?.textContent || (seState.editingEntry ? 'Save Changes' : 'Submit Entry');
@@ -26883,7 +26887,7 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
       const dupHit = (existing || []).some(e => (e.sd_round || 0) === _curRound);
       if (dupHit) {
         errBox.textContent = _sdSubmitting
-          ? 'You already submitted your Sudden Death entry.'
+          ? 'You already submitted your Tiebreaker entry.'
           : 'You already have an entry in this challenge. Tap ✏️ Edit on your entry to change it.';
         errBox.classList.add('show');
         btn.disabled = false;
@@ -27897,7 +27901,7 @@ function renderFeed() {
     if (!(ch.is_public || ch.creator_id === myId)) return;
     if (new Date(ch.voting_end).getTime() < recentClosedCutoff) return;
     if (ch.sd_phase) return; // mid-Sudden-Death — not decided yet
-    // Sudden Death: only the FINAL round's entries decide the winner
+    // Tiebreaker: only the FINAL round's entries decide the winner
     const _finalR = ch.sd_round || 0;
     const chEntries = (state.feedEntries || []).filter(e =>
       e.challenge_id === ch.id && (e.sd_round || 0) === _finalR);
@@ -29202,7 +29206,7 @@ function fcCardGuidanceV1055(ch,status,entryCount,isCreator){
 function fcCompeteStatusLineV1059(ch,status,entryCount,voteTotal){
   const parts=[];
   if(status==='submitting')parts.push('Open');
-  else if(status==='sd_submitting')parts.push('Sudden-death entries');
+  else if(status==='sd_submitting')parts.push('Tiebreaker entries');
   else if(isVotingPhase(status))parts.push(ch.is_championship?'Title vote':'Voting');
   else if(status==='championship_pending')parts.push('Result sealed');
   else if(status==='voided')parts.push('No contest');
@@ -29225,7 +29229,7 @@ function fcCompeteScoreContextV1059(ch,status,entryCount){
   if(row)return `Awarded ${Number(row.total_boost||0)} Championship Score.`;
   if(status==='voided')return 'No contest · No Championship Score awarded.';
   if(status==='closed')return 'Final result · Open the challenge for the Score breakdown.';
-  if(status==='sd_submitting')return 'Championship Score is set after the sudden-death vote closes.';
+  if(status==='sd_submitting')return 'Championship Score is set after the tiebreaker vote closes.';
   if(isVotingPhase(status))return 'Championship Score is calculated when voting closes.';
   if(entryCount===0)return 'Needs two competitors to earn Championship Score.';
   if(entryCount===1)return 'Needs one more competitor to earn Championship Score.';
@@ -29294,7 +29298,7 @@ function fcPreparingEntryCardV1120(ch, entry) {
 function fcPreparingStatusLineV1120(ch, status, publicCount, voteTotal) {
   const parts = [];
   if (status === 'submitting') parts.push('Open');
-  else if (status === 'sd_submitting') parts.push('Sudden-death entries');
+  else if (status === 'sd_submitting') parts.push('Tiebreaker entries');
   else if (isVotingPhase(status)) parts.push(ch.is_championship ? 'Title vote' : 'Voting');
   else if (status === 'voided') parts.push('No contest');
   else parts.push('Final');
@@ -29927,7 +29931,7 @@ const TOUR_STEPS = [
   {
     target: () => null,
     title: 'How FlamesChallenge Works',
-    body: 'A creator opens a challenge and sets what can be submitted. Entries stay open until the deadline. Voting begins after entry closes. Each person gets one vote. A winner is recorded only when at least two entries compete; ties move to sudden death.',
+    body: 'A creator opens a challenge and sets what can be submitted. Entries stay open until the deadline. Voting begins after entry closes. Each person gets one vote. A winner is recorded only when at least two entries compete; ties move to tiebreaker.',
     position: 'center',
     pose: 'wave',
   },
@@ -30246,11 +30250,11 @@ const FC_COMPETITION_RULES_V1047 = Object.freeze({
   }),
   results: Object.freeze({
     decisiveWinner: 'The entry with the most ballots wins.',
-    suddenDeathEnabledTie: 'When sudden death is enabled and the final vote ties, only the tied finalists submit new hidden entries. The entries reveal together and a fresh runoff vote opens.',
-    oneSubmission: 'If only one tied finalist submits a sudden-death entry, that finalist wins by default.',
+    suddenDeathEnabledTie: 'When tiebreaker is enabled and the final vote ties, only the tied finalists submit new hidden entries. The entries reveal together and a fresh runoff vote opens.',
+    oneSubmission: 'If only one tied finalist submits a tiebreaker entry, that finalist wins by default.',
     noSubmissions: 'If no tied finalist submits, the tied finalists are co-winners.',
-    secondTie: 'If the sudden-death runoff ties again, the tied finalists are co-winners.',
-    tieWithoutSuddenDeath: 'If sudden death was not enabled and the final vote remains tied, there is no decisive winner and no Championship Score is awarded.',
+    secondTie: 'If the tiebreaker runoff ties again, the tied finalists are co-winners.',
+    tieWithoutSuddenDeath: 'If tiebreaker was not enabled and the final vote remains tied, there is no decisive winner and no Championship Score is awarded.',
     manualDecision: false,
     discretionaryExtension: false
   }),
@@ -30271,7 +30275,7 @@ const FC_COMPETITION_RULES_V1047 = Object.freeze({
     monthlyByCategory: true,
     regularScoreFromChampionshipRound: false,
     suddenDeathParity: true,
-    explanation: 'Championship rounds decide titles. They use the same hidden-entry sudden-death model, but the Championship round itself does not add to monthly Championship Score.'
+    explanation: 'Championship rounds decide titles. They use the same hidden-entry tiebreaker model, but the Championship round itself does not add to monthly Championship Score.'
   }),
   privateChallenges: Object.freeze({
     monthlyScore: false,
@@ -30280,7 +30284,7 @@ const FC_COMPETITION_RULES_V1047 = Object.freeze({
   integrity: Object.freeze({
     duplicateAccounts: 'Using multiple accounts to enter, vote, or otherwise manipulate a competition is prohibited. Accounts or content used to manipulate a result may be removed or banned.',
     rejectedEntries: 'Entries rejected under moderation do not count toward the competitor minimum and are excluded from final competition calculations.',
-    adminAuthority: 'Administrators enforce account, content, and competition-integrity rules. Administrators do not choose winners, rewrite vote totals, manually break ties, or grant discretionary sudden-death extensions.',
+    adminAuthority: 'Administrators enforce account, content, and competition-integrity rules. Administrators do not choose winners, rewrite vote totals, manually break ties, or grant discretionary tiebreaker extensions.',
     guidelines: 'Competition integrity rules work alongside the Community Guidelines. Content can be removed for guideline violations without changing the published competition rules.'
   })
 });
@@ -30379,7 +30383,7 @@ function fcEmberLocalAnswerV1046(question){
   const strongestWords=/(strongest.*win|best.*win|signature.*win)/.test(q);
   const tierWords=/(championship tier|tier progress|spark|flame|blaze|inferno|legend|immortal|g\.o\.a\.t|goat)/.test(q);
   const eligibilityWords=/(eligible|eligibility|earn score|affect championship score|score impact|private challenge|no contest)/.test(q);
-  const tieWords=/(sudden death|tie|tied|co winner|co-winner)/.test(q);
+  const tieWords=/(tiebreaker|sudden death|tie|tied|co winner|co-winner)/.test(q);
 
   if(/opponent points/.test(q)&&/turnout points/.test(q))return `${fcEmberRuleTablesV1046('opponent')}\n\n${fcEmberRuleTablesV1046('turnout')}\n\nOpponent Points + Turnout Points = Championship Score for each decisive public challenge win.`;
   if(/opponent points/.test(q))return fcEmberRuleTablesV1046('opponent');
@@ -31068,7 +31072,7 @@ async function openFeedViewer(chId, startEntryId = null) {
     const entries = (entriesRes.data || []).filter(e => entryModVisible(e));
     const votes   = votesRes.data  || [];
 
-    // Sudden Death visibility:
+    // Tiebreaker visibility:
     //  - submitting phase → entries are HIDDEN from everyone (blind round)
     //  - voting phase     → show ONLY this round's fresh entries
     let visibleEntries;
@@ -33146,7 +33150,7 @@ function renderProfileSheet() {
 
   // v1102: signed-in and public viewers read the same profile-specific
   // authoritative record. Co-winners are wins; participation is one result per
-  // challenge across every sudden-death round.
+  // challenge across every tiebreaker round.
   let hcWins, hcLosses, hcTies, hcStreak, hcEntries;
   const competitiveRecordV1102 = psState.competitive?.record;
   if (competitiveRecordV1102) {
@@ -33310,7 +33314,7 @@ function renderProfileEmber(prof, isMe, theirStats) {
 }
 
 // Tapping "Challenge them" from Ember → opens Create Challenge as a PRIVATE
-// head-to-head with this rival pre-invited and Sudden Death pre-enabled.
+// head-to-head with this rival pre-invited and Tiebreaker pre-enabled.
 function emberChallengeFromProfile(userId) {
   // Pull the rival's display info from whatever we have loaded
   const lu = (state.leaderboardData?.users || []).find(u => u.id === userId);
@@ -36277,7 +36281,7 @@ window.fcPublicFeedDiagnostics = function(){
     const visibility=ccState.visibility==='private'?'Invited people':'Public community';
     const entryType=({photo:'Photo',video:'Video',audio:'Audio',text:'Text'})[ccState.mediaType]||ccState.mediaType;
     const close=formatDate(byId('ccSubDeadline')?.value),vote=formatDate(byId('ccVotingEnd')?.value);
-    box.innerHTML=`<div class="cc-launch-preview-head"><div class="cc-launch-preview-kicker">FINAL PREVIEW</div><h3>${escapeHtml(title)}</h3><div class="cc-launch-preview-meta">${escapeHtml(ccState.category)} · ${escapeHtml(entryType)} · ${escapeHtml(visibility)}</div></div><div class="cc-launch-preview-body"><div class="cc-launch-preview-stat"><span>Creator role</span><b>${escapeHtml(role)}</b></div><div class="cc-launch-preview-stat"><span>Maximum entries</span><b>${byId('ccEntryLimit')?.value || 'Unlimited'}</b></div><div class="cc-launch-preview-stat"><span>Tie rule</span><b>${byId('ccSuddenDeathCheck')?.checked?'Sudden death':'Standard result'}</b></div><div class="cc-launch-preview-stat"><span>Entries close</span><b>${escapeHtml(close)}</b></div><div class="cc-launch-preview-stat"><span>Voting ends</span><b>${escapeHtml(vote)}</b></div>${rules?`<div class="cc-launch-preview-rules"><strong>Rules:</strong> ${escapeHtml(rules)}</div>`:''}</div>`;
+    box.innerHTML=`<div class="cc-launch-preview-head"><div class="cc-launch-preview-kicker">FINAL PREVIEW</div><h3>${escapeHtml(title)}</h3><div class="cc-launch-preview-meta">${escapeHtml(ccState.category)} · ${escapeHtml(entryType)} · ${escapeHtml(visibility)}</div></div><div class="cc-launch-preview-body"><div class="cc-launch-preview-stat"><span>Creator role</span><b>${escapeHtml(role)}</b></div><div class="cc-launch-preview-stat"><span>Maximum entries</span><b>${byId('ccEntryLimit')?.value || 'Unlimited'}</b></div><div class="cc-launch-preview-stat"><span>Tie rule</span><b>${byId('ccSuddenDeathCheck')?.checked?'Tiebreaker':'Standard result'}</b></div><div class="cc-launch-preview-stat"><span>Entries close</span><b>${escapeHtml(close)}</b></div><div class="cc-launch-preview-stat"><span>Voting ends</span><b>${escapeHtml(vote)}</b></div>${rules?`<div class="cc-launch-preview-rules"><strong>Rules:</strong> ${escapeHtml(rules)}</div>`:''}</div>`;
   }
   function videoDuration(file){
     const statusEl=byId('ccVideoTrimStatus');if(!statusEl||!file||ccState.mediaType!=='video'){if(statusEl)statusEl.style.display='none';return}
@@ -36518,7 +36522,7 @@ window.fcPublicFeedDiagnostics = function(){
     return left?`${left} left · ${exact} ET`:`Closes ${exact} ET`;
   }
   function noticeHtml(ch,status,myVote,total){
-    if(status==='sd_submitting')return `<div class="row"><div class="icon">⚡</div><div><strong>Sudden-death entry round</strong><span>Only the tied entrants are submitting new work. Their entries reveal together when runoff voting opens.</span><small>${ch?.sd_submit_end&&typeof formatCountdown==='function'?formatCountdown(ch.sd_submit_end)+' left':''}</small></div></div>`;
+    if(status==='sd_submitting')return `<div class="row"><div class="icon">⚡</div><div><strong>Tiebreaker entry round</strong><span>Only the tied entrants are submitting new work. Their entries reveal together when runoff voting opens.</span><small>${ch?.sd_submit_end&&typeof formatCountdown==='function'?formatCountdown(ch.sd_submit_end)+' left':''}</small></div></div>`;
     if(!isVotingPhase(status))return '';
     const recorded=!!myVote;
     const title=recorded?'Vote recorded':'1 vote available';
@@ -36562,7 +36566,7 @@ window.fcPublicFeedDiagnostics = function(){
 })();
 </script>
 <style id="fc-v1025-sudden-death-parity-css">
-/* v1025 — live race visibility and sudden-death parity. */
+/* v1025 — live race visibility and tiebreaker parity. */
 .fc-v1025-live-race{margin:10px 0 14px;padding:12px 14px;border:1px solid rgba(255,102,48,.28);border-radius:14px;background:linear-gradient(145deg,rgba(255,87,32,.11),rgba(255,255,255,.018));display:flex;align-items:center;justify-content:space-between;gap:12px}
 .fc-v1025-live-race .copy{min-width:0}.fc-v1025-live-race .kicker{font-size:9px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#ff9860}.fc-v1025-live-race strong{display:block;margin-top:3px;font-size:14px;color:#fff}.fc-v1025-live-race small{display:block;margin-top:3px;font-size:11px;color:#9e9188;line-height:1.35}.fc-v1025-live-race .total{flex:0 0 auto;text-align:center;min-width:54px;padding:8px 10px;border-radius:12px;background:rgba(0,0,0,.24);font-weight:800;color:#fff}.fc-v1025-live-race .total span{display:block;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:#8d817a;margin-top:2px}
 .fc-v1025-sd-rule{margin-top:8px;color:#9f9188;font-size:11px;line-height:1.4}
@@ -36672,12 +36676,12 @@ window.fcPublicFeedDiagnostics = function(){
     try{
       const {error}=await db.rpc('fc_process_sudden_death_v1025');
       if(error){
-        if(/function .* does not exist|Could not find the function/i.test(error.message||'')){rpcUnavailable=true;console.warn('[v1025] Install the included Supabase migration to enable sudden-death parity.');}
-        else console.warn('[v1025] sudden-death processor',error);
+        if(/function .* does not exist|Could not find the function/i.test(error.message||'')){rpcUnavailable=true;console.warn('[v1025] Install the included Supabase migration to enable tiebreaker parity.');}
+        else console.warn('[v1025] tiebreaker processor',error);
         return false;
       }
       return true;
-    }catch(e){console.warn('[v1025] sudden-death processor',e);return false}
+    }catch(e){console.warn('[v1025] tiebreaker processor',e);return false}
     finally{rpcRunning=false}
   };
   const priorLoad=window.loadAppData;
@@ -37496,7 +37500,7 @@ window.fcPublicFeedDiagnostics = function(){
     if(st==='voided')return {text:'No contest · no Championship Score',kind:'neutral',title:'No Championship Score',copy:'The challenge did not reach a valid two-competitor contest.'};
     if(st==='closed')return {text:'No Championship Score awarded',kind:'neutral',title:'No Championship Score awarded',copy:'This completed challenge does not have a qualifying score result.'};
     if(st==='voting'||st==='sudden_death')return {text:'Score calculated after voting',kind:'pending',title:'Championship Score is pending',copy:'Opponent tiers and total ballots will be frozen when the final voting round closes.'};
-    if(st==='sd_submitting')return {text:'Sudden-death Score pending',kind:'pending',title:'Sudden-death result pending',copy:'A new final round must close before Championship Score can be calculated.'};
+    if(st==='sd_submitting')return {text:'Tiebreaker Score pending',kind:'pending',title:'Tiebreaker result pending',copy:'A new final round must close before Championship Score can be calculated.'};
     if(count<2)return {text:count===1?'Needs another competitor to earn Score':'Needs 2 competitors to earn Score',kind:'needs',title:'Not score-ready yet',copy:count===1?'One competitor is entered. At least one more competitor must enter before this can become a valid scoring challenge.':'At least two competitors must enter before this can become a valid scoring challenge.'};
     return {text:'Can earn Championship Score',kind:'eligible',title:'Can earn Championship Score',copy:'This public challenge currently has enough competitors. The exact score will be calculated after the final vote closes.'};
   }
@@ -37930,7 +37934,7 @@ html[data-theme="light"] .fc-v1036-archive{
     else parts.push('All time: no decided win is recorded yet.');
     return parts.join(' ');
   }
-  function statusLabel(status){return ({submitting:'Open',voting:'Voting',sudden_death:'Sudden death',sd_submitting:'Sudden death entry'})[status]||'Active'}
+  function statusLabel(status){return ({submitting:'Open',voting:'Voting',sudden_death:'Tiebreaker',sd_submitting:'Tiebreaker entry'})[status]||'Active'}
   function openChallengeId(id){
     const ch=profileChallenge(id);
     if(ch){closeArchive();closeProfileSheet();openChallenge(ch);return}
@@ -41488,7 +41492,7 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
     wrap.addEventListener('click',e=>{if(e.target===wrap)wrap.classList.remove('open')});
     wrap.innerHTML=`<div class="modal fc-ember-guidance-sheet"><button class="modal-close-x" aria-label="Close">×</button><div class="fc-eg-kicker">Ember guidance</div><h2>Choose how often Ember steps in.</h2><p>Ask Ember is always available. This setting controls proactive guidance around the product.</p><div class="fc-eg-options">
       <button class="fc-eg-option" data-fc-eg-mode="full" type="button"><span class="fc-eg-icon">🔥</span><span class="fc-eg-copy"><b>Full</b><span>Contextual next actions, score interpretation, and important competition moments.</span></span><span class="fc-eg-check"></span></button>
-      <button class="fc-eg-option" data-fc-eg-mode="important" type="button"><span class="fc-eg-icon">⚡</span><span class="fc-eg-copy"><b>Important only</b><span>Keep winner, qualification, sudden-death, and major status guidance. Hide routine reads.</span></span><span class="fc-eg-check"></span></button>
+      <button class="fc-eg-option" data-fc-eg-mode="important" type="button"><span class="fc-eg-icon">⚡</span><span class="fc-eg-copy"><b>Important only</b><span>Keep winner, qualification, tiebreaker, and major status guidance. Hide routine reads.</span></span><span class="fc-eg-check"></span></button>
       <button class="fc-eg-option" data-fc-eg-mode="off" type="button"><span class="fc-eg-icon">○</span><span class="fc-eg-copy"><b>Off</b><span>No proactive Ember cards. You can still open Ask Ember whenever you want.</span></span><span class="fc-eg-check"></span></button>
     </div><button class="btn btn-primary" data-fc-eg-done style="width:100%;margin-top:16px">Done</button></div>`;
     document.body.appendChild(wrap);
@@ -41532,7 +41536,7 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
     ];
     if(s==='challenge'){
       if(status==='submitting') return [['What should happen next in this challenge?','What happens next?'],['Explain the rules and Championship Championship Score.','Rules & Score'],['How can I improve or promote this challenge?','Improve / promote'],['What would make a strong entry here?','Strong entry']];
-      if(status==='voting'||status==='sudden_death') return [['Read this live competition for me.','Read the race'],['How does voting work in this challenge?','Voting'],['What happens if this ends tied?','Tie / sudden death'],['How will this result affect Championship Score?','Score impact']];
+      if(status==='voting'||status==='sudden_death') return [['Read this live competition for me.','Read the race'],['How does voting work in this challenge?','Voting'],['What happens if this ends tied?','Tie / tiebreaker'],['How will this result affect Championship Score?','Score impact']];
       return [['Explain this result from the recorded totals.','Explain result'],['How did this affect Championship Score?','Score impact'],['What happens next for the winner?','Winner next step'],['What can I learn from this challenge?','What to learn']];
     }
     if(s==='titles') return [['How do I qualify from my current position?','Qualification gap'],['What is driving my Championship Score?','My Score'],['What is my strongest scoring win?','Strongest win'],['Explain Opponent Points and Turnout Points.','Score formula']];
@@ -41664,7 +41668,7 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
     {id:'overview',label:'Overview',title:'How a challenge works',intro:R.lifecycle.summary,bullets:[
       'Enter: members submit work while the entry window is open.',
       'Vote: each member has one recorded ballot and can change it until voting closes.',
-      'Winner: the recorded ballots determine the result; special tie rules apply when sudden death is enabled.'
+      'Winner: the recorded ballots determine the result; special tie rules apply when tiebreaker is enabled.'
     ]},
     {id:'entering',label:'Entering',title:'Entering and withdrawing',intro:'The entry window is the only normal self-service window for changing your participation.',bullets:[
       R.entry.oneActiveEntryPerPerson?'One active entry per person in a regular challenge.':'',
@@ -41677,7 +41681,7 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
       R.voting.selfVote,
       'Live vote totals, percentages, and leaders remain visible while voting is open.'
     ]},
-    {id:'results',label:'Results',title:'Winners, ties, and sudden death',intro:R.results.decisiveWinner,bullets:[
+    {id:'results',label:'Results',title:'Winners, ties, and tiebreaker',intro:R.results.decisiveWinner,bullets:[
       R.results.suddenDeathEnabledTie,
       R.results.oneSubmission,
       R.results.noSubmissions,
@@ -41694,7 +41698,7 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
     {id:'championships',label:'Championships',title:'Championship rounds',intro:R.championships.explanation,bullets:[
       'Championship standings are category-specific and monthly.',
       'Qualifiers compete for the category title; the Championship round itself does not add regular monthly Score.',
-      'Championship sudden death uses the same new-hidden-entry, simultaneous-reveal, fresh-runoff model.'
+      'Championship tiebreaker uses the same new-hidden-entry, simultaneous-reveal, fresh-runoff model.'
     ]},
     {id:'private',label:'Private',title:'Private challenges',intro:R.privateChallenges.explanation,bullets:[
       'Only invited participants can enter and vote.',
@@ -41736,7 +41740,7 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
   function renderEntryRules(){
     const el=byId('fcEntryRulesV1047');if(!el)return;const ch=state.currentChallenge;if(!ch){el.innerHTML='';return}
     const status=computeChallengeStatus(ch);let title='Before you enter',copy=R.entry.withdrawal,section='entering';
-    if(status==='sd_submitting'){title='Sudden-death entry';copy='Only tied finalists submit new work. The new entries stay hidden until they reveal together for the runoff.';section='results'}
+    if(status==='sd_submitting'){title='Tiebreaker entry';copy='Only tied finalists submit new work. The new entries stay hidden until they reveal together for the runoff.';section='results'}
     el.innerHTML=`<div><strong>${esc(title)}</strong><span>${esc(copy)}</span></div><button type="button" class="fc-rule-link-v1047">Competition Rules</button>`;
     el.querySelector('button').onclick=()=>openCompetitionRules(section);
   }
@@ -41768,7 +41772,7 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
     if(/disqual|rejected entry|removed entry|moderation.*result/.test(q))return R.integrity.rejectedEntries+' '+R.integrity.adminAuthority;
     if(/private challenge.*score|private.*championship score/.test(q))return R.privateChallenges.explanation;
     if(/championship round.*score|championship.*add.*score/.test(q))return R.championships.explanation;
-    if(/tie|sudden death|co winner|co-winner/.test(q)){
+    if(/tie|tiebreaker|sudden death|co winner|co-winner/.test(q)){
       const ch=state.currentChallenge;
       if(ch&&!ch.is_championship&&!ch.allow_sudden_death&&!ch.sudden_death)return R.results.tieWithoutSuddenDeath;
       return `${R.results.suddenDeathEnabledTie} ${R.results.oneSubmission} ${R.results.noSubmissions} ${R.results.secondTie} There is no manual administrator decision or discretionary extension.`;
@@ -41961,9 +41965,9 @@ body.theme-light .fc-score-metric-v1032,body.theme-light .fc-score-cutoff-v1032,
       }
       return {k:'Entries open',t:left(ch.submission_deadline),h:'Submit before the deadline',p:`${entries.length} approved entr${entries.length===1?'y':'ies'} so far. Voting begins after entries close.`,primary:'enter'};
     }
-    if(status==='voting'||status==='sudden_death')return {k:status==='sudden_death'?'Sudden-death voting':'Voting is open',t:left(ch.voting_end),h:'Choose the strongest entry',p:'Swipe the entries below and vote directly on the card. You can change it until voting closes.'};
+    if(status==='voting'||status==='sudden_death')return {k:status==='sudden_death'?'Tiebreaker voting':'Voting is open',t:left(ch.voting_end),h:'Choose the strongest entry',p:'Swipe the entries below and vote directly on the card. You can change it until voting closes.'};
     if(status==='championship_pending')return {k:'Voting is closed',t:left(ch.championship_announce_at),h:'The crown drops at 8 PM ET',p:'Ballots are locked. The Championship result stays sealed until the scheduled announcement.'};
-    if(status==='sd_submitting')return {k:'Sudden-death entries',t:left(ch.sd_submit_end),h:'Tied finalists are submitting new work',p:'New entries reveal together for a fresh runoff.',primary:mine?'edit':null,mine};
+    if(status==='sd_submitting')return {k:'Tiebreaker entries',t:left(ch.sd_submit_end),h:'Tied finalists are submitting new work',p:'New entries reveal together for a fresh runoff.',primary:mine?'edit':null,mine};
     if(status==='voided')return {k:'No contest',t:'Final',h:'No winner was awarded',p:'Fewer than two competitors remained when entries closed.'};
     return {k:'Final result',t:'Final',h:'Voting is complete',p:'Review the winner, final totals, and any Championship Score awarded.',primary:'results'};
   }
@@ -45102,7 +45106,7 @@ body[data-fc-ember-important-surface="challenge"] .champ-arena-tape{display:none
     }
     return typeof priorLocal==='function'?priorLocal(question):null;
   };
-  const factualIntent=q=>/(score|point|winner|winning|result|deadline|when does|close|ends?|ending|phase|status|qualif|rank|place|vote|ballot|opponent|turnout|tie|sudden death|co[- ]?winner|rule|eligible|participant|how many entr|entry count|who entered|who is in|who is ahead|leader|leading)/i.test(q);
+  const factualIntent=q=>/(score|point|winner|winning|result|deadline|when does|close|ends?|ending|phase|status|qualif|rank|place|vote|ballot|opponent|turnout|tie|tiebreaker|sudden death|co[- ]?winner|rule|eligible|participant|how many entr|entry count|who entered|who is in|who is ahead|leader|leading)/i.test(q);
   const unsafeAnswer=text=>{
     const t=String(text||'');
     if(typeof window.fcEmberServerAnswerUnsafeV1046==='function'&&window.fcEmberServerAnswerUnsafeV1046(t))return true;
@@ -45356,7 +45360,7 @@ html[data-theme="light"] body .nav-icon-btn:active{
     }),
     eligibility:Object.freeze({
       validContest:'A scored contest needs at least two competitors when the result is settled. Entries removed from competition do not count.',
-      oneEntry:'Each member may have one entry per challenge round. Sudden death is a new round, so tied finalists submit one fresh entry for that round.',
+      oneEntry:'Each member may have one entry per challenge round. Tiebreaker is a new round, so tied finalists submit one fresh entry for that round.',
       bannedAccounts:'Banned accounts cannot enter or vote. Their entries cannot receive new ballots.',
       format:'An entry must match the challenge format and the host’s published rules.'
     }),
@@ -45375,13 +45379,13 @@ html[data-theme="light"] body .nav-icon-btn:active{
     }),
     results:Object.freeze({
       decisive:'The entry with the most ballots wins.',
-      suddenDeath:'When sudden death is enabled and the vote ties, only the tied finalists submit new hidden entries. Those entries reveal together for a fresh runoff.',
-      oneSubmission:'If only one tied finalist submits in sudden death, that finalist wins by default.',
+      suddenDeath:'When tiebreaker is enabled and the vote ties, only the tied finalists submit new hidden entries. Those entries reveal together for a fresh runoff.',
+      oneSubmission:'If only one tied finalist submits in tiebreaker, that finalist wins by default.',
       noSubmissions:'If no tied finalist submits, the tied finalists are co-winners and receive no Championship Score.',
-      noBallots:'If a sudden-death runoff receives no ballots, the finalists are co-winners and receive no Championship Score.',
+      noBallots:'If a tiebreaker runoff receives no ballots, the finalists are co-winners and receive no Championship Score.',
       tiedRunoff:'If the runoff ends with the same number of ballots, the tied finalists are competitive co-winners.',
-      unresolved:'If sudden death was not enabled and the final vote remains tied, there is no decisive winner and no Championship Score.',
-      admin:'Administrators do not choose winners, rewrite ballot totals, manually break ties, or grant discretionary sudden-death extensions.'
+      unresolved:'If tiebreaker was not enabled and the final vote remains tied, there is no decisive winner and no Championship Score.',
+      admin:'Administrators do not choose winners, rewrite ballot totals, manually break ties, or grant discretionary tiebreaker extensions.'
     }),
     score:Object.freeze({
       formula:'Championship Score = Opponent Points + Turnout Points.',
@@ -45421,9 +45425,9 @@ html[data-theme="light"] body .nav-icon-btn:active{
     {id:'eligibility',label:'Eligibility',title:'Competitors and entries',intro:RULES.eligibility.validContest,bullets:[RULES.eligibility.oneEntry,RULES.eligibility.format,RULES.eligibility.bannedAccounts,RULES.entry.moderation],enforced:true},
     {id:'entering',label:'Entering',title:'Entering, editing, and withdrawing',intro:'The active submission window is the only normal self-service period for changing participation.',bullets:[RULES.entry.withdrawal,RULES.entry.hostDelete,RULES.entry.noContest],enforced:true},
     {id:'voting',label:'Voting',title:'Voting and ballots',intro:RULES.voting.oneBallot,bullets:[RULES.voting.close,RULES.voting.selfVote,RULES.voting.live,RULES.voting.manipulation],enforced:true,enforcementLabel:'Anti-manipulation enforcement'},
-    {id:'results',label:'Results',title:'Winners, ties, and sudden death',intro:RULES.results.decisive,bullets:[RULES.results.suddenDeath,RULES.results.oneSubmission,RULES.results.noSubmissions,RULES.results.noBallots,RULES.results.tiedRunoff,RULES.results.unresolved,RULES.results.admin],enforced:true},
+    {id:'results',label:'Results',title:'Winners, ties, and tiebreaker',intro:RULES.results.decisive,bullets:[RULES.results.suddenDeath,RULES.results.oneSubmission,RULES.results.noSubmissions,RULES.results.noBallots,RULES.results.tiedRunoff,RULES.results.unresolved,RULES.results.admin],enforced:true},
     {id:'score',label:'Score',title:'Championship Score and qualification',intro:RULES.score.formula,bullets:[RULES.score.decisive,RULES.score.coWinner,RULES.score.opponent,RULES.score.turnout,RULES.score.exclusions,RULES.score.qualification],callout:'Opponent Points: Spark 1 · Flame 2 · Blaze 4 · Inferno 6 · Legend 10 · Icon 14 · Immortal 18 · G.O.A.T. 24. Turnout: under 10 = 0 · 10–24 = 3 · 25–49 = 6 · 50–99 = 10 · 100–249 = 15 · 250+ = 22.',enforced:true},
-    {id:'championships',label:'Titles',title:'Championship rounds and titles',intro:'Championship standings are category-specific and monthly.',bullets:[RULES.score.qualification,'Qualified contenders compete for the category title. The Championship round itself does not add to monthly Championship Score.','Championship sudden death uses the same hidden-entry, simultaneous-reveal, fresh-runoff model.'],enforced:true},
+    {id:'championships',label:'Titles',title:'Championship rounds and titles',intro:'Championship standings are category-specific and monthly.',bullets:[RULES.score.qualification,'Qualified contenders compete for the category title. The Championship round itself does not add to monthly Championship Score.','Championship tiebreaker uses the same hidden-entry, simultaneous-reveal, fresh-runoff model.'],enforced:true},
     {id:'private',label:'Private',title:'Private challenges',intro:RULES.privateChallenges.access,bullets:[RULES.privateChallenges.score],enforced:true},
     {id:'moderation',label:'Reports',title:'Reports, moderation, and removals',intro:RULES.moderation.reports,bullets:[RULES.moderation.removal,RULES.moderation.scope],enforced:true},
     {id:'authority',label:'Authority',title:'Host and administrator authority',intro:RULES.authority.host,bullets:[RULES.authority.admin,RULES.authority.durable],enforced:true}
@@ -45432,7 +45436,7 @@ html[data-theme="light"] body .nav-icon-btn:active{
   function render(section='overview'){
     const nav=byId('fcRulesNavV1047'),body=byId('fcRulesBodyV1047');if(!nav||!body)return;
     nav.innerHTML=sections.map(s=>`<button type="button" data-fc-v1109-rule="${s.id}" class="${s.id===section?'active':''}">${safe(s.label)}</button>`).join('');
-    body.innerHTML=`<div class="fc-rules-atglance-v1047"><div><b>1 entry per round</b><span>Sudden death is a fresh round.</span></div><div><b>1 recorded ballot</b><span>Change it until voting closes.</span></div><div><b>2 competitors</b><span>Minimum for a scored contest.</span></div><div><b>Top 3 Scores</b><span>All cutoff ties qualify.</span></div></div>`+
+    body.innerHTML=`<div class="fc-rules-atglance-v1047"><div><b>1 entry per round</b><span>Tiebreaker is a fresh round.</span></div><div><b>1 recorded ballot</b><span>Change it until voting closes.</span></div><div><b>2 competitors</b><span>Minimum for a scored contest.</span></div><div><b>Top 3 Scores</b><span>All cutoff ties qualify.</span></div></div>`+
       sections.map(s=>`<details class="fc-rule-section-v1047" id="fc-v1109-rule-${s.id}" ${s.id===section?'open':''}><summary>${safe(s.title)}</summary><div class="fc-rule-section-v1047-body"><p>${safe(s.intro)}</p><ul>${s.bullets.map(b=>`<li>${safe(b)}</li>`).join('')}</ul>${s.callout?`<div class="fc-rule-callout-v1047"><b>Current values</b><br>${safe(s.callout)}</div>`:''}${s.enforced?`<div class="fc-rule-enforced-v1109">${safe(s.enforcementLabel||'Database-enforced write rule')}</div>`:''}</div></details>`).join('');
     nav.querySelectorAll('[data-fc-v1109-rule]').forEach(btn=>btn.onclick=()=>focus(btn.dataset.fcV1109Rule));
   }
@@ -45458,7 +45462,7 @@ html[data-theme="light"] body .nav-icon-btn:active{
     const el=byId('fcEntryRulesV1047'),ch=state?.currentChallenge;if(!el||!ch)return;
     const st=typeof computeChallengeStatus==='function'?computeChallengeStatus(ch):'';
     let title='Before you enter',copy=RULES.entry.withdrawal,section='entering';
-    if(st==='sd_submitting'){title='Sudden-death entry';copy=RULES.results.suddenDeath+' '+RULES.eligibility.oneEntry;section='results';}
+    if(st==='sd_submitting'){title='Tiebreaker entry';copy=RULES.results.suddenDeath+' '+RULES.eligibility.oneEntry;section='results';}
     else if(ch.is_public===false){title='Private challenge';copy=RULES.privateChallenges.access;section='private';}
     el.innerHTML=`<div><strong>${safe(title)}</strong><span>${safe(copy)}</span></div><button type="button" class="fc-rule-link-v1047">Competition Rules</button>`;
     el.querySelector('button').onclick=()=>openCompetitionRules(section);
@@ -45474,7 +45478,7 @@ html[data-theme="light"] body .nav-icon-btn:active{
   window.fcEmberLocalAnswerV1046=function(question){
     const q=String(question||'').toLowerCase().replace(/[’']/g,"'").replace(/[^a-z0-9.+ -]/g,' ').replace(/\s+/g,' ').trim();
     if(/co winner|co-winner|shared winner/.test(q))return `${RULES.results.tiedRunoff} ${RULES.score.coWinner} ${RULES.score.exclusions}`;
-    if(/tie|sudden death|runoff/.test(q))return `${RULES.results.suddenDeath} ${RULES.results.oneSubmission} ${RULES.results.noSubmissions} ${RULES.results.noBallots} ${RULES.results.tiedRunoff} ${RULES.results.admin}`;
+    if(/tie|tiebreaker|sudden death|runoff/.test(q))return `${RULES.results.suddenDeath} ${RULES.results.oneSubmission} ${RULES.results.noSubmissions} ${RULES.results.noBallots} ${RULES.results.tiedRunoff} ${RULES.results.admin}`;
     if(/championship score|opponent points|turnout points|qualif/.test(q))return `${RULES.score.formula} ${RULES.score.decisive} ${RULES.score.coWinner} ${RULES.score.exclusions} ${RULES.score.qualification}`;
     if(/one entry|duplicate entry|second entry/.test(q))return RULES.eligibility.oneEntry;
     if(/withdraw|delete.*entry|remove my entry|edit.*entry/.test(q))return RULES.entry.withdrawal;
@@ -49799,9 +49803,9 @@ body.fc-championship-view-v1226 #challengeDetailSheet #cdEntriesDots .cd-entries
 
   function fcChampPhaseV1236(status) {
     if (status === 'submitting') return 'ENTRIES OPEN';
-    if (status === 'sd_submitting') return 'SUDDEN DEATH ENTRIES';
+    if (status === 'sd_submitting') return 'TIEBREAKER ENTRIES';
     if (status === 'voting') return 'VOTING OPEN';
-    if (status === 'sudden_death') return 'SUDDEN DEATH VOTING';
+    if (status === 'sudden_death') return 'TIEBREAKER VOTING';
     if (status === 'closed') return 'CHAMPIONSHIP DECIDED';
     return 'CHAMPIONSHIP ROUND';
   }
