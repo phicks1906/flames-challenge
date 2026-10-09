@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1356 · simplified-ranks-and-scoring" name="fc-build"/>
+<meta content="v1357 · regular-rank-milestones" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Ranks now match Opponent Points: Spark 1, Blaze 5, Inferno 10; Hall of Fame requires 10, 20, 30, and 40 Championships. Flame rank is retired." name="fc-whatsnew"/>
+<meta content="Blaze now requires 3 public wins and is worth 3 Opponent Points. Inferno requires 5 public wins and is worth 5. Hall of Fame milestones remain 10, 20, 30, and 40 Championships." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -8963,7 +8963,7 @@ body.theme-light .fc-challenge-options-v1338{background:rgba(20,16,14,.38)}
 <div class="fc-score-rule-grid-v1032">
 <div class="fc-score-rule-panel-v1032">
 <h4>Opponent Points</h4>
-<div class="fc-score-rule-table-v1032"><span>Spark <b>1</b></span><span>Blaze <b>5</b></span><span>Inferno <b>10</b></span><span>Legend <b>10</b></span><span>Icon <b>20</b></span><span>Immortal <b>30</b></span><span>G.O.A.T. <b>40</b></span></div>
+<div class="fc-score-rule-table-v1032"><span>Spark <b>1</b></span><span>Blaze <b>3</b></span><span>Inferno <b>5</b></span><span>Legend <b>10</b></span><span>Icon <b>20</b></span><span>Immortal <b>30</b></span><span>G.O.A.T. <b>40</b></span></div>
 </div>
 <div class="fc-score-rule-panel-v1032">
 <h4>Turnout Points</h4>
@@ -20258,7 +20258,7 @@ function getChampIds() {
    ALL NUMBERS SOFT — retune here, one place, no logic changes. */
 const BOOST_CFG = {
   // Opponent tier -> points for beating one such player
-  opponentPts: { spark: 1, blaze: 5, inferno: 10, legend: 10, icon: 20, immortal: 30, goat: 40 },
+  opponentPts: { spark: 1, blaze: 3, inferno: 5, legend: 10, icon: 20, immortal: 30, goat: 40 },
   // Total valid ballots cast in the final round -> capped turnout points (highest threshold met wins)
   voteTiers: [ { min: 250, pts: 22 }, { min: 100, pts: 15 }, { min: 50, pts: 10 }, { min: 25, pts: 6 }, { min: 10, pts: 3 } ],
   // Upset = you beat someone at least this many ladder stages above you.
@@ -23068,8 +23068,8 @@ const FOUNDERS = [
 let _hofUid = 0;
 const LADDER = [
   { key:'spark',    name:'Spark',    min:0,  source:'regular',      points:1  },
-  { key:'blaze',    name:'Blaze',    min:5,  source:'regular',      points:5  },
-  { key:'inferno',  name:'Inferno',  min:10, source:'regular',      points:10  },
+  { key:'blaze',    name:'Blaze',    min:3,  source:'regular',      points:3  },
+  { key:'inferno',  name:'Inferno',  min:5,  source:'regular',      points:5  },
   { key:'legend',   name:'Legend',   min:10, source:'championship', points:10 },
   { key:'icon',     name:'Icon',     min:20, source:'championship', points:20 },
   { key:'immortal', name:'Immortal', min:30, source:'championship', points:30 },
@@ -23091,7 +23091,7 @@ function levelStatusForCounts(regularWins=0, champCount=0, isFounder=false){
     nextName:next?.name||null,nextMin:next?.min??null,pct,isMaxed:!next,isFounder};
 }
 function fcRankProgressV1356(ls) {
-  if (!ls) return 'Win 5 public challenges to reach Blaze';
+  if (!ls) return 'Win 3 public challenges to reach Blaze';
   const unit = ls.isHallOfFame ? 'Championship title' : 'public win';
   if (ls.isMaxed && !ls.isHallOfFame) return `${ls.regularWins} public wins · Win 10 Championships to enter as Legend`;
   if (ls.isMaxed) return `${ls.champCount} Championship titles · highest level`;
@@ -30262,9 +30262,9 @@ const FC_COMPETITION_RULES_V1047 = Object.freeze({
   score: Object.freeze({
     scorePeriod: 'calendar_month',
     scoreFormula: 'Opponent Points + Turnout Points',
-    opponentPoints: Object.freeze({Spark:1,Blaze:5,Inferno:10,Legend:10,Icon:20,Immortal:30,'G.O.A.T.':40}),
+    opponentPoints: Object.freeze({Spark:1,Blaze:3,Inferno:5,Legend:10,Icon:20,Immortal:30,'G.O.A.T.':40}),
     turnoutPoints: Object.freeze([{label:'250 or more',pts:22},{label:'100–249',pts:15},{label:'50–99',pts:10},{label:'25–49',pts:6},{label:'10–24',pts:3},{label:'Under 10',pts:0}]),
-    regularLevelWins: Object.freeze({Spark:0,Blaze:5,Inferno:10}),
+    regularLevelWins: Object.freeze({Spark:0,Blaze:3,Inferno:5}),
     hallOfFameTitles: Object.freeze({Legend:10,Icon:20,Immortal:30,'G.O.A.T.':40}),
     visibleLevelDeterminesOpponentPoints: true,
     qualifyingDistinctLevels: 3,
@@ -30373,7 +30373,7 @@ function fcEmberStrongestWinV1046(userId){
 }
 function fcEmberNormalizeV1046(q){return String(q||'').toLowerCase().replace(/[’']/g,"'").replace(/[^a-z0-9.+ -]/g,' ').replace(/\s+/g,' ').trim();}
 function fcEmberRuleTablesV1046(kind){
-  if(kind==='opponent')return 'Opponent Points per defeated opponent: Spark 1, Blaze 5, Inferno 10, Legend 10, Icon 20, Immortal 30, G.O.A.T. 40. An opponent’s tier and point value are frozen when the challenge resolves.';
+  if(kind==='opponent')return 'Opponent Points per defeated opponent: Spark 1, Blaze 3, Inferno 5, Legend 10, Icon 20, Immortal 30, G.O.A.T. 40. An opponent’s tier and point value are frozen when the challenge resolves.';
   return 'Turnout Points use the total number of ballots cast in the challenge: under 10 = 0, 10–24 = 3, 25–49 = 6, 50–99 = 10, 100–249 = 15, and 250+ = 22.';
 }
 function fcEmberLocalAnswerV1046(question){
@@ -41649,10 +41649,10 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
         scorePeriod:'calendar month',
         scoreFormula:'Opponent Points + Turnout Points from decisive public challenge wins in that category',
         qualification:'at 11:59 PM ET on the final day of each calendar month, the top three Championship Scores qualify; everyone tied at the cutoff advances',
-        opponentPoints:{Spark:1,Blaze:5,Inferno:10,Legend:10,Icon:20,Immortal:30,'G.O.A.T.':40},
+        opponentPoints:{Spark:1,Blaze:3,Inferno:5,Legend:10,Icon:20,Immortal:30,'G.O.A.T.':40},
         turnoutPoints:{under10:0,'10-24':3,'25-49':6,'50-99':10,'100-249':15,'250+':22},
         turnoutBasis:'total ballots cast in the challenge',
-        regularLevelWins:{Spark:0,Blaze:5,Inferno:10},
+        regularLevelWins:{Spark:0,Blaze:3,Inferno:5},
         hallOfFameTitles:{Legend:10,Icon:20,Immortal:30,'G.O.A.T.':40},
         visibleLevelDeterminesOpponentPoints:true,
         obsoleteTerms:['rolling 30-day Score','Prestige tab','Top-3 challenge placement earns Score']
@@ -41697,7 +41697,7 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
       'Turnout Points use total ballots cast in the challenge.',
       R.score.qualification,
       'Private challenges, Championship rounds, no-contests, and unresolved ties do not add to monthly Championship Score.'
-    ],callout:'Opponent Points: Spark 1 · Blaze 5 · Inferno 10 · Legend 10 · Icon 20 · Immortal 30 · G.O.A.T. 40. Turnout: under 10 = 0 · 10–24 = 3 · 25–49 = 6 · 50–99 = 10 · 100–249 = 15 · 250+ = 22.'},
+    ],callout:'Opponent Points: Spark 1 · Blaze 3 · Inferno 5 · Legend 10 · Icon 20 · Immortal 30 · G.O.A.T. 40. Turnout: under 10 = 0 · 10–24 = 3 · 25–49 = 6 · 50–99 = 10 · 100–249 = 15 · 250+ = 22.'},
     {id:'championships',label:'Championships',title:'Championship rounds',intro:R.championships.explanation,bullets:[
       'Championship standings are category-specific and monthly.',
       'Qualifiers compete for the category title; the Championship round itself does not add regular monthly Score.',
@@ -42003,7 +42003,7 @@ body.theme-light .fc-score-metric-v1032,body.theme-light .fc-score-cutoff-v1032,
   window.fcRegisterChallengeDetailEnhancerV1078?.('compact-status-brief',40,renderBrief);
   const priorLeaderboard=window.renderLeaderboard;if(typeof priorLeaderboard==='function')window.renderLeaderboard=function(){const r=priorLeaderboard.apply(this,arguments);requestAnimationFrame(addTitlesHelp);return r;};
   const priorProfile=window.renderProfileTab;if(typeof priorProfile==='function')window.renderProfileTab=function(){const r=priorProfile.apply(this,arguments);requestAnimationFrame(decorateProfileLevel);return r;};
-  const priorLocal=window.fcEmberLocalAnswerV1046;window.fcEmberLocalAnswerV1046=function(q){const x=String(q||'').toLowerCase();if(/tier|level|spark|flame|blaze|inferno|legend|icon|immortal|g\.?o\.?a\.?t|hall of fame/.test(x)){const uid=state.profile?.id,ls=uid?getLadderStatus(uid):null;let own='';if(ls)own=` Your visible level is ${ls.name}, worth ${ls.points} Opponent Point${ls.points===1?'':'s'}.`;return `FlamesChallenge has one visible level. Public challenge wins move competitors through Spark, Blaze, and Inferno. Ten Championship titles permanently move a competitor into the Hall of Fame as a Legend; 20 titles earns Icon, 30 earns Immortal, and 40 earns G.O.A.T. Once inducted, the badge never returns to the regular ladder. The visible badge determines Opponent Points: Spark 1, Blaze 5, Inferno 10, Legend 10, Icon 20, Immortal 30, G.O.A.T. 40.${own}`;}return typeof priorLocal==='function'?priorLocal(q):null;};
+  const priorLocal=window.fcEmberLocalAnswerV1046;window.fcEmberLocalAnswerV1046=function(q){const x=String(q||'').toLowerCase();if(/tier|level|spark|flame|blaze|inferno|legend|icon|immortal|g\.?o\.?a\.?t|hall of fame/.test(x)){const uid=state.profile?.id,ls=uid?getLadderStatus(uid):null;let own='';if(ls)own=` Your visible level is ${ls.name}, worth ${ls.points} Opponent Point${ls.points===1?'':'s'}.`;return `FlamesChallenge has one visible level. Public challenge wins move competitors through Spark, Blaze, and Inferno. Ten Championship titles permanently move a competitor into the Hall of Fame as a Legend; 20 titles earns Icon, 30 earns Immortal, and 40 earns G.O.A.T. Once inducted, the badge never returns to the regular ladder. The visible badge determines Opponent Points: Spark 1, Blaze 3, Inferno 5, Legend 10, Icon 20, Immortal 30, G.O.A.T. 40.${own}`;}return typeof priorLocal==='function'?priorLocal(q):null;};
   const priorCtx=window.buildEmberContext;window.buildEmberContext=function(){const base=typeof priorCtx==='function'?priorCtx():{};const ls=state.profile?.id?getLadderStatus(state.profile.id):null;return {...base,levelSystem:{version:'v1054',visibleBadgeIsOpponentValue:true,regularLevels:REGULAR_LEVELS,hallOfFameLevels:HOF_LEVELS,current:ls?{name:ls.name,source:ls.source,points:ls.points,regularWins:ls.regularWins,championshipTitles:ls.champCount,next:ls.nextName}:null,founderIsSeparate:true}};};
   document.addEventListener('DOMContentLoaded',()=>{addTitlesHelp();decorateProfileLevel();},{once:true});if(document.readyState!=='loading'){addTitlesHelp();decorateProfileLevel();}
   window.__fcBuildV1054={build:'v1054',phase:'Production Hardening',focus:'progressive guidance + visible level system',newEdgeFunctions:0,edgeFunctionChanges:0,sqlChanges:0};
@@ -45429,7 +45429,7 @@ html[data-theme="light"] body .nav-icon-btn:active{
     {id:'entering',label:'Entering',title:'Entering, editing, and withdrawing',intro:'The active submission window is the only normal self-service period for changing participation.',bullets:[RULES.entry.withdrawal,RULES.entry.hostDelete,RULES.entry.noContest],enforced:true},
     {id:'voting',label:'Voting',title:'Voting and ballots',intro:RULES.voting.oneBallot,bullets:[RULES.voting.close,RULES.voting.selfVote,RULES.voting.live,RULES.voting.manipulation],enforced:true,enforcementLabel:'Anti-manipulation enforcement'},
     {id:'results',label:'Results',title:'Winners, ties, and tiebreaker',intro:RULES.results.decisive,bullets:[RULES.results.suddenDeath,RULES.results.oneSubmission,RULES.results.noSubmissions,RULES.results.noBallots,RULES.results.tiedRunoff,RULES.results.unresolved,RULES.results.admin],enforced:true},
-    {id:'score',label:'Score',title:'Championship Score and qualification',intro:RULES.score.formula,bullets:[RULES.score.decisive,RULES.score.coWinner,RULES.score.opponent,RULES.score.turnout,RULES.score.exclusions,RULES.score.qualification],callout:'Opponent Points: Spark 1 · Blaze 5 · Inferno 10 · Legend 10 · Icon 20 · Immortal 30 · G.O.A.T. 40. Turnout: under 10 = 0 · 10–24 = 3 · 25–49 = 6 · 50–99 = 10 · 100–249 = 15 · 250+ = 22.',enforced:true},
+    {id:'score',label:'Score',title:'Championship Score and qualification',intro:RULES.score.formula,bullets:[RULES.score.decisive,RULES.score.coWinner,RULES.score.opponent,RULES.score.turnout,RULES.score.exclusions,RULES.score.qualification],callout:'Opponent Points: Spark 1 · Blaze 3 · Inferno 5 · Legend 10 · Icon 20 · Immortal 30 · G.O.A.T. 40. Turnout: under 10 = 0 · 10–24 = 3 · 25–49 = 6 · 50–99 = 10 · 100–249 = 15 · 250+ = 22.',enforced:true},
     {id:'championships',label:'Titles',title:'Championship rounds and titles',intro:'Championship standings are category-specific and monthly.',bullets:[RULES.score.qualification,'Qualified contenders compete for the category title. The Championship round itself does not add to monthly Championship Score.','Championship tiebreaker uses the same hidden-entry, simultaneous-reveal, fresh-runoff model.'],enforced:true},
     {id:'private',label:'Private',title:'Private challenges',intro:RULES.privateChallenges.access,bullets:[RULES.privateChallenges.score],enforced:true},
     {id:'moderation',label:'Reports',title:'Reports, moderation, and removals',intro:RULES.moderation.reports,bullets:[RULES.moderation.removal,RULES.moderation.scope],enforced:true},
