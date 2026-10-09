@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1355 · tiebreaker-terminology" name="fc-build"/>
+<meta content="v1356 · simplified-ranks-and-scoring" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Tiebreaker wording now appears throughout competition screens and guidance. The competition rules are unchanged." name="fc-whatsnew"/>
+<meta content="Ranks now match Opponent Points: Spark 1, Blaze 5, Inferno 10; Hall of Fame requires 10, 20, 30, and 40 Championships. Flame rank is retired." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -8963,7 +8963,7 @@ body.theme-light .fc-challenge-options-v1338{background:rgba(20,16,14,.38)}
 <div class="fc-score-rule-grid-v1032">
 <div class="fc-score-rule-panel-v1032">
 <h4>Opponent Points</h4>
-<div class="fc-score-rule-table-v1032"><span>Spark <b>1</b></span><span>Flame <b>2</b></span><span>Blaze <b>4</b></span><span>Inferno <b>6</b></span><span>Legend <b>10</b></span><span>Icon <b>14</b></span><span>Immortal <b>18</b></span><span>G.O.A.T. <b>24</b></span></div>
+<div class="fc-score-rule-table-v1032"><span>Spark <b>1</b></span><span>Blaze <b>5</b></span><span>Inferno <b>10</b></span><span>Legend <b>10</b></span><span>Icon <b>20</b></span><span>Immortal <b>30</b></span><span>G.O.A.T. <b>40</b></span></div>
 </div>
 <div class="fc-score-rule-panel-v1032">
 <h4>Turnout Points</h4>
@@ -18256,10 +18256,10 @@ function renderHeatCheck() {
   const ladEl = document.getElementById('hcLadder');
   if (ladEl && ls) {
     const curIdx = ls.stageIndex - 1;  // 0-based
-    const shortNames = ['Spark','Flame','Blaze','Inferno','Legend','Icon','Immo','GOAT'];
+    const shortNames = LADDER.map(st => ({immortal:'Immo',goat:'GOAT'}[st.key] || st.name));
     // Level-up detection: compare to the last stage we rendered for this user.
     // If it advanced, fire the burst on the newly-completed dot + scale-in the new current.
-    const lastKey = `hcLastStage_${myId}`;
+    const lastKey = `hcLastStage_v1356_${myId}`;
     let lastIdx = -1;
     try { const v = localStorage.getItem(lastKey); if (v !== null) lastIdx = parseInt(v, 10); } catch(e) {}
     const justLeveledUp = lastIdx >= 0 && curIdx > lastIdx;
@@ -20258,7 +20258,7 @@ function getChampIds() {
    ALL NUMBERS SOFT — retune here, one place, no logic changes. */
 const BOOST_CFG = {
   // Opponent tier -> points for beating one such player
-  opponentPts: { spark: 1, flame: 2, blaze: 4, inferno: 6, legend: 10, icon: 14, immortal: 18, goat: 24 },
+  opponentPts: { spark: 1, blaze: 5, inferno: 10, legend: 10, icon: 20, immortal: 30, goat: 40 },
   // Total valid ballots cast in the final round -> capped turnout points (highest threshold met wins)
   voteTiers: [ { min: 250, pts: 22 }, { min: 100, pts: 15 }, { min: 50, pts: 10 }, { min: 25, pts: 6 }, { min: 10, pts: 3 } ],
   // Upset = you beat someone at least this many ladder stages above you.
@@ -20372,7 +20372,7 @@ function computeBoostSnapshot(opponents, totalValidBallots, levelSnapshot = {}) 
   let opponentPts = 0;
   opponents.forEach(oid => {
     const tier = levelSnapshot[oid] || tierKeyForUser(oid);
-    const pts = BOOST_CFG.opponentPts[tier] || 0;
+    const pts = BOOST_CFG.opponentPts[tier] ?? (tier === 'flame' ? 1 : 0);
     opponentPts += pts;
     detail.opponents.push({ opponent_id: oid, tier, pts });
   });
@@ -20859,7 +20859,7 @@ function renderHallOfFame() {
   const hofLevel=myLevel?.isHallOfFame?myLevel:null;
   const next=HOF_LEVELS.find(x=>myCount<x.min);
   const remaining=next?next.min-myCount:0;
-  const firstHallMin=HOF_LEVELS[0]?.min||5;
+  const firstHallMin=HOF_LEVELS[0]?.min||10;
   const pathPct=Math.max(0,Math.min(100,Math.round((Math.min(myCount,firstHallMin)/firstHallMin)*100)));
 
   const hero=`<section class="fc-hof-hero-v1283" aria-label="FlamesChallenge Hall of Fame">
@@ -20868,7 +20868,7 @@ function renderHallOfFame() {
     <div class="fc-hof-hero-copy-v1283">
       <small>FLAMESCHALLENGE HALL OF FAME</small>
       <h3>Championships become legacy.</h3>
-      <p>Win 5 Championships to enter as a Legend. Keep winning to rise through Icon, Immortal, and G.O.A.T.</p>
+      <p>Win 10 Championships to enter as a Legend. Keep winning to rise through Icon, Immortal, and G.O.A.T.</p>
     </div>
     <div class="fc-hof-levels-v1283" aria-label="Hall of Fame levels">
       ${HOF_LEVELS.map((lvl,i)=>`<div class="${myCount>=lvl.min?'reached':''}"><span>${lvl.name}</span><b>${lvl.min}</b><em>${i===0?'titles to enter':'titles'}</em></div>`).join('')}
@@ -20907,7 +20907,7 @@ function renderHallOfFame() {
     <div class="fc-hof-vacant-crest-v1283" aria-hidden="true"></div>
     <small>THE FIRST SEAT IS OPEN</small>
     <h4>No competitor has entered the Hall yet.</h4>
-    <p>The first competitor to win 5 Championships becomes a Legend and takes the first place in FlamesChallenge history.</p>
+    <p>The first competitor to win 10 Championships becomes a Legend and takes the first place in FlamesChallenge history.</p>
   </section>`;
 
   const byMonth={};
@@ -23068,13 +23068,12 @@ const FOUNDERS = [
 let _hofUid = 0;
 const LADDER = [
   { key:'spark',    name:'Spark',    min:0,  source:'regular',      points:1  },
-  { key:'flame',    name:'Flame',    min:1,  source:'regular',      points:2  },
-  { key:'blaze',    name:'Blaze',    min:5,  source:'regular',      points:4  },
-  { key:'inferno',  name:'Inferno',  min:10, source:'regular',      points:6  },
-  { key:'legend',   name:'Legend',   min:5,  source:'championship', points:10 },
-  { key:'icon',     name:'Icon',     min:10, source:'championship', points:14 },
-  { key:'immortal', name:'Immortal', min:15, source:'championship', points:18 },
-  { key:'goat',     name:'G.O.A.T.', min:20, source:'championship', points:24 },
+  { key:'blaze',    name:'Blaze',    min:5,  source:'regular',      points:5  },
+  { key:'inferno',  name:'Inferno',  min:10, source:'regular',      points:10  },
+  { key:'legend',   name:'Legend',   min:10, source:'championship', points:10 },
+  { key:'icon',     name:'Icon',     min:20, source:'championship', points:20 },
+  { key:'immortal', name:'Immortal', min:30, source:'championship', points:30 },
+  { key:'goat',     name:'G.O.A.T.', min:40, source:'championship', points:40 },
 ];
 const REGULAR_LEVELS = LADDER.filter(x => x.source === 'regular');
 const HOF_LEVELS = LADDER.filter(x => x.source === 'championship');
@@ -23090,6 +23089,13 @@ function levelStatusForCounts(regularWins=0, champCount=0, isFounder=false){
     source:stage.source,isHallOfFame:stage.source==='championship',points:stage.points,
     regularWins,champCount,metricCount,metricLabel:stage.source==='championship'?'Championship titles':'public challenge wins',
     nextName:next?.name||null,nextMin:next?.min??null,pct,isMaxed:!next,isFounder};
+}
+function fcRankProgressV1356(ls) {
+  if (!ls) return 'Win 5 public challenges to reach Blaze';
+  const unit = ls.isHallOfFame ? 'Championship title' : 'public win';
+  if (ls.isMaxed && !ls.isHallOfFame) return `${ls.regularWins} public wins · Win 10 Championships to enter as Legend`;
+  if (ls.isMaxed) return `${ls.champCount} Championship titles · highest level`;
+  return `${ls.metricCount} ${unit}${ls.metricCount === 1 ? '' : 's'} · ${Math.max(0, ls.nextMin - ls.metricCount)} more to ${ls.nextName}`;
 }
 function levelIndexForKey(key){return Math.max(0,LADDER.findIndex(x=>x.key===key));}
 function visibleLevelKeyForCounts(regularWins,champCount){return levelStatusForCounts(regularWins,champCount).key;}
@@ -23154,7 +23160,7 @@ async function openBoostSheet(userId, cat) {
   let pose = 'think', line;
   if (!wins) { pose = 'gutter'; line = `No ${cat ? escapeHtml(cat) + ' ' : ''}wins yet this month. Win one and you're in the race.`; }
   else if (allSpark && wins >= 3) { pose = 'sly'; line = `${wins} wins, all against Sparks. Championship Score counts who you beat, not only how many times.`; }
-  else if (topTier >= 4) { const tn = LADDER[topTier].name; pose = 'fired-up'; line = `Beat ${/^[AEIOUaeiou]/.test(tn) ? 'an' : 'a'} ${tn}. That's worth more than a handful of easy wins.`; }
+  else if (topTier >= 4) { const tn = LADDER[topTier]?.name || 'high-level opponent'; pose = 'fired-up'; line = `Beat ${/^[AEIOUaeiou]/.test(tn) ? 'an' : 'a'} ${tn}. That's worth more than a handful of easy wins.`; }
   else if (topTier >= 2) { pose = 'fired-up'; line = `Solid opponents this month. That's exactly what Championship Score rewards.`; }
   else if (wins === 1) { pose = 'point'; line = `One win on the board. Keep going.`; }
   else { line = `Beat someone ranked above you and this number jumps.`; }
@@ -23225,7 +23231,7 @@ async function maybeShowCelebration() {
     let variant, html;
     if (pick.type === 'champ_won') {
       const ls = getLadderStatus(state.profile.id);
-      const stage = LADDER.slice().reverse().find(s => ls.champCount >= s.min);
+      const stage = HOF_LEVELS.slice().reverse().find(s => ls.champCount >= s.min);
       const stageIdx = stage ? LADDER.indexOf(stage) : 0;
       const justCrossed = stage && ls.champCount === stage.min;
       const legendIdx = LADDER.findIndex(s => s.key === 'legend');
@@ -28047,13 +28053,8 @@ function renderFeed() {
   // Exclude championship challenges from the regular scored feed (they're pinned above)
   // ── Hall of Fame announcements (inductions + tier promotions) ──────────────
   // Inductions: each championship win in hofData. Promotions: when a player's
-  // cumulative championship count crosses a tier threshold (5/10/15/20).
-  const TIER_THRESHOLDS = [
-    { at: 20, name: 'G.O.A.T.' },
-    { at: 15, name: 'Immortal' },
-    { at: 10, name: 'Icon' },
-    { at: 5,  name: 'Legend' },
-  ];
+  // cumulative championship count crosses a tier threshold (10/20/30/40).
+  const TIER_THRESHOLDS = HOF_LEVELS.slice().reverse().map(level => ({at:level.min,name:level.name}));
   const hofItems = [];
   {
     const inductions = [...(state.hofData || [])].filter(r => r.userId);
@@ -30261,10 +30262,10 @@ const FC_COMPETITION_RULES_V1047 = Object.freeze({
   score: Object.freeze({
     scorePeriod: 'calendar_month',
     scoreFormula: 'Opponent Points + Turnout Points',
-    opponentPoints: Object.freeze({Spark:1,Flame:2,Blaze:4,Inferno:6,Legend:10,Icon:14,Immortal:18,'G.O.A.T.':24}),
+    opponentPoints: Object.freeze({Spark:1,Blaze:5,Inferno:10,Legend:10,Icon:20,Immortal:30,'G.O.A.T.':40}),
     turnoutPoints: Object.freeze([{label:'250 or more',pts:22},{label:'100–249',pts:15},{label:'50–99',pts:10},{label:'25–49',pts:6},{label:'10–24',pts:3},{label:'Under 10',pts:0}]),
-    regularLevelWins: Object.freeze({Spark:0,Flame:1,Blaze:5,Inferno:10}),
-    hallOfFameTitles: Object.freeze({Legend:5,Icon:10,Immortal:15,'G.O.A.T.':20}),
+    regularLevelWins: Object.freeze({Spark:0,Blaze:5,Inferno:10}),
+    hallOfFameTitles: Object.freeze({Legend:10,Icon:20,Immortal:30,'G.O.A.T.':40}),
     visibleLevelDeterminesOpponentPoints: true,
     qualifyingDistinctLevels: 3,
     tiesAtCutoffAdvance: true,
@@ -30372,7 +30373,7 @@ function fcEmberStrongestWinV1046(userId){
 }
 function fcEmberNormalizeV1046(q){return String(q||'').toLowerCase().replace(/[’']/g,"'").replace(/[^a-z0-9.+ -]/g,' ').replace(/\s+/g,' ').trim();}
 function fcEmberRuleTablesV1046(kind){
-  if(kind==='opponent')return 'Opponent Points per defeated opponent: Spark 1, Flame 2, Blaze 4, Inferno 6, Legend 10, Icon 14, Immortal 18, G.O.A.T. 24. An opponent’s tier and point value are frozen when the challenge resolves.';
+  if(kind==='opponent')return 'Opponent Points per defeated opponent: Spark 1, Blaze 5, Inferno 10, Legend 10, Icon 20, Immortal 30, G.O.A.T. 40. An opponent’s tier and point value are frozen when the challenge resolves.';
   return 'Turnout Points use the total number of ballots cast in the challenge: under 10 = 0, 10–24 = 3, 25–49 = 6, 50–99 = 10, 100–249 = 15, and 250+ = 22.';
 }
 function fcEmberLocalAnswerV1046(question){
@@ -30412,7 +30413,7 @@ function fcEmberLocalAnswerV1046(question){
   }
 
   if(tierWords){
-    let text='Public challenge wins move competitors through Spark, Flame, Blaze, and Inferno. Five Championship titles permanently move a competitor into the Hall of Fame as a Legend; 10 titles earns Icon, 15 earns Immortal, and 20 earns G.O.A.T. The visible level determines Opponent Points.';
+    let text='Public challenge wins move competitors through Spark, Blaze, and Inferno. Ten Championship titles permanently move a competitor into the Hall of Fame as a Legend; 20 titles earns Icon, 30 earns Immortal, and 40 earns G.O.A.T. The visible level determines Opponent Points.';
     if(uid){try{const t=getLadderStatus(uid);if(t)text+=` Your current level is ${t.name}, worth ${t.points} Opponent Point${t.points===1?'':'s'}${t.nextName?`; ${Math.max(0,t.nextMin-t.metricCount)} more ${t.isHallOfFame?'Championship title':'public challenge win'}${Math.max(0,t.nextMin-t.metricCount)===1?'':'s'} to ${t.nextName}`:''}.`;}catch(e){}}
     return text;
   }
@@ -30864,7 +30865,7 @@ function openBadgeLegend() {
   const list=document.getElementById('badgeLegendList');if(!list)return;
   const medal=(key,size=42)=>`<img class="hof-badge-img" src="${LADDER_BADGE_BASE}${key}.png" width="${size}" height="${size}" alt="">`;
   const row=t=>`<div class="fc-level-row-v1054"><div class="fc-level-icon-v1054">${medal(t.key)}</div><div><b>${t.name}</b><span>${t.source==='regular'?`${t.min} public challenge win${t.min===1?'':'s'}`:`${t.min} Championship title${t.min===1?'':'s'} · Hall of Fame`}</span></div><strong>${t.points} pt${t.points===1?'':'s'}</strong></div>`;
-  list.innerHTML=`<div class="fc-level-explain-v1054"><b>How progression works</b><span>Win public challenges to rise from Spark to Inferno. Win 5 Championships to enter the Hall of Fame as a Legend. From that point forward, your badge progresses only through Hall of Fame levels. The badge shown beside your name is the value opponents earn for defeating you.</span></div><div class="fc-level-section-v1054"><small>REGULAR COMPETITION LEVELS</small>${REGULAR_LEVELS.map(row).join('')}</div><div class="fc-level-section-v1054"><small>HALL OF FAME LEVELS</small>${HOF_LEVELS.map(row).join('')}</div><div class="fc-level-founder-v1054">${medal('founder',34)}<div><b>Founder</b><span>A separate permanent designation. It does not replace the earned competitive level.</span></div></div>`;
+  list.innerHTML=`<div class="fc-level-explain-v1054"><b>How progression works</b><span>Win public challenges to rise from Spark to Inferno. Win 10 Championships to enter the Hall of Fame as a Legend. From that point forward, your badge progresses only through Hall of Fame levels. The badge shown beside your name is the value opponents earn for defeating you.</span></div><div class="fc-level-section-v1054"><small>REGULAR COMPETITION LEVELS</small>${REGULAR_LEVELS.map(row).join('')}</div><div class="fc-level-section-v1054"><small>HALL OF FAME LEVELS</small>${HOF_LEVELS.map(row).join('')}</div><div class="fc-level-founder-v1054">${medal('founder',34)}<div><b>Founder</b><span>A separate permanent designation. It does not replace the earned competitive level.</span></div></div>`;
   document.getElementById('badgeLegendSheet').classList.add('open');
 }
 function closeBadgeLegend() {
@@ -33190,19 +33191,21 @@ function renderProfileSheet() {
     let rankProgHtml = '';
     const _ls = getLadderStatus(prof.id);
     if (_ls && _ls.champCount >= 1) {  // only show for users who've won a championship
-      if (_ls.isMaxed) {
+      if (_ls.isMaxed && _ls.isHallOfFame) {
         rankProgHtml = `<div class="ps-rank-prog"><div class="ps-rank-prog-max">★ Max Rank — G.O.A.T. ★</div></div>`;
       } else {
+        const rankNameV1356 = _ls.nextName || 'Legend';
+        const rankPctV1356 = _ls.isHallOfFame || !_ls.isMaxed ? _ls.pct : Math.min(100, Math.round(_ls.champCount / HOF_LEVELS[0].min * 100));
         const hint = isMe
-          ? `You're <strong>${_ls.pct}%</strong> of the way to ${_ls.nextName}`
-          : `<strong>${_ls.pct}%</strong> to ${_ls.nextName}`;
+          ? `You're <strong>${rankPctV1356}%</strong> of the way to ${rankNameV1356}`
+          : `<strong>${rankPctV1356}%</strong> to ${rankNameV1356}`;
         rankProgHtml = `
           <div class="ps-rank-prog">
             <div class="ps-rank-prog-labels">
               <span class="ps-rank-prog-cur">${_ls.name}</span>
-              <span class="ps-rank-prog-next" style="color:#ff8040">${_ls.nextName}</span>
+              <span class="ps-rank-prog-next" style="color:#ff8040">${rankNameV1356}</span>
             </div>
-            <div class="ps-rank-prog-track"><div class="ps-rank-prog-fill" style="width:${_ls.pct}%"></div></div>
+            <div class="ps-rank-prog-track"><div class="ps-rank-prog-fill" style="width:${rankPctV1356}%"></div></div>
             <div class="ps-rank-prog-hint">${hint}</div>
           </div>`;
       }
@@ -35881,7 +35884,7 @@ document.addEventListener('click', async (e) => {
     let ls=null; try{ls=getLadderStatus(state.profile.id);}catch(e){}
     if(sl&&ls){
       const icon=`${LADDER_BADGE_BASE}${ls.key}.png`;
-      const progress=ls.isMaxed?`${ls.champCount} Championships · highest tier`:(ls.champCount===0?`Win ${ls.nextMin} Championship to reach ${ls.nextName}`:`${ls.champCount} Championship${ls.champCount===1?'':'s'} · ${Math.max(0,ls.nextMin-ls.champCount)} more to ${ls.nextName}`);
+      const progress=fcRankProgressV1356(ls);
       sl.innerHTML=`<img class="hc-sl-coin" src="${icon}" alt=""><div class="fc-edge-copy"><div class="fc-edge-label">Current competition tier</div><div class="fc-edge-tier">${escapeHtml(ls.name)}</div><div class="fc-edge-progress">${escapeHtml(progress)}</div></div>${ls.isFounder?'<span class="fc-founder-recognition">Founder badge</span>':''}`;
       sl.onclick=()=>switchView('leaderboard');
     }
@@ -36001,7 +36004,7 @@ document.addEventListener('click', async (e) => {
     let ls=null; try{ls=getLadderStatus(prof.id);}catch(e){}
     const tierName=ls?.name||'Spark';
     const badge=ls?.key ? `${LADDER_BADGE_BASE}${ls.key}.png` : `${LADDER_BADGE_BASE}spark.png`;
-    const next=ls?.isMaxed ? 'Highest competition tier' : (ls?.champCount===0 ? `Win ${ls?.nextMin||1} Championship to reach ${ls?.nextName||'Flame'}` : `${ls.champCount} Championship${ls.champCount===1?'':'s'} · ${Math.max(0,(ls.nextMin||0)-ls.champCount)} more to ${ls.nextName}`);
+    const next=fcRankProgressV1356(ls);
     hc.className='ps-heat-card fc-profile-overview';
     hc.style.display='block';
     hc.innerHTML=`
@@ -41646,11 +41649,11 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
         scorePeriod:'calendar month',
         scoreFormula:'Opponent Points + Turnout Points from decisive public challenge wins in that category',
         qualification:'at 11:59 PM ET on the final day of each calendar month, the top three Championship Scores qualify; everyone tied at the cutoff advances',
-        opponentPoints:{Spark:1,Flame:2,Blaze:4,Inferno:6,Legend:10,Icon:14,Immortal:18,'G.O.A.T.':24},
+        opponentPoints:{Spark:1,Blaze:5,Inferno:10,Legend:10,Icon:20,Immortal:30,'G.O.A.T.':40},
         turnoutPoints:{under10:0,'10-24':3,'25-49':6,'50-99':10,'100-249':15,'250+':22},
         turnoutBasis:'total ballots cast in the challenge',
-        regularLevelWins:{Spark:0,Flame:1,Blaze:5,Inferno:10},
-        hallOfFameTitles:{Legend:5,Icon:10,Immortal:15,'G.O.A.T.':20},
+        regularLevelWins:{Spark:0,Blaze:5,Inferno:10},
+        hallOfFameTitles:{Legend:10,Icon:20,Immortal:30,'G.O.A.T.':40},
         visibleLevelDeterminesOpponentPoints:true,
         obsoleteTerms:['rolling 30-day Score','Prestige tab','Top-3 challenge placement earns Score']
       }
@@ -41694,7 +41697,7 @@ body[data-fc-ember-guidance="off"] .celeb-bow{
       'Turnout Points use total ballots cast in the challenge.',
       R.score.qualification,
       'Private challenges, Championship rounds, no-contests, and unresolved ties do not add to monthly Championship Score.'
-    ],callout:'Opponent Points: Spark 1 · Flame 2 · Blaze 4 · Inferno 6 · Legend 10 · Icon 14 · Immortal 18 · G.O.A.T. 24. Turnout: under 10 = 0 · 10–24 = 3 · 25–49 = 6 · 50–99 = 10 · 100–249 = 15 · 250+ = 22.'},
+    ],callout:'Opponent Points: Spark 1 · Blaze 5 · Inferno 10 · Legend 10 · Icon 20 · Immortal 30 · G.O.A.T. 40. Turnout: under 10 = 0 · 10–24 = 3 · 25–49 = 6 · 50–99 = 10 · 100–249 = 15 · 250+ = 22.'},
     {id:'championships',label:'Championships',title:'Championship rounds',intro:R.championships.explanation,bullets:[
       'Championship standings are category-specific and monthly.',
       'Qualifiers compete for the category title; the Championship round itself does not add regular monthly Score.',
@@ -42000,7 +42003,7 @@ body.theme-light .fc-score-metric-v1032,body.theme-light .fc-score-cutoff-v1032,
   window.fcRegisterChallengeDetailEnhancerV1078?.('compact-status-brief',40,renderBrief);
   const priorLeaderboard=window.renderLeaderboard;if(typeof priorLeaderboard==='function')window.renderLeaderboard=function(){const r=priorLeaderboard.apply(this,arguments);requestAnimationFrame(addTitlesHelp);return r;};
   const priorProfile=window.renderProfileTab;if(typeof priorProfile==='function')window.renderProfileTab=function(){const r=priorProfile.apply(this,arguments);requestAnimationFrame(decorateProfileLevel);return r;};
-  const priorLocal=window.fcEmberLocalAnswerV1046;window.fcEmberLocalAnswerV1046=function(q){const x=String(q||'').toLowerCase();if(/tier|level|spark|flame|blaze|inferno|legend|icon|immortal|g\.?o\.?a\.?t|hall of fame/.test(x)){const uid=state.profile?.id,ls=uid?getLadderStatus(uid):null;let own='';if(ls)own=` Your visible level is ${ls.name}, worth ${ls.points} Opponent Point${ls.points===1?'':'s'}.`;return `FlamesChallenge has one visible level. Public challenge wins move competitors through Spark, Flame, Blaze, and Inferno. Five Championship titles permanently move a competitor into the Hall of Fame as a Legend; 10 titles earns Icon, 15 earns Immortal, and 20 earns G.O.A.T. Once inducted, the badge never returns to the regular ladder. The visible badge determines Opponent Points: Spark 1, Flame 2, Blaze 4, Inferno 6, Legend 10, Icon 14, Immortal 18, G.O.A.T. 24.${own}`;}return typeof priorLocal==='function'?priorLocal(q):null;};
+  const priorLocal=window.fcEmberLocalAnswerV1046;window.fcEmberLocalAnswerV1046=function(q){const x=String(q||'').toLowerCase();if(/tier|level|spark|flame|blaze|inferno|legend|icon|immortal|g\.?o\.?a\.?t|hall of fame/.test(x)){const uid=state.profile?.id,ls=uid?getLadderStatus(uid):null;let own='';if(ls)own=` Your visible level is ${ls.name}, worth ${ls.points} Opponent Point${ls.points===1?'':'s'}.`;return `FlamesChallenge has one visible level. Public challenge wins move competitors through Spark, Blaze, and Inferno. Ten Championship titles permanently move a competitor into the Hall of Fame as a Legend; 20 titles earns Icon, 30 earns Immortal, and 40 earns G.O.A.T. Once inducted, the badge never returns to the regular ladder. The visible badge determines Opponent Points: Spark 1, Blaze 5, Inferno 10, Legend 10, Icon 20, Immortal 30, G.O.A.T. 40.${own}`;}return typeof priorLocal==='function'?priorLocal(q):null;};
   const priorCtx=window.buildEmberContext;window.buildEmberContext=function(){const base=typeof priorCtx==='function'?priorCtx():{};const ls=state.profile?.id?getLadderStatus(state.profile.id):null;return {...base,levelSystem:{version:'v1054',visibleBadgeIsOpponentValue:true,regularLevels:REGULAR_LEVELS,hallOfFameLevels:HOF_LEVELS,current:ls?{name:ls.name,source:ls.source,points:ls.points,regularWins:ls.regularWins,championshipTitles:ls.champCount,next:ls.nextName}:null,founderIsSeparate:true}};};
   document.addEventListener('DOMContentLoaded',()=>{addTitlesHelp();decorateProfileLevel();},{once:true});if(document.readyState!=='loading'){addTitlesHelp();decorateProfileLevel();}
   window.__fcBuildV1054={build:'v1054',phase:'Production Hardening',focus:'progressive guidance + visible level system',newEdgeFunctions:0,edgeFunctionChanges:0,sqlChanges:0};
@@ -45426,7 +45429,7 @@ html[data-theme="light"] body .nav-icon-btn:active{
     {id:'entering',label:'Entering',title:'Entering, editing, and withdrawing',intro:'The active submission window is the only normal self-service period for changing participation.',bullets:[RULES.entry.withdrawal,RULES.entry.hostDelete,RULES.entry.noContest],enforced:true},
     {id:'voting',label:'Voting',title:'Voting and ballots',intro:RULES.voting.oneBallot,bullets:[RULES.voting.close,RULES.voting.selfVote,RULES.voting.live,RULES.voting.manipulation],enforced:true,enforcementLabel:'Anti-manipulation enforcement'},
     {id:'results',label:'Results',title:'Winners, ties, and tiebreaker',intro:RULES.results.decisive,bullets:[RULES.results.suddenDeath,RULES.results.oneSubmission,RULES.results.noSubmissions,RULES.results.noBallots,RULES.results.tiedRunoff,RULES.results.unresolved,RULES.results.admin],enforced:true},
-    {id:'score',label:'Score',title:'Championship Score and qualification',intro:RULES.score.formula,bullets:[RULES.score.decisive,RULES.score.coWinner,RULES.score.opponent,RULES.score.turnout,RULES.score.exclusions,RULES.score.qualification],callout:'Opponent Points: Spark 1 · Flame 2 · Blaze 4 · Inferno 6 · Legend 10 · Icon 14 · Immortal 18 · G.O.A.T. 24. Turnout: under 10 = 0 · 10–24 = 3 · 25–49 = 6 · 50–99 = 10 · 100–249 = 15 · 250+ = 22.',enforced:true},
+    {id:'score',label:'Score',title:'Championship Score and qualification',intro:RULES.score.formula,bullets:[RULES.score.decisive,RULES.score.coWinner,RULES.score.opponent,RULES.score.turnout,RULES.score.exclusions,RULES.score.qualification],callout:'Opponent Points: Spark 1 · Blaze 5 · Inferno 10 · Legend 10 · Icon 20 · Immortal 30 · G.O.A.T. 40. Turnout: under 10 = 0 · 10–24 = 3 · 25–49 = 6 · 50–99 = 10 · 100–249 = 15 · 250+ = 22.',enforced:true},
     {id:'championships',label:'Titles',title:'Championship rounds and titles',intro:'Championship standings are category-specific and monthly.',bullets:[RULES.score.qualification,'Qualified contenders compete for the category title. The Championship round itself does not add to monthly Championship Score.','Championship tiebreaker uses the same hidden-entry, simultaneous-reveal, fresh-runoff model.'],enforced:true},
     {id:'private',label:'Private',title:'Private challenges',intro:RULES.privateChallenges.access,bullets:[RULES.privateChallenges.score],enforced:true},
     {id:'moderation',label:'Reports',title:'Reports, moderation, and removals',intro:RULES.moderation.reports,bullets:[RULES.moderation.removal,RULES.moderation.scope],enforced:true},
