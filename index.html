@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1358 · audio-entry-identity" name="fc-build"/>
+<meta content="v1359 · flyer-crop-and-vote-refresh" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Audio entry cards now show the submitter name and avatar. The challenge creation setting is labeled Tiebreaker." name="fc-whatsnew"/>
+<meta content="Crop flyer images, see vote changes in live standings, use one video expand control, and keep Ask Ember clear of entry actions." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -10000,6 +10000,8 @@ body.theme-light .fc-challenge-options-v1338{background:rgba(20,16,14,.38)}
 <span class="pm-tool-icon-v1187" aria-hidden="true">
 <svg viewBox="0 0 24 24" focusable="false"><path d="M4 5.5h16v13H4zM7.2 15.5l3.2-3.7 2.5 2.7 1.7-1.9 2.2 2.9M8 9h.01"/></svg>
 </span><span class="pm-tool-label-v1187">Upload image</span></button>
+<button class="pm-tool" id="pmCropV1359" onclick="cropPromoteMediaV1359()" style="display:none">Crop image</button>
+<button class="pm-tool" id="pmUncropV1359" onclick="resetPromoteCropV1359()" style="display:none">Reset crop</button>
 <button class="pm-tool" id="pmRemove" onclick="clearPromoteHero()" style="display:none">
 <span>🚫</span>Remove</button>
 <button class="pm-tool" id="pmReset" onclick="resetHeroFocus()" style="display:none">
@@ -16760,12 +16762,12 @@ function _spotlightStrokeBevelV1325(ctx,x,y,w,h,cut,stroke,width,fill){
   if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=width||1;ctx.lineJoin='miter';ctx.stroke();}
   ctx.restore();
 }
-function _spotlightPaintHeroV1325(ctx,im,x,y,w,h,focus){
+function _spotlightPaintHeroV1325(ctx,im,x,y,w,h,focus,fit){
   if(!im)return;
   const ratio=im.width/im.height,box=w/h;
   ctx.save();
   _spotlightBevelPathV1325(ctx,x,y,w,h,18);ctx.clip();
-  if(ratio<box*.82){
+  if(fit === 'fit' || ratio<box*.82){
     const rb=Math.max(w/im.width,h/im.height)*1.16,bw=im.width*rb,bh=im.height*rb;
     ctx.save();try{ctx.filter='blur(28px) brightness(.38) saturate(.9)';}catch(_){}
     ctx.drawImage(im,x+(w-bw)/2,y+(h-bh)/2,bw,bh);ctx.restore();
@@ -16977,7 +16979,7 @@ async function _drawSpotlightFlyerV1328(c,W,H,o){
   // the oversized black gap that compressed the lower third in v1327.
   const hero={x:32,y:349,w:W-64,h:751};
   _spotlightStrokeBevelV1325(c,hero.x,hero.y,hero.w,hero.h,17,WHITE,4,'#010101');
-  if(o.heroImage)_spotlightPaintHeroV1325(c,o.heroImage,hero.x+6,hero.y+6,hero.w-12,hero.h-12,o.heroFocus);
+  if(o.heroImage)_spotlightPaintHeroV1325(c,o.heroImage,hero.x+6,hero.y+6,hero.w-12,hero.h-12,o.heroFocus,o.heroFit);
   else {
     const g=c.createLinearGradient(hero.x,hero.y,hero.x+hero.w,hero.y+hero.h);
     g.addColorStop(0,'#120d08'); g.addColorStop(1,'#050403');
@@ -17153,7 +17155,7 @@ async function _drawSpotlightFlyerV1335(c,W,H,o){
   const hero={x:44,y:380,w:936,h:910};
   _spotlightStrokeBevelV1325(c,hero.x,hero.y,hero.w,hero.h,22,WHITE,3,'#010101');
   if(media==='AUDIO')_spotlightPaintAudioV1348(c,await _spotlightAudioEmberV1348(),hero);
-  else if(o.heroImage)_spotlightPaintHeroV1325(c,o.heroImage,hero.x+6,hero.y+6,hero.w-12,hero.h-12,o.heroFocus);
+  else if(o.heroImage)_spotlightPaintHeroV1325(c,o.heroImage,hero.x+6,hero.y+6,hero.w-12,hero.h-12,o.heroFocus,o.heroFit);
   else {
     const g=c.createLinearGradient(hero.x,hero.y,hero.x+hero.w,hero.y+hero.h);
     g.addColorStop(0,'#17100a');g.addColorStop(1,'#020202');
@@ -17471,6 +17473,55 @@ function resetHeroFocus() {
   });
 }
 
+function promoteMediaV1359(ps) {
+  const style = ps.style || 'ember';
+  const source = ps.mediaSourceByStyleV1186?.[style] || (style === 'ember' ? 'detected' : 'artwork');
+  const url = source === 'custom' ? ps.heroUserUrl : source === 'detected'
+    ? (style === 'spotlight' ? (ps.spotlightHeroAutoUrlV1325 || ps.heroAutoUrl) : ps.heroAutoUrl) : null;
+  const stored = ps.heroCropByStyleV1359?.[style];
+  const crop = stored && stored.source === source && stored.original === url ? stored : null;
+  return {style, source, url, crop};
+}
+async function cropPromoteMediaV1359() {
+  const ps = promoteState;
+  if (!ps) return;
+  const media = promoteMediaV1359(ps);
+  if (!media.url) return;
+  const unchanged = () => promoteState === ps && promoteMediaV1359(ps).style === media.style
+    && promoteMediaV1359(ps).source === media.source && promoteMediaV1359(ps).url === media.url;
+  try {
+    const image = await loadImageForFlyer(media.url);
+    if (!unchanged()) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth || image.width;
+    canvas.height = image.naturalHeight || image.height;
+    canvas.getContext('2d').drawImage(image, 0, 0);
+    const original = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', .95));
+    if (!original) throw new Error('Unable to load this image for cropping');
+    if (!unchanged()) return;
+    openCrop(original, 0, 0, blob => {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        if (!unchanged()) return;
+        ps.heroCropByStyleV1359 ||= {};
+        ps.heroCropByStyleV1359[media.style] = {source:media.source, original:media.url, url:reader.result};
+        ps.heroFocus = {x:.5,y:.5};
+        ps.heroFit = 'fit';
+        document.querySelectorAll('#pmFitSeg button').forEach(b => b.classList.toggle('on', b.dataset.fit === 'fit'));
+        await renderPromoteFlyer();
+        updateHeroTools();
+      };
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) { toast('Could not crop image: ' + (error.message || 'Please upload the image again')); }
+}
+function resetPromoteCropV1359() {
+  if (!promoteState) return;
+  delete (promoteState.heroCropByStyleV1359 || {})[promoteState.style || 'ember'];
+  promoteState.heroFocus = {x:.5,y:.5};
+  renderPromoteFlyer();
+  updateHeroTools();
+}
 function updateHeroTools() {
   if (!promoteState) return;
   const style = promoteState.style || 'ember';
@@ -17480,6 +17531,11 @@ function updateHeroTools() {
   const show = (id, on) => { const e = document.getElementById(id); if (e) e.style.display = on ? '' : 'none'; };
   show('pmReplace', true);
   show('pmRemove', usingCustom);
+  const mediaV1359 = promoteMediaV1359(promoteState);
+  show('pmCropV1359', usingMedia && !!mediaV1359.url && !(style === 'spotlight' && promoteState.sourceMediaType === 'audio'));
+  show('pmUncropV1359', !!mediaV1359.crop);
+  const cropButtonV1359 = document.getElementById('pmCropV1359');
+  if(cropButtonV1359) cropButtonV1359.textContent = mediaV1359.crop ? 'Crop again' : 'Crop image';
   const replaceBtn = document.getElementById('pmReplace');
   if (replaceBtn) {
     replaceBtn.innerHTML = `<span class="pm-tool-icon-v1187" aria-hidden="true">
@@ -17677,11 +17733,13 @@ async function renderPromoteFlyer() {
     const map = stateRefV1184.mediaSourceByStyleV1186 || {};
     return map[_style] || (_style === 'ember' ? 'detected' : 'artwork');
   })();
-  const heroSrc = mediaSourceV1186 === 'custom'
+  const originalHeroSrcV1359 = mediaSourceV1186 === 'custom'
     ? stateRefV1184.heroUserUrl
     : mediaSourceV1186 === 'detected'
       ? (_style === 'spotlight' ? (stateRefV1184.spotlightHeroAutoUrlV1325 || stateRefV1184.heroAutoUrl) : stateRefV1184.heroAutoUrl)
       : null;
+  const cropV1359 = promoteMediaV1359(stateRefV1184).crop;
+  const heroSrc = cropV1359?.url || originalHeroSrcV1359;
   // v800 — hand the painter the user's fit mode and focal point.
   opts.heroFit = stateRefV1184.heroFit || 'fill';
   opts.heroFocus = stateRefV1184.heroFocus || { x: 0.5, y: 0.5 };
@@ -28667,7 +28725,6 @@ function renderFlyerCard(p) {
           <div class="fc-flyer-inline-video-v1332 fc-video-unified-v1238" data-entry-open="${escapeHtml(flyerVideoEntryV1332.id)}" data-flyer-inline-video-v1332="${escapeHtml(flyerVideoEntryV1332.id)}" aria-hidden="true">
             <video data-src="${escapeHtml(flyerVideoEntryV1332.media_url || '')}" ${_videoPosterAttr(flyerVideoEntryV1332.media_url || '', flyerVideoEntryV1332.poster_url || '')}
               muted playsinline preload="none" tabindex="-1" aria-label="Featured challenge video"></video>
-            <button type="button" class="fc-inline-video-expand-v1239" aria-label="Expand video">⛶</button>
           </div>
           <button type="button" class="fc-flyer-video-play-v1332" data-flyer-video-play-v1332="${escapeHtml(flyerVideoEntryV1332.id)}" aria-label="Play featured challenge video"></button>` : ''}
         ${isChampFlyerV1272 && champMonthLabelV1272 ? `<div class="fc-champ-flyer-month-corrector-v1272">${escapeHtml(champMonthLabelV1272)} · ${escapeHtml(String(ch.category || '').toUpperCase())}</div>` : ''}
@@ -31116,6 +31173,7 @@ async function openFeedViewer(chId, startEntryId = null) {
     const counterV1193 = document.getElementById('fvCounter');
     const dotsV1193 = document.getElementById('fvDots');
 
+    window.fcFvVoteRowsV1359 = {chId, rows: _validVotesV1047.slice()};
     if (viewerModeV1193 === 'results') {
       // v1299 — A settled result must not erase the matchup. Keep the final
       // result summary first, but restore the same horizontal entry rail used
@@ -31901,17 +31959,26 @@ function syncFvVoteSelectionV1024(entryId) {
     button.classList.toggle('selected', selected);
     button.disabled = selected;
     button.setAttribute('aria-current', selected ? 'true' : 'false');
-    button.textContent = selected ? '✓ Your vote' : 'Change vote';
+    button.textContent = selected ? '✓ Your vote' : entryId ? 'Change vote' : 'Vote for this entry';
   });
 }
 
+function redrawFvVotesV1359(chId, rows) {
+  if (String(_fvChallenge?.id) !== String(chId)) return;
+  window.fcFvVoteRowsV1359 = {chId, rows:rows.slice()};
+  renderFvStandings(chId, rows);
+}
 async function fvVote(btn, chId) {
   if (!state.profile) return;
   const ch = (state.challenges || []).find(c => c.id === chId) || _fvChallenge;
   const status = ch ? computeChallengeStatus(ch) : '';
   if (ch && !isVotingPhase(status)) { toast("Voting isn't open right now"); return; }
-  const entryId = btn.dataset.fvVote;
   if (btn.classList.contains('selected')) return;
+  const voterIdV1359 = state.profile.id;
+  const revisionV1359 = (window.fcFvVoteRevisionV1359 || 0) + 1;
+  window.fcFvVoteRevisionV1359 = revisionV1359;
+  const latestV1359 = () => window.fcFvVoteRevisionV1359 === revisionV1359 && state.profile?.id === voterIdV1359 && String(_fvChallenge?.id) === String(chId);
+  const entryId = btn.dataset.fvVote;
   try { navigator.vibrate && navigator.vibrate(10); } catch(e) {}
 
   const previous = fcCurrentVoteForChallengeV1096(chId)
@@ -31920,35 +31987,36 @@ async function fvVote(btn, chId) {
   fcApplyUnifiedVoteStateV1096(chId, entryId, previous);
   syncFvVoteSelectionV1024(entryId);
   renderFvVotingNoticeV1024(ch, status, entryId, (_fvVoteCounts && Object.values(_fvVoteCounts).reduce((a,b)=>a+b,0)) || 0);
+  const cachedV1359 = window.fcFvVoteRowsV1359;
+  if (String(cachedV1359?.chId) === String(chId)) {
+    const rows = cachedV1359.rows.filter(v => String(v.voter_id) !== String(voterIdV1359));
+    rows.push({entry_id:entryId,voter_id:voterIdV1359});
+    redrawFvVotesV1359(chId, rows);
+  }
   spawnEmberBurst(btn);
 
   try {
     const sdRound = ch?.sd_phase === 'voting' ? (ch.sd_round || 0) : 0;
-    let { error: upErr } = await fcWithTimeoutV1099(
-      fcVoteUpsertQueryV1112(
-        { challenge_id: chId, entry_id: entryId, voter_id: state.profile.id, sd_round: sdRound },
-        { onConflict: 'challenge_id,voter_id' }
-      ),
-      20000,
-      'Record vote'
+    let {error:upErr} = await fcVoteUpsertQueryV1112(
+      {challenge_id:chId,entry_id:entryId,voter_id:voterIdV1359,sd_round:sdRound},
+      {onConflict:'challenge_id,voter_id'}
     );
     if (upErr && /sd_round/.test(upErr.message || '')) {
-      ({ error: upErr } = await fcWithTimeoutV1099(
-        fcVoteUpsertQueryV1112(
-          { challenge_id: chId, entry_id: entryId, voter_id: state.profile.id },
-          { onConflict: 'challenge_id,voter_id' }
-        ),
-        20000,
-        'Record vote'
+      ({error:upErr} = await fcVoteUpsertQueryV1112(
+        {challenge_id:chId,entry_id:entryId,voter_id:voterIdV1359},
+        {onConflict:'challenge_id,voter_id'}
       ));
     }
     if (upErr) throw upErr;
+    if (!latestV1359()) return;
     toast(previous ? 'Vote changed' : 'Vote recorded');
     try { fcTrackAttributedConversionV1048('attributed_vote', chId, { entry_id: entryId }); } catch(e) {}
 
     const { data: votes, error: vErr } = await db.from('entry_votes').select('entry_id, voter_id').eq('challenge_id', chId);
+    if (!latestV1359()) return;
     if (!vErr) {
       fcReplaceChallengeVoteCountsV1096(chId, votes || []);
+      redrawFvVotesV1359(chId, votes || []);
       if (state.currentChallenge && String(state.currentChallenge.id) === String(chId)) {
         state.currentVotes = votes || [];
         state.myCurrentVote = (votes || []).find(v => String(v.voter_id) === String(state.profile.id))?.entry_id || null;
@@ -31957,6 +32025,7 @@ async function fvVote(btn, chId) {
     }
   } catch(e) {
     console.error('fvVote error', e);
+    if (!latestV1359()) return;
     fcApplyUnifiedVoteStateV1096(chId, previous || null, entryId);
     if (previous) {
       syncFvVoteSelectionV1024(previous);
@@ -31967,6 +32036,18 @@ async function fvVote(btn, chId) {
     }
     renderFvVotingNoticeV1024(ch, status, previous, (_fvVoteCounts && Object.values(_fvVoteCounts).reduce((a,b)=>a+b,0)) || 0);
     toast('Vote failed: ' + (e.message || 'unknown'));
+    // Recover the saved ballot after a failed rapid change; an earlier save may have succeeded.
+    try {
+      const {data:rows,error} = await db.from('entry_votes').select('entry_id,voter_id').eq('challenge_id',chId);
+      if (!error && latestV1359()) {
+        const saved = (rows || []).find(v => String(v.voter_id) === String(voterIdV1359))?.entry_id || null;
+        fcApplyUnifiedVoteStateV1096(chId,saved,fcCurrentVoteForChallengeV1096(chId));
+        fcReplaceChallengeVoteCountsV1096(chId,rows || []);
+        syncFvVoteSelectionV1024(saved);
+        redrawFvVotesV1359(chId,rows || []);
+        renderFvVotingNoticeV1024(ch,status,saved,(rows || []).length);
+      }
+    } catch (_) {}
   }
 }
 
@@ -45756,12 +45837,17 @@ window.fcResetAccountStateV1112 = function(nextSession = null) {
   const viewAs = document.getElementById('viewAsBanner'); if (viewAs) viewAs.style.display = 'none';
 };
 
+const fcVoteWriteQueueV1359 = new Map();
 async function fcVoteUpsertQueryV1112(row, options = {}) {
-  return fcDbMutationV1101(
-    db.from('entry_votes').upsert(row, options),
-    'Record vote',
-    { timeout: 15000 }
-  );
+  const key = String(row.challenge_id) + ':' + String(row.voter_id);
+  const prior = fcVoteWriteQueueV1359.get(key) || Promise.resolve();
+  const task = prior.catch(() => {}).then(() => {
+    if (state.profile?.id !== row.voter_id) throw new Error('Account changed before vote was saved');
+    return fcDbMutationV1101(db.from('entry_votes').upsert(row, options), 'Record vote', { timeout: 15000 });
+  });
+  fcVoteWriteQueueV1359.set(key, task);
+  try { return await task; }
+  finally { if (fcVoteWriteQueueV1359.get(key) === task) fcVoteWriteQueueV1359.delete(key); }
 }
 window.fcVoteUpsertQueryV1112 = fcVoteUpsertQueryV1112;
 
@@ -47545,7 +47631,10 @@ body:has(.entrants-backdrop.open) #fcGlobalAskEmberV1131{
     button.addEventListener('click',()=>{
       if(typeof openEmber==='function') openEmber();
     });
-    document.body.appendChild(button);
+    const dock = document.createElement('div');
+    dock.id = 'fcEmberDockV1359';
+    dock.appendChild(button);
+    document.body.appendChild(dock);
   }
 
   /* The thread is now a fixed-height flex surface; scroll the message region,
@@ -53130,10 +53219,6 @@ window.FC_V1323_VALIDATION={
   object-fit:cover!important;
   background:#000!important;
 }
-.flyer-stage .fc-flyer-inline-video-v1332 .fc-inline-video-expand-v1239{
-  top:10px!important;
-  right:10px!important;
-}
 /* Transparent hit target aligned to the play circle baked into the poster. */
 .flyer-stage .fc-flyer-video-play-v1332{
   position:absolute!important;
@@ -53541,5 +53626,22 @@ window.fcOpenHighlightAdminV1349=function(){if(!isAdmin())return;switchView('adm
 setInterval(()=>{if(document.visibilityState==='visible'&&state.profile){fcRenderHighlightsV1349();}},60000);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&state.profile){fcHighlightsV1349.complete=false;fcLoadHighlightsV1349(true);}});
 </script>
+
+<style id="fc-v1359-ember-dock-css">
+body.fc-authenticated{--fc-bottom-nav-clearance:calc(160px + env(safe-area-inset-bottom,0px))}
+#fcEmberDockV1359{display:none;position:fixed;left:0;right:0;bottom:var(--fc-bottom-nav-bar-h);height:56px;padding:6px 12px;box-sizing:border-box;background:var(--surface,#160e09);border-top:1px solid var(--border,rgba(255,106,44,.2));z-index:950;align-items:center;justify-content:flex-end}
+body.fc-authenticated #fcEmberDockV1359{display:flex}
+#fcEmberDockV1359 #fcGlobalAskEmberV1131{position:static!important;min-height:44px;box-shadow:none}
+#fcEmberDockV1359:has(#fcGlobalAskEmberV1131[style*="display: none"]){display:none!important}
+body.fc-entry-viewer-open-v1194 #fcEmberDockV1359,
+body.fc-immersive-active-v1198 #fcEmberDockV1359,
+body.fc-challenge-detail-open-v1207 #fcEmberDockV1359,
+body.fc-challenge-rules-open-v1213 #fcEmberDockV1359,
+body.fc-champ-promote-open-v1218 #fcEmberDockV1359,
+body.fc-ember-daily-open-v1221 #fcEmberDockV1359,
+body.fc-champ-card-visible-v1236 #fcEmberDockV1359,
+body:has(.modal-backdrop.open,.cc-sheet.open,.cd-sheet.open,.entrants-backdrop.open) #fcEmberDockV1359{display:none!important}
+html{scroll-padding-bottom:calc(160px + env(safe-area-inset-bottom,0px))}
+</style>
 </body>
 </html>
