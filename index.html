@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1359 · flyer-crop-and-vote-refresh" name="fc-build"/>
+<meta content="v1360 · offscreen-media-and-swipe" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Crop flyer images, see vote changes in live standings, use one video expand control, and keep Ask Ember clear of entry actions." name="fc-whatsnew"/>
+<meta content="Audio pauses when its tile leaves view. Swipe and snap through entries, or use the arrows." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -53643,5 +53643,80 @@ body.fc-champ-card-visible-v1236 #fcEmberDockV1359,
 body:has(.modal-backdrop.open,.cc-sheet.open,.cd-sheet.open,.entrants-backdrop.open) #fcEmberDockV1359{display:none!important}
 html{scroll-padding-bottom:calc(160px + env(safe-area-inset-bottom,0px))}
 </style>
+
+<style id="fc-v1360-audio-swipe-css">
+/* Let native horizontal paging begin on expanded audio artwork too. */
+#feedViewerModal #fvEntries .fcc-fire-eq,
+#feedViewerModal #fvEntries .fc-audio-premium-v1277,
+#feedViewerModal #fvEntries .fc-audio-unified-v1280,
+#feedViewerModal #fvEntries .fc-audio-scene-v1286{touch-action:pan-x pan-y pinch-zoom!important}
+</style>
+<script id="fc-v1360-media-visibility-js">
+(function fcMediaVisibilityV1360(){
+  const playing = new Set();
+  let frame = 0;
+  function visible(media) {
+    if (!media.isConnected) return false;
+    if (document.fullscreenElement?.contains(media) || media.webkitDisplayingFullscreen
+        || document.pictureInPictureElement === media) return true;
+    const surface = media.closest('.fcc-fire-eq,.fc-video-unified-v1238,.fc-entry-stage-v1060,.fc-fv-media-stage-v1305,.cd-entry-media')
+      || (media.tagName === 'AUDIO' ? media.parentElement : media);
+    if (!surface) return false;
+    const r = surface.getBoundingClientRect();
+    const viewport = window.visualViewport;
+    let left = Math.max(r.left, viewport?.offsetLeft || 0);
+    let top = Math.max(r.top, viewport?.offsetTop || 0);
+    let right = Math.min(r.right, (viewport?.offsetLeft || 0) + (viewport?.width || window.innerWidth));
+    let bottom = Math.min(r.bottom, (viewport?.offsetTop || 0) + (viewport?.height || window.innerHeight));
+    for (let node = surface; node; node = node.parentElement) {
+      const style = getComputedStyle(node);
+      if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') return false;
+      if (node === surface) continue;
+      const clipX = /^(auto|scroll|hidden|clip)$/.test(style.overflowX);
+      const clipY = /^(auto|scroll|hidden|clip)$/.test(style.overflowY);
+      if (clipX || clipY) {
+        const clip = node.getBoundingClientRect();
+        if (clipX) { left = Math.max(left,clip.left); right = Math.min(right,clip.right); }
+        if (clipY) { top = Math.max(top,clip.top); bottom = Math.min(bottom,clip.bottom); }
+      }
+    }
+    return right > left && bottom > top;
+  }
+  function check() {
+    frame = 0;
+    playing.forEach(media => {
+      if (media.paused || media.ended) { playing.delete(media); return; }
+      if (document.hidden || !visible(media)) {
+        try { media.pause(); } catch (_) {}
+        playing.delete(media);
+      }
+    });
+  }
+  function schedule() { if (playing.size && !frame) frame = requestAnimationFrame(check); }
+  document.addEventListener('play',event => {
+    const media = event.target;
+    if (!(media instanceof HTMLMediaElement)) return;
+    // The existing controller retains ownership of passive three-second previews.
+    if (media.tagName !== 'AUDIO' && media.muted && media.dataset.fcInlineUserPlayV1263 !== '1') return;
+    playing.add(media);
+    schedule();
+  },true);
+  const forget = event => playing.delete(event.target);
+  document.addEventListener('pause',forget,true);
+  document.addEventListener('ended',forget,true);
+  document.addEventListener('scroll',schedule,{capture:true,passive:true});
+  window.addEventListener('resize',schedule,{passive:true});
+  window.visualViewport?.addEventListener('resize',schedule,{passive:true});
+  window.visualViewport?.addEventListener('scroll',schedule,{passive:true});
+  document.addEventListener('visibilitychange',check);
+  window.addEventListener('pagehide',() => {
+    playing.forEach(media => { try { media.pause(); } catch (_) {} });
+    playing.clear();
+  });
+  new MutationObserver(records => {
+    if (playing.size && records.some(record => [...playing].some(media => !media.isConnected || record.target.contains(media)))) schedule();
+  }).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['class','style','hidden']});
+})();
+</script>
 </body>
 </html>
