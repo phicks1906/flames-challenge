@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1360 · offscreen-media-and-swipe" name="fc-build"/>
+<meta content="v1361 · cropped-flyer-and-featured-entry" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Audio pauses when its tile leaves view. Swipe and snap through entries, or use the arrows." name="fc-whatsnew"/>
+<meta content="Cropped flyer media fills its intended area. Flyer playback and entry links follow the featured submission." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -16762,12 +16762,12 @@ function _spotlightStrokeBevelV1325(ctx,x,y,w,h,cut,stroke,width,fill){
   if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=width||1;ctx.lineJoin='miter';ctx.stroke();}
   ctx.restore();
 }
-function _spotlightPaintHeroV1325(ctx,im,x,y,w,h,focus,fit){
+function _spotlightPaintHeroV1325(ctx,im,x,y,w,h,focus,fit,cropped){
   if(!im)return;
   const ratio=im.width/im.height,box=w/h;
   ctx.save();
   _spotlightBevelPathV1325(ctx,x,y,w,h,18);ctx.clip();
-  if(fit === 'fit' || ratio<box*.82){
+  if(fit === 'fit' || (!cropped && ratio<box*.82)){
     const rb=Math.max(w/im.width,h/im.height)*1.16,bw=im.width*rb,bh=im.height*rb;
     ctx.save();try{ctx.filter='blur(28px) brightness(.38) saturate(.9)';}catch(_){}
     ctx.drawImage(im,x+(w-bw)/2,y+(h-bh)/2,bw,bh);ctx.restore();
@@ -16979,7 +16979,7 @@ async function _drawSpotlightFlyerV1328(c,W,H,o){
   // the oversized black gap that compressed the lower third in v1327.
   const hero={x:32,y:349,w:W-64,h:751};
   _spotlightStrokeBevelV1325(c,hero.x,hero.y,hero.w,hero.h,17,WHITE,4,'#010101');
-  if(o.heroImage)_spotlightPaintHeroV1325(c,o.heroImage,hero.x+6,hero.y+6,hero.w-12,hero.h-12,o.heroFocus,o.heroFit);
+  if(o.heroImage)_spotlightPaintHeroV1325(c,o.heroImage,hero.x+6,hero.y+6,hero.w-12,hero.h-12,o.heroFocus,o.heroFit,o.heroCroppedV1361);
   else {
     const g=c.createLinearGradient(hero.x,hero.y,hero.x+hero.w,hero.y+hero.h);
     g.addColorStop(0,'#120d08'); g.addColorStop(1,'#050403');
@@ -17155,7 +17155,7 @@ async function _drawSpotlightFlyerV1335(c,W,H,o){
   const hero={x:44,y:380,w:936,h:910};
   _spotlightStrokeBevelV1325(c,hero.x,hero.y,hero.w,hero.h,22,WHITE,3,'#010101');
   if(media==='AUDIO')_spotlightPaintAudioV1348(c,await _spotlightAudioEmberV1348(),hero);
-  else if(o.heroImage)_spotlightPaintHeroV1325(c,o.heroImage,hero.x+6,hero.y+6,hero.w-12,hero.h-12,o.heroFocus,o.heroFit);
+  else if(o.heroImage)_spotlightPaintHeroV1325(c,o.heroImage,hero.x+6,hero.y+6,hero.w-12,hero.h-12,o.heroFocus,o.heroFit,o.heroCroppedV1361);
   else {
     const g=c.createLinearGradient(hero.x,hero.y,hero.x+hero.w,hero.y+hero.h);
     g.addColorStop(0,'#17100a');g.addColorStop(1,'#020202');
@@ -17375,15 +17375,28 @@ async function openPromote(type, item) {
       // the one artifact that LEAVES the platform — once it's on someone's
       // story it can't be recalled — so it must never carry content that hasn't
       // passed review. Nothing here filtered that before.
-      const { data } = await db.from('entries')
-        .select('id, user_id, media_url, media_type, poster_url, moderation_status')
+      const { data: heroRowsV1361 } = await db.from('entries')
+        .select('id, user_id, media_url, media_type, poster_url, moderation_status, sd_round')
         .eq('challenge_id', item.id)
         .in('media_type', ['image', 'photo', 'video', 'audio'])
         .or('moderation_status.is.null,moderation_status.eq.clear,moderation_status.eq.approved')
         .limit(20);
+      const data = heroRowsV1361 || [];
+      // Include the promoter's eligible submission even beyond the first 20 rows.
+      if (state.profile?.id && !data.some(e => e.user_id === state.profile.id)) {
+        const own = await db.from('entries')
+          .select('id,user_id,media_url,media_type,poster_url,moderation_status,sd_round')
+          .eq('challenge_id',item.id).eq('user_id',state.profile.id)
+          .in('media_type',['image','photo','video','audio'])
+          .or('moderation_status.is.null,moderation_status.eq.clear,moderation_status.eq.approved')
+          .order('created_at',{ascending:false}).limit(1);
+        if (own.data?.[0]) data.unshift(own.data[0]);
+      }
       // v716 — an image entry's hero is its media; a video entry's is its poster.
       // Drop anything with neither rather than handing generateFlyer a bad URL.
       const _heroable = (data || [])
+        .filter(e => item.sd_phase !== 'submitting' || Number(e.sd_round || 0) < Number(item.sd_round || 0))
+        .filter(e => item.sd_phase !== 'voting' || Number(e.sd_round || 0) === Number(item.sd_round || 0))
         .map(e => {
           const mediaTypeV1338 = String(e.media_type || '').toLowerCase();
           let hero = (mediaTypeV1338 === 'image' || mediaTypeV1338 === 'photo') ? e.media_url : e.poster_url;
@@ -17399,9 +17412,10 @@ async function openPromote(type, item) {
       if (_heroable.length && promoteState && promoteState.id === item.id) {
         const data = _heroable; // eslint-disable-line no-shadow
         // Pick highest-voted entry if we have votes, else first
-        let chosen = data[0];
+        const ownV1361 = data.find(e => String(e.user_id) === String(state.profile?.id));
+        let chosen = ownV1361 || data[0];
         try {
-          const voteRes = await db.from('entry_votes')
+          const voteRes = ownV1361 ? {data:[]} : await db.from('entry_votes')
             .select('entry_id')
             .in('entry_id', data.map(e => e.id));
           if (voteRes.data && voteRes.data.length) {
@@ -17506,8 +17520,8 @@ async function cropPromoteMediaV1359() {
         ps.heroCropByStyleV1359 ||= {};
         ps.heroCropByStyleV1359[media.style] = {source:media.source, original:media.url, url:reader.result};
         ps.heroFocus = {x:.5,y:.5};
-        ps.heroFit = 'fit';
-        document.querySelectorAll('#pmFitSeg button').forEach(b => b.classList.toggle('on', b.dataset.fit === 'fit'));
+        ps.heroFit = 'fill';
+        document.querySelectorAll('#pmFitSeg button').forEach(b => b.classList.toggle('on', b.dataset.fit === 'fill'));
         await renderPromoteFlyer();
         updateHeroTools();
       };
@@ -17738,8 +17752,11 @@ async function renderPromoteFlyer() {
     : mediaSourceV1186 === 'detected'
       ? (_style === 'spotlight' ? (stateRefV1184.spotlightHeroAutoUrlV1325 || stateRefV1184.heroAutoUrl) : stateRefV1184.heroAutoUrl)
       : null;
+  const featuredEntrySnapshotV1361 = mediaSourceV1186 !== 'artwork'
+    ? stateRefV1184.heroAutoMetaV1324?.id || null : null;
   const cropV1359 = promoteMediaV1359(stateRefV1184).crop;
   const heroSrc = cropV1359?.url || originalHeroSrcV1359;
+  opts.heroCroppedV1361 = !!cropV1359;
   // v800 — hand the painter the user's fit mode and focal point.
   opts.heroFit = stateRefV1184.heroFit || 'fill';
   opts.heroFocus = stateRefV1184.heroFocus || { x: 0.5, y: 0.5 };
@@ -17774,6 +17791,7 @@ async function renderPromoteFlyer() {
     if (stateRefV1184.renderTokenV1184 !== renderTokenV1184) return;
     if ((stateRefV1184.style || 'ember') !== _style) return;
     stateRefV1184.blob = blob;
+    stateRefV1184.renderedFeaturedEntryIdV1361 = featuredEntrySnapshotV1361;
     const preview = document.getElementById('promotePreview');
     if (preview) preview.innerHTML = `<img src="${dataUrl}" alt="${escapeHtml(_style)} flyer preview" class="promote-flyer-img"><div class="promote-generated-note-v1182">This design applies to this newly generated flyer. Existing posted flyers remain unchanged.</div>`;
     if (stateRefV1184.type === 'challenge' && !stateRefV1184.analyticsGeneratedTracked) {
@@ -17884,6 +17902,8 @@ async function postFlyerToFeed() {
       btn.textContent = 'Posting...';
     }
 
+    // Finish the selected crop/style and capture the entry identity with its raster.
+    await renderPromoteFlyer();
     // Get flyer blob — use promoteState.blob (already generated), never fetch data: URLs on iOS
     let mediaUrl = null;
     let blob = promoteState?.blob || null;
@@ -17900,7 +17920,7 @@ async function postFlyerToFeed() {
       return;
     }
     if (blob) {
-      const path = `${state.profile.id}/flyer-${FC_FLYER_RENDERER_VERSION_V1182}-${ch.id}-${Date.now()}.png`;
+      const path = fcFlyerUploadPathV1361(ch.id);
       btn.textContent = 'Uploading...';
       // Plain insert (upsert:false). Bucket has INSERT/DELETE policies only — an
       // upsert turns this into INSERT...ON CONFLICT DO UPDATE which also needs
@@ -18008,6 +18028,7 @@ async function postFlyerToGroup(groupId, groupName) {
 
   try {
     let mediaUrl = null;
+    await renderPromoteFlyer();
     let blob = promoteState?.blob || null;
     if (!blob) {
       const canvas = document.querySelector('#promotePreview canvas');
@@ -18015,7 +18036,7 @@ async function postFlyerToGroup(groupId, groupName) {
     }
 
     if (blob) {
-      const path = `${state.profile.id}/flyer-${ch.id}-${Date.now()}.png`;
+      const path = fcFlyerUploadPathV1361(ch.id);
       const { error: upErr } = await db.storage
         .from('challenge-media')
         .upload(path, blob, { contentType: 'image/png', upsert: false, cacheControl: '3600' });
@@ -18188,7 +18209,7 @@ async function openPostView(postId) {
     el.addEventListener('click', e => {
       e.stopPropagation();
       const chId = el.dataset.flyerViewer;
-      if (chId) { closePostView(); fcOpenChallengeSurfaceV1273(chId); }
+      if (chId) { closePostView(); fcOpenFlyerSurfaceV1361(el); }
     });
   });
   wireLazyVideoThumbnails(body);
@@ -28267,8 +28288,7 @@ function renderFeed() {
   c.querySelectorAll('[data-flyer-viewer]').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
-      if (btn.dataset.flyerEntry) openFeedViewer(btn.dataset.flyerViewer, btn.dataset.flyerEntry);
-      else fcOpenChallengeSurfaceV1273(btn.dataset.flyerViewer);
+      fcOpenFlyerSurfaceV1361(btn);
     });
   });
 
@@ -28594,15 +28614,37 @@ function renderPostCard(p, options = {}) {
 // empty black by design; v716 found the hero query was filtering to
 // media_type = image, so video challenges never got a hero — which removed the
 // only reason to shrink it.
-function fcFeaturedFlyerVideoEntryV1332(ch) {
-  if (!ch) return null;
-  const entries = (typeof fcEntriesForChallengeV1060 === 'function' ? fcEntriesForChallengeV1060(ch) : [])
-    .filter(e => e && String(e.media_type || ch.media_type || '').toLowerCase() === 'video' && e.media_url)
-    .filter(e => typeof entryModVisible !== 'function' || entryModVisible(e, { allowAdmin: true }));
-  if (!entries.length) return null;
-  const votes = state.feedVoteCounts || {};
-  return entries.map((entry, index) => ({ entry, index, votes: Number(votes[entry.id] || 0) }))
-    .sort((a,b) => (b.votes - a.votes) || (a.index - b.index))[0].entry;
+function fcFlyerEntryIdV1361(post) {
+  return String(post?.media_url || '').match(/-featured-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.png(?:[?#]|$)/i)?.[1] || null;
+}
+function fcFlyerUploadPathV1361(chId) {
+  const id = promoteState?.renderedFeaturedEntryIdV1361;
+  const featured = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id || '')) ? '-featured-' + id : '-featured-none';
+  return `${state.profile.id}/flyer-${FC_FLYER_RENDERER_VERSION_V1182}-${chId}-${Date.now()}${featured}.png`;
+}
+function fcFeaturedFlyerEntryV1361(ch, post) {
+  if (!ch || !post) return null;
+  const entries = fcEntriesForChallengeV1060(ch).filter(e =>
+    ch.sd_phase !== 'submitting' || Number(e.sd_round || 0) < Number(ch.sd_round || 0));
+  const id = fcFlyerEntryIdV1361(post);
+  if (id) return entries.find(e => String(e.id).toLowerCase() === id.toLowerCase()) || null;
+  if (/-featured-none\.png(?:[?#]|$)/i.test(String(post.media_url || ''))) return null;
+  // Older raster-only flyers have no ID. Prefer the poster's own submission,
+  // never substitute the first entrant or whoever happens to lead today.
+  return entries.filter(e => String(e.user_id) === String(post.user_id)
+    && (!post.created_at || !e.created_at || new Date(e.created_at) <= new Date(post.created_at)))
+    .sort((a,b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))[0] || null;
+}
+function fcFeaturedFlyerVideoEntryV1332(ch, post) {
+  const entry = fcFeaturedFlyerEntryV1361(ch,post);
+  return entry && String(entry.media_type || ch.media_type).toLowerCase() === 'video' && entry.media_url ? entry : null;
+}
+function fcOpenFlyerSurfaceV1361(trigger) {
+  const chId = trigger?.dataset.flyerViewer;
+  if (!chId) return;
+  const entryId = trigger.dataset.flyerEntry;
+  if (entryId) openFeedViewer(chId,entryId,true);
+  else fcOpenChallengeSurfaceV1273(chId);
 }
 
 function fcPlayFlyerVideoV1332(trigger) {
@@ -28662,7 +28704,9 @@ function renderFlyerCard(p) {
 
   // Find linked challenge
   const ch = p.challenge_id ? state.challenges.find(c => c.id === p.challenge_id) : null;
-  const flyerVideoEntryV1332 = ch ? fcFeaturedFlyerVideoEntryV1332(ch) : null;
+  const featuredEntryV1361 = ch ? fcFeaturedFlyerEntryV1361(ch,p) : null;
+  const featuredIdV1361 = fcFlyerEntryIdV1361(p) || featuredEntryV1361?.id || null;
+  const flyerVideoEntryV1332 = ch ? fcFeaturedFlyerVideoEntryV1332(ch,p) : null;
   const chStatus = ch ? computeChallengeStatus(ch) : null;
   const isChampFlyerV1272 = !!(ch && isChampionshipCh(ch));
   const champLaunchV1272 = isChampFlyerV1272
@@ -28713,7 +28757,7 @@ function renderFlyerCard(p) {
 
       <!-- Flyer hero + facts + CTA. See the note above renderFlyerCard. -->
       ${ch ? `
-      <div class="flyer-stage" data-flyer-viewer="${ch.id}">
+      <div class="flyer-stage" data-flyer-viewer="${ch.id}"${featuredIdV1361 ? ` data-flyer-entry="${escapeHtml(featuredIdV1361)}"` : ''}>
         ${p.media_url && p.media_type !== 'video'
           ? `<img src="${escapeHtml(p.media_url)}" class="flyer-stage-blur" aria-hidden="true" loading="lazy">
              <img src="${escapeHtml(p.media_url)}" alt="Challenge flyer" class="flyer-stage-fg" loading="lazy">`
@@ -28733,7 +28777,7 @@ function renderFlyerCard(p) {
         <div class="flyer-preview-cat">${escapeHtml(ch.category || '')}</div>
         <div class="flyer-card-title">${escapeHtml(ch.title)}</div>
         ${countdown ? `<div class="flyer-preview-meta">${countdown}</div>` : ''}
-        <button class="btn btn-primary flyer-preview-cta${isChampFlyerV1272 ? ' fc-champ-flyer-cta-v1272' : ''}" data-flyer-viewer="${ch.id}"${!isChampFlyerV1272 && isOpen && flyerEnteredV1341 && flyerOwnEntryIdV1341 ? ` data-flyer-entry="${escapeHtml(flyerOwnEntryIdV1341)}"` : ''}>${ctaText}</button>
+        <button class="btn btn-primary flyer-preview-cta${isChampFlyerV1272 ? ' fc-champ-flyer-cta-v1272' : ''}" data-flyer-viewer="${ch.id}"${!isChampFlyerV1272 && isOpen && flyerEnteredV1341 && flyerOwnEntryIdV1341 ? ` data-flyer-entry="${escapeHtml(flyerOwnEntryIdV1341)}"` : featuredIdV1361 ? ` data-flyer-entry="${escapeHtml(featuredIdV1361)}"` : ''}>${ctaText}</button>
       </div>`
       : `<div class="flyer-card-body">
            <div class="flyer-card-title">Challenge unavailable</div>
@@ -30968,7 +31012,7 @@ let _fvEntries = [];    // entries loaded by openFeedViewer — used by standing
 let _fvFeedReturnStateV1303 = null;
 
 // v1068 — restored exact v1065 native horizontal viewer behavior; no touch interception.
-async function openFeedViewer(chId, startEntryId = null) {
+async function openFeedViewer(chId, startEntryId = null, strictStartV1361 = false) {
   let ch = state.challenges.find(c => c.id === chId) || state.currentChallenge;
   if (!ch) return;
 
@@ -31144,6 +31188,11 @@ async function openFeedViewer(chId, startEntryId = null) {
 
     _fvEntries = entries; // keep full list so a submitter can see their own moderation status
     const _eligibleVisibleV1047 = visibleEntries.filter(fcEntryCompetesV1060);
+    if (strictStartV1361 && startEntryId && !_eligibleVisibleV1047.some(e => String(e.id) === String(startEntryId))) {
+      closeFeedViewer();
+      toast('The featured entry is no longer available');
+      return;
+    }
     const _eligibleIdsV1047 = new Set(_eligibleVisibleV1047.map(e => e.id));
     const _validVotesV1047 = votes.filter(v => _eligibleIdsV1047.has(v.entry_id));
     _fvVoteCounts = {};
