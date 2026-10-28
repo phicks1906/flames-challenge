@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1361 · cropped-flyer-and-featured-entry" name="fc-build"/>
+<meta content="v1362 · reliable-media-pause" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Cropped flyer media fills its intended area. Flyer playback and entry links follow the featured submission." name="fc-whatsnew"/>
+<meta content="Fixed feed video Pause controls and audio play/pause handling during loading." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -19619,6 +19619,10 @@ function fcAudioPlayStateV1123(tile, audio) {
 
 function fcAudioPauseStateV1123(tile, audio) {
   if (!tile || !audio) return;
+  // A queued pause event may arrive after the member has already resumed.
+  if (!audio.paused && !audio.ended) return;
+  audio._fcAudioPlayRequestV1362 = (audio._fcAudioPlayRequestV1362 || 0) + 1;
+  audio._fcAudioPlayPendingV1362 = false;
   if (_fcActiveAudibleMediaV1300 === audio) {
     _fcActiveAudibleMediaV1300 = null;
     _userAudioActive = false;
@@ -19650,7 +19654,7 @@ function toggleFccAudio(tile, ev) {
   showFccAudioControlV1172(tile, 1250);
   const audio = tile?.querySelector('audio');
   if (!audio) return;
-  if (audio.paused) {
+  if (audio.paused && !audio._fcAudioPlayPendingV1362) {
     // v1301 — audio fidelity wins. Never reroute the element through Web Audio.
     // iOS can intermittently clock a MediaElementSource differently from native
     // media output, which sounds like a tape dragging / pitch sag even while the
@@ -19659,20 +19663,35 @@ function toggleFccAudio(tile, ev) {
     fcNormalizeAudioTransportV1301(audio);
 
     const prior = _fcActiveAudibleMediaV1300;
-    if (prior && prior !== audio && !prior.paused) {
+    if (prior && prior !== audio && (!prior.paused || prior._fcAudioPlayPendingV1362)) {
+      prior._fcAudioPlayRequestV1362 = (prior._fcAudioPlayRequestV1362 || 0) + 1;
+      prior._fcAudioPlayPendingV1362 = false;
       try { prior.pause(); } catch (_) {}
     }
     _fcActiveAudibleMediaV1300 = audio;
     _userAudioActive = true;
-    audio.play().catch(error => {
+    const requestV1362 = (audio._fcAudioPlayRequestV1362 || 0) + 1;
+    audio._fcAudioPlayRequestV1362 = requestV1362;
+    audio._fcAudioPlayPendingV1362 = true;
+    let playbackV1362;
+    try { playbackV1362 = audio.play(); }
+    catch (error) { playbackV1362 = Promise.reject(error); }
+    Promise.resolve(playbackV1362).then(() => {
+      if (audio._fcAudioPlayRequestV1362 === requestV1362) audio._fcAudioPlayPendingV1362 = false;
+    }).catch(error => {
+      if (audio._fcAudioPlayRequestV1362 !== requestV1362) return;
+      audio._fcAudioPlayPendingV1362 = false;
       if (_fcActiveAudibleMediaV1300 === audio) _fcActiveAudibleMediaV1300 = null;
       _userAudioActive = false;
       fcAudioPauseStateV1123(tile, audio);
-      toast('Audio could not start. Tap again.');
+      if (error?.name !== 'AbortError') toast('Audio could not start. Tap again.');
       dlog('audio', 'play-failed', { error: String(error?.message || error).slice(0,80) });
     });
   } else {
+    audio._fcAudioPlayRequestV1362 = (audio._fcAudioPlayRequestV1362 || 0) + 1;
+    audio._fcAudioPlayPendingV1362 = false;
     audio.pause();
+    fcAudioPauseStateV1123(tile, audio);
   }
 }
 
@@ -50838,6 +50857,10 @@ document.addEventListener('pointerdown', function(event) {
 
     const media = event.target.closest('.fc-video-unified-v1238');
     if (!media) return;
+
+    // Custom transport buttons own pause/resume/seek. Let their target handlers
+    // run instead of swallowing the click and interpreting Pause as Play.
+    if (event.target.closest('.fc-feed-video-transport-v1337')) return;
 
     // v1310 — once native controls are present, they own BOTH play and pause.
     // On iOS Safari a pause tap can pause the video before this capture listener
