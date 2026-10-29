@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1362 · reliable-media-pause" name="fc-build"/>
+<meta content="v1363 · stable-viewer-and-first-tap-sound" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Fixed feed video Pause controls and audio play/pause handling during loading." name="fc-whatsnew"/>
+<meta content="Video entries start with sound on the opening tap. Expanded playback keeps a stable media area, accessible actions, and hidden navigation." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -21870,6 +21870,10 @@ async function openEntryViewer(entryId, chId) {
   document.getElementById('entryViewerSheet').classList.add('open');
   document.body.classList.add('fc-entry-viewer-open-v1194');
   fcOpenImmersiveViewerV1198('entry-viewer');
+  // Start the already-mounted player in the original opening gesture. Opening
+  // the entry must not consume the first tap and leave a second Play required.
+  const openingVideoV1363 = document.querySelector('#evMedia video');
+  if (openingVideoV1363) fcPlayEntryVideoV1363(openingVideoV1363);
   if (state.profile && isVotingPhase(computeChallengeStatus(ch))) {
     hydrateEntryVotesV1083().then(() => {
       if (!_evChallenge || String(_evChallenge.id) !== String(chId)) return;
@@ -21881,6 +21885,22 @@ async function openEntryViewer(entryId, chId) {
       markEntryVoteCardsV1083(chId, _evMyVoteEntryId);
     });
   }
+}
+
+function fcPlayEntryVideoV1363(video) {
+  if (!video || !video.isConnected) return;
+  fcPauseCompetingMediaV1200(video);
+  video.removeAttribute('muted');
+  video.defaultMuted = false;
+  video.muted = false;
+  video.volume = 1;
+  _userAudioActive = true;
+  // Do not await metadata or an animation before invoking native play().
+  const playback = video.play();
+  if (playback?.catch) playback.catch(error => {
+    if (!video.isConnected || !document.getElementById('entryViewerSheet')?.classList.contains('open')) return;
+    if (error?.name !== 'AbortError') toast('Playback could not start. Tap Play to retry.');
+  });
 }
 
 function evNavigate(dir) {
@@ -31329,7 +31349,7 @@ async function openFeedViewer(chId, startEntryId = null, strictStartV1361 = fals
       const newVid = document.createElement('video');
       newVid.src = src;
       fcInitDeliberateVideoV1200(newVid, {
-        autoplay:true,
+        autoplay:false,
         userStarted:true,
         preload:'auto'
       });
@@ -53790,5 +53810,29 @@ html{scroll-padding-bottom:calc(160px + env(safe-area-inset-bottom,0px))}
   }).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['class','style','hidden']});
 })();
 </script>
+<style id="fc-v1363-stable-entry-viewer">
+/* One bounded media slot for poster, loading, paused and playing states.
+   Contain preserves source proportions; footer space never belongs to video. */
+#entryViewerSheet .entry-viewer-modal.fc-entry-viewer-v1079{
+  height:90dvh!important;max-height:90dvh!important;min-height:0!important;
+}
+#entryViewerSheet .entry-viewer-media[data-entry-media-type-v1194="video"]{
+  flex:1 1 0!important;height:0!important;min-height:0!important;max-height:none!important;
+}
+#entryViewerSheet .entry-viewer-media[data-entry-media-type-v1194="video"] .fc-ev-media-content-v1079,
+#entryViewerSheet .fc-ev-video-stage-v1194{
+  height:100%!important;min-height:0!important;max-height:100%!important;
+  aspect-ratio:auto!important;width:100%!important;
+}
+#entryViewerSheet .fc-ev-video-v1194{width:100%!important;height:100%!important;object-fit:contain!important}
+#entryViewerSheet .entry-viewer-actions{flex:0 0 auto!important}
+body.fc-authenticated:has(#entryViewerSheet.open) #bottomNav,
+body.fc-authenticated:has(#feedViewerSheet.open) #bottomNav,
+body.fc-authenticated.fc-immersive-active-v1198 #bottomNav{
+  display:none!important;visibility:hidden!important;pointer-events:none!important;
+}
+body:has(#entryViewerSheet.open) #entryViewerSheet,
+body:has(#feedViewerSheet.open) #feedViewerSheet{padding-bottom:env(safe-area-inset-bottom,0px)!important}
+</style>
 </body>
 </html>
