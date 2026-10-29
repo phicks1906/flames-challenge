@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1365 · unobstructed-admin-screens" name="fc-build"/>
+<meta content="v1366 · working-post-follow-buttons" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Admin screens hide the bottom menu and Ask Ember, with a clear Back to Home button." name="fc-whatsnew"/>
+<meta content="The plus beside a post or flyer author now follows that member and confirms when saved." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -19379,6 +19379,7 @@ async function lbToggleFollow(btn) {
     }
     btn.textContent = state.myFollowing.has(uid) ? '✓' : '+ Follow';
     btn.classList.toggle('following', state.myFollowing.has(uid));
+    if (btn.classList.contains('fc-post-follow-v1366') && state.myFollowing.has(uid)) toast('Following');
     if (state.currentView === 'feed') renderFeed();
   } catch(err) {
     console.warn('leaderboard follow', err);
@@ -28610,7 +28611,8 @@ function renderPostCard(p, options = {}) {
   const likeBtnAttrs = `data-like-post="${p.id}"`;
   const isClickableUser = p.user_id && !isMine;
   const userClickAttr = isClickableUser ? `data-user-id="${p.user_id}" class="user-clickable"` : '';
-  const plusBadge = needsFollowPlus(p.user_id) ? ' <span class="user-plus">+</span>' : '';
+  const plusBadge = needsFollowPlus(p.user_id)
+    ? ` <button type="button" class="user-plus fc-post-follow-v1366" data-lb-follow="${escapeHtml(p.user_id)}" aria-label="Follow ${escapeHtml(author.name)}" onclick="event.stopPropagation();if(!this.disabled)lbToggleFollow(this)">+</button>` : '';
   return `
     <div class="post-card" data-pid="${p.id}">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px 0"><span class="feed-poll-tag" style="color:#4fc3f7">✍️ POST</span><span style="font-size:12px;color:var(--text-muted)">${timeAgo(p.created_at)}</span></div>
@@ -28746,7 +28748,8 @@ function renderFlyerCard(p) {
   const iLiked = state.myPostLikes.has(p.id);
   const isClickableUser = p.user_id && !isMine;
   const userClickAttr = isClickableUser ? `data-user-id="${p.user_id}" class="user-clickable"` : '';
-  const plusBadge = needsFollowPlus(p.user_id) ? ' <span class="user-plus">+</span>' : '';
+  const plusBadge = needsFollowPlus(p.user_id)
+    ? ` <button type="button" class="user-plus fc-post-follow-v1366" data-lb-follow="${escapeHtml(p.user_id)}" aria-label="Follow ${escapeHtml(author.name)}" onclick="event.stopPropagation();if(!this.disabled)lbToggleFollow(this)">+</button>` : '';
 
   // Find linked challenge
   const ch = p.challenge_id ? state.challenges.find(c => c.id === p.challenge_id) : null;
@@ -53851,5 +53854,9 @@ body.fc-admin-view-v1365 #fcGlobalAskEmberV1131 {
 #adminViewSection .fc-admin-home-v1365 { margin-bottom:12px;min-height:44px; }
 </style>
 
+<style id="fc-v1366-post-follow">
+button.fc-post-follow-v1366{border:0;padding:0;cursor:pointer;min-width:32px;min-height:32px;touch-action:manipulation;vertical-align:middle}
+button.fc-post-follow-v1366:disabled{opacity:.55;cursor:wait}
+</style>
 </body>
 </html>
