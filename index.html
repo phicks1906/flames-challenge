@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1363 · stable-viewer-and-first-tap-sound" name="fc-build"/>
+<meta content="v1364 · duplicate-entry-protection" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Video entries start with sound on the opening tap. Expanded playback keeps a stable media area, accessible actions, and hidden navigation." name="fc-whatsnew"/>
+<meta content="Duplicate entries are blocked within a challenge, including creator entries and repeated text." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -24637,6 +24637,8 @@ document.getElementById('createChallengeForm').addEventListener('submit', async 
   try {
     let mediaUrl = null;
     let posterUrl = null;
+    const creatorMediaHashV1364 = ccState.competeSelf !== false && ccState.mediaType !== 'text'
+      ? await fileSha256(ccState.file) : null;
     // Moderate ALL user text in one shot: challenge title, rules, the entry
     // caption, and (for text entries) the text body itself. Previously only
     // title+rules were checked, letting harassment text ride in the caption.
@@ -24710,7 +24712,8 @@ document.getElementById('createChallengeForm').addEventListener('submit', async 
 
     btn.textContent = 'Creating...';
     const rpcResult = await fcDbMutationV1101(
-      db.rpc('fc_create_challenge_v1344', {
+      db.rpc('fc_create_challenge_v1364', {
+        p_media_hash: creatorMediaHashV1364,
         p_entry_limit: document.getElementById('ccEntryLimit').value === '' ? null : Number(document.getElementById('ccEntryLimit').value),
         p_title: title,
         p_rules: rules || null,
@@ -27037,8 +27040,8 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
 
   // Block exact-duplicate media in this challenge (same file submitted twice).
   // Hash the raw file BEFORE upload so a duplicate doesn't waste a Bunny upload.
-  // Only catches byte-identical files. Needs entries.media_hash; if that column
-  // is absent the query errors and we skip the check (non-fatal).
+  // Exact-file check before upload. A failed check must not permit submission.
+  // The database also enforces uniqueness, including concurrent submissions.
   if (seState.file && ch.media_type !== 'text') {
     try {
       btn.textContent = 'Checking…';
@@ -27048,14 +27051,22 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
         .eq('challenge_id', ch.id).eq('media_hash', seState._mediaHash);
       if (seState.editingEntry) dupQ = dupQ.neq('id', seState.editingEntry.id);
       const { data: dupMedia, error: dupErr2 } = await dupQ.limit(1);
-      if (!dupErr2 && dupMedia && dupMedia.length) {
+      if (dupErr2) throw dupErr2;
+      if (dupMedia && dupMedia.length) {
         errBox.textContent = 'That exact media is already entered in this challenge. Please submit something original.';
         errBox.classList.add('show');
         btn.disabled = false; btn.removeAttribute('aria-busy'); btn.textContent = orig;
         seState.submitInFlightV1274 = false;
         return;
       }
-    } catch (mhErr) { console.warn('media hash check', mhErr); seState._mediaHash = seState._mediaHash || null; }
+    } catch (mhErr) {
+      errBox.textContent = mhErr?.name === 'AbortError'
+        ? 'Upload canceled.' : 'Could not check for duplicate media. Try again before submitting.';
+      errBox.classList.add('show');
+      btn.disabled = false; btn.removeAttribute('aria-busy'); btn.textContent = orig;
+      seState.submitInFlightV1274 = false;
+      return;
+    }
   }
 
   try {
@@ -27188,10 +27199,6 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
         delete updates.moderation_status;
         ({ data:updateRowsV1270, error: entryError } = await fcWithTimeoutV1099(runUpdate(), 25000, 'Update entry'));
       }
-      if (entryError && /media_hash/.test(entryError.message || '')) {
-        delete updates.media_hash;
-        ({ data:updateRowsV1270, error: entryError } = await fcWithTimeoutV1099(runUpdate(), 25000, 'Update entry'));
-      }
       if (entryError) throw new Error('Update failed: ' + entryError.message);
       if (!Array.isArray(updateRowsV1270) || updateRowsV1270.length !== 1) {
         if (ch.is_championship) await fcRefreshChampionshipEntryStateV1270(ch);
@@ -27223,10 +27230,6 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
         delete newEntry.sd_round;
         ({ data: entryData, error: entryError } = await fcWithTimeoutV1099(db.from('entries').insert(newEntry).select('id').single(), 25000, 'Submit entry'));
       }
-      if (entryError && /media_hash/.test(entryError.message || '')) {
-        delete newEntry.media_hash;
-        ({ data: entryData, error: entryError } = await fcWithTimeoutV1099(db.from('entries').insert(newEntry).select('id').single(), 25000, 'Submit entry'));
-      }
       if (entryError && /moderation_status/.test(entryError.message || '')) {
         // moderation columns not migrated yet — retry without them so submit still works
         delete newEntry.moderation_status;
@@ -27234,7 +27237,9 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
       }
       if (entryError) {
         if (entryError.code === '23505' || /duplicate|unique/i.test(entryError.message || '')) {
-          throw new Error('You already have an entry in this challenge.');
+          throw new Error(/entries_challenge_media_hash_unique_v1364/.test(entryError.message || '')
+            ? 'That exact media is already entered in this challenge. Please submit something original.'
+            : (entryError.code === 'FC064' ? entryError.message : 'You already have an entry in this challenge.'));
         }
         throw new Error('Submit failed: ' + entryError.message);
       }
