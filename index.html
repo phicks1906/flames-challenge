@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1366 · working-post-follow-buttons" name="fc-build"/>
+<meta content="v1367 · production-login-errors" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="The plus beside a post or flyer author now follows that member and confirms when saved." name="fc-whatsnew"/>
+<meta content="Login errors now use clear customer messages without internal diagnostics or duplicate login requests." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -11842,6 +11842,24 @@ document.getElementById('signupAvatarRemove')?.addEventListener('click', () => {
   renderSignupInitialsPreview();
 });
 
+function fcLoginErrorMessageV1367(error, action = 'log you in') {
+  const code = String(error?.code || '').toLowerCase();
+  const message = String(error?.message || '').toLowerCase();
+  if (code === 'email_not_confirmed' || message.includes('email not confirmed')) {
+    return 'Please verify your email first — check your inbox for the link.';
+  }
+  if (code === 'invalid_credentials' || message.includes('invalid login credentials')) {
+    return 'Email or password is incorrect. Please try again.';
+  }
+  if (error?.status === 429 || /rate.limit|too many requests/.test(message)) {
+    return 'Too many attempts. Please wait a few minutes and try again.';
+  }
+  if (/timeout|timed out|fetch|network|load failed|connection/.test(message) || error?.status === 0) {
+    return 'We couldn’t connect. Please try again in a moment.';
+  }
+  return `We couldn’t ${action} right now. Please try again shortly.`;
+}
+
 /* ---------- LOGIN ---------- */
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -11851,58 +11869,25 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
   const btn = e.target.querySelector('button[type="submit"]');
   btn.disabled = true; const orig = btn.textContent; btn.textContent = 'Logging in...';
 
-  const t0 = Date.now();
   let result;
+  let loginTimerV1367;
   try {
     result = await Promise.race([
       db.auth.signInWithPassword({ email, password }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('__SDK_TIMEOUT__')), 12000))
+      new Promise((_, reject) => {
+        loginTimerV1367 = setTimeout(() => reject(new Error('__LOGIN_TIMEOUT__')), 12000);
+      })
     ]);
   } catch (err) {
     result = { error: err };
+  } finally {
+    clearTimeout(loginTimerV1367);
+    btn.disabled = false;
+    btn.textContent = orig;
   }
-  const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
-
-  // DIAGNOSTIC: if the SDK call hung, test the raw auth endpoint directly to
-  // see whether it's the network/server or the Supabase client library.
-  if (result.error && result.error.message === '__SDK_TIMEOUT__') {
-    btn.textContent = 'Testing connection...';
-    try {
-      const resp = await Promise.race([
-        fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-          body: JSON.stringify({ email, password }),
-        }),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('raw-timeout')), 12000)),
-      ]);
-      const bodyText = await resp.text();
-      btn.disabled = false; btn.textContent = orig;
-      if (resp.ok) {
-        // The server logged us in fine — the SDK is the thing that's stuck.
-        showAuthError(`Server OK (HTTP ${resp.status}) but the app's login library hung after ${elapsed}s. This is a client bug — screenshot this and send it.`);
-      } else {
-        showAuthError(`Server responded HTTP ${resp.status}: ${bodyText.slice(0, 160)}`);
-      }
-      console.log('[login diag] raw status', resp.status, bodyText);
-      return;
-    } catch (rawErr) {
-      btn.disabled = false; btn.textContent = orig;
-      showAuthError(`Both the app and a direct test couldn't reach Supabase (${rawErr.message}). The Supabase project may be PAUSED — check your Supabase dashboard and tap "Restore"/"Resume" if it is.`);
-      console.log('[login diag] raw fetch failed', rawErr);
-      return;
-    }
-  }
-
-  btn.disabled = false; btn.textContent = orig;
 
   if (result.error) {
-    const msg = result.error.message || 'Login failed';
-    if (msg.toLowerCase().includes('email not confirmed')) {
-      showAuthError('Please verify your email first — check your inbox for the link.');
-    } else {
-      showAuthError(msg);
-    }
+    showAuthError(fcLoginErrorMessageV1367(result.error));
     return;
   }
 
@@ -12330,7 +12315,7 @@ async function forgotPassword() {
   const { error } = await db.auth.resetPasswordForEmail(email, {
     redirectTo: window.location.origin + window.location.pathname,
   });
-  if (error) showAuthError(error.message);
+  if (error) showAuthError(fcLoginErrorMessageV1367(error, 'send a reset email'));
   else toast(`Password reset sent to ${email}`);
 }
 
