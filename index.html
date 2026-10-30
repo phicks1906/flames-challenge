@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1367 · production-login-errors" name="fc-build"/>
+<meta content="v1368 · category-poster-empty-challenges" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Login errors now use clear customer messages without internal diagnostics or duplicate login requests." name="fc-whatsnew"/>
+<meta content="Open challenges with no entries now use the existing category poster artwork and clear entry actions." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -29459,6 +29459,38 @@ function fcRebuildEntryCountsV1120() {
   return counts;
 }
 
+function fcEmptyChallengePosterV1368(ch, creator, avatar, isCreator, display, action) {
+  const category = ch.category || 'Other';
+  const artwork = FLYER_ASSET_BASE + `flyer-classic-${PAPER_TPL_VER}-${_flyerCatKey(category)}.webp`;
+  const longTitle = String(display.title || '').length > 42;
+  return `<div class="fc-empty-challenge-v1368">
+    <div class="chc-top">
+      <div class="chc-av">${avatar}</div>
+      <div class="chc-who">
+        <div class="chc-nm">${escapeHtml(creator.name)}${isCreator ? ' <span class="fc-empty-owner-v1368">(you)</span>' : ''}</div>
+        <div class="chc-cat">${escapeHtml(category)}${ch.media_type ? ' · ' + mediaTypeLabel(ch.media_type) : ''}</div>
+      </div>
+      <button type="button" class="chc-dots" data-chc-menu="${escapeHtml(ch.id)}" aria-label="Challenge options">•••</button>
+    </div>
+    <div class="fc-empty-poster-v1368" role="group" aria-label="${escapeHtml(category)} challenge invitation">
+      <img class="fc-empty-art-v1368" src="${escapeHtml(artwork)}" alt="" loading="lazy" onerror="this.closest('.fc-empty-poster-v1368').classList.add('fc-art-unavailable-v1368');this.remove()">
+      <div class="fc-empty-category-v1368">${escapeHtml(category)}</div>
+      <h3 class="fc-empty-title-v1368${longTitle ? ' fc-empty-title-long-v1368' : ''}">${escapeHtml(display.title)}</h3>
+    </div>
+    <div class="fc-empty-footer-v1368">
+      <div class="fc-empty-open-v1368">Open for entries</div>
+      <p class="fc-empty-invite-v1368">Be the first to enter.</p>
+      ${display.prompt ? `<p class="fc-empty-prompt-v1368">${escapeHtml(display.prompt)}</p>` : ''}
+      <div class="fc-empty-meta-v1368">
+        <span>Entries close in ${escapeHtml(formatCountdown(ch.submission_deadline))}</span>
+        <button type="button" class="fc-empty-details-v1368" data-chc-act="${escapeHtml(ch.id)}" data-chc-mode="view">Details</button>
+        <span class="fc-empty-limit-v1368">${escapeHtml(fcCapacityLabelV1344(ch,0))}</span>
+      </div>
+      ${action.hidden ? '' : `<button type="button" class="chc-cta${action.ghost ? ' chc-ghost' : ''}" data-chc-act="${escapeHtml(ch.id)}" data-chc-mode="${escapeHtml(action.mode)}">${action.label}</button>`}
+    </div>
+  </div>`;
+}
+
 function buildChallengeCardShell(ch, surface = 'compete') {
   const creator = ch.creator || { name: 'Unknown' };
   const cardEntries = _cardEntriesFor(ch);
@@ -29487,6 +29519,10 @@ function buildChallengeCardShell(ch, surface = 'compete') {
       : _cardMediaHTML(ch, status, cardEntries, isChampionship, entryCount);
 
   const action = fcCardAction(ch, status);
+  if (!isChampionship && status === 'submitting' && entryCount === 0 &&
+      !myPreparing && !myRejectedV1288 && fcKnownCapacityV1344(ch,cardEntries) === 0) {
+    return fcEmptyChallengePosterV1368(ch,creator,av,isCreator,display,action);
+  }
   const ctaCls = action.ghost ? ' chc-ghost' : '';
   const commonTop = `
     <div class="chc-top">
@@ -53842,6 +53878,28 @@ body.fc-admin-view-v1365 #fcGlobalAskEmberV1131 {
 <style id="fc-v1366-post-follow">
 button.fc-post-follow-v1366{border:0;padding:0;cursor:pointer;min-width:32px;min-height:32px;touch-action:manipulation;vertical-align:middle}
 button.fc-post-follow-v1366:disabled{opacity:.55;cursor:wait}
+</style>
+
+<style id="fc-v1368-empty-category-poster">
+.fc-empty-challenge-v1368{overflow:hidden}
+.fc-empty-challenge-v1368 .chc-top{margin-bottom:12px}
+.fc-empty-owner-v1368{color:var(--text-muted);font-weight:600}
+.fc-empty-poster-v1368{position:relative;width:100%;aspect-ratio:1080/992;overflow:hidden;background:#100b08;color:#fff;isolation:isolate}
+.fc-empty-poster-v1368 .fc-empty-art-v1368{position:absolute;inset:0 auto auto 0;width:100%;height:auto;max-width:none;display:block;z-index:-1}
+.fc-empty-category-v1368{position:absolute;top:20.4%;left:34%;width:32%;height:6%;display:flex;align-items:center;justify-content:center;color:#ffc857;font-size:clamp(9px,2.6vw,13px);font-weight:800;letter-spacing:.13em;text-transform:uppercase;white-space:nowrap}
+.fc-empty-title-v1368{position:absolute;left:14%;top:81.6%;width:72%;height:16.4%;margin:0;display:flex;align-items:center;justify-content:center;text-align:center;font-family:Anton,Impact,sans-serif;font-size:clamp(16px,5vw,28px);line-height:1.12;font-weight:700;overflow-wrap:anywhere;color:#fff;text-shadow:0 2px 3px #000;overflow:auto}
+.fc-empty-title-v1368.fc-empty-title-long-v1368{font-size:clamp(11px,3.5vw,20px)}
+.fc-empty-footer-v1368{padding:14px 16px 16px}
+.fc-empty-open-v1368{color:var(--ember);font-size:11px;font-weight:800;letter-spacing:.13em;text-transform:uppercase}
+.fc-empty-invite-v1368{margin:5px 0 12px;font-size:16px;font-weight:600;color:var(--text)}
+.fc-empty-prompt-v1368{margin:0 0 12px;color:var(--text-dim);font-size:13px;overflow-wrap:anywhere}
+.fc-empty-meta-v1368{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;align-items:center;color:var(--text-dim);font-size:12px;line-height:1.4}
+.fc-empty-limit-v1368{grid-column:1/-1;color:var(--text-muted)}
+.fc-empty-details-v1368{border:0;background:none;color:var(--text-dim);text-decoration:underline;padding:8px 0 8px 8px;min-height:36px;cursor:pointer;font:inherit}
+.fc-empty-footer-v1368 .chc-cta{width:100%;margin:14px 0 0}
+.fc-empty-poster-v1368.fc-art-unavailable-v1368{aspect-ratio:auto;min-height:150px;background:linear-gradient(135deg,#281209,#110b07);border-block:1px solid #7b3821}
+.fc-art-unavailable-v1368 .fc-empty-category-v1368{position:static;width:auto;height:auto;margin:18px 16px 10px;color:#ff783a}
+.fc-art-unavailable-v1368 .fc-empty-title-v1368{position:static;width:auto;height:auto;margin:0 18px 22px;overflow:visible}
 </style>
 </body>
 </html>
