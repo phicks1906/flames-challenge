@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1368 · category-poster-empty-challenges" name="fc-build"/>
+<meta content="v1369 · photo-duplicate-fingerprints" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Open challenges with no entries now use the existing category poster artwork and clear entry actions." name="fc-whatsnew"/>
+<meta content="Duplicate photo checks now use the original photo, even when it is cropped differently." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -23058,6 +23058,8 @@ function _bunnyGuidFromUrl(src) {
 // than the whole file: loading a 500MB video fully into memory to hash it can
 // crash the tab on iOS. A byte-identical file always yields the same key, and
 // two distinct real videos effectively never collide. (Re-encodes differ.)
+const fcPhotoOriginalsV1369 = new WeakMap();
+
 async function fileSha256(file) {
   const CHUNK = 8 * 1024 * 1024;
   const parts = [new TextEncoder().encode('s' + file.size)];
@@ -24215,6 +24217,7 @@ function ccFileChangeHandler(e) {
     openCrop(file, 16, 9, (croppedBlob) => {
       croppedBlob.name = file.name;
       croppedBlob.lastModified = file.lastModified;
+      fcPhotoOriginalsV1369.set(croppedBlob, file);
       ccState.file = croppedBlob;
       ccState.fileUrl = URL.createObjectURL(croppedBlob);
       const preview = document.getElementById('ccPreview');
@@ -24626,7 +24629,7 @@ document.getElementById('createChallengeForm').addEventListener('submit', async 
     let mediaUrl = null;
     let posterUrl = null;
     const creatorMediaHashV1364 = ccState.competeSelf !== false && ccState.mediaType !== 'text'
-      ? await fileSha256(ccState.file) : null;
+      ? await fileSha256(fcPhotoOriginalsV1369.get(ccState.file) || ccState.file) : null;
     // Moderate ALL user text in one shot: challenge title, rules, the entry
     // caption, and (for text entries) the text body itself. Previously only
     // title+rules were checked, letting harassment text ride in the caption.
@@ -26827,6 +26830,7 @@ function seFileChangeHandler(e) {
     openCrop(file, 16, 9, (croppedBlob) => {
       croppedBlob.name = file.name;
       croppedBlob.lastModified = file.lastModified;
+      fcPhotoOriginalsV1369.set(croppedBlob, file);
       seState.file = croppedBlob;
       seState.fileUrl = URL.createObjectURL(croppedBlob);
       const preview = document.getElementById('sePreview');
@@ -27033,10 +27037,15 @@ document.getElementById('submitEntryForm').addEventListener('submit', async (e) 
   if (seState.file && ch.media_type !== 'text') {
     try {
       btn.textContent = 'Checking…';
-      seState._mediaHash = await fileSha256(seState.file);
+      const selectedFileV1369 = seState.file;
+      const originalPhotoV1369 = fcPhotoOriginalsV1369.get(selectedFileV1369);
+      seState._mediaHash = await fileSha256(originalPhotoV1369 || selectedFileV1369);
+      const matchHashesV1369 = originalPhotoV1369
+        ? [seState._mediaHash, await fileSha256(selectedFileV1369)]
+        : [seState._mediaHash];
       fcThrowIfEntryUploadCancelledV1135(seUploadSignalV1135);
       let dupQ = db.from('entries').select('id')
-        .eq('challenge_id', ch.id).eq('media_hash', seState._mediaHash);
+        .eq('challenge_id', ch.id).in('media_hash', matchHashesV1369);
       if (seState.editingEntry) dupQ = dupQ.neq('id', seState.editingEntry.id);
       const { data: dupMedia, error: dupErr2 } = await dupQ.limit(1);
       if (dupErr2) throw dupErr2;
