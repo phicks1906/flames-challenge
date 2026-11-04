@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1369 · photo-duplicate-fingerprints" name="fc-build"/>
+<meta content="v1370 · ember-briefing-dismissal" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Duplicate photo checks now use the original photo, even when it is cropped differently." name="fc-whatsnew"/>
+<meta content="Ember’s daily briefing is easier to dismiss and releases the screen before opening your next move." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -10179,8 +10179,8 @@ body.theme-light .fc-challenge-options-v1338{background:rgba(20,16,14,.38)}
 
 
 <!-- DAILY EMBER BRIEFING — v1221 -->
-<div class="fc-ember-daily-overlay-v1221" id="fcEmberDailyBriefingV1221" aria-hidden="true">
-  <section class="fc-ember-daily-card-v1221" role="dialog" aria-modal="true" aria-labelledby="fcEmberDailyTitleV1221">
+<dialog class="fc-ember-daily-overlay-v1221" id="fcEmberDailyBriefingV1221" aria-hidden="true" aria-labelledby="fcEmberDailyTitleV1221">
+  <section class="fc-ember-daily-card-v1221">
     <button type="button" class="fc-ember-daily-close-v1221" aria-label="Minimize Ember" data-ember-daily-close>×</button>
     <div class="fc-ember-daily-hero-v1221" id="fcEmberDailyHeroV1221"></div>
     <div class="fc-ember-daily-copy-v1221">
@@ -10194,7 +10194,7 @@ body.theme-light .fc-challenge-options-v1338{background:rgba(20,16,14,.38)}
       <button type="button" class="fc-ember-daily-secondary-v1221" data-ember-daily-close>Minimize</button>
     </div>
   </section>
-</div>
+</dialog>
 
 <!-- PROFILE SETTINGS SHEET -->
 <div class="modal-backdrop" id="profileModal" onclick="if(event.target===this)closeModals()">
@@ -40227,6 +40227,12 @@ body.fc-champ-promote-open-v1218 .ask-ember-global {
 .fc-ember-daily-overlay-v1221 {
   position:fixed;
   inset:0;
+  margin:0;
+  border:0;
+  width:100%;
+  height:100%;
+  max-width:none;
+  max-height:none;
   z-index:2147483200;
   display:none;
   align-items:center;
@@ -40240,7 +40246,7 @@ body.fc-champ-promote-open-v1218 .ask-ember-global {
     radial-gradient(circle at 50% 22%,rgba(255,82,20,.20),transparent 38%),
     rgba(5,3,2,.96);
 }
-.fc-ember-daily-overlay-v1221.open {
+.fc-ember-daily-overlay-v1221[open] {
   display:flex;
 }
 body.fc-ember-daily-open-v1221 #bottomNav,
@@ -50405,9 +50411,23 @@ document.addEventListener('pointerdown', function(event) {
   }
 
   function runChallengeV1221(ch) {
-    closeDailyEmberV1221();
+    if (!ch?.id || typeof openChallenge !== 'function') return;
     state.currentChallenge = ch;
-    if (typeof openChallenge === 'function') openChallenge(ch);
+    return openChallenge(ch);
+  }
+
+  function runDailyActionV1370(item) {
+    const overlay = byId('fcEmberDailyBriefingV1221');
+    if (!overlay?.open) return;
+    closeDailyEmberV1221();
+    // Let iOS release the modal's touch and scroll state before opening another sheet.
+    setTimeout(async () => {
+      try { await item?.run?.(); }
+      catch (error) {
+        console.warn('Ember next move could not open', error);
+        if (typeof toast === 'function') toast('Could not open that move. Please try from Compete.');
+      }
+    }, 0);
   }
 
   function ordinalV1225(value) {
@@ -50682,10 +50702,10 @@ document.addEventListener('pointerdown', function(event) {
     `).join('');
 
     list.querySelectorAll('[data-ember-daily-item]').forEach(button => {
-      button.onclick = () => items[Number(button.dataset.emberDailyItem)]?.run?.();
+      button.onclick = () => runDailyActionV1370(items[Number(button.dataset.emberDailyItem)]);
     });
 
-    primary.onclick = () => items[0]?.run?.();
+    primary.onclick = () => runDailyActionV1370(items[0]);
     overlay.__fcItemsV1221 = items;
     return true;
   }
@@ -50701,13 +50721,17 @@ document.addEventListener('pointerdown', function(event) {
       if (typeof hydrateEntryVotesV1083 === 'function') await hydrateEntryVotesV1083();
     } catch (_) {}
 
+    if (!state?.profile || state?.loading || !document.body.classList.contains('fc-boot-ready-v1095') ||
+        document.querySelector('#fcOnboardingV1103.open, #fcCommercialModalV1103.open, dialog[open]')) return false;
     const items = buildItemsV1221();
     if (!items.length) return false;
     if (!renderDailyEmberV1221(items)) return false;
 
     const overlay = byId('fcEmberDailyBriefingV1221');
-    overlay.classList.add('open');
+    if (overlay.open) return true;
     overlay.setAttribute('aria-hidden','false');
+    try { overlay.showModal(); } catch (_) { overlay.setAttribute('aria-hidden','true'); return false; }
+    overlay.__fcPreviousOverflowV1370 = document.body.style.overflow;
     document.body.classList.add('fc-ember-daily-open-v1221');
     document.body.style.overflow = 'hidden';
 
@@ -50721,10 +50745,12 @@ document.addEventListener('pointerdown', function(event) {
   window.closeDailyEmberV1221 = function closeDailyEmberV1221() {
     const overlay = byId('fcEmberDailyBriefingV1221');
     if (!overlay) return;
-    overlay.classList.remove('open');
+    if (overlay.open) overlay.close();
     overlay.setAttribute('aria-hidden','true');
-    document.body.classList.remove('fc-ember-daily-open-v1221');
-    document.body.style.overflow = '';
+    if (document.body.classList.contains('fc-ember-daily-open-v1221')) {
+      document.body.classList.remove('fc-ember-daily-open-v1221');
+      document.body.style.overflow = overlay.__fcPreviousOverflowV1370 ?? '';
+    }
   };
 
   async function maybeOpenDailyEmberV1221() {
@@ -50752,6 +50778,13 @@ document.addEventListener('pointerdown', function(event) {
   });
 
   const overlay = byId('fcEmberDailyBriefingV1221');
+  overlay?.addEventListener('cancel', event => {
+    event.preventDefault();
+    closeDailyEmberV1221();
+  });
+  overlay?.addEventListener('close', () => {
+    if (!overlay.open) closeDailyEmberV1221();
+  });
   overlay?.addEventListener('click', event => {
     if (event.target === overlay) closeDailyEmberV1221();
   });
@@ -50759,7 +50792,7 @@ document.addEventListener('pointerdown', function(event) {
   let attempts = 0;
   const timer = setInterval(() => {
     attempts++;
-    if (state?.profile && !state?.loading) {
+    if (state?.profile && !state?.loading && document.body.classList.contains('fc-boot-ready-v1095')) {
       clearInterval(timer);
       setTimeout(maybeOpenDailyEmberV1221, 500);
     } else if (attempts > 80) {
