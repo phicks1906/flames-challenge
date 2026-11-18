@@ -1,0 +1,60 @@
+name: A3.6 isolated Votes preview
+on:
+  push:
+    branches: [a36-integration-v1389]
+    paths:
+      - '.github/workflows/a36-votes-preview.yml'
+      - 'devtools/a36_make_preview.py'
+      - 'devtools/a36_votes_component.html'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  preview:
+    if: github.ref == 'refs/heads/a36-integration-v1389'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate source and voting-history behavior
+        run: |
+          python3 -m py_compile devtools/a36_make_preview.py
+          node devtools/a36_part1_test.js
+      - name: Generate preview (no live API)
+        run: python3 devtools/a36_make_preview.py
+      - name: Confirm isolation and scope
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('preview/a36-votes.html').read_text(encoding='utf-8')
+          assert s.count('fc-a36-v1390-votes-js')==1
+          assert 'SAMPLE DATA' in s
+          assert 'No sign-in, live votes, settled results or production changes' in s
+          assert 'https://sioalvawzayfphwzqctq.supabase.co' not in s
+          assert 'createClient(' not in s
+          assert 'previewRows' in s
+          print('Isolated HTML preview and sample-data checks passed')
+          PY
+          git diff --check
+          test -z "$(git status --short -- index.html)"
+          test -z "$(git status --short -- sw.js)"
+          test -z "$(git status --short -- supabase)"
+          git status --short
+      - name: Commit isolated preview on development branch only
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- preview/a36-votes.html
+          if ! git diff --cached --quiet; then
+            git commit -m 'A3.6 preview: isolated interactive Votes page (sample data)'
+            git push origin HEAD:refs/heads/a36-integration-v1389
+          else
+            echo 'A3.6 preview already current'
+          fi
