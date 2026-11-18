@@ -1,0 +1,37 @@
+name: A3.6 external preview smoke test
+on:
+  push:
+    branches: [a36-integration-v1389]
+    paths:
+      - '.github/workflows/a36-external-preview-check.yml'
+      - 'devtools/a36_external_preview_smoke.js'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  external-preview:
+    if: github.ref == 'refs/heads/a36-integration-v1389'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Isolated browser dependency
+        run: |
+          npm install --prefix /tmp/fc-a36-test --no-audit --no-fund playwright@1.56.1
+          google-chrome --version
+      - name: Check third-party static HTML preview on phone viewport
+        run: node devtools/a36_external_preview_smoke.js
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a36-external-preview-check
+          path: a36-external-evidence
+          if-no-files-found: warn
+          retention-days: 7
