@@ -1,0 +1,49 @@
+name: A3.6 Part 3 Following staging candidate
+on:
+  push:
+    branches: [a36-integration-v1389]
+    paths: ['.github/workflows/a36-part3-stage.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  stage:
+    if: github.ref == 'refs/heads/a36-integration-v1389'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check current staging source
+        run: python3 devtools/fc_source_tools.py validate
+      - name: Apply guarded Part 3 change
+        run: python3 devtools/a36_apply_part3.py
+      - name: Validate full updated single-file app
+        run: |
+          python3 devtools/fc_source_tools.py validate
+          node devtools/a36_part1_test.js
+          git diff --check
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+          s=Path('index.html').read_text(encoding='utf-8')
+          assert s.count('function fcA36AttachFollowingEntriesV1391')==1
+          assert s.count("fcA36AttachFollowingEntriesV1391(list, profiles);")==1
+          assert "item.challenge.is_public === true" in s
+          assert "['submitting','voting'].includes(computeChallengeStatus(item.challenge))" in s
+          assert "openFeedViewer(latest.challenge.id, latest.entry.id)" in s
+          assert 'v1391 · a36-following-active-entries' in s
+          assert subprocess.check_output(['git','diff','--name-only'],text=True).splitlines()==['index.html']
+          print('PASS: Part 3 public active eligible links, existing viewer, unchanged follow operations')
+          PY
+      - name: Commit staged candidate only
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- index.html
+          git commit -m 'v1391 candidate: A3.6 Part 3 active entry links in Following'
+          git push origin HEAD:refs/heads/a36-integration-v1389
