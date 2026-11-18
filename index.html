@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1389 · continuous-championship-medal-rings" name="fc-build"/>
+<meta content="v1390 · a36-vote-history-part1" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Championship gold, silver and bronze portrait rings now form complete, uninterrupted circles." name="fc-whatsnew"/>
+<meta content="Your competitive votes are now listed on your own profile, with a path back to each competition." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -54519,5 +54519,192 @@ button.fc-post-follow-v1366:disabled{opacity:.55;cursor:wait}
 .fc-art-unavailable-v1368 .fc-empty-category-v1368{position:static;width:auto;height:auto;margin:18px 16px 10px;color:#ff783a}
 .fc-art-unavailable-v1368 .fc-empty-title-v1368{position:static;width:auto;height:auto;margin:0 18px 22px;overflow:visible}
 </style>
+<!-- A3.6 Part 1: member-only competition vote history; no result calculation -->
+<style id="fc-a36-v1390-votes-css">
+#profileSheet .fc-a36-vote-intro{font-size:12px;line-height:1.5;color:var(--p-muted,var(--text-muted));margin:3px 3px 14px}
+#profileSheet .fc-a36-vote-list{display:flex;flex-direction:column;gap:9px}
+#profileSheet .fc-a36-vote-row{display:flex;align-items:center;gap:11px;padding:12px;border:1px solid var(--p-border,var(--border));border-radius:13px;background:var(--p-card,var(--surface));min-width:0}
+#profileSheet .fc-a36-vote-icon{flex:0 0 42px;width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:rgba(255,106,44,.09);color:var(--ember);font-size:20px;font-weight:800}
+#profileSheet .fc-a36-vote-detail{flex:1;min-width:0}
+#profileSheet .fc-a36-vote-date{font-size:10px;color:var(--p-muted,var(--text-muted));margin-bottom:3px}
+#profileSheet .fc-a36-vote-title{font-size:13px;line-height:1.3;font-weight:750;color:var(--p-text,var(--text));overflow-wrap:anywhere}
+#profileSheet .fc-a36-vote-choice{font-size:12px;line-height:1.4;color:var(--p-dim,var(--text-dim));margin-top:4px;overflow-wrap:anywhere}
+#profileSheet .fc-a36-vote-open{font:inherit;font-weight:750;font-size:11px;border:1px solid var(--p-border,var(--border));border-radius:9px;padding:10px 8px;min-height:39px;white-space:nowrap;color:var(--p-text,var(--text));background:var(--p-card,var(--surface));cursor:pointer}
+#profileSheet .fc-a36-vote-open:disabled{opacity:.45;cursor:not-allowed}
+#profileSheet .fc-a36-vote-action{display:block;width:100%;min-height:42px;margin:13px 0;border:1px solid var(--p-border,var(--border));border-radius:12px;background:var(--p-card,var(--surface));color:var(--p-text,var(--text));font:inherit;font-size:12px;font-weight:750}
+#profileSheet .fc-a36-vote-message{padding:22px 15px;text-align:center;font-size:13px;line-height:1.5;color:var(--p-muted,var(--text-muted))}
+#profileSheet .ps-tab[hidden]{display:none!important}
+@media(max-width:390px){#profileSheet .fc-a36-vote-row{gap:7px;padding:9px}#profileSheet .fc-a36-vote-open{font-size:10px;padding:9px 6px}#profileSheet .fc-a36-vote-title{font-size:12px}}
+</style>
+<script id="fc-a36-v1390-votes-js">
+(function(){
+  'use strict';
+  const PAGE_SIZE=50;
+  const history={uid:null,rows:[],challenges:new Map(),entries:new Map(),offset:0,hasMore:false,loading:false,error:null,loaded:false,loadedAt:0,request:0};
+  const same=(a,b)=>!!a&&!!b&&String(a)===String(b);
+  function ownProfile(){
+    return same(state?.profile?.id,psState?.userId)&&same(state?.profile?.id,psState?.profile?.id);
+  }
+  function current(){
+    return ownProfile()&&psState?.tab==='votes'&&document.getElementById('profileSheet')?.classList.contains('open');
+  }
+  function resetHistory(uid){
+    history.request++;
+    history.uid=uid;
+    history.rows=[];history.challenges=new Map();history.entries=new Map();
+    history.offset=0;history.hasMore=false;history.loading=false;history.error=null;
+    history.loaded=false;history.loadedAt=0;
+  }
+  function ensureAccount(){
+    const uid=state?.profile?.id||null;
+    if(!same(history.uid,uid)) resetHistory(uid);
+    return uid;
+  }
+  function ensureTab(){
+    const bar=document.querySelector('#profileSheet .ps-tabs');
+    if(!bar)return;
+    let btn=document.getElementById('fcA36VotesTab');
+    if(!btn){
+      btn=document.createElement('button');
+      btn.type='button';
+      btn.id='fcA36VotesTab';
+      btn.className='ps-tab';
+      btn.dataset.pstab='votes';
+      btn.textContent='Votes';
+      bar.appendChild(btn);
+      btn.addEventListener('click',function(){
+        if(!ownProfile())return;
+        psState.tab='votes';
+        bar.querySelectorAll('.ps-tab').forEach(b=>b.classList.toggle('active',b.dataset.pstab==='votes'));
+        window.renderProfileTab();
+        if(!history.loaded||Date.now()-history.loadedAt>30000)loadHistory(true);
+      });
+    }
+    const own=ownProfile();
+    btn.hidden=!own;
+    btn.style.display=own?'':'none';
+    if(!own&&psState?.tab==='votes')psState.tab='challenges';
+    bar.querySelectorAll('.ps-tab').forEach(b=>b.classList.toggle('active',b.dataset.pstab===psState.tab));
+  }
+  function dateLabel(v){
+    if(!v)return 'Vote recorded';
+    const d=new Date(v);
+    return Number.isNaN(d.getTime())?'Vote recorded':'Voted '+new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric'}).format(d);
+  }
+  function paint(){
+    if(!current())return;
+    const c=document.getElementById('psContent');
+    if(!c)return;
+    ensureAccount();
+    let html='<p class="fc-a36-vote-intro">Competitions you voted in. Following a competitor is not required to find your vote.</p>';
+    if(history.loading&&!history.rows.length){
+      html+='<div class="fc-a36-vote-message" role="status">Loading your competition votes…</div>';
+    }else if(history.error&&!history.rows.length){
+      html+='<div class="fc-a36-vote-message" role="alert">Could not load your votes. Please try again.</div><button type="button" class="fc-a36-vote-action" id="fcA36VotesRetry">Retry</button>';
+    }else if(history.loaded&&!history.rows.length){
+      html+='<div class="fc-a36-vote-message">You haven’t voted in a competition yet. When you vote, the competition will appear here.</div>';
+    }else{
+      html+='<div class="fc-a36-vote-list">';
+      for(const vote of history.rows){
+        const ch=history.challenges.get(String(vote.challenge_id));
+        const entry=history.entries.get(String(vote.entry_id));
+        const who=entry?.submitter?.name||'Competitor unavailable';
+        const title=ch?.title||'Challenge unavailable';
+        const category=ch?.category?String(ch.category)+' · ':'';
+        html+='<div class="fc-a36-vote-row"><div class="fc-a36-vote-icon" aria-hidden="true">✓</div>'+
+          '<div class="fc-a36-vote-detail"><div class="fc-a36-vote-date">'+escapeHtml(category+dateLabel(vote.created_at))+'</div>'+
+          '<div class="fc-a36-vote-title">'+escapeHtml(title)+'</div>'+
+          '<div class="fc-a36-vote-choice">Your pick: '+escapeHtml(who)+'</div></div>'+
+          '<button type="button" class="fc-a36-vote-open" data-fc-a36-ch="'+escapeHtml(String(vote.challenge_id||''))+'"'+
+          (ch?'':' disabled')+'>View</button></div>';
+      }
+      html+='</div>';
+      if(history.error) html+='<div class="fc-a36-vote-message" role="alert">More votes could not be loaded. Try again.</div>';
+      if(history.hasMore||history.error) html+='<button type="button" class="fc-a36-vote-action" id="fcA36VotesMore">'+(history.error?'Retry loading':'Load more votes')+'</button>';
+      if(history.loading)html+='<div class="fc-a36-vote-message" role="status">Loading more…</div>';
+    }
+    c.innerHTML=html;
+    c.querySelector('#fcA36VotesRetry')?.addEventListener('click',()=>loadHistory(true));
+    c.querySelector('#fcA36VotesMore')?.addEventListener('click',()=>loadHistory(false));
+    c.querySelectorAll('[data-fc-a36-ch]').forEach(btn=>btn.addEventListener('click',()=>{
+      const id=btn.dataset.fcA36Ch;
+      const ch=history.challenges.get(String(id));
+      if(!ch){toast('Challenge unavailable');return;}
+      // Reuse the existing viewer. The You page stays mounted underneath.
+      const list=state.challenges||(state.challenges=[]);
+      if(!list.some(v=>same(v.id,ch.id)))list.push(ch);
+      Promise.resolve(openFeedViewer(ch.id)).catch(e=>{console.warn('A3.6 vote history viewer',e);toast('Could not open competition');});
+    }));
+  }
+  async function loadHistory(reset){
+    const uid=ensureAccount();
+    if(!uid||!ownProfile()||history.loading)return;
+    if(reset){
+      history.request++;
+      history.rows=[];history.challenges=new Map();history.entries=new Map();
+      history.offset=0;history.hasMore=false;history.loaded=false;
+    }
+    const request=++history.request;
+    const offset=history.offset;
+    history.error=null;history.loading=true;
+    paint();
+    try{
+      const vRes=await fcWithTimeoutV1099(db.from('entry_votes')
+        .select('id,challenge_id,entry_id,created_at')
+        .eq('voter_id',uid)
+        .order('created_at',{ascending:false})
+        .range(offset,offset+PAGE_SIZE-1),12000,'Your competition vote history');
+      if(vRes?.error)throw vRes.error;
+      const rows=vRes?.data||[];
+      const challengeIds=[...new Set(rows.map(v=>v.challenge_id).filter(Boolean))];
+      const entryIds=[...new Set(rows.map(v=>v.entry_id).filter(Boolean))];
+      const [cRes,eRes]=await Promise.all([
+        challengeIds.length?fcWithTimeoutV1099(db.from('challenges').select('*').in('id',challengeIds),12000,'Voted challenges'):Promise.resolve({data:[],error:null}),
+        entryIds.length?fcWithTimeoutV1099(db.from('entries').select('id,challenge_id,user_id,submitter:profiles!entries_user_id_fkey(id,name,avatar)').in('id',entryIds),12000,'Voted competitors'):Promise.resolve({data:[],error:null})
+      ]);
+      if(cRes?.error)throw cRes.error;
+      if(eRes?.error)throw eRes.error;
+      if(request!==history.request||!same(uid,state?.profile?.id))return;
+      (cRes.data||[]).forEach(ch=>history.challenges.set(String(ch.id),ch));
+      (eRes.data||[]).forEach(entry=>history.entries.set(String(entry.id),entry));
+      const seen=new Set(history.rows.map(v=>String(v.id)));
+      rows.forEach(v=>{if(!seen.has(String(v.id))){history.rows.push(v);seen.add(String(v.id));}});
+      history.offset=offset+rows.length;
+      history.hasMore=rows.length===PAGE_SIZE;
+      history.loaded=true;
+      history.loadedAt=Date.now();
+    }catch(e){
+      if(request===history.request&&same(uid,state?.profile?.id)){
+        history.error=e;
+        console.warn('A3.6 Your Votes',e);
+      }
+    }finally{
+      if(request===history.request){history.loading=false;paint();}
+    }
+  }
+  const originalSheet=window.renderProfileSheet;
+  if(typeof originalSheet==='function'){
+    window.renderProfileSheet=function(){
+      const out=originalSheet.apply(this,arguments);
+      ensureTab();
+      if(current())paint();
+      return out;
+    };
+  }
+  const originalTab=window.renderProfileTab;
+  if(typeof originalTab==='function'){
+    window.renderProfileTab=function(){
+      ensureTab();
+      if(psState?.tab==='votes'&&ownProfile()){
+        paint();
+        return;
+      }
+      return originalTab.apply(this,arguments);
+    };
+  }
+  window.fcA36VotesPart1={version:'v1390',refresh:()=>loadHistory(true)};
+})();
+</script>
+
 </body>
 </html>
