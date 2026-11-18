@@ -20,6 +20,20 @@ jobs:
           node-version: '22'
       - run: npm install --prefix /tmp/fc-a36-restore --no-audit --no-fund playwright@1.56.1
       - run: node devtools/a36_restored_phone_test.js
+      - name: Confirm public A3.5 preview matches approved restored source
+        run: |
+          python3 - <<'PY'
+          import urllib.request, pathlib, hashlib
+          url='https://flameschallenge.com/preview/index.html'
+          with urllib.request.urlopen(urllib.request.Request(url,headers={'User-Agent':'FlamesChallenge-A36-Check'}),timeout=35) as response:
+              published=response.read()
+              print('HTTP_STATUS',response.status,'FINAL_URL',response.url,'BYTES',len(published))
+              assert response.status==200
+          source=pathlib.Path('preview/a36-restored.html').read_bytes()
+          print('SOURCE_SHA256',hashlib.sha256(source).hexdigest())
+          print('PUBLISHED_SHA256',hashlib.sha256(published).hexdigest())
+          assert published==source, 'Published preview differs from approved A3.5 source'
+          PY
       - name: Upload actual browser screenshots
         if: always()
         uses: actions/upload-artifact@v4
