@@ -10,6 +10,7 @@ import json
 import re
 import subprocess
 import sys
+from html.parser import HTMLParser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -105,9 +106,18 @@ def blocks(text, tag):
 def validate(args):
     text = source()
     failures = []
-    meta = re.findall(r'<meta\s+name=["\']fc-build["\'][^>]*>', text, re.IGNORECASE)
-    if len(meta) != 1:
-        failures.append(f"Expected one fc-build meta tag, found {len(meta)}")
+    class MetadataParser(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.fc_build_count = 0
+        def handle_starttag(self, tag, attrs):
+            if tag.lower() == "meta" and dict(attrs).get("name", "").lower() == "fc-build":
+                self.fc_build_count += 1
+    parsed = MetadataParser()
+    parsed.feed(text)
+    meta_count = parsed.fc_build_count
+    if meta_count != 1:
+        failures.append(f"Expected one fc-build meta tag, found {meta_count}")
     if re.search(r'>\s*Check for updates\s*<', text, re.IGNORECASE):
         failures.append("Manual Check for updates UI detected")
     scripts = blocks(text, "script")
@@ -136,7 +146,7 @@ def validate(args):
     # A full CSS parser is preferable to naive brace counting; do not pretend
     # that literal braces in strings/data URIs constitute CSS errors.
     styles = blocks(text, "style")
-    result = {"fc_build_meta_count": len(meta), "script_blocks": len(scripts),
+    result = {"fc_build_meta_count": meta_count, "script_blocks": len(scripts),
               "javascript_checked": checked, "javascript_skipped": skipped,
               "style_blocks": len(styles), "css_parse_verified": False,
               "failures": failures}
