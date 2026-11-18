@@ -19,3 +19,7 @@ for p in patterns:
   for j in range(max(i-5,0),min(i+18,len(lines))):
    if j not in seen:
     print(f'{j+1}: {lines[j][:230]}');seen.add(j)
+
+for lo,hi in [(21812,21895),(28390,28445),(31283,31420)]:
+ print('FULL_SECTION',lo,hi)
+ for i in range(lo-1,min(hi,len(lines))):print(f'{i+1}: {lines[i][:450]}')
