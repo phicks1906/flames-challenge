@@ -1,0 +1,38 @@
+name: A3.6 preview browser checks
+on:
+  push:
+    branches: [a36-integration-v1389]
+    paths:
+      - '.github/workflows/a36-browser-check.yml'
+      - 'devtools/a36_preview_browser_test.js'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  phone-preview:
+    if: github.ref == 'refs/heads/a36-integration-v1389'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated pinned Chromium harness
+        run: |
+          npm install --prefix /tmp/fc-a36-test --no-audit --no-fund playwright@1.56.1
+          /tmp/fc-a36-test/node_modules/.bin/playwright install --with-deps chromium
+      - name: Run sample-data preview in phone-size Chromium
+        run: node devtools/a36_preview_browser_test.js
+      - name: Upload screenshots and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a36-preview-phone-browser-evidence
+          path: a36-browser-evidence
+          if-no-files-found: warn
+          retention-days: 7
