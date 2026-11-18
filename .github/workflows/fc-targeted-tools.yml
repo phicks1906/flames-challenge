@@ -1,0 +1,54 @@
+name: FlamesChallenge targeted source tools
+on:
+  push:
+    branches:
+      - a36-integration-v1389
+    paths:
+      - 'devtools/**'
+      - '.github/workflows/fc-targeted-tools.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Generate source map without uploading the HTML
+        run: python3 devtools/fc_source_tools.py map
+      - name: Check guarded patch runner (dry run only)
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          s=Path("index.html").read_text(encoding="utf-8")
+          first=s[:min(len(s),120)]
+          if not first:
+              raise SystemExit("Empty production source")
+          anchor=first[:min(len(first), 30)]
+          if s.count(anchor)!=1:
+              raise SystemExit("Self-test anchor is ambiguous")
+          Path("/tmp/fc-patch-test.json").write_text(
+              json.dumps({"edits":[{"old":anchor,"new":anchor+" "}]})
+          )
+          PY
+          python3 devtools/fc_source_tools.py patch /tmp/fc-patch-test.json
+          git diff --exit-code -- index.html
+      - name: Check inline JS and invariant metadata
+        run: python3 devtools/fc_source_tools.py validate
+      - name: Upload small source map and validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fc-source-map
+          path: .fc-tools/source-map.json
+          if-no-files-found: ignore
+          retention-days: 7
