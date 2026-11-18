@@ -48,8 +48,12 @@ class El{
   querySelectorAll(selector){
     if(selector==='.ps-tab')return this.children.filter(x=>x.className==='ps-tab');
     if(selector==='[data-fc-a36-ch]'){
-      const found=[...this.innerHTML.matchAll(/data-fc-a36-ch="([^"]+)"/g)];
-      return found.map(m=>{const e=new El('row'+m[1]);e.dataset.fcA36Ch=m[1];return e;});
+      if(this._lastVoteMarkup!==this.innerHTML){
+        const found=[...this.innerHTML.matchAll(/data-fc-a36-ch="([^"]+)"/g)];
+        this._voteButtons=found.map(m=>{const e=new El('row'+m[1]);e.dataset.fcA36Ch=m[1];return e;});
+        this._lastVoteMarkup=this.innerHTML;
+      }
+      return this._voteButtons||[];
     }
     return [];
   }
