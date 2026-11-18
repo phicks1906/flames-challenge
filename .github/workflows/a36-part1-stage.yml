@@ -1,0 +1,54 @@
+name: A3.6 Part 1 staging candidate
+on:
+  push:
+    branches: [a36-integration-v1389]
+    paths:
+      - '.github/workflows/a36-part1-stage.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  stage:
+    if: github.ref == 'refs/heads/a36-integration-v1389'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Ensure v1389 baseline is healthy
+        run: python3 devtools/fc_source_tools.py validate
+      - name: Apply guarded A3.6 Part 1 candidate locally
+        run: python3 devtools/a36_apply_part1.py
+      - name: Validate candidate JS and build metadata
+        run: python3 devtools/fc_source_tools.py validate
+      - name: Check scope and safeguards
+        run: |
+          git diff --check
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+          s=Path('index.html').read_text(encoding='utf-8')
+          assert s.count('fc-a36-v1390-votes-js')==1
+          assert s.count('fcA36VotesTab')>=1
+          assert ".eq('voter_id',uid)" in s
+          assert "state.myVotes" not in Path('devtools/a36_votes_component.html').read_text()
+          assert "challenge_result_winners" not in Path('devtools/a36_votes_component.html').read_text()
+          assert s.count('name="fc-build"')>=1
+          changed=subprocess.check_output(['git','diff','--name-only'],text=True).splitlines()
+          assert changed==['index.html'],changed
+          print("A3.6 Part 1 source scope and identity checks passed")
+          PY
+          git diff --stat -- index.html
+      - name: Stage candidate on development branch only
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- index.html
+          git commit -m 'v1390 candidate: A3.6 Part 1 competition voting history'
+          git push origin HEAD:refs/heads/a36-integration-v1389
