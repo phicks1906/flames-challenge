@@ -8,7 +8,7 @@ const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
 
 (async () => {
-  const browser = await chromium.launch({headless:true});
+  const browser = await chromium.launch({headless:true,channel:'chrome'});
   const dir=path.resolve('a36-browser-evidence');
   fs.mkdirSync(dir,{recursive:true});
   const pageUrl=pathToFileURL(path.resolve('preview/a36-votes.html')).href;
