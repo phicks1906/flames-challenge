@@ -1,0 +1,30 @@
+name: A3.6 restored full-screen phone browser checkpoint
+on:
+  push:
+    branches: [a36-integration-v1389]
+    paths:
+      - 'preview/a36-restored.html'
+      - 'devtools/a36_restored_phone_test.js'
+      - '.github/workflows/a36-restored-check.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  phone-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --prefix /tmp/fc-a36-restore --no-audit --no-fund playwright@1.56.1
+      - run: node devtools/a36_restored_phone_test.js
+      - name: Upload actual browser screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a36-restored-phone-screens
+          path: a36-restored-evidence/
+          if-no-files-found: warn
+          retention-days: 7
