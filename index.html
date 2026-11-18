@@ -21,7 +21,7 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1390 · a36-vote-history-part1" name="fc-build"/>
+<meta content="v1391 · a36-following-active-entries" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
 <meta content="Your competitive votes are now listed on your own profile, with a path back to each competition." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
@@ -31300,9 +31300,40 @@ async function loadFollowingList() {
     const competingIds = new Set((competingRes.data || []).map(e => e.user_id));
     profiles.sort((a, b) => (competingIds.has(b.id) ? 1 : 0) - (competingIds.has(a.id) ? 1 : 0) || a.name.localeCompare(b.name));
     renderFollowList(list, profiles, competingIds, 'following');
+    fcA36AttachFollowingEntriesV1391(list, profiles);
   } catch(err) {
     list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Could not load list.</div>';
   }
+}
+
+// A3.6 Part 3: link a followed person to an eligible PUBLIC active entry
+// already hydrated by the production feed. Do not infer wins or request hidden entries.
+function fcA36AttachFollowingEntriesV1391(list, profiles) {
+  if (!list || !state.profile || !Array.isArray(state.feedEntries)) return;
+  const challenges = new Map((state.challenges || []).map(ch => [String(ch.id), ch]));
+  const entries = state.feedEntries;
+  profiles.forEach((person, index) => {
+    const latest = entries.filter(e => String(e.user_id) === String(person.id))
+      .map(e => ({ entry:e, challenge:challenges.get(String(e.challenge_id)) }))
+      .filter(item => item.challenge && item.challenge.is_public === true &&
+        ['submitting','voting'].includes(computeChallengeStatus(item.challenge)))
+      .sort((a,b) => Date.parse(b.entry.created_at || 0) - Date.parse(a.entry.created_at || 0))[0];
+    if (!latest) return;
+    const row = list.children[index];
+    const details = row?.children?.[1];
+    if (!details) return;
+    const btn = document.createElement('button');
+    btn.type='button';
+    btn.className='fc-a36-following-entry-v1391';
+    btn.textContent='View entry · ' + (latest.challenge.title || 'Competition');
+    btn.style.cssText='display:block;margin-top:5px;padding:5px 0;border:0;background:transparent;color:var(--ember);font-size:12px;font-weight:700;text-align:left;max-width:100%;white-space:normal;cursor:pointer';
+    btn.addEventListener('click', event => {
+      event.stopPropagation();
+      closeFollowingSheet();
+      openFeedViewer(latest.challenge.id, latest.entry.id);
+    });
+    details.appendChild(btn);
+  });
 }
 
 async function loadFollowersList() {
