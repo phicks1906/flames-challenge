@@ -1,0 +1,37 @@
+name: A3.6 real signed-in immersive Home -> native vote -> X
+on:
+  push:
+    branches: [a36-integration-v1389]
+    paths: ['.github/workflows/a36-signed-in-integrated-stage.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  mobile-auth:
+    if: github.ref == 'refs/heads/a36-integration-v1389'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    env:
+      FC_A36_TEST_EMAIL: \${{ secrets.FC_A36_TEST_EMAIL }}
+      FC_A36_TEST_PASSWORD: \${{ secrets.FC_A36_TEST_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate authenticated acceptance test
+        run: node --check devtools/a36_signed_in_integrated_stage_test.js
+      - name: Install pinned phone browser harness
+        run: npm install --prefix /tmp/fc-a36-integrated-auth --no-audit --no-fund playwright@1.56.1
+      - name: Signed-in staged Home native viewer real voting, return navigation
+        run: node devtools/a36_signed_in_integrated_stage_test.js
+      - name: Archive screenshots and sanitized report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a36-integrated-auth-native-vote-screens
+          path: a36-integrated-auth-evidence/
+          retention-days: 10
+          if-no-files-found: warn
