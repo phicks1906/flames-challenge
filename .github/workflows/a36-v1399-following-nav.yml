@@ -1,0 +1,55 @@
+name: A3.6 v1399 Following sheet clears bottom navigation
+on:
+  push:
+    branches: [a36-integration-v1389]
+    paths: ['.github/workflows/a36-v1399-following-nav.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  staging-following-layout:
+    if: github.ref == 'refs/heads/a36-integration-v1389'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated structural CSS parser
+        run: npm install --prefix /tmp/fc-a36-css --no-audit --no-fund postcss@8.5.6
+      - name: Verify v1398 staging baseline
+        run: python3 devtools/fc_source_tools.py validate
+      - name: Apply scoped Following sheet safe-area and bottom nav fix
+        run: python3 devtools/a36_fix_following_nav_v1399.py
+      - name: Validate v1399 and all earlier A3.6 regressions
+        run: |
+          python3 devtools/fc_source_tools.py validate
+          node devtools/a36_css_parse_test.js
+          node devtools/a36_following_nav_v1399_test.js
+          node devtools/a36_get_app_gate_v1398_test.js
+          node devtools/a36_ember_gate_v1397_test.js
+          node devtools/a36_guidelines_gate_v1396_test.js
+          node devtools/a36_competing_label_test.js
+          node devtools/a36_follow_independent_test.js
+          node devtools/a36_avatar_authoritative_test.js
+          node devtools/a36_part1_test.js
+          git diff --check
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+          s=Path('index.html').read_text('utf8')
+          assert s.count('v1399 · a36-following-nav-clearance')==1
+          assert s.count('id="fc-a36-following-nav-v1399"')==1
+          assert subprocess.check_output(['git','diff','--name-only'],text=True).splitlines()==['index.html']
+          print('PASS v1399: only staged root index.html modified; no production, SQL or SW')
+          PY
+      - name: Commit verified staged v1399 candidate
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- index.html
+          git commit -m 'v1399 candidate: keep Following sheet clear of fixed bottom nav'
+          git push origin HEAD:refs/heads/a36-integration-v1389
