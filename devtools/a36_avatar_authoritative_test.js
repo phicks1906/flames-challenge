@@ -4,7 +4,7 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const source=fs.readFileSync('index.html','utf8');
-assert.match(source,/(?:v139[45] · a36-following-(?:active-only|authoritative-rings)|v1396 · a36-guidelines-before-welcome-guide|v139[78] · a36-(?:ember-after-onboarding|safe-get-app-after-ember))/);
+assert.match(source,/(?:v139[45] · a36-following-(?:active-only|authoritative-rings)|v1396 · a36-guidelines-before-welcome-guide|(?:v139[78] · a36-(?:ember-after-onboarding|safe-get-app-after-ember)|v1399 · a36-following-nav-clearance))/);
 const functionStart=source.indexOf('async function loadFollowingAvatarRow() {');
 const snippetStart=source.indexOf('    const followingIds = following.map(u => u.id);',functionStart);
 const snippetEndAnchor="    }).join('');";
