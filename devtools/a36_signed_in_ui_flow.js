@@ -148,7 +148,17 @@ async function awaitServer(){
      await page.waitForFunction(()=>!document.getElementById('fcOnboardingV1103')?.classList.contains('open'),null,{timeout:15000});
      console.log('PASS A3.6 optional guide Skip handler persisted');
    }
-   assert.equal(await page.evaluate(()=>document.querySelector('meta[name="fc-build"]')?.content.startsWith('v1396')),true);
+   // Native Ember is the intended once-per-day briefing *after* consent and guide.
+   // Dismiss it through its real Minimize control before exploring the app.
+   await page.waitForTimeout(1800);
+   const ember=page.locator('dialog#fcEmberDailyBriefingV1221:modal');
+   if(await ember.count()){
+     await page.screenshot({path:path.join(out,'ember-daily-'+width+'.png')});
+     await ember.locator('[aria-label="Minimize Ember"]').click({timeout:10000});
+     await page.waitForFunction(()=>!document.querySelector('#fcEmberDailyBriefingV1221:modal'),null,{timeout:10000});
+     console.log('PASS A3.6 once-daily Ember minimized using actual control '+width+'px');
+   }
+   assert.equal(await page.evaluate(()=>document.querySelector('meta[name="fc-build"]')?.content.startsWith('v1397')),true);
    // Open the actual profile sheet using the app's own navigation function.
    await page.evaluate(async()=>await openUserProfile(state.profile.id));
    await page.locator('#fcA36VotesTab:visible').waitFor({timeout:18000});
@@ -220,6 +230,6 @@ async function awaitServer(){
    await context.close();
   }
   fs.writeFileSync(path.join(out,'report.json'),JSON.stringify({scope:'real staging v1395 signed-in app UI, mobile Chromium',physicalIphone:false,report},null,2));
-  console.log('PASS A3.6 signed-in v1396 UI navigation at 375/390/430px; physical iPhone still separate');
+  console.log('PASS A3.6 signed-in v1397 UI navigation at 375/390/430px; physical iPhone still separate');
  }finally{if(browser)await browser.close();server.kill('SIGTERM');}
 })().catch(e=>{console.error('A36_FLOW_UI_FAILED '+String(e.message||e).slice(0,450));process.exitCode=1;});
