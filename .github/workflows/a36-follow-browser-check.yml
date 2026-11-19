@@ -1,0 +1,34 @@
+name: A3.6 Following rendered phone check
+on:
+  push:
+    branches: [a36-integration-v1389]
+    paths: ['.github/workflows/a36-follow-browser-check.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  phone-render:
+    if: github.ref == 'refs/heads/a36-integration-v1389'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned browser harness
+        run: |
+          npm install --prefix /tmp/fc-a36-follow-browser --no-audit --no-fund playwright@1.56.1
+          google-chrome --version
+      - name: Exercise the actual staged Following code
+        run: node devtools/a36_follow_browser_test.js
+      - name: Upload dark/light rendered screenshots and result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a36-following-v1393-browser
+          path: a36-follow-browser-evidence/
+          if-no-files-found: warn
+          retention-days: 7
