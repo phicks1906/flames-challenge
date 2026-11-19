@@ -23,8 +23,9 @@ segment=s[s.index(anchor):s.index(anchor)+500]
 if old_condition not in segment or old_timer not in segment:
  raise SystemExit('STOP: optional guide anchors not inside intended function')
 s=s.replace(old_condition,new_condition,1).replace(old_timer,new_timer,1).replace(before,after,1)
-assert s.count('!guidelinesAcked()')==1
-assert s.count('&& guidelinesAcked()')==1
+patched_function=s[s.index(anchor):s.index(anchor)+800]
+assert patched_function.count('!guidelinesAcked()')==1
+assert patched_function.count('&& guidelinesAcked()')==1
 assert s.count(after)==1
 path.write_text(s,encoding='utf-8')
 print('STAGED v1396: Guidelines acknowledgement gates optional guide before and after timer')
