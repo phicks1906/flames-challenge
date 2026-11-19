@@ -1,0 +1,35 @@
+name: A3.6 approved Arena phone-render check
+on:
+  push:
+    branches: [a36-integration-v1389]
+    paths:
+      - '.github/workflows/a36-arena-reference-check.yml'
+      - 'preview/a36-arena-approved-reference.html'
+      - 'devtools/a36_arena_reference_test.js'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  render:
+    if: github.ref == 'refs/heads/a36-integration-v1389'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated Chromium automation
+        run: npm install --prefix /tmp/fc-a36-arena --no-audit --no-fund playwright@1.56.1
+      - name: Confirm approved A3.4 reference and navigation at 375, 390 and 430px
+        run: node devtools/a36_arena_reference_test.js
+      - name: Save actual rendered phone-size screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a36-approved-a34-arena-screens
+          path: a36-arena-evidence/
+          if-no-files-found: warn
+          retention-days: 7
