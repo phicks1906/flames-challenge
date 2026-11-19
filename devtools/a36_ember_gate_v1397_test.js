@@ -1,0 +1,30 @@
+'use strict';
+// Regression of actual staged v1397 Ember native modal ordering.
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const source=fs.readFileSync('index.html','utf8');
+assert.match(source,/v1397 · a36-ember-after-onboarding/);
+const start=source.indexOf('  function fcA36EmberMustDeferV1397() {');
+const end=source.indexOf('  let fcA36EmberDeferralsV1397 = 0;',start);
+assert.ok(start>0&&end>start,'Missing real Ember gate');
+const helper=source.slice(start,end);
+const gate=new Function('state','document','guidelinesAcked',helper+'\nreturn fcA36EmberMustDeferV1397();');
+const profile={onboarding_version:1103,walkthrough_seen_version:1103};
+const check=(state,accepted,selector)=>gate(state,{querySelector:q=>selector&&q.includes(selector)?{}:null},()=>accepted);
+assert.equal(check(null,false,''),true,'No member => do not open Ember');
+assert.equal(check({profile:{...profile,onboarding_version:1}},true,''),true,'Mandatory setup goes first');
+assert.equal(check({profile:{...profile,walkthrough_seen_version:0}},true,''),true,'First-run guide goes first');
+assert.equal(check({profile},false,''),true,'Guidelines acknowledgement goes first');
+for(const selector of ['#fcOnboardingV1103.open','#guidelinesModal.open','#fcCommercialModalV1103.open','.modal-backdrop.open','dialog[open]'])
+ assert.equal(check({profile},true,selector),true,selector+' blocks the native modal');
+assert.equal(check({profile},true,''),false,'Ember can open after first-run steps finish');
+const open=source.indexOf('window.openDailyEmberV1221 = async function',end);
+const daily=source.indexOf('async function maybeOpenDailyEmberV1221()',open);
+assert.ok(open>0&&daily>open);
+const body=source.slice(open,daily);
+assert.ok(body.includes('if (fcA36EmberMustDeferV1397()) return false;'),'Direct open must respect gate');
+assert.ok(body.includes('fcA36EmberMustDeferV1397()) return false;'),'After async vote hydration must re-check gate');
+const retry=source.slice(daily,daily+1450);
+assert.match(retry,/setTimeout\(maybeOpenDailyEmberV1221,\s*1500\)/,'Daily reminder must defer rather than vanish');
+assert.match(retry,/fcA36EmberDeferralsV1397\s*=\s*0/,'Daily reminder resets after gating');
+console.log('PASS v1397: actual Ember top-layer gate protects mandatory setup, Guidelines, guide, other modals, and defers daily reminder');
