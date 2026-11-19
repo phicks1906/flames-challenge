@@ -253,7 +253,31 @@ async function awaitServer(){
        navComputedPointerEvents:getComputedStyle(nav).pointerEvents,
        navInlineVisibility:nav.style.getPropertyValue('visibility'),
        navInlineVisibilityPriority:nav.style.getPropertyPriority('visibility'),
-       navClass:nav.className,bodyClass:document.body.className.slice(0,160)};
+       navClass:nav.className,bodyClass:document.body.className.slice(0,160),
+       rules:(()=>{
+         const hits=[];
+         for(const sheet of document.styleSheets){
+           let rules;try{rules=sheet.cssRules}catch{continue}
+           function walk(items){
+             for(const rule of items){
+               if(rule.cssRules){walk(rule.cssRules);continue}
+               if(!rule.selectorText||!rule.style)continue;
+               if(!/bottomNav|bottom-nav|fc-dialog-open-v1100/.test(rule.selectorText))continue;
+               let match=false;try{match=nav.matches(rule.selectorText)}catch{}
+               if(match && ['visibility','pointer-events','z-index'].some(k=>rule.style.getPropertyValue(k))){
+                 hits.push({selector:rule.selectorText.slice(0,190),
+                   visibility:rule.style.getPropertyValue('visibility'),
+                   visibilityPriority:rule.style.getPropertyPriority('visibility'),
+                   pointer:rule.style.getPropertyValue('pointer-events'),
+                   zIndex:rule.style.getPropertyValue('z-index'),
+                   styleId:sheet.ownerNode?.id||null});
+               }
+             }
+           }
+           walk(rules);
+         }
+         return hits.slice(-25);
+       })()};
    });
    console.log('A36_FOLLOWING_CSS_DIAGNOSTIC '+JSON.stringify(cssProbe));
    console.log('A36_FOLLOWING_LAYOUT_CHECK '+JSON.stringify({width,navVisibility:following.navVisibility,actionInViewport:following.actionInViewport,actionReceivesTap:following.actionReceivesTap}));
