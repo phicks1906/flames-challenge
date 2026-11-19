@@ -87,7 +87,22 @@ async function awaitServer(){
      const guidelines=page.locator('#guidelinesModal.open');
      await guidelines.waitFor({timeout:20000});
      await page.screenshot({path:path.join(out,'guidelines-before-accept-'+width+'.png')});
-     await guidelines.locator('button:has-text("I Agree")').click({timeout:15000});
+     const agreeHit=await page.evaluate(()=>{
+       const e=[...document.querySelectorAll('#guidelinesModal button')].find(x=>x.textContent.includes('I Agree'));
+       const overlay=document.getElementById('guidelinesModal'),r=e.getBoundingClientRect(),o=overlay.getBoundingClientRect();
+       const h=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2),c=getComputedStyle(overlay);
+       const chain=[];for(let n=e;n&&chain.length<8;n=n.parentElement){const st=getComputedStyle(n);
+         chain.push({tag:n.tagName,id:n.id,klass:String(n.className).slice(0,65),display:st.display,visibility:st.visibility,pointerEvents:st.pointerEvents,z:st.zIndex,inert:n.inert});
+       }
+       return {buttonRect:{x:r.x,y:r.y,w:r.width,h:r.height},modalRect:{x:o.x,y:o.y,w:o.width,h:o.height},
+         hit:h?.tagName+'#'+h?.id,hitStack:document.elementsFromPoint(r.left+r.width/2,r.top+r.height/2).slice(0,5).map(n=>n.tagName+'#'+n.id),
+         modalOpen:overlay.classList.contains('open'),modalStyle:{display:c.display,visibility:c.visibility,z:c.zIndex,pointerEvents:c.pointerEvents},
+         inertNodes:[...document.querySelectorAll('[inert]')].slice(0,10).map(n=>n.id||n.tagName),
+         onboardingOpen:document.getElementById('fcOnboardingV1103')?.classList.contains('open'),
+         chain,viewport:{w:innerWidth,h:innerHeight,scale:visualViewport?.scale}};
+     });
+     console.log('A36_GUIDELINES_TAP_HITTEST '+JSON.stringify(agreeHit));
+     await guidelines.locator('button:has-text("I Agree")').click({timeout:7000});
      await page.waitForFunction(()=>!document.getElementById('guidelinesModal')?.classList.contains('open'),null,{timeout:15000});
      console.log('PASS A3.6 mandatory Guidelines accepted through actual UI '+width+'px');
    }
