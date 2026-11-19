@@ -1,0 +1,49 @@
+name: A3.6 Part 4 independent Following staging candidate
+on:
+  push:
+    branches: [a36-integration-v1389]
+    paths: ['.github/workflows/a36-part4-follow-independent.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  stage:
+    if: github.ref == 'refs/heads/a36-integration-v1389'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate existing staged source
+        run: python3 devtools/fc_source_tools.py validate
+      - name: Apply guarded independent Following patch to staging only
+        run: python3 devtools/a36_apply_follow_independent.py
+      - name: Verify current candidate, behavior and unchanged production
+        run: |
+          python3 devtools/fc_source_tools.py validate
+          node devtools/a36_follow_independent_test.js
+          node devtools/a36_part1_test.js
+          git diff --check
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+          s=Path('index.html').read_text(encoding='utf-8')
+          assert s.count('v1393 · a36-following-independent')==1
+          assert s.count('async function fcA36OpenFollowedEntryV1393')==1
+          assert s.count('await fcA36AttachFollowingEntriesV1391(list, profiles);')==1
+          assert "db.from('challenge_result_winners')" in s
+          assert "db.from('entry_votes')" in s
+          assert subprocess.check_output(['git','diff','--name-only'],text=True).splitlines()==['index.html']
+          print('PASS: only index.html modified in staging; no DB, workflow or service-worker change.')
+          PY
+      - name: Commit validated staged candidate without deploying production
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- index.html
+          git commit -m 'v1393 candidate: A3.6 discover eligible followed entries outside feed cache'
+          git push origin HEAD:refs/heads/a36-integration-v1389
