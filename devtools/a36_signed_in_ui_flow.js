@@ -296,14 +296,17 @@ async function awaitServer(){
    const futureEntryId='a3610000-0000-4000-8000-000000000003';
    const found=await page.locator('#followingList .fc-a36-following-entry-v1393')
      .evaluateAll(els=>els.map(el=>({
-       challengeId:el.getAttribute('data-entry-open'),
-       entryId:el.getAttribute('data-entry-id'),
-       label:(el.innerText||'').trim().slice(0,90)
+       // The app attaches listener closures containing the entry IDs rather
+       // than rendering those IDs into data attributes. The user's actual
+       // button label is the visible challenge title.
+       label:(el.innerText||'').trim().slice(0,110)
      })));
    console.log('A36_NEW_FOLLOWED_ENTRY_CHOICES '+JSON.stringify({width,buttons:found}));
-   assert.ok(found.some(x=>x.challengeId===futureChallengeId&&x.entryId===futureEntryId),
-     'The genuinely newer followed entry is not present in Following');
-   const freshButton=page.locator('#followingList .fc-a36-following-entry-v1393[data-entry-open="'+futureChallengeId+'"][data-entry-id="'+futureEntryId+'"]');
+   assert.ok(found.some(x=>x.label.includes('FC_A36_V1395_FOLLOW_NEXT')),
+     'The genuinely newer followed competition is not visible in Following');
+   const freshButton=page.locator('#followingList .fc-a36-following-entry-v1393')
+     .filter({hasText:'FC_A36_V1395_FOLLOW_NEXT'});
+   assert.equal(await freshButton.count(),1,'Newer competition must have exactly one View Entry action');
    await freshButton.click({timeout:12000});
    await page.waitForFunction(()=>!document.getElementById('followingSheet')?.classList.contains('open'),null,{timeout:12000});
    await page.waitForTimeout(700);
