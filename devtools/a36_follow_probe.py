@@ -23,3 +23,8 @@ for p in patterns:
 for lo,hi in [(21812,21895),(28390,28445),(31283,31420)]:
  print('FULL_SECTION',lo,hi)
  for i in range(lo-1,min(hi,len(lines))):print(f'{i+1}: {lines[i][:450]}')
+
+# A3.6 Part 4: read-only viewer-opening trace to verify off-feed entry hydration.
+for lo,hi in [(31532,31735),(21828,21894)]:
+ print('VIEWER_TRACE',lo,hi)
+ for i in range(lo-1,min(hi,len(lines))):print(f'{i+1}: {lines[i][:460]}')
