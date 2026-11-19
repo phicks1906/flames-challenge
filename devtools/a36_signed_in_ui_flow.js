@@ -99,6 +99,9 @@ async function awaitServer(){
          modalOpen:overlay.classList.contains('open'),modalStyle:{display:c.display,visibility:c.visibility,z:c.zIndex,pointerEvents:c.pointerEvents},
          inertNodes:[...document.querySelectorAll('[inert]')].slice(0,10).map(n=>n.id||n.tagName),
          onboardingOpen:document.getElementById('fcOnboardingV1103')?.classList.contains('open'),
+         nativeDialogs:[...document.querySelectorAll('dialog')].map(d=>({id:d.id,open:d.open,isModal:d.matches(':modal'),rect:{x:d.getBoundingClientRect().x,y:d.getBoundingClientRect().y,w:d.getBoundingClientRect().width,h:d.getBoundingClientRect().height},label:d.getAttribute('aria-label'),buttons:[...d.querySelectorAll('button')].slice(0,8).map(b=>({text:(b.textContent||'').trim().slice(0,35),label:b.getAttribute('aria-label')}))})).filter(d=>d.open),
+         modalLayer:[...document.querySelectorAll(':modal')].map(d=>d.id||d.tagName),
+         bodyInert:document.body.inert,htmlInert:document.documentElement.inert,
          chain,viewport:{w:innerWidth,h:innerHeight,scale:visualViewport?.scale}};
      });
      console.log('A36_GUIDELINES_TAP_HITTEST '+JSON.stringify(agreeHit));
