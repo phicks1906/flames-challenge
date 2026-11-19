@@ -1,0 +1,27 @@
+name: A3.6 real staging Auth signup and signed-in journey
+on:
+  push:
+    branches: [a36-integration-v1389]
+    paths: ['.github/workflows/a36-run-real-auth-bootstrap.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  authenticated-staging:
+    if: github.ref == 'refs/heads/a36-integration-v1389'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 13
+    env:
+      FC_A36_STAGING_URL: https://pcmobielrhdfzivrwvuu.supabase.co
+      FC_A36_STAGING_PUBLISHABLE_KEY: sb_publishable_CEKUcsp6qLL3RL5iajJ5jg_ArDJB7BK
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify isolated real Auth journey test
+        run: node --check devtools/a36_auth_signup_and_e2e.js
+      - name: Sign up ephemeral staging members and run actual authenticated REST path
+        run: node devtools/a36_auth_signup_and_e2e.js
