@@ -1,6 +1,6 @@
 'use strict';
 // A3.6 staging only: real Supabase Auth sign-up/sign-in and RLS-backed REST.
-// Temporary password and session live only in this CI process. No credentials logged.
+// Credentials are provided as private GitHub Actions secrets, never committed or logged.
 const assert=require('node:assert/strict');
 const base=process.env.FC_A36_STAGING_URL;
 const apiKey=process.env.FC_A36_STAGING_PUBLISHABLE_KEY;
@@ -8,9 +8,10 @@ const runId=String(process.env.GITHUB_RUN_ID||'').trim();
 assert.equal(base,'https://pcmobielrhdfzivrwvuu.supabase.co','STOP: wrong project target');
 assert.ok(apiKey&&apiKey.startsWith('sb_publishable_'),'STOP: missing publishable key');
 assert.match(runId,/^\d{6,15}$/,'STOP: require CI run ID');
-const email='fc-a36-e2e-'+runId+'@flameschallenge.com';
-// Disposable, run-scoped staging-only credential. Delete the user after the test.
-const password='FC-A36-TEMP-'+runId+'-Review-2026!';
+const email=process.env.FC_A36_TEST_EMAIL;
+const password=process.env.FC_A36_TEST_PASSWORD;
+assert.ok(email && email.includes('@') && password && password.length>=16,
+  'STOP: configure private staging-only test-account email and password');
 const title='FC_A36_E2E_'+runId+'_LIVE';
 const nextTitle='FC_A36_E2E_'+runId+'_FOLLOW_NEXT';
 const started=Date.now();
@@ -33,8 +34,8 @@ async function waitFor(label,fn,timeout=140){
  throw new Error('Timed out waiting for '+label);
 }
 (async()=>{
- // The verified throwaway staging account is preseeded with this run-scoped
- // credential by the authorized staging setup. Avoid sign-up email rate limits.
+ // Use a dedicated staging-only account, created through supported Supabase Auth.
+ // Do not attempt email signup or issue repetitive logins without credentials.
  const session=await waitFor('SEEDED_AUTH_LOGIN',async()=>{
   const auth=await req('POST','/auth/v1/token?grant_type=password',{email,password});
   if(auth.ok&&auth.data.access_token)return auth.data;
