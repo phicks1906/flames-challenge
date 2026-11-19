@@ -10,7 +10,7 @@ const start=source.indexOf('async function fcA36AttachFollowingEntriesV1391(list
 const end=source.indexOf('\nasync function loadFollowersList() {',start);
 assert.ok(start>0&&end>start,'Following component must be present in canonical staged index');
 assert.equal(source.includes('    await fcA36AttachFollowingEntriesV1391(list, profiles);'),true,'Following loader must await independent discovery');
-assert.match(source,/(?:v139[45] · a36-following-(?:active-only|authoritative-rings)|v1396 · a36-guidelines-before-welcome-guide|(?:v139[78] · a36-(?:ember-after-onboarding|safe-get-app-after-ember)|v1399 · a36-following-nav-clearance))/);
+assert.match(source,/(?:v139[45] · a36-following-(?:active-only|authoritative-rings)|v1396 · a36-guidelines-before-welcome-guide|(?:v139[78] · a36-(?:ember-after-onboarding|safe-get-app-after-ember)|v1399 · a36-following-nav-clearance|v1400 · a36-following-nav-runtime))/);
 const code=source.slice(start,end);
 const fresh={id:'c-new',title:'Live Showcase',is_public:true,status:'voting',sd_round:0};
 const privateChallenge={id:'c-private',title:'Private',is_public:false,status:'voting',sd_round:0};
