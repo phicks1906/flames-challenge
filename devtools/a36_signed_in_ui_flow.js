@@ -183,7 +183,7 @@ async function awaitServer(){
      await page.waitForFunction(()=>!document.getElementById('getAppPrompt')?.classList.contains('open'),null,{timeout:10000});
      console.log('PASS A3.6 one-time Get App prompt dismissed using real Not now control '+width+'px');
    }
-   assert.equal(await page.evaluate(()=>document.querySelector('meta[name="fc-build"]')?.content.startsWith('v1398')),true);
+   assert.equal(await page.evaluate(()=>document.querySelector('meta[name="fc-build"]')?.content.startsWith('v1399')),true);
    // Open the actual profile sheet using the app's own navigation function.
    await page.evaluate(async()=>await openUserProfile(state.profile.id));
    await page.locator('#fcA36VotesTab:visible').waitFor({timeout:18000});
@@ -223,13 +223,28 @@ async function awaitServer(){
    await page.evaluate(async()=>{closeProfileSheet();await openFollowingSheet()});
    await page.locator('#followingSheet.open #followingList').waitFor({timeout:15000});
    await page.locator('#followingList .fc-a36-following-entry-v1393').waitFor({timeout:30000});
-   const following=await page.evaluate(()=>({
-    open:document.getElementById('followingSheet')?.classList.contains('open'),
-    text:document.getElementById('followingList')?.innerText.slice(0,1300)||'',
-    offFeedButtons:document.querySelectorAll('#followingList .fc-a36-following-entry-v1393').length,
-    overflow:document.documentElement.scrollWidth>document.documentElement.clientWidth+1
-   }));
+   const following=await page.evaluate(()=>{
+    const nav=document.getElementById('bottomNav');
+    const action=document.querySelector('#followingList .fc-a36-following-entry-v1393');
+    const rect=action?.getBoundingClientRect();
+    const hit=rect?document.elementFromPoint(rect.left+rect.width/2,rect.top+rect.height/2):null;
+    return {
+      open:document.getElementById('followingSheet')?.classList.contains('open'),
+      text:document.getElementById('followingList')?.innerText.slice(0,1300)||'',
+      offFeedButtons:document.querySelectorAll('#followingList .fc-a36-following-entry-v1393').length,
+      overflow:document.documentElement.scrollWidth>document.documentElement.clientWidth+1,
+      navVisibility:getComputedStyle(nav).visibility,
+      navPointerEvents:getComputedStyle(nav).pointerEvents,
+      actionInViewport:!!rect&&rect.bottom<=innerHeight-1&&rect.top>=0,
+      actionReceivesTap:!!action&&(hit===action||action.contains(hit))
+    };
+   });
+   console.log('A36_FOLLOWING_LAYOUT_CHECK '+JSON.stringify({width,navVisibility:following.navVisibility,actionInViewport:following.actionInViewport,actionReceivesTap:following.actionReceivesTap}));
    assert.ok(following.open,'Following sheet failed to open');
+   assert.equal(following.navVisibility,'hidden','Following must cover persistent bottom navigation');
+   assert.equal(following.navPointerEvents,'none','Hidden bottom navigation must not intercept taps');
+   assert.ok(following.actionInViewport,'View Entry action clipped at bottom of Following');
+   assert.ok(following.actionReceivesTap,'View Entry action obscured by another layer');
    assert.ok(following.offFeedButtons>=1,'Followed competitor has no off-feed entry link');
    assert.match(following.text,/A3\.6 Staging Competitor/);
    assert.ok(!following.overflow,'Following horizontally overflows');
@@ -255,6 +270,6 @@ async function awaitServer(){
    await context.close();
   }
   fs.writeFileSync(path.join(out,'report.json'),JSON.stringify({scope:'real staging v1395 signed-in app UI, mobile Chromium',physicalIphone:false,report},null,2));
-  console.log('PASS A3.6 signed-in v1398 UI navigation at 375/390/430px; physical iPhone still separate');
+  console.log('PASS A3.6 signed-in v1399 UI navigation at 375/390/430px; physical iPhone still separate');
  }finally{if(browser)await browser.close();server.kill('SIGTERM');}
 })().catch(e=>{console.error('A36_FLOW_UI_FAILED '+String(e.message||e).slice(0,450));process.exitCode=1;});
