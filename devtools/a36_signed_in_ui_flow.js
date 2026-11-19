@@ -290,23 +290,40 @@ async function awaitServer(){
    assert.match(following.text,/A3\.6 Staging Competitor/);
    assert.ok(!following.overflow,'Following horizontally overflows');
    await page.screenshot({path:path.join(out,'following-'+width+'.png')});
-   await page.locator('#followingList .fc-a36-following-entry-v1393').first().click();
+   // This verifies the *newer, future* entry, not an arbitrary existing entry
+   // from the same competitor. The test fixture has distinct created_at values.
+   const futureChallengeId='a3600000-0000-4000-8000-000000000002';
+   const futureEntryId='a3610000-0000-4000-8000-000000000003';
+   const found=await page.locator('#followingList .fc-a36-following-entry-v1393')
+     .evaluateAll(els=>els.map(el=>({
+       challengeId:el.getAttribute('data-entry-open'),
+       entryId:el.getAttribute('data-entry-id'),
+       label:(el.innerText||'').trim().slice(0,90)
+     })));
+   console.log('A36_NEW_FOLLOWED_ENTRY_CHOICES '+JSON.stringify({width,buttons:found}));
+   assert.ok(found.some(x=>x.challengeId===futureChallengeId&&x.entryId===futureEntryId),
+     'The genuinely newer followed entry is not present in Following');
+   const freshButton=page.locator('#followingList .fc-a36-following-entry-v1393[data-entry-open="'+futureChallengeId+'"][data-entry-id="'+futureEntryId+'"]');
+   await freshButton.click({timeout:12000});
    await page.waitForFunction(()=>!document.getElementById('followingSheet')?.classList.contains('open'),null,{timeout:12000});
    await page.waitForTimeout(700);
-   const viewer=await page.evaluate(()=>({
+   const viewer=await page.evaluate(expected=>({
     sheetClosed:!document.getElementById('followingSheet')?.classList.contains('open'),
-    challengeHydrated:(state.challenges||[]).some(ch=>ch.title==='FC_A36_V1395_FOLLOW_NEXT'||ch.title==='FC_A36_V1395_LIVE'),
+    challengeHydrated:(state.challenges||[]).some(ch=>String(ch.id)===expected.challengeId&&ch.title==='FC_A36_V1395_FOLLOW_NEXT'),
+    targetEntryLoaded:(state.feedEntries||[]).some(e=>String(e.id)===expected.entryId),
+    visibleText:(document.body?.innerText||'').slice(0,3500),
     scrollWidth:document.documentElement.scrollWidth,
     viewport:document.documentElement.clientWidth
-   }));
-   assert.ok(viewer.sheetClosed,'Following sheet did not close when View Entry clicked');
-   assert.ok(viewer.challengeHydrated,'Off-feed competition not hydrated after View Entry click');
+   }),{challengeId:futureChallengeId,entryId:futureEntryId});
+   assert.ok(viewer.sheetClosed,'Following sheet did not close when new entry clicked');
+   assert.ok(viewer.challengeHydrated,'The newer off-feed challenge was not hydrated by View Entry');
+   assert.match(viewer.visibleText,/FC_A36_V1395_FOLLOW_NEXT/,'The future competition title is not visible after View Entry');
    assert.ok(viewer.scrollWidth<=viewer.viewport+1,'Entry viewer horizontal overflow');
    await page.screenshot({path:path.join(out,'entry-viewer-'+width+'.png')});
    assert.equal(blockedProduction.length,0,'Production API request detected');
    assert.deepEqual(pageErrors,[],'Uncaught JS errors');
-   report.push({width,signedIn:true,votesRendered:true,officialResultsVisible:true,followingRendered:true,offFeedViewerHydrated:true,noProductionAPI:true,noOverflow:true,noJSRuntimeError:true});
-   console.log('PASS A3.6 real UI flow '+width+'px — own Votes, official result, Following, off-feed viewer');
+   report.push({width,signedIn:true,votesRendered:true,officialResultsVisible:true,followingRendered:true,offFeedViewerHydrated:true,newerFollowedEntryOpened:true,noProductionAPI:true,noOverflow:true,noJSRuntimeError:true});
+   console.log('PASS A3.6 real UI flow '+width+'px — own Votes, official result, Following, NEW future entry viewer');
    await page.evaluate(async()=>{try{await db.auth.signOut()}catch{}});
    await context.close();
   }
