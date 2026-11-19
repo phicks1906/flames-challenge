@@ -1,0 +1,43 @@
+name: A3.6 staged real authenticated E2E self-seed
+on:
+  push:
+    branches: [a36-integration-v1389]
+    paths: ['.github/workflows/a36-auth-selfseed-check.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  staging-auth-journey:
+    if: github.ref == 'refs/heads/a36-integration-v1389'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 11
+    env:
+      FC_A36_STAGING_URL: https://pcmobielrhdfzivrwvuu.supabase.co
+      FC_A36_STAGING_PUBLISHABLE_KEY: sb_publishable_CEKUcsp6qLL3RL5iajJ5jg_ArDJB7BK
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Restrict fixture to exactly two staging Auth users
+        run: python3 devtools/a36_two_member_auth_patch.py
+      - name: Make staging test self-seeding through authenticated REST
+        run: python3 devtools/a36_auth_two_member_selfseed_patch.py
+      - name: Validate patched E2E syntax and safety boundaries
+        run: |
+          node --check devtools/a36_auth_signup_and_e2e.js
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('devtools/a36_auth_signup_and_e2e.js').read_text('utf8')
+          assert "['voter','competitor1']" in s
+          assert "['voter','competitor1','competitor2']" not in s
+          assert s.count('A36_SIGNED_IN_FIXTURE_READY')==1
+          assert s.count('A36_SIGNED_IN_VOTE_CLOSED')==1
+          assert "pcmobielrhdfzivrwvuu.supabase.co" in s
+          assert "sioalvawzayfphwzqctq.supabase.co" not in s
+          print('PASS two-member signed-in staging E2E safety guard')
+          PY
+      - name: Signup and run complete authenticated staging integration
+        run: node devtools/a36_auth_signup_and_e2e.js
