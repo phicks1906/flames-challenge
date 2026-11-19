@@ -1,5 +1,5 @@
 'use strict';
-// Real A3.6 UI navigation against an ephemeral staging-bound v1395 browser copy.
+// Real A3.6 UI navigation against an ephemeral staging-bound v1400 browser copy.
 // Only the designated staging account is used; no production API access.
 // Browser screenshots are artifacts. These are Chromium emulations, not iPhone hardware.
 const assert=require('node:assert/strict');
@@ -183,7 +183,7 @@ async function awaitServer(){
      await page.waitForFunction(()=>!document.getElementById('getAppPrompt')?.classList.contains('open'),null,{timeout:10000});
      console.log('PASS A3.6 one-time Get App prompt dismissed using real Not now control '+width+'px');
    }
-   assert.equal(await page.evaluate(()=>document.querySelector('meta[name="fc-build"]')?.content.startsWith('v1399')),true);
+   assert.equal(await page.evaluate(()=>document.querySelector('meta[name="fc-build"]')?.content.startsWith('v1400')),true);
    // Open the actual profile sheet using the app's own navigation function.
    await page.evaluate(async()=>await openUserProfile(state.profile.id));
    await page.locator('#fcA36VotesTab:visible').waitFor({timeout:18000});
@@ -310,7 +310,7 @@ async function awaitServer(){
    await page.evaluate(async()=>{try{await db.auth.signOut()}catch{}});
    await context.close();
   }
-  fs.writeFileSync(path.join(out,'report.json'),JSON.stringify({scope:'real staging v1395 signed-in app UI, mobile Chromium',physicalIphone:false,report},null,2));
-  console.log('PASS A3.6 signed-in v1399 UI navigation at 375/390/430px; physical iPhone still separate');
+  fs.writeFileSync(path.join(out,'report.json'),JSON.stringify({scope:'real staging v1400 signed-in app UI, mobile Chromium',physicalIphone:false,report},null,2));
+  console.log('PASS A3.6 signed-in v1400 UI navigation at 375/390/430px; physical iPhone still separate');
  }finally{if(browser)await browser.close();server.kill('SIGTERM');}
 })().catch(e=>{console.error('A36_FLOW_UI_FAILED '+String(e.message||e).slice(0,450));process.exitCode=1;});
