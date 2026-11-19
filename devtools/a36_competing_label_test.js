@@ -3,7 +3,7 @@
    from a seven-day-old entry. This is a mocked-DB unit test, not live browser auth. */
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
 const source=fs.readFileSync('index.html','utf8');
-assert.match(source,/v1394 · a36-following-active-only/);
+assert.match(source,/v139[45] · a36-following-(?:active-only|authoritative-rings)/);
 const begin=source.indexOf('async function loadFollowingList() {');
 const attach=source.indexOf('async function fcA36AttachFollowingEntriesV1391(list, profiles) {');
 const end=source.indexOf('\nasync function loadFollowersList() {',attach);
