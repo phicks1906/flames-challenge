@@ -64,7 +64,7 @@ const document={
  createElement(type){assert.equal(type,'button');return {handlers:{},style:{},disabled:false,addEventListener(k,cb){this.handlers[k]=cb;}};}
 };
 const ctx={db:{from},document,state,
- renderFollowList: (el,ordered,active,mode)=>{renderSnapshots.push({ordered:ordered.map(p=>p.id),active:[...active],mode});},
+ renderFollowList: (el,ordered,active,mode)=>{renderSnapshots.push({ordered:Array.from(ordered,p=>p.id),active:Array.from(active),mode});},
  computeChallengeStatus(ch){return ch.status;},
  fcWithTimeoutV1099:async q=>await q,
  toast:s=>toasts.push(s),
