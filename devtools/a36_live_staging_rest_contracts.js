@@ -19,8 +19,8 @@ const queries=[
   const resp=await fetch(base+path,{headers:{apikey:key,Accept:'application/json'},signal:AbortSignal.timeout(13000)});
   const payload=await resp.text();
   if(!resp.ok) {
-   let code='unknown';try{const parsed=JSON.parse(payload);code=parsed.code||parsed.message||code}catch{}
-   throw Error(label+' POSTGREST HTTP '+resp.status+' '+String(code).slice(0,160));
+   let code='unknown';let message='';try{const parsed=JSON.parse(payload);code=parsed.code||'unknown';message=parsed.message||''}catch{}
+   throw Error(label+' POSTGREST HTTP '+resp.status+' '+String(code).slice(0,60)+' '+String(message).slice(0,180));
   }
   const json=JSON.parse(payload);
   assert.ok(Array.isArray(json),'Expected array from '+label);
