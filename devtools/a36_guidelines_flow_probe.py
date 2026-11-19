@@ -2,7 +2,7 @@ from pathlib import Path
 import re
 s=Path('index.html').read_text('utf-8').splitlines()
 patterns=[
-r'id=["\\']guidelinesModal["\\']',
+r'id=.*guidelinesModal',
 r'guidelinesModal',
 r'function.*[Gg]uidelines',
 r'guidelines.*accept',
