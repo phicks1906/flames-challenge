@@ -61,7 +61,7 @@ const opened=[],toasts=[],closedSheets=[];
 const state={profile:{id:'me'},challenges:[],feedEntries:[],myVotes:{pollVoted:true}};
 const document={
  getElementById(id){return id==='followingList'?list:null;},
- createElement(type){assert.equal(type,'button');return {handlers:{},disabled:false,addEventListener(k,cb){this.handlers[k]=cb;}};}
+ createElement(type){assert.equal(type,'button');return {handlers:{},style:{},disabled:false,addEventListener(k,cb){this.handlers[k]=cb;}};}
 };
 const ctx={db:{from},document,state,
  computeChallengeStatus(ch){return ch.status;},
