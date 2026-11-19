@@ -1,0 +1,36 @@
+name: A3.6 real signed-in test against staged fixtures
+on:
+  push:
+    branches: [a36-integration-v1389]
+    paths: ['.github/workflows/a36-fixture-signed-in.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  staging-fixture:
+    if: github.ref == 'refs/heads/a36-integration-v1389'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    env:
+      FC_A36_STAGING_PUBLISHABLE_KEY: sb_publishable_CEKUcsp6qLL3RL5iajJ5jg_ArDJB7BK
+      FC_A36_TEST_EMAIL: ${{ secrets.FC_A36_TEST_EMAIL }}
+      FC_A36_TEST_PASSWORD: ${{ secrets.FC_A36_TEST_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check staging signed-in test syntax
+        run: node --check devtools/a36_fixture_signed_in_test.js
+      - name: Check GitHub Actions credentials are configured without printing them
+        shell: bash
+        run: |
+          if [[ -z "$FC_A36_TEST_EMAIL" || -z "$FC_A36_TEST_PASSWORD" ]]; then
+            echo 'A36_AUTH_SECRETS_NOT_CONFIGURED: set FC_A36_TEST_EMAIL and FC_A36_TEST_PASSWORD in repository Actions secrets'
+            exit 3
+          fi
+          echo 'A36_AUTH_SECRETS_CONFIGURED'
+      - name: Run actual staged authenticated vote and Follow journey
+        run: node devtools/a36_fixture_signed_in_test.js
