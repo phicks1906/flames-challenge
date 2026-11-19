@@ -1,0 +1,38 @@
+name: A3.6 authenticated app browser mobile smoke
+on:
+  push:
+    branches: [a36-integration-v1389]
+    paths: ['.github/workflows/a36-signed-in-browser-smoke.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  signed-in-browser:
+    if: github.ref == 'refs/heads/a36-integration-v1389'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      FC_A36_STAGING_PUBLISHABLE_KEY: sb_publishable_CEKUcsp6qLL3RL5iajJ5jg_ArDJB7BK
+      FC_A36_TEST_EMAIL: ${{ secrets.FC_A36_TEST_EMAIL }}
+      FC_A36_TEST_PASSWORD: ${{ secrets.FC_A36_TEST_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Generate ephemeral staging-bound v1395 browser copy
+        run: python3 devtools/a36_make_ephemeral_staging_preview.py
+      - name: Install isolated pinned Playwright browser harness
+        run: npm install --prefix /tmp/fc-a36-browser-auth --no-audit --no-fund playwright@1.56.1
+      - name: Run signed-in browser smoke with staging account
+        run: node devtools/a36_signed_in_browser_smoke.js
+      - name: Archive screenshots and sanitized test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a36-staging-auth-browser-v1395
+          path: a36-signed-in-browser-evidence/
+          if-no-files-found: warn
+          retention-days: 7
