@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """A3.6 staging-only browser copy.
 
-Read verified v1398 root index.html and rewrite only its Supabase client URL/key.
+Read verified v1399 root index.html and rewrite only its Supabase client URL/key.
 Never edits the checked-in root index.html or production data, never logs key.
 Public static media assets intentionally remain production-hosted read-only.
 """
@@ -16,7 +16,7 @@ staging_url = 'https://pcmobielrhdfzivrwvuu.supabase.co'
 staging_key = os.environ.get('FC_A36_STAGING_PUBLISHABLE_KEY', '')
 if not staging_key.startswith('sb_publishable_') or len(staging_key) < 35:
     raise SystemExit('STOP: missing valid public staging publishable key')
-if raw.count('v1398 · a36-safe-get-app-after-ember') != 1:
+if raw.count('v1399 · a36-following-nav-clearance') != 1:
     raise SystemExit('STOP: unsupported staged build')
 url_pattern = re.compile(r'(?m)^(const SUPABASE_URL = )"([^"]+)";$')
 key_pattern = re.compile(r'(?m)^(const SUPABASE_KEY = )"([^"]+)";$')
@@ -40,6 +40,6 @@ if src.read_text('utf-8') != raw:
     raise SystemExit('STOP: canonical source modified unexpectedly')
 dest.parent.mkdir(parents=True, exist_ok=True)
 dest.write_text(rebound, encoding='utf-8')
-print('PASS A3.6: generated ephemeral v1398 HTML bound to staging Supabase client')
+print('PASS A3.6: generated ephemeral v1399 HTML bound to staging Supabase client')
 print('PASS A3.6: preserved production-hosted public media links, not production database calls')
 print('PASS A3.6: canonical staged root index.html unchanged; keys never logged')
