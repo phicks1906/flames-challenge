@@ -66,7 +66,9 @@ async function awaitServer(){
      await page.screenshot({path:path.join(out,'onboarding-'+width+'.png')});
      await overlay.locator('[data-ob-theme="dark"]').click({timeout:10000});
      await overlay.locator('#fcObNextV1103').click({timeout:10000});
-     await overlay.locator('[data-ob-interest="Music"]').click({timeout:10000});
+     // Existing Music interest is preselected by the app; clicking it again
+     // would remove the only interest and correctly fail required onboarding.
+     if(!beforeSetup.hasInterest) await overlay.locator('[data-ob-interest="Music"]').click({timeout:10000});
      await overlay.locator('#fcObNextV1103').click({timeout:15000});
      try {
        await page.waitForFunction(()=>Number(state.profile?.onboarding_version||0)>=1103,null,{timeout:9000});
