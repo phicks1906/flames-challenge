@@ -173,7 +173,17 @@ async function awaitServer(){
      await page.waitForFunction(()=>!document.querySelector('#fcEmberDailyBriefingV1221:modal'),null,{timeout:10000});
      console.log('PASS A3.6 once-daily Ember minimized using actual control '+width+'px');
    }
-   assert.equal(await page.evaluate(()=>document.querySelector('meta[name="fc-build"]')?.content.startsWith('v1397')),true);
+   // A one-time Get App nudge may appear after the user minimizes Ember.
+   // Dismiss it via the actual Not now control; never bypass modal handlers.
+   await page.waitForTimeout(900);
+   const getApp=page.locator('#getAppPrompt.open');
+   if(await getApp.count()){
+     await page.screenshot({path:path.join(out,'get-app-prompt-'+width+'.png')});
+     await getApp.locator('button.ga-later').click({timeout:10000});
+     await page.waitForFunction(()=>!document.getElementById('getAppPrompt')?.classList.contains('open'),null,{timeout:10000});
+     console.log('PASS A3.6 one-time Get App prompt dismissed using real Not now control '+width+'px');
+   }
+   assert.equal(await page.evaluate(()=>document.querySelector('meta[name="fc-build"]')?.content.startsWith('v1398')),true);
    // Open the actual profile sheet using the app's own navigation function.
    await page.evaluate(async()=>await openUserProfile(state.profile.id));
    await page.locator('#fcA36VotesTab:visible').waitFor({timeout:18000});
@@ -245,6 +255,6 @@ async function awaitServer(){
    await context.close();
   }
   fs.writeFileSync(path.join(out,'report.json'),JSON.stringify({scope:'real staging v1395 signed-in app UI, mobile Chromium',physicalIphone:false,report},null,2));
-  console.log('PASS A3.6 signed-in v1397 UI navigation at 375/390/430px; physical iPhone still separate');
+  console.log('PASS A3.6 signed-in v1398 UI navigation at 375/390/430px; physical iPhone still separate');
  }finally{if(browser)await browser.close();server.kill('SIGTERM');}
 })().catch(e=>{console.error('A36_FLOW_UI_FAILED '+String(e.message||e).slice(0,450));process.exitCode=1;});
