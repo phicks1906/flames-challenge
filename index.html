@@ -21,7 +21,7 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1392 · a36-voted-official-results" name="fc-build"/>
+<meta content="v1393 · a36-following-independent" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
 <meta content="Your competition votes now link to official settled results, including wins, co-wins and no-contests." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
@@ -31300,7 +31300,7 @@ async function loadFollowingList() {
     const competingIds = new Set((competingRes.data || []).map(e => e.user_id));
     profiles.sort((a, b) => (competingIds.has(b.id) ? 1 : 0) - (competingIds.has(a.id) ? 1 : 0) || a.name.localeCompare(b.name));
     renderFollowList(list, profiles, competingIds, 'following');
-    fcA36AttachFollowingEntriesV1391(list, profiles);
+    await fcA36AttachFollowingEntriesV1391(list, profiles);
   } catch(err) {
     list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Could not load list.</div>';
   }
@@ -31308,32 +31308,91 @@ async function loadFollowingList() {
 
 // A3.6 Part 3: link a followed person to an eligible PUBLIC active entry
 // already hydrated by the production feed. Do not infer wins or request hidden entries.
-function fcA36AttachFollowingEntriesV1391(list, profiles) {
-  if (!list || !state.profile || !Array.isArray(state.feedEntries)) return;
-  const challenges = new Map((state.challenges || []).map(ch => [String(ch.id), ch]));
-  const entries = state.feedEntries;
-  profiles.forEach((person, index) => {
-    const latest = entries.filter(e => String(e.user_id) === String(person.id))
-      .map(e => ({ entry:e, challenge:challenges.get(String(e.challenge_id)) }))
-      .filter(item => item.challenge && item.challenge.is_public === true &&
-        ['submitting','voting'].includes(computeChallengeStatus(item.challenge)))
-      .sort((a,b) => Date.parse(b.entry.created_at || 0) - Date.parse(a.entry.created_at || 0))[0];
-    if (!latest) return;
-    const row = list.children[index];
-    const details = row?.children?.[1];
+// A3.6 Part 4 — query followed people's entries independently from the feed.
+// Only public, active, moderation-cleared entries are eligible for a direct link.
+async function fcA36AttachFollowingEntriesV1391(list, profiles) {
+  if (!list || !state.profile || !Array.isArray(profiles) || !profiles.length) return;
+  const memberId = String(state.profile.id);
+  const followeeIds = profiles.map(p => p.id).filter(Boolean);
+  let entryData;
+  try {
+    const { data, error } = await fcWithTimeoutV1099(
+      db.from('entries')
+        .select('id,user_id,challenge_id,created_at,moderation_status,sd_round,challenge:challenges!entries_challenge_id_fkey(id,title,is_public,status,created_at,submission_deadline,voting_end,voided_at,is_championship,sd_phase,sd_round,sd_submit_end,sd_vote_end)')
+        .in('user_id', followeeIds)
+        .in('moderation_status', ['approved','clear'])
+        .order('created_at', { ascending:false })
+        .limit(500),
+      7000, 'Following entries');
+    if (error) throw error;
+    entryData = data || [];
+  } catch (error) {
+    console.warn('[A3.6] Following entry lookup failed:', error);
+    if (String(state.profile?.id || '') === memberId) toast('Could not check followed entries. Try reopening Following.');
+    return;
+  }
+  if (String(state.profile?.id || '') !== memberId ||
+      document.getElementById('followingList') !== list) return;
+  const eligible = new Map();
+  for (const entry of entryData) {
+    if (!followeeIds.includes(entry.user_id)) continue;
+    const ch = entry.challenge;
+    if (!ch || ch.is_public !== true || ch.sd_phase === 'submitting') continue;
+    if (!['submitting','voting'].includes(computeChallengeStatus(ch))) continue;
+    if (Number(entry.sd_round || 0) !== Number(ch.sd_round || 0)) continue;
+    if (!eligible.has(entry.user_id)) eligible.set(entry.user_id,{entry,ch});
+  }
+  profiles.forEach((person,index) => {
+    const match=eligible.get(person.id);
+    if (!match) return;
+    const details=list.children[index]?.children?.[1];
     if (!details) return;
-    const btn = document.createElement('button');
+    const btn=document.createElement('button');
     btn.type='button';
-    btn.className='fc-a36-following-entry-v1391';
-    btn.textContent='View entry · ' + (latest.challenge.title || 'Competition');
+    btn.className='fc-a36-following-entry-v1393';
+    btn.textContent='View entry · ' + (match.ch.title || 'Competition');
     btn.style.cssText='display:block;margin-top:5px;padding:5px 0;border:0;background:transparent;color:var(--ember);font-size:12px;font-weight:700;text-align:left;max-width:100%;white-space:normal;cursor:pointer';
-    btn.addEventListener('click', event => {
+    btn.addEventListener('click',async event => {
       event.stopPropagation();
-      closeFollowingSheet();
-      openFeedViewer(latest.challenge.id, latest.entry.id);
+      if (btn.disabled) return;
+      btn.disabled=true;
+      try {
+        await fcA36OpenFollowedEntryV1393(match.ch.id,match.entry.id,true);
+      } catch (error) {
+        console.warn('[A3.6] Could not open followed entry:',error);
+        toast('This entry is unavailable. Try again.');
+      } finally { btn.disabled=false; }
     });
     details.appendChild(btn);
   });
+}
+
+// Off-feed links must hydrate a current, authorized challenge before calling
+// the unchanged production viewer, which otherwise returns on cache misses.
+async function fcA36OpenFollowedEntryV1393(challengeId, entryId, fromSheet) {
+  const [challengeRes,entryRes]=await Promise.all([
+    fcWithTimeoutV1099(db.from('challenges')
+      .select('*, creator:profiles!challenges_creator_id_fkey(id,name,avatar)')
+      .eq('id',challengeId).eq('is_public',true).maybeSingle(),7000,'Followed challenge'),
+    fcWithTimeoutV1099(db.from('entries')
+      .select('id,challenge_id,moderation_status,sd_round')
+      .eq('id',entryId).eq('challenge_id',challengeId).maybeSingle(),7000,'Followed entry')
+  ]);
+  if (challengeRes.error) throw challengeRes.error;
+  if (entryRes.error) throw entryRes.error;
+  const ch=challengeRes.data, entry=entryRes.data;
+  if (!ch || ch.is_public !== true || !entry ||
+      !['approved','clear'].includes(entry.moderation_status) ||
+      ch.sd_phase === 'submitting' ||
+      Number(ch.sd_round || 0) !== Number(entry.sd_round || 0)) {
+    throw new Error('Followed competition entry is no longer available');
+  }
+  if (!Array.isArray(state.challenges)) state.challenges=[];
+  const index=state.challenges.findIndex(item=>String(item.id)===String(ch.id));
+  if (index>=0) state.challenges[index]=ch;
+  else state.challenges.push(ch);
+  if (fromSheet) closeFollowingSheet();
+  await openFeedViewer(ch.id,entry.id);
 }
 
 async function loadFollowersList() {
