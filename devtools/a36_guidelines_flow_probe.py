@@ -17,3 +17,11 @@ for pattern in patterns:
   print('A36_GUIDELINES_LINE',i+1,' '.join(s[i].strip().split())[:275])
   for line in s[i+1:i+3]:
    print('A36_GUIDELINES_CONTEXT',' '.join(line.strip().split())[:220])
+
+for a,b in [(12860,12912),(45575,45634),(28982,29005)]:
+ print('A36_GUIDELINES_SECTION',a,b)
+ for i in range(a-1,min(b,len(s))):
+  print('A36_GUIDELINES_SOURCE',i+1,' '.join(s[i].strip().split())[:340])
+for i,line in enumerate(s):
+ if 'fcMaybeOpenOptionalGuideV1103' in line:
+  print('A36_GUIDELINES_OPTIONAL',i+1,' '.join(line.split())[:360])
