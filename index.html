@@ -21,7 +21,7 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1396 · a36-guidelines-before-welcome-guide" name="fc-build"/>
+<meta content="v1397 · a36-ember-after-onboarding" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
 <meta content="Your competition votes now link to official settled results, including wins, co-wins and no-contests." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
@@ -51409,9 +51409,24 @@ document.addEventListener('pointerdown', function(event) {
     return true;
   }
 
+  // v1397 — Native dialog.showModal() makes the background untappable.
+  // Finish mandatory setup, Guidelines and first-run guide before Ember.
+  function fcA36EmberMustDeferV1397() {
+    const p = state?.profile;
+    if (!p || Number(p.onboarding_version || 0) < 1103 ||
+        Number(p.walkthrough_seen_version || 0) < 1103) return true;
+    if (typeof guidelinesAcked === 'function' && !guidelinesAcked()) return true;
+    return !!document.querySelector(
+      '#fcOnboardingV1103.open, #guidelinesModal.open, ' +
+      '#fcCommercialModalV1103.open, .modal-backdrop.open, dialog[open]'
+    );
+  }
+  let fcA36EmberDeferralsV1397 = 0;
+
   window.openDailyEmberV1221 = async function openDailyEmberV1221(force = false) {
     if (!state?.profile || state?.loading) return false;
     if (document.body.dataset.fcEmberGuidance === 'off') return false;
+    if (fcA36EmberMustDeferV1397()) return false;
 
     // v1259 — hydrate challenge ballot selections before Ember decides whether
     // a vote is still available. This prevents poll-vote state from leaking into
@@ -51421,7 +51436,7 @@ document.addEventListener('pointerdown', function(event) {
     } catch (_) {}
 
     if (!state?.profile || state?.loading || !document.body.classList.contains('fc-boot-ready-v1095') ||
-        document.querySelector('#fcOnboardingV1103.open, #fcCommercialModalV1103.open, dialog[open]')) return false;
+        fcA36EmberMustDeferV1397()) return false;
     const items = buildItemsV1221();
     if (!items.length) return false;
     if (!renderDailyEmberV1221(items)) return false;
@@ -51457,6 +51472,14 @@ document.addEventListener('pointerdown', function(event) {
     if (document.body.dataset.fcEmberGuidance === 'off') return;
     const key = `fc_ember_daily_seen_v1221_${state.profile.id}_${easternDateKeyV1221()}`;
     try { if (localStorage.getItem(key) === '1') return; } catch (_) {}
+
+    // Preserve the once-daily reminder: defer it until first-run gates close.
+    if (fcA36EmberMustDeferV1397()) {
+      if (++fcA36EmberDeferralsV1397 <= 240)
+        setTimeout(maybeOpenDailyEmberV1221, 1500);
+      return;
+    }
+    fcA36EmberDeferralsV1397 = 0;
 
     try {
       if (typeof hydrateEntryVotesV1083 === 'function') await hydrateEntryVotesV1083();
