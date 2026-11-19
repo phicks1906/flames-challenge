@@ -68,7 +68,14 @@ async function awaitServer(){
      await overlay.locator('#fcObNextV1103').click({timeout:10000});
      await overlay.locator('[data-ob-interest="Music"]').click({timeout:10000});
      await overlay.locator('#fcObNextV1103').click({timeout:15000});
-     await page.waitForFunction(()=>Number(state.profile?.onboarding_version||0)>=1103,null,{timeout:20000});
+     try {
+       await page.waitForFunction(()=>Number(state.profile?.onboarding_version||0)>=1103,null,{timeout:9000});
+     } catch(error){
+       const diagnostic=await page.evaluate(()=>({profileVersion:Number(state.profile?.onboarding_version||0),overlayOpen:document.getElementById('fcOnboardingV1103')?.classList.contains('open'),status:document.getElementById('fcObStatusV1103')?.innerText||'',nextLabel:document.getElementById('fcObNextV1103')?.innerText||'',nextDisabled:document.getElementById('fcObNextV1103')?.disabled}));
+       console.warn('A36_REQUIRED_SETUP_DIAGNOSTIC '+JSON.stringify(diagnostic));
+       await page.screenshot({path:path.join(out,'onboarding-error-'+width+'.png')});
+       throw error;
+     }
      console.log('PASS A3.6 actual first-run appearance and Music interest onboarding '+width+'px');
    }
    // The guide appears shortly after required setup; use its ordinary Skip
