@@ -10,7 +10,7 @@ const start=source.indexOf('async function fcA36AttachFollowingEntriesV1391(list
 const end=source.indexOf('\nasync function loadFollowersList() {',start);
 assert.ok(start>0&&end>start,'Following component must be present in canonical staged index');
 assert.equal(source.includes('    await fcA36AttachFollowingEntriesV1391(list, profiles);'),true,'Following loader must await independent discovery');
-assert.match(source,/v1394 · a36-following-active-only/);
+assert.match(source,/v139[45] · a36-following-(?:active-only|authoritative-rings)/);
 const code=source.slice(start,end);
 const fresh={id:'c-new',title:'Live Showcase',is_public:true,status:'voting',sd_round:0};
 const privateChallenge={id:'c-private',title:'Private',is_public:false,status:'voting',sd_round:0};
