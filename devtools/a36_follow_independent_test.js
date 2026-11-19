@@ -57,13 +57,14 @@ function details(){return {buttons:[],appendChild(btn){this.buttons.push(btn);}}
 const profiles=[{id:'followed',name:'Creator A'},{id:'followed2',name:'Creator B'}];
 const rows=profiles.map(()=>({children:[{},details(),{}]}));
 const list={children:rows};
-const opened=[],toasts=[],closedSheets=[];
+const opened=[],toasts=[],closedSheets=[],renderSnapshots=[];
 const state={profile:{id:'me'},challenges:[],feedEntries:[],myVotes:{pollVoted:true}};
 const document={
  getElementById(id){return id==='followingList'?list:null;},
  createElement(type){assert.equal(type,'button');return {handlers:{},style:{},disabled:false,addEventListener(k,cb){this.handlers[k]=cb;}};}
 };
 const ctx={db:{from},document,state,
+ renderFollowList: (el,ordered,active,mode)=>{renderSnapshots.push({ordered:ordered.map(p=>p.id),active:[...active],mode});},
  computeChallengeStatus(ch){return ch.status;},
  fcWithTimeoutV1099:async q=>await q,
  toast:s=>toasts.push(s),
@@ -77,6 +78,7 @@ vm.createContext(ctx);
 vm.runInContext(code,ctx);
 (async()=>{
  await ctx.fcA36AttachFollowingEntriesV1391(list,profiles);
+ assert.deepEqual(renderSnapshots[0],{ordered:['followed','followed2'],active:['followed'],mode:'following'},'Only verified eligible users receive Competing now');
  assert.equal(rows[0].children[1].buttons.length,1,'Off-feed followed new entry must be discoverable');
  assert.equal(rows[1].children[1].buttons.length,0,'Private, hidden, rejected, pending and closed entries must not appear as active');
  assert.match(rows[0].children[1].buttons[0].textContent,/Live Showcase/);
