@@ -93,9 +93,20 @@ async function awaitServer(){
        const chain=[];for(let n=e;n&&chain.length<10;n=n.parentElement){
          const cs=getComputedStyle(n);chain.push({tag:n.tagName,id:n.id,klass:String(n.className).slice(0,60),pointerEvents:cs.pointerEvents,display:cs.display,zIndex:cs.zIndex,position:cs.position});
        }
+       const overlay=document.getElementById('fcOnboardingV1103');
+       const os=getComputedStyle(overlay);
+       const overRect=overlay.getBoundingClientRect();
+       const cs=getComputedStyle(e);
        return {rect:{x:r.x,y:r.y,w:r.width,h:r.height},hit:hit?.tagName+'.'+String(hit?.className||'').slice(0,90),
-         overlayOpen:document.getElementById('fcOnboardingV1103')?.classList.contains('open'),
-         chain,viewport:{w:innerWidth,h:innerHeight}};
+         hitStack:document.elementsFromPoint(r.left+r.width/2,r.top+r.height/2).slice(0,5).map(n=>n.tagName+'#'+n.id),
+         overlayOpen:overlay.classList.contains('open'),modalMatches:[...document.querySelectorAll('dialog[open],[popover]:popover-open')].slice(0,8).map(n=>n.id),
+         inert:[...document.querySelectorAll('[inert]')].slice(0,8).map(n=>n.id+'|'+n.className),
+         bodyInert:document.body.inert,htmlInert:document.documentElement.inert,
+         overlayStyle:{display:os.display,visibility:os.visibility,opacity:os.opacity,pointerEvents:os.pointerEvents,transform:os.transform,clipPath:os.clipPath},
+         overlayRect:{x:overRect.x,y:overRect.y,w:overRect.width,h:overRect.height},
+         buttonStyle:{visibility:cs.visibility,opacity:cs.opacity,pointerEvents:cs.pointerEvents},
+         chain,viewport:{w:innerWidth,h:innerHeight,visualW:visualViewport?.width,visualH:visualViewport?.height,scale:visualViewport?.scale},
+         hitAtCorner:document.elementFromPoint(20,20)?.tagName,hitAtCenter:document.elementFromPoint(innerWidth/2,innerHeight/2)?.tagName};
      });
      console.log('A36_GUIDE_TAP_HITTEST '+JSON.stringify(guideProbe));
      await page.screenshot({path:path.join(out,'guide-before-skip-'+width+'.png')});
