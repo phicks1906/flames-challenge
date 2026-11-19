@@ -3,7 +3,7 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const source=fs.readFileSync('index.html','utf8');
-assert.match(source,/v1398 · a36-safe-get-app-after-ember/);
+assert.match(source,/v139(?:8 · a36-safe-get-app-after-ember|9 · a36-following-nav-clearance)/);
 const start=source.indexOf('function maybeShowGetAppPrompt() {');
 const stop=source.indexOf('// Nothing to ask for',start);
 assert.ok(start>0&&stop>start,'Exact Get App gate source not found');
