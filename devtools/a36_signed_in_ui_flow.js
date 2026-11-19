@@ -54,6 +54,34 @@ async function awaitServer(){
    assert.ok(login.userId,'Real staging sign-in failed: '+String(login.error||'unknown'));
    await page.reload({waitUntil:'domcontentloaded',timeout:50000});
    await page.waitForFunction(expected=>typeof state!=='undefined'&&state.profile?.id===expected,login.userId,{timeout:25000});
+   // Preserve forced onboarding: run the actual two-step appearance/interest
+   // user experience if this staging account has not completed v1103 setup.
+   const beforeSetup=await page.evaluate(()=>({
+     complete:Number(state.profile?.onboarding_version||0)>=1103,
+     hasInterest:Array.isArray(state.profile?.interests)&&state.profile.interests.length>0
+   }));
+   if(!beforeSetup.complete){
+     const overlay=page.locator('#fcOnboardingV1103.open');
+     await overlay.waitFor({timeout:20000});
+     await page.screenshot({path:path.join(out,'onboarding-'+width+'.png')});
+     await overlay.locator('[data-ob-theme="dark"]').click({timeout:10000});
+     await overlay.locator('#fcObNextV1103').click({timeout:10000});
+     await overlay.locator('[data-ob-interest="Music"]').click({timeout:10000});
+     await overlay.locator('#fcObNextV1103').click({timeout:15000});
+     await page.waitForFunction(()=>Number(state.profile?.onboarding_version||0)>=1103,null,{timeout:20000});
+     console.log('PASS A3.6 actual first-run appearance and Music interest onboarding '+width+'px');
+   }
+   // The guide appears shortly after required setup; use its ordinary Skip
+   // button, which persists the walkthrough choice. Do not hide DOM layers.
+   await page.waitForTimeout(1650);
+   const guide=page.locator('#fcOnboardingV1103.open');
+   if(await guide.count()){
+     const skip=guide.locator('#fcObSkipV1103');
+     await skip.waitFor({timeout:11000});
+     await skip.click({timeout:11000});
+     await page.waitForFunction(()=>!document.getElementById('fcOnboardingV1103')?.classList.contains('open'),null,{timeout:15000});
+     console.log('PASS A3.6 optional first-run guide completed through Skip');
+   }
    assert.equal(await page.evaluate(()=>document.querySelector('meta[name="fc-build"]')?.content.startsWith('v1395')),true);
    // Open the actual profile sheet using the app's own navigation function.
    await page.evaluate(async()=>await openUserProfile(state.profile.id));
