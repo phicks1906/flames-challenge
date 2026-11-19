@@ -4,7 +4,7 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 const assert=require('node:assert/strict');
 const source=fs.readFileSync('index.html','utf8');
-assert.match(source,/v139(?:6 · a36-guidelines-before-welcome-guide|7 · a36-ember-after-onboarding|8 · a36-safe-get-app-after-ember|9 · a36-following-nav-clearance|1400 · a36-following-nav-runtime)/);
+assert.match(source,/v(?:1396 · a36-guidelines-before-welcome-guide|1397 · a36-ember-after-onboarding|1398 · a36-safe-get-app-after-ember|1399 · a36-following-nav-clearance|1400 · a36-following-nav-runtime)/);
 const begin=source.indexOf('window.fcMaybeOpenOptionalGuideV1103 = function(){');
 const end=source.indexOf('window.fcOpenHowItWorks =',begin);
 assert.ok(begin>=0&&end>begin,'Real optional guide function absent');
