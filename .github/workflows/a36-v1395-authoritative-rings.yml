@@ -1,0 +1,49 @@
+name: A3.6 v1395 authoritative Following avatar rings
+on:
+  push:
+    branches: [a36-integration-v1389]
+    paths: ['.github/workflows/a36-v1395-authoritative-rings.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  stage-fix:
+    if: github.ref == 'refs/heads/a36-integration-v1389'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify staged baseline
+        run: python3 devtools/fc_source_tools.py validate
+      - name: Apply guarded truthfulness fix only to staging root index.html
+        run: python3 devtools/a36_fix_avatar_authoritative_v1395.py
+      - name: Regression and structural checks
+        run: |
+          python3 devtools/fc_source_tools.py validate
+          node devtools/a36_avatar_authoritative_test.js
+          node devtools/a36_competing_label_test.js
+          node devtools/a36_follow_independent_test.js
+          node devtools/a36_part1_test.js
+          git diff --check
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+          s=Path('index.html').read_text(encoding='utf-8')
+          assert s.count('v1395 · a36-following-authoritative-rings')==1
+          assert s.count("winningKeys.has(String(e.challenge_id)+'|'+String(e.user_id))")==1
+          assert s.count("fcA36OpenFollowedEntryV1393(el.dataset.entryOpen, el.dataset.entryId, false)")==1
+          assert subprocess.check_output(['git','diff','--name-only'],text=True).splitlines()==['index.html']
+          print('PASS: v1395 changes only staging index.html; no schema or service worker edits')
+          PY
+      - name: Commit verified v1395 staging candidate
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- index.html
+          git commit -m 'v1395 candidate: authoritative winner rings and correct Following avatar activity'
+          git push origin HEAD:refs/heads/a36-integration-v1389
