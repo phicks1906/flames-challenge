@@ -87,7 +87,19 @@ async function awaitServer(){
    if(await guide.count()){
      const skip=guide.locator('#fcObSkipV1103');
      await skip.waitFor({timeout:11000});
-     await skip.click({timeout:11000});
+     const guideProbe=await page.evaluate(()=>{
+       const e=document.getElementById('fcObSkipV1103'),r=e.getBoundingClientRect();
+       const hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);
+       const chain=[];for(let n=e;n&&chain.length<10;n=n.parentElement){
+         const cs=getComputedStyle(n);chain.push({tag:n.tagName,id:n.id,klass:String(n.className).slice(0,60),pointerEvents:cs.pointerEvents,display:cs.display,zIndex:cs.zIndex,position:cs.position});
+       }
+       return {rect:{x:r.x,y:r.y,w:r.width,h:r.height},hit:hit?.tagName+'.'+String(hit?.className||'').slice(0,90),
+         overlayOpen:document.getElementById('fcOnboardingV1103')?.classList.contains('open'),
+         chain,viewport:{w:innerWidth,h:innerHeight}};
+     });
+     console.log('A36_GUIDE_TAP_HITTEST '+JSON.stringify(guideProbe));
+     await page.screenshot({path:path.join(out,'guide-before-skip-'+width+'.png')});
+     await skip.click({timeout:5000});
      await page.waitForFunction(()=>!document.getElementById('fcOnboardingV1103')?.classList.contains('open'),null,{timeout:15000});
      console.log('PASS A3.6 optional first-run guide completed through Skip');
    }
