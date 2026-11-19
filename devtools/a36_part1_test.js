@@ -118,5 +118,45 @@ const advance=async()=>{for(let i=0;i<12;i++)await new Promise(resolve=>setImmed
   const readCount=calls.length;btn.click();await advance();
   assert.equal(calls.length,readCount,'Other profiles must not trigger vote history fetches');
 
-  console.log('PASS: own-only Votes tab, authoritative voter filter, competitor hydration, poll isolation, viewer return context, public privacy');
+
+  // Part 2 North Star outcome matrix: rely on settled records only, not local vote totals.
+  psState.userId='me';psState.profile={id:'me'};psState.tab='votes';
+  ctx.window.renderProfileSheet();
+  const cases=[
+    {id:'c3',entry:'e3',user:'u3',resolution:'decisive',winner_count:1,
+      winners:[{challenge_id:'c3',entry_id:'e3',user_id:'u3',is_co_winner:false}]},
+    {id:'c4',entry:'e4',user:'u4',resolution:'co_winners',winner_count:2,
+      winners:[{challenge_id:'c4',entry_id:'e4',user_id:'u4',is_co_winner:true},
+               {challenge_id:'c4',entry_id:'other4',user_id:'other4',is_co_winner:true}]},
+    {id:'c5',entry:'e5',user:'u5',resolution:'no_contest',winner_count:0,winners:[]},
+    {id:'c6',entry:'e6',user:'u6',resolution:'decisive',winner_count:1,
+      winners:[{challenge_id:'c6',entry_id:'other6',user_id:'other6',is_co_winner:false}]},
+  ];
+  for(const c of cases){
+    rows.entry_votes.push({id:'vote-'+c.id,challenge_id:c.id,entry_id:c.entry,
+      created_at:'2026-11-18T12:00:00Z',voter_id:'me'});
+    rows.challenges.push({id:c.id,title:'Official '+c.id,category:'Dance',voting_end:'2026-11-17T12:00:00Z'});
+    rows.entries.push({id:c.entry,challenge_id:c.id,user_id:c.user,
+      submitter:{id:c.user,name:'Competitor '+c.user,avatar:'X'}});
+  }
+  rows.challenge_results=cases.map(({id,resolution,winner_count})=>
+    ({challenge_id:id,resolution,winner_count,resolved_at:'2026-11-18T12:30:00Z'}));
+  rows.challenge_result_winners=cases.flatMap(x=>x.winners);
+  rows.entry_votes.push({id:'pending',challenge_id:'c7',entry_id:'e7',
+    created_at:'2026-11-18T10:00:00Z',voter_id:'me'});
+  rows.challenges.push({id:'c7',title:'Pending official result',category:'Dance',
+    voting_end:'2026-11-17T12:00:00Z'});
+  rows.entries.push({id:'e7',challenge_id:'c7',user_id:'u7',
+    submitter:{id:'u7',name:'Competitor u7',avatar:'X'}});
+  await ctx.window.fcA36VotesPart1.refresh();
+  await advance();
+  assert.match(content.innerHTML,/Official result · Your pick won/);
+  assert.match(content.innerHTML,/Official result · Your pick co-won/);
+  assert.match(content.innerHTML,/Official result · No contest/);
+  assert.match(content.innerHTML,/Official result · Another competitor won/);
+  assert.match(content.innerHTML,/Official result not available/);
+  assert.equal(state.myVotes,pollState,'Settlement outcomes must never overwrite poll state');
+  assert.ok(calls.some(c=>c.table==='challenge_results'),'Must request authoritative result source');
+  assert.ok(calls.some(c=>c.table==='challenge_result_winners'),'Must request authoritative winner source');
+  console.log('PASS: own-only history, safe navigation, official win/co-win/loss/no-contest/pending states, poll isolation');
 })().catch(e=>{console.error(e);process.exit(1)});
