@@ -21,9 +21,9 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1391 · a36-following-active-entries" name="fc-build"/>
+<meta content="v1392 · a36-voted-official-results" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
-<meta content="Your competitive votes are now listed on your own profile, with a path back to each competition." name="fc-whatsnew"/>
+<meta content="Your competition votes now link to official settled results, including wins, co-wins and no-contests." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
      The primary logo is the approved Crowned F extracted from the approved
      Option 2 concept board. Do not reconstruct, redraw, or substitute another F.
@@ -54550,7 +54550,7 @@ button.fc-post-follow-v1366:disabled{opacity:.55;cursor:wait}
 .fc-art-unavailable-v1368 .fc-empty-category-v1368{position:static;width:auto;height:auto;margin:18px 16px 10px;color:#ff783a}
 .fc-art-unavailable-v1368 .fc-empty-title-v1368{position:static;width:auto;height:auto;margin:0 18px 22px;overflow:visible}
 </style>
-<!-- A3.6 Part 1: member-only competition vote history; no result calculation -->
+<!-- A3.6 Part 2: competition vote history with authoritative settled results -->
 <style id="fc-a36-v1390-votes-css">
 #profileSheet .fc-a36-vote-intro{font-size:12px;line-height:1.5;color:var(--p-muted,var(--text-muted));margin:3px 3px 14px}
 #profileSheet .fc-a36-vote-list{display:flex;flex-direction:column;gap:9px}
@@ -54560,6 +54560,7 @@ button.fc-post-follow-v1366:disabled{opacity:.55;cursor:wait}
 #profileSheet .fc-a36-vote-date{font-size:10px;color:var(--p-muted,var(--text-muted));margin-bottom:3px}
 #profileSheet .fc-a36-vote-title{font-size:13px;line-height:1.3;font-weight:750;color:var(--p-text,var(--text));overflow-wrap:anywhere}
 #profileSheet .fc-a36-vote-choice{font-size:12px;line-height:1.4;color:var(--p-dim,var(--text-dim));margin-top:4px;overflow-wrap:anywhere}
+#profileSheet .fc-a36-vote-outcome{font-size:11px;line-height:1.35;font-weight:700;color:var(--ember);margin-top:5px;overflow-wrap:anywhere}
 #profileSheet .fc-a36-vote-open{font:inherit;font-weight:750;font-size:11px;border:1px solid var(--p-border,var(--border));border-radius:9px;padding:10px 8px;min-height:39px;white-space:nowrap;color:var(--p-text,var(--text));background:var(--p-card,var(--surface));cursor:pointer}
 #profileSheet .fc-a36-vote-open:disabled{opacity:.45;cursor:not-allowed}
 #profileSheet .fc-a36-vote-action{display:block;width:100%;min-height:42px;margin:13px 0;border:1px solid var(--p-border,var(--border));border-radius:12px;background:var(--p-card,var(--surface));color:var(--p-text,var(--text));font:inherit;font-size:12px;font-weight:750}
@@ -54571,7 +54572,7 @@ button.fc-post-follow-v1366:disabled{opacity:.55;cursor:wait}
 (function(){
   'use strict';
   const PAGE_SIZE=50;
-  const history={uid:null,rows:[],challenges:new Map(),entries:new Map(),offset:0,hasMore:false,loading:false,error:null,loaded:false,loadedAt:0,request:0};
+  const history={uid:null,rows:[],challenges:new Map(),entries:new Map(),results:new Map(),winners:new Map(),offset:0,hasMore:false,loading:false,error:null,loaded:false,loadedAt:0,request:0};
   const same=(a,b)=>!!a&&!!b&&String(a)===String(b);
   function ownProfile(){
     return same(state?.profile?.id,psState?.userId)&&same(state?.profile?.id,psState?.profile?.id);
@@ -54582,7 +54583,7 @@ button.fc-post-follow-v1366:disabled{opacity:.55;cursor:wait}
   function resetHistory(uid){
     history.request++;
     history.uid=uid;
-    history.rows=[];history.challenges=new Map();history.entries=new Map();
+    history.rows=[];history.challenges=new Map();history.entries=new Map();history.results=new Map();history.winners=new Map();
     history.offset=0;history.hasMore=false;history.loading=false;history.error=null;
     history.loaded=false;history.loadedAt=0;
   }
@@ -54622,12 +54623,35 @@ button.fc-post-follow-v1366:disabled{opacity:.55;cursor:wait}
     const d=new Date(v);
     return Number.isNaN(d.getTime())?'Vote recorded':'Voted '+new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric'}).format(d);
   }
+  // Final outcomes always come from settled records, never local vote counting.
+  function outcomeFor(vote,ch,entry){
+    const result=history.results.get(String(vote.challenge_id));
+    if(result){
+      const winners=history.winners.get(String(vote.challenge_id))||[];
+      if(winners.length){
+        const competitorId=entry?.user_id?String(entry.user_id):null;
+        const pickWon=winners.some(w=>(w.entry_id&&String(w.entry_id)===String(vote.entry_id))||
+          (competitorId&&String(w.user_id)===competitorId));
+        const isCoWin=winners.length>1||Number(result.winner_count)>1;
+        return pickWon?(isCoWin?'Official result · Your pick co-won':'Official result · Your pick won'):
+          'Official result · Another competitor won';
+      }
+      if(Number(result.winner_count)>0)return 'Official winner details unavailable';
+      return result.resolution==='no_contest'?'Official result · No contest':'Official result · No decisive winner';
+    }
+    if(!ch)return 'Official result unavailable';
+    if(ch.sd_phase==='submitting')return 'Tiebreaker entries pending';
+    if(ch.sd_phase==='voting')return 'Tiebreaker voting open';
+    const end=Date.parse(ch.voting_end||'');
+    if(Number.isFinite(end)&&end>Date.now())return 'Voting open';
+    return 'Official result not available';
+  }
   function paint(){
     if(!current())return;
     const c=document.getElementById('psContent');
     if(!c)return;
     ensureAccount();
-    let html='<p class="fc-a36-vote-intro">Competitions you voted in. Following a competitor is not required to find your vote.</p>';
+    let html='<p class="fc-a36-vote-intro">Your competition votes and official outcomes. Following a competitor is optional.</p>';
     if(history.loading&&!history.rows.length){
       html+='<div class="fc-a36-vote-message" role="status">Loading your competition votes…</div>';
     }else if(history.error&&!history.rows.length){
@@ -54645,7 +54669,8 @@ button.fc-post-follow-v1366:disabled{opacity:.55;cursor:wait}
         html+='<div class="fc-a36-vote-row"><div class="fc-a36-vote-icon" aria-hidden="true">✓</div>'+
           '<div class="fc-a36-vote-detail"><div class="fc-a36-vote-date">'+escapeHtml(category+dateLabel(vote.created_at))+'</div>'+
           '<div class="fc-a36-vote-title">'+escapeHtml(title)+'</div>'+
-          '<div class="fc-a36-vote-choice">Your pick: '+escapeHtml(who)+'</div></div>'+
+          '<div class="fc-a36-vote-choice">Your pick: '+escapeHtml(who)+'</div>'+
+          '<div class="fc-a36-vote-outcome">'+escapeHtml(outcomeFor(vote,ch,entry))+'</div></div>'+
           '<button type="button" class="fc-a36-vote-open" data-fc-a36-ch="'+escapeHtml(String(vote.challenge_id||''))+'"'+
           (ch?'':' disabled')+'>View</button></div>';
       }
@@ -54672,7 +54697,7 @@ button.fc-post-follow-v1366:disabled{opacity:.55;cursor:wait}
     if(!uid||!ownProfile()||history.loading)return;
     if(reset){
       history.request++;
-      history.rows=[];history.challenges=new Map();history.entries=new Map();
+      history.rows=[];history.challenges=new Map();history.entries=new Map();history.results=new Map();history.winners=new Map();
       history.offset=0;history.hasMore=false;history.loaded=false;
     }
     const request=++history.request;
@@ -54689,15 +54714,25 @@ button.fc-post-follow-v1366:disabled{opacity:.55;cursor:wait}
       const rows=vRes?.data||[];
       const challengeIds=[...new Set(rows.map(v=>v.challenge_id).filter(Boolean))];
       const entryIds=[...new Set(rows.map(v=>v.entry_id).filter(Boolean))];
-      const [cRes,eRes]=await Promise.all([
+      const [cRes,eRes,rRes,wRes]=await Promise.all([
         challengeIds.length?fcWithTimeoutV1099(db.from('challenges').select('*').in('id',challengeIds),12000,'Voted challenges'):Promise.resolve({data:[],error:null}),
-        entryIds.length?fcWithTimeoutV1099(db.from('entries').select('id,challenge_id,user_id,submitter:profiles!entries_user_id_fkey(id,name,avatar)').in('id',entryIds),12000,'Voted competitors'):Promise.resolve({data:[],error:null})
+        entryIds.length?fcWithTimeoutV1099(db.from('entries').select('id,challenge_id,user_id,submitter:profiles!entries_user_id_fkey(id,name,avatar)').in('id',entryIds),12000,'Voted competitors'):Promise.resolve({data:[],error:null}),
+        challengeIds.length?fcWithTimeoutV1099(db.from('challenge_results').select('challenge_id,resolution,winner_count,resolved_at').in('challenge_id',challengeIds),12000,'Official voted results'):Promise.resolve({data:[],error:null}),
+        challengeIds.length?fcWithTimeoutV1099(db.from('challenge_result_winners').select('challenge_id,user_id,entry_id,is_co_winner').in('challenge_id',challengeIds),12000,'Official voted winners'):Promise.resolve({data:[],error:null})
       ]);
       if(cRes?.error)throw cRes.error;
       if(eRes?.error)throw eRes.error;
+      if(rRes?.error)console.warn('A3.6 official results temporarily unavailable',rRes.error);
+      if(wRes?.error)console.warn('A3.6 winner records temporarily unavailable',wRes.error);
       if(request!==history.request||!same(uid,state?.profile?.id))return;
       (cRes.data||[]).forEach(ch=>history.challenges.set(String(ch.id),ch));
       (eRes.data||[]).forEach(entry=>history.entries.set(String(entry.id),entry));
+      if(!rRes?.error)(rRes?.data||[]).forEach(r=>history.results.set(String(r.challenge_id),r));
+      if(!wRes?.error)(wRes?.data||[]).forEach(w=>{
+        const key=String(w.challenge_id);
+        if(!history.winners.has(key))history.winners.set(key,[]);
+        history.winners.get(key).push(w);
+      });
       const seen=new Set(history.rows.map(v=>String(v.id)));
       rows.forEach(v=>{if(!seen.has(String(v.id))){history.rows.push(v);seen.add(String(v.id));}});
       history.offset=offset+rows.length;
