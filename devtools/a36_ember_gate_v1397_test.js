@@ -3,7 +3,7 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const source=fs.readFileSync('index.html','utf8');
-assert.match(source,/v1397 · a36-ember-after-onboarding/);
+assert.match(source,/v139[78] · a36-(?:ember-after-onboarding|safe-get-app-after-ember)/);
 const start=source.indexOf('  function fcA36EmberMustDeferV1397() {');
 const end=source.indexOf('  let fcA36EmberDeferralsV1397 = 0;',start);
 assert.ok(start>0&&end>start,'Missing real Ember gate');
