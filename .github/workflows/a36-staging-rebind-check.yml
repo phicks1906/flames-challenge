@@ -1,0 +1,36 @@
+name: A3.6 safe staging client rebind check
+on:
+  push:
+    branches: [a36-integration-v1389]
+    paths: ['.github/workflows/a36-staging-rebind-check.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check-runtime-rebinding:
+    if: github.ref == 'refs/heads/a36-integration-v1389'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      FC_A36_STAGING_PUBLISHABLE_KEY: sb_publishable_CEKUcsp6qLL3RL5iajJ5jg_ArDJB7BK
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Generate local-only v1395 staging browser copy
+        run: python3 devtools/a36_make_ephemeral_staging_preview.py
+      - name: Verify canonical root and copy remain distinct
+        run: |
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          main=Path('index.html').read_text('utf-8')
+          staging=Path('/tmp/fc-a36-staging-browser/index.html').read_text('utf-8')
+          assert 'const SUPABASE_URL = "https://sioalvawzayfphwzqctq.supabase.co";' in main
+          assert 'const SUPABASE_URL = "https://pcmobielrhdfzivrwvuu.supabase.co";' in staging
+          assert main.count('const SUPABASE_URL = ') == staging.count('const SUPABASE_URL = ') == 1
+          assert main.count('const SUPABASE_KEY = ') == staging.count('const SUPABASE_KEY = ') == 1
+          assert re.sub(r'^const SUPABASE_(URL|KEY) = .*;$','[APP_DB_CLIENT_REDACTED]',main,flags=re.M) == re.sub(r'^const SUPABASE_(URL|KEY) = .*;$','[APP_DB_CLIENT_REDACTED]',staging,flags=re.M)
+          print('PASS: ephemeral test app uses staging DB client; all other app bytes identical')
+          PY
+          git diff --exit-code -- index.html
