@@ -9,7 +9,7 @@ const runId=String(process.env.GITHUB_RUN_ID||'').trim();
 assert.equal(base,'https://pcmobielrhdfzivrwvuu.supabase.co','STOP: wrong project target');
 assert.ok(apiKey&&apiKey.startsWith('sb_publishable_'),'STOP: missing publishable key');
 assert.match(runId,/^\d{6,15}$/,'STOP: require CI run ID');
-const email='fc-a36-e2e-'+runId+'@example.invalid';
+const email='fc-a36-e2e-'+runId+'@flameschallenge.com';
 const password=crypto.randomBytes(32).toString('base64url')+'aA1!';
 const title='FC_A36_E2E_'+runId+'_LIVE';
 const nextTitle='FC_A36_E2E_'+runId+'_FOLLOW_NEXT';
