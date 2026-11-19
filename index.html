@@ -21,7 +21,7 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1393 · a36-following-independent" name="fc-build"/>
+<meta content="v1394 · a36-following-active-only" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
 <meta content="Your competition votes now link to official settled results, including wins, co-wins and no-contests." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
@@ -31292,14 +31292,12 @@ async function loadFollowingList() {
       list.innerHTML = '<div style="text-align:center;padding:48px 20px;color:var(--text-muted);"><div style="font-size:40px;margin-bottom:12px;">👥</div><div style="font-weight:600;margin-bottom:6px;">Not following anyone yet</div><div style="font-size:14px;">Find people from the profile menu.</div></div>';
       return;
     }
-    const [profilesRes, competingRes] = await Promise.all([
-      db.from('profiles').select('id,name,avatar').in('id', ids),
-      db.from('entries').select('user_id').in('user_id', ids).gte('created_at', new Date(Date.now() - 7*24*60*60*1000).toISOString()),
-    ]);
+    const profilesRes = await db.from('profiles').select('id,name,avatar').in('id', ids);
+    if (profilesRes.error) throw profilesRes.error;
     const profiles = profilesRes.data || [];
-    const competingIds = new Set((competingRes.data || []).map(e => e.user_id));
-    profiles.sort((a, b) => (competingIds.has(b.id) ? 1 : 0) - (competingIds.has(a.id) ? 1 : 0) || a.name.localeCompare(b.name));
-    renderFollowList(list, profiles, competingIds, 'following');
+    profiles.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    // Don't imply current competition based on a recent entry or an unchecked query.
+    renderFollowList(list, profiles, new Set(), 'following');
     await fcA36AttachFollowingEntriesV1391(list, profiles);
   } catch(err) {
     list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Could not load list.</div>';
@@ -31342,7 +31340,14 @@ async function fcA36AttachFollowingEntriesV1391(list, profiles) {
     if (Number(entry.sd_round || 0) !== Number(ch.sd_round || 0)) continue;
     if (!eligible.has(entry.user_id)) eligible.set(entry.user_id,{entry,ch});
   }
-  profiles.forEach((person,index) => {
+  // The SAME eligible entries drive both the status badge and the View Entry link.
+  // Keep active competitors first, retaining stable alphabetical ties.
+  const activeIds = new Set(eligible.keys());
+  const orderedProfiles = [...profiles].sort((a,b) =>
+    (activeIds.has(b.id) ? 1 : 0) - (activeIds.has(a.id) ? 1 : 0) ||
+    (a.name || '').localeCompare(b.name || ''));
+  renderFollowList(list, orderedProfiles, activeIds, 'following');
+  orderedProfiles.forEach((person,index) => {
     const match=eligible.get(person.id);
     if (!match) return;
     const details=list.children[index]?.children?.[1];
