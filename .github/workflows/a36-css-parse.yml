@@ -1,0 +1,26 @@
+name: A3.6 staged full CSS structural parse
+on:
+  push:
+    branches: [a36-integration-v1389]
+    paths: ['.github/workflows/a36-css-parse.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  parse-staging-css:
+    if: github.ref == 'refs/heads/a36-integration-v1389'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated CSS parser
+        run: npm install --prefix /tmp/fc-a36-css --no-audit --no-fund postcss@8.5.6
+      - name: Parse every inline style block in staged index.html
+        run: node devtools/a36_css_parse_test.js
+      - name: Check all inline JavaScript and build metadata
+        run: python3 devtools/fc_source_tools.py validate
