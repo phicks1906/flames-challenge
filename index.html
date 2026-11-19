@@ -21,7 +21,7 @@
      request instead of pulling the whole 1.2 MB file. APP_VERSION reads from
      this tag; bump it HERE and nowhere else.
      fc-whatsnew is the one line shown in the update prompt. -->
-<meta content="v1399 · a36-following-nav-clearance" name="fc-build"/>
+<meta content="v1400 · a36-following-nav-runtime" name="fc-build"/>
 <!-- v1161: improved Record style visibility without changing its layout or playback behavior. -->
 <meta content="Your competition votes now link to official settled results, including wins, co-wins and no-contests." name="fc-whatsnew"/>
 <!-- v1011 CANONICAL BRAND ASSET:
@@ -31301,9 +31301,47 @@ function maybeStartTour() {
 // ── FOLLOWING SHEET ──────────────────────────────────────────────────────────
 let _fsActiveTab = 'following';
 
+// v1400: the primary nav has legacy high-priority visibility rules. During
+// Connections, set the effective inline priority and restore it on exit.
+// Observe all close paths, including backdrop and generic modal cleanup.
+let fcA36FollowingNavPriorV1400 = null;
+function fcA36SyncFollowingNavV1400() {
+  const sheet = document.getElementById('followingSheet');
+  const nav = document.getElementById('bottomNav');
+  if (!sheet || !nav) return;
+  if (sheet.classList.contains('open')) {
+    if (!fcA36FollowingNavPriorV1400) {
+      fcA36FollowingNavPriorV1400 = {
+        visibility:nav.style.getPropertyValue('visibility'),
+        visibilityPriority:nav.style.getPropertyPriority('visibility'),
+        pointerEvents:nav.style.getPropertyValue('pointer-events'),
+        pointerPriority:nav.style.getPropertyPriority('pointer-events')
+      };
+    }
+    nav.style.setProperty('visibility','hidden','important');
+    nav.style.setProperty('pointer-events','none','important');
+  } else if (fcA36FollowingNavPriorV1400) {
+    const prev = fcA36FollowingNavPriorV1400;
+    if (prev.visibility) nav.style.setProperty('visibility',prev.visibility,prev.visibilityPriority);
+    else nav.style.removeProperty('visibility');
+    if (prev.pointerEvents) nav.style.setProperty('pointer-events',prev.pointerEvents,prev.pointerPriority);
+    else nav.style.removeProperty('pointer-events');
+    fcA36FollowingNavPriorV1400 = null;
+  }
+}
+function fcA36WatchFollowingNavV1400() {
+  const sheet = document.getElementById('followingSheet');
+  if (!sheet || sheet.dataset.fcA36NavObservedV1400 === '1') return;
+  sheet.dataset.fcA36NavObservedV1400 = '1';
+  new MutationObserver(fcA36SyncFollowingNavV1400).observe(sheet,{
+    attributes:true,attributeFilter:['class']
+  });
+}
 async function openFollowingSheet() {
   document.getElementById('profileModal')?.classList.remove('open');
   document.getElementById('followingSheet').classList.add('open');
+  fcA36WatchFollowingNavV1400();
+  fcA36SyncFollowingNavV1400();
   _fsActiveTab = 'following';
   switchFollowTab('following');
 }
@@ -31562,6 +31600,7 @@ function renderFollowList(list, profiles, competingIds, mode, iFollow) {
 
 function closeFollowingSheet() {
   document.getElementById('followingSheet').classList.remove('open');
+  fcA36SyncFollowingNavV1400();
 }
 
 
