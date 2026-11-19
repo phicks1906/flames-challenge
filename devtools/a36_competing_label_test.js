@@ -49,7 +49,7 @@ function renderFollowList(el, people, competingIds, mode){
    buttons:[],appendChild(btn){this.buttons.push(btn);}
   },{}]
  }));
- rendered.push({names:people.map(p=>p.name),active:people.filter(p=>competingIds.has(p.id)).map(p=>p.id),mode});
+ rendered.push({names:Array.from(people,p=>p.name),active:Array.from(people).filter(p=>competingIds.has(p.id)).map(p=>p.id),mode});
 }
 const ctx={state:{profile:{id:'fan'},feedEntries:[],challenges:[]},db:{from},document,renderFollowList,
  computeChallengeStatus:ch=>ch.status,fcWithTimeoutV1099:async q=>await q,
