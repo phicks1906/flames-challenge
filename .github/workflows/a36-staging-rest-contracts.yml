@@ -1,0 +1,27 @@
+name: A3.6 live staging PostgREST read contract validation
+on:
+  push:
+    branches: [a36-integration-v1389]
+    paths: ['.github/workflows/a36-staging-rest-contracts.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  staging-read-contracts:
+    if: github.ref == 'refs/heads/a36-integration-v1389'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      FC_A36_STAGING_URL: https://pcmobielrhdfzivrwvuu.supabase.co
+      FC_A36_STAGING_PUBLISHABLE_KEY: sb_publishable_CEKUcsp6qLL3RL5iajJ5jg_ArDJB7BK
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check read-only staging contract test syntax
+        run: node --check devtools/a36_live_staging_rest_contracts.js
+      - name: Verify actual PostgREST relationships and result endpoints
+        run: node devtools/a36_live_staging_rest_contracts.js
