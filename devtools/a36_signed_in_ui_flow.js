@@ -154,7 +154,22 @@ async function awaitServer(){
    const ember=page.locator('dialog#fcEmberDailyBriefingV1221:modal');
    if(await ember.count()){
      await page.screenshot({path:path.join(out,'ember-daily-'+width+'.png')});
-     await ember.locator('[aria-label="Minimize Ember"]').click({timeout:10000});
+     const emberHit=await page.evaluate(()=>{
+       const d=document.getElementById('fcEmberDailyBriefingV1221'),
+             b=d?.querySelector('[aria-label="Minimize Ember"]');
+       if(!d||!b)return {missing:true};
+       const r=b.getBoundingClientRect(), x=r.left+r.width/2,y=r.top+r.height/2;
+       const st=getComputedStyle(d);
+       return {button:{x:r.x,y:r.y,w:r.width,h:r.height},hitStack:document.elementsFromPoint(x,y).slice(0,7).map(n=>n.tagName+'#'+n.id),
+         dialogOpen:d.open,dialogModal:d.matches(':modal'),dialogInert:d.inert,inertParent:!!d.closest('[inert]'),
+         dialogStyle:{display:st.display,pointerEvents:st.pointerEvents,visibility:st.visibility,zIndex:st.zIndex},
+         otherOpen:[...document.querySelectorAll('.modal-backdrop.open,.cd-sheet.open')].map(n=>n.id).slice(0,12),
+         allModal:[...document.querySelectorAll(':modal')].map(n=>n.id),
+         inertTopLevel:[...document.body.children].filter(n=>n.inert).slice(0,20).map(n=>n.id||n.tagName),
+         bodyInert:document.body.inert};
+     });
+     console.log('A36_EMBER_TAP_HITTEST '+JSON.stringify(emberHit));
+     await ember.locator('[aria-label="Minimize Ember"]').click({timeout:7500});
      await page.waitForFunction(()=>!document.querySelector('#fcEmberDailyBriefingV1221:modal'),null,{timeout:10000});
      console.log('PASS A3.6 once-daily Ember minimized using actual control '+width+'px');
    }
