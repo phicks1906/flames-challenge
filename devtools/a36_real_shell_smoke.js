@@ -1,5 +1,5 @@
 'use strict';
-/* A3.6 staging v1394: smoke check the REAL root index.html in headless phone-sized
+/* A3.6 staging v1395: smoke check the REAL root index.html in headless phone-sized
    Chromium. Guest-only, no authentication; all outbound non-GET requests blocked.
    Never writes production data or declares iPhone hardware acceptance. */
 const {chromium}=require('/tmp/fc-a36-shell/node_modules/playwright');
@@ -67,7 +67,7 @@ function isVisible(el){
        bodyExists:!!document.body,screenHeight:window.innerHeight};
    },isVisible.toString());
    await page.screenshot({path:path.join(OUT,'root-'+width+'-guest.png'),fullPage:false});
-   assert.match(status.build||'',/^v1394\b/,'Expected staged build v1394');
+   assert.match(status.build||'',/^v1395\b/,'Expected staged build v1395');
    assert.ok(status.bodyExists&&status.bodyWidth>0,'No app body');
    assert.ok(status.visibleCount>0,'Guest app has no visible controls/text');
    // Interpret any overflow as evidence rather than certifying it without inspection:
@@ -83,7 +83,7 @@ function isVisible(el){
   },null,2));
   console.log('STAGED_ROOT_GUEST_SUMMARY '+JSON.stringify(summary));
   if(summary.some(s=>s.pageErrors.length))console.warn('GUEST_BOOTSTRAP_ERRORS: See captured summary; backend reads blocked for safety');
-  console.log('PASS: staged v1394 root HTML rendered visible guest controls at all phone widths; production writes blocked');
+  console.log('PASS: staged v1395 root HTML rendered visible guest controls at all phone widths; production writes blocked');
  }finally{
   if(browser)await browser.close();
   server.kill('SIGTERM');
