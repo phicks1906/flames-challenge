@@ -239,6 +239,23 @@ async function awaitServer(){
       actionReceivesTap:!!action&&(hit===action||action.contains(hit))
     };
    });
+   const cssProbe=await page.evaluate(()=>{
+     const sheet=document.getElementById('followingSheet'),
+           nav=document.getElementById('bottomNav'),
+           style=document.getElementById('fc-a36-following-nav-v1399');
+     return {styleExists:!!style,ruleText:(style?.textContent||'').slice(0,600),
+       bodyHasFollowing:document.body.matches('body:has(#followingSheet.open)'),
+       followingOpen:sheet.classList.contains('open'),
+       sheetInBody:document.body.contains(sheet),
+       sheetComputedZ:getComputedStyle(sheet).zIndex,
+       navComputedZ:getComputedStyle(nav).zIndex,
+       navComputedVisibility:getComputedStyle(nav).visibility,
+       navComputedPointerEvents:getComputedStyle(nav).pointerEvents,
+       navInlineVisibility:nav.style.getPropertyValue('visibility'),
+       navInlineVisibilityPriority:nav.style.getPropertyPriority('visibility'),
+       navClass:nav.className,bodyClass:document.body.className.slice(0,160)};
+   });
+   console.log('A36_FOLLOWING_CSS_DIAGNOSTIC '+JSON.stringify(cssProbe));
    console.log('A36_FOLLOWING_LAYOUT_CHECK '+JSON.stringify({width,navVisibility:following.navVisibility,actionInViewport:following.actionInViewport,actionReceivesTap:following.actionReceivesTap}));
    assert.ok(following.open,'Following sheet failed to open');
    assert.equal(following.navVisibility,'hidden','Following must cover persistent bottom navigation');
