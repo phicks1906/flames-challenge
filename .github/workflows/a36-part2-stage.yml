@@ -1,0 +1,62 @@
+name: A3.6 Part 2 official results staging candidate
+on:
+  push:
+    branches: [a36-integration-v1389]
+    paths: ['.github/workflows/a36-part2-stage.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  stage:
+    if: github.ref == 'refs/heads/a36-integration-v1389'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate current staging v1391
+        run: |
+          python3 devtools/fc_source_tools.py validate
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('index.html').read_text(encoding='utf-8')
+          assert s.count('v1391 · a36-following-active-entries')==1
+          assert s.count('function fcA36AttachFollowingEntriesV1391')==1
+          PY
+      - name: Apply guarded A3.6 Part 2 update
+        run: python3 devtools/a36_apply_part2.py
+      - name: Validate new version, JS and official outcome states
+        run: |
+          python3 devtools/fc_source_tools.py validate
+          git diff --check
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+          s=Path('index.html').read_text(encoding='utf-8')
+          a=s.index('<!-- A3.6 Part 2:')
+          b=s.index('</script>',a)
+          component=s[a:b]
+          assert 'v1392 · a36-voted-official-results' in s
+          assert s.count('function fcA36AttachFollowingEntriesV1391')==1
+          assert 'state.myVotes' not in component
+          for key in ["db.from('entry_votes')","db.from('challenge_results')",
+                      "db.from('challenge_result_winners')",
+                      "Official result · Your pick won",
+                      "Official result · Your pick co-won",
+                      "Official result · No contest",
+                      "Official result not available"]:
+              assert key in component, key
+          assert subprocess.check_output(['git','diff','--name-only'],text=True).splitlines()==['index.html']
+          print('PASS: Part 2 isolated candidate, official outcomes, no poll state conflation')
+          PY
+      - name: Commit only index.html to staging branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- index.html
+          git commit -m 'v1392 candidate: A3.6 authoritative result records for vote history'
+          git push origin HEAD:refs/heads/a36-integration-v1389
