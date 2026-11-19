@@ -80,8 +80,19 @@ async function awaitServer(){
      }
      console.log('PASS A3.6 actual first-run appearance and Music interest onboarding '+width+'px');
    }
-   // The guide appears shortly after required setup; use its ordinary Skip
-   // button, which persists the walkthrough choice. Do not hide DOM layers.
+   // Required setup has to finish before Community Guidelines acceptance.
+   await page.waitForFunction(()=>!document.getElementById('fcOnboardingV1103')?.classList.contains('open'),null,{timeout:15000});
+   const hasAgreed=await page.evaluate(()=>guidelinesAcked());
+   if(!hasAgreed){
+     const guidelines=page.locator('#guidelinesModal.open');
+     await guidelines.waitFor({timeout:20000});
+     await page.screenshot({path:path.join(out,'guidelines-before-accept-'+width+'.png')});
+     await guidelines.locator('button:has-text("I Agree")').click({timeout:15000});
+     await page.waitForFunction(()=>!document.getElementById('guidelinesModal')?.classList.contains('open'),null,{timeout:15000});
+     console.log('PASS A3.6 mandatory Guidelines accepted through actual UI '+width+'px');
+   }
+   // The guide appears shortly after Guidelines acceptance; use Skip normally.
+   // Never remove overlays or bypass required onboarding in test code.
    await page.waitForTimeout(1650);
    const guide=page.locator('#fcOnboardingV1103.open');
    if(await guide.count()){
@@ -114,7 +125,7 @@ async function awaitServer(){
      await page.waitForFunction(()=>!document.getElementById('fcOnboardingV1103')?.classList.contains('open'),null,{timeout:15000});
      console.log('PASS A3.6 optional first-run guide completed through Skip');
    }
-   assert.equal(await page.evaluate(()=>document.querySelector('meta[name="fc-build"]')?.content.startsWith('v1395')),true);
+   assert.equal(await page.evaluate(()=>document.querySelector('meta[name="fc-build"]')?.content.startsWith('v1396')),true);
    // Open the actual profile sheet using the app's own navigation function.
    await page.evaluate(async()=>await openUserProfile(state.profile.id));
    await page.locator('#fcA36VotesTab:visible').waitFor({timeout:18000});
@@ -186,6 +197,6 @@ async function awaitServer(){
    await context.close();
   }
   fs.writeFileSync(path.join(out,'report.json'),JSON.stringify({scope:'real staging v1395 signed-in app UI, mobile Chromium',physicalIphone:false,report},null,2));
-  console.log('PASS A3.6 signed-in v1395 UI navigation at 375/390/430px; physical iPhone still separate');
+  console.log('PASS A3.6 signed-in v1396 UI navigation at 375/390/430px; physical iPhone still separate');
  }finally{if(browser)await browser.close();server.kill('SIGTERM');}
 })().catch(e=>{console.error('A36_FLOW_UI_FAILED '+String(e.message||e).slice(0,450));process.exitCode=1;});
