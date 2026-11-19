@@ -32,7 +32,8 @@ function browserSetup(){
     discoveryQueries++;
     return Promise.resolve({data:[
      {id:'private-entry',user_id:'other',challenge_id:'private',moderation_status:'clear',sd_round:0,created_at:'2026-11-18T12:00:00Z',challenge:{id:'private',is_public:false,status:'voting',title:'Hidden'}},
-     {id:'entry-new',user_id:'followed',challenge_id:'challenge-new',moderation_status:'clear',sd_round:0,created_at:'2026-11-18T11:00:00Z',challenge}
+     {id:'recent-closed',user_id:'other',challenge_id:'closed',moderation_status:'clear',sd_round:0,created_at:'2026-11-18T11:30:00Z',challenge:{id:'closed',title:'Closed Yesterday',is_public:true,status:'closed',sd_round:0}},
+    {id:'entry-new',user_id:'followed',challenge_id:'challenge-new',moderation_status:'clear',sd_round:0,created_at:'2026-11-18T11:00:00Z',challenge}
     ],error:null}).then(ok,bad);
    }
   };
@@ -47,12 +48,15 @@ function browserSetup(){
   opened.push([challengeId,entryId]);
   document.getElementById('result').textContent='Opened '+challengeId+' / '+entryId;
  }
+ function renderFollowList(list,profiles,competingIds,mode){
+  list.innerHTML=profiles.map(p=>'<div><div>'+p.name[0]+'</div><div>'+p.name+(competingIds.has(p.id)?'<div class="competing-label">● Competing now</div>':'')+'</div><div>Following</div></div>').join('');
+ }
  function toast(s){errors.push(s)}
  document.getElementById('theme').onclick=()=>{
   const light=document.documentElement.classList.toggle('light');
   document.getElementById('theme').textContent=light?'Dark':'Light';
  };
- Object.assign(window,{state,people,challenge,opened,errors,db,fcWithTimeoutV1099,computeChallengeStatus,closeFollowingSheet,openFeedViewer,toast});
+ Object.assign(window,{state,people,challenge,opened,errors,db,fcWithTimeoutV1099,computeChallengeStatus,closeFollowingSheet,openFeedViewer,toast,renderFollowList});
  Object.defineProperty(window,'discoveryQueries',{get:()=>discoveryQueries});
 }
 (async()=>{
@@ -68,6 +72,8 @@ function browserSetup(){
    await page.evaluate(()=>fcA36AttachFollowingEntriesV1391(document.getElementById('followingList'),people));
    await page.locator('.fc-a36-following-entry-v1393').waitFor();
    assert.equal(await page.locator('.fc-a36-following-entry-v1393').count(),1,'Only active public entry should link');
+   assert.equal(await page.locator('.competing-label').count(),1,'Only verified eligible competitor has Competing now');
+   assert.match(await page.locator('#followingList').innerText(),/Avery[\s\S]*Competing now[\s\S]*Blake/,'Active competitor sorted above recently-closed competitor');
    assert.equal(await page.locator('.fc-a36-following-entry-v1393').innerText(),'View entry · New Public Challenge');
    assert.deepEqual(await page.evaluate(()=>[discoveryQueries,state.feedEntries.length,state.challenges.length]),[1,0,0],'Independent discovery without feed cache');
    assert.equal(await page.locator('#followingList').evaluate(e=>e.scrollWidth<=e.clientWidth+1),true,'No Following overflow');
