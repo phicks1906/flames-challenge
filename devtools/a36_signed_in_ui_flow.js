@@ -96,7 +96,21 @@ async function awaitServer(){
    await page.evaluate(async()=>await openUserProfile(state.profile.id));
    await page.locator('#fcA36VotesTab:visible').waitFor({timeout:18000});
    await page.screenshot({path:path.join(out,'votes-before-'+width+'.png')});
-   await page.locator('#fcA36VotesTab').click();
+   const geometry=await page.evaluate(()=>{
+    const button=document.getElementById('fcA36VotesTab'),sheet=document.getElementById('profileSheet');
+    const rect=button.getBoundingClientRect(),box=sheet.getBoundingClientRect();
+    const x=rect.x+rect.width/2,y=rect.y+rect.height/2,hit=document.elementFromPoint(x,y);
+    return {rect:{x:Math.round(rect.x),y:Math.round(rect.y),width:Math.round(rect.width),height:Math.round(rect.height)},
+      viewport:{w:innerWidth,h:innerHeight},sheetOpen:sheet.classList.contains('open'),
+      sheetRect:{x:Math.round(box.x),y:Math.round(box.y),width:Math.round(box.width),height:Math.round(box.height)},
+      hit:hit?.tagName+'.'+String(hit?.className||'').slice(0,120),
+      hitInsideTab:button===hit||button.contains(hit),
+      onboardingOpen:document.getElementById('fcOnboardingV1103')?.classList.contains('open'),
+      otherOpen:[...document.querySelectorAll('.modal-backdrop.open,.cd-sheet.open')].map(el=>el.id).slice(0,10)};
+   });
+   console.log('A36_VOTES_TAP_GEOMETRY '+JSON.stringify(geometry));
+   try {await page.locator('#fcA36VotesTab').click({timeout:9000});}
+   catch(e){await page.screenshot({path:path.join(out,'votes-click-blocked-'+width+'.png')});throw e;}
    await page.waitForFunction(()=>{
     const txt=document.getElementById('psContent')?.innerText||'';
     return typeof psState!=='undefined'&&psState.tab==='votes'&&txt.includes('FC_A36_V1395_LIVE')&&txt.includes('FC_A36_V1395_SETTLED');
