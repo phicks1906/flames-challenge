@@ -34,9 +34,10 @@ async function waitFor(label,fn,timeout=140){
 }
 (async()=>{
  const signup=await req('POST','/auth/v1/signup',{email,password,data:{full_name:'A36 Staging Voter'}});
- if(!signup.ok||!signup.data.user?.id)
-  throw new Error('Staging Auth signup failed status='+signup.status+' code='+String(signup.data.code||signup.data.error_code||'unknown'));
- const userId=signup.data.user.id;
+ const signupUser=signup.data.user?.id?signup.data.user:signup.data;
+ if(!signup.ok||!signupUser?.id)
+  throw new Error('Staging Auth signup failed status='+signup.status+' response_fields='+Object.keys(signup.data||{}).join(','));
+ const userId=signupUser.id;
  console.log('A36_SIGNUP_CREATED user_id='+userId+' run_id='+runId+' direct_session='+!!signup.data.access_token);
  let session=signup.data.access_token?signup.data:null;
  if(!session){
