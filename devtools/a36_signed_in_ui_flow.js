@@ -323,9 +323,29 @@ async function awaitServer(){
    assert.match(viewer.visibleText,/FC_A36_V1395_FOLLOW_NEXT/,'The future competition title is not visible after View Entry');
    assert.ok(viewer.scrollWidth<=viewer.viewport+1,'Entry viewer horizontal overflow');
    await page.screenshot({path:path.join(out,'entry-viewer-'+width+'.png')});
+   // Check the actual visible X returns the member to a usable screen.
+   const feedViewer=page.locator('#feedViewerSheet.open');
+   await feedViewer.waitFor({timeout:10000});
+   const realClose=feedViewer.locator('button[onclick="closeFeedViewer()"]');
+   assert.equal(await realClose.count(),1,'Expected one actual viewer close control');
+   await realClose.click({timeout:10000});
+   await page.waitForFunction(()=>!document.getElementById('feedViewerSheet')?.classList.contains('open'),null,{timeout:10000});
+   const returned=await page.evaluate(()=>({
+     viewerClosed:!document.getElementById('feedViewerSheet')?.classList.contains('open'),
+     followingClosed:!document.getElementById('followingSheet')?.classList.contains('open'),
+     navVisibility:getComputedStyle(document.getElementById('bottomNav')).visibility,
+     navPointerEvents:getComputedStyle(document.getElementById('bottomNav')).pointerEvents,
+     noOverflow:document.documentElement.scrollWidth<=document.documentElement.clientWidth+1
+   }));
+   assert.ok(returned.viewerClosed&&returned.followingClosed,'View Entry close failed to return to primary app');
+   assert.notEqual(returned.navVisibility,'hidden','Primary nav remained hidden after closing entry viewer');
+   assert.notEqual(returned.navPointerEvents,'none','Primary nav remained non-interactive after closing entry viewer');
+   assert.ok(returned.noOverflow,'Closing entry viewer introduced horizontal overflow');
+   await page.screenshot({path:path.join(out,'viewer-closed-return-'+width+'.png')});
+   console.log('PASS A3.6 viewer X closes and restores usable primary navigation '+width+'px');
    assert.equal(blockedProduction.length,0,'Production API request detected');
    assert.deepEqual(pageErrors,[],'Uncaught JS errors');
-   report.push({width,signedIn:true,votesRendered:true,officialResultsVisible:true,followingRendered:true,offFeedViewerHydrated:true,newerFollowedEntryOpened:true,noProductionAPI:true,noOverflow:true,noJSRuntimeError:true});
+   report.push({width,signedIn:true,votesRendered:true,officialResultsVisible:true,followingRendered:true,offFeedViewerHydrated:true,newerFollowedEntryOpened:true,entryViewerCloseReturnsToApp:true,noProductionAPI:true,noOverflow:true,noJSRuntimeError:true});
    console.log('PASS A3.6 real UI flow '+width+'px — own Votes, official result, Following, NEW future entry viewer');
    await page.evaluate(async()=>{try{await db.auth.signOut()}catch{}});
    await context.close();
