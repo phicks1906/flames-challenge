@@ -1,7 +1,7 @@
 'use strict';
 const fs=require('node:fs'),assert=require('node:assert/strict');
 const s=fs.readFileSync('index.html','utf8');
-assert.match(s,/v1399 · a36-following-nav-clearance/);
+assert.match(s,/v(?:1399 · a36-following-nav-clearance|1400 · a36-following-nav-runtime)/);
 const tag='<style id="fc-a36-following-nav-v1399">';
 assert.equal(s.split(tag).length-1,1,'One scoped Following layout override');
 const start=s.indexOf(tag),end=s.indexOf('</style>',start);
