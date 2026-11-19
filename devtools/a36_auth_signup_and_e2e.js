@@ -73,8 +73,13 @@ async function poll(name,fn,maxSec) {
   const profile=await call('GET','/rest/v1/profiles?select=id&id=eq.'+voter.id,undefined,token);
   if(!live.ok||!future.ok||!profile.ok)
     throw Error('Authenticated PostgREST read failed status='+live.status+','+future.status+','+profile.status);
-  if(live.data.length===1&&future.data.length===1&&profile.data.length===1)
-    return {live:live.data[0].id,future:future.data[0].id};
+  if(live.data.length===1&&future.data.length===1&&profile.data.length===1) {
+    const liveEntries=await call('GET','/rest/v1/entries?select=id,user_id,moderation_status&challenge_id=eq.'+live.data[0].id,undefined,token);
+    const futureEntries=await call('GET','/rest/v1/entries?select=id,user_id,moderation_status&challenge_id=eq.'+future.data[0].id,undefined,token);
+    if(!liveEntries.ok||!futureEntries.ok)throw Error('Authenticated entry read denied before fixture readiness');
+    if(liveEntries.data.length>=2&&futureEntries.data.some(x=>x.user_id===competitor.id&&['clear','approved'].includes(x.moderation_status)))
+      return {live:live.data[0].id,future:future.data[0].id};
+  }
   return null;
  },180);
  const ballot=await call('GET','/rest/v1/entries?select=id,user_id,challenge_id,moderation_status&challenge_id=eq.'+fixture.live,undefined,token);
