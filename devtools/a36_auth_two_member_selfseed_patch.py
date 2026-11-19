@@ -63,7 +63,7 @@ helper="""async function must(task,label) {
  return result.data;
 }
 """
-replace("const sleep=ms=>new Promise(r=>setTimeout(r,ms));",helper+"const sleep=ms=>new Promise(r=>setTimeout(r,ms));")
+replace("const sleep=t=>new Promise(r=>setTimeout(r,t));",helper+"const sleep=t=>new Promise(r=>setTimeout(r,t));")
 if "STAGING_REAL_FOLLOW_OFF_FEED_OK" not in s or s.count("A36_SIGNED_IN_FIXTURE_READY")!=1:
  raise SystemExit("STOP: unexpected result")
 p.write_text(s,encoding="utf8")
