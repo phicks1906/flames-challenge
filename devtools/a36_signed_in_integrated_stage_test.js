@@ -96,8 +96,25 @@ async function main(){
    assert.ok(viewer.video.includes(spec+'.mp4'));
    assert.equal(viewer.visible,true,'Native vote action not visible');
    await page.screenshot({path:out+'/viewer-'+width+'.png',fullPage:false});
-   // Vote through v1400's native click and upsert. No direct SQL or fabricated counts.
-   await page.locator('#evVoteBtn').click({timeout:12000});
+   // Verify ballot state before acting: a previously cast vote is immutable.
+   // Only submit through the native UI if this member has not yet voted.
+   const existing=await page.evaluate(async({uid})=>{
+    const {data,error}=await db.from('entry_votes').select('entry_id')
+     .eq('challenge_id','a3600000-0000-4000-8000-000000000004').eq('voter_id',uid).maybeSingle();
+    if(error) return {error:error.message};
+    return {entry:data?.entry_id||null};
+   },{uid:auth.userId});
+   assert.ok(!existing.error,'Failed to read staging ballot: '+String(existing.error));
+   const freshBallot=!existing.entry;
+   if(freshBallot){
+     assert.equal(await page.locator('#evVoteBtn').isEnabled(),true,'Unvoted entry should allow a ballot');
+     // Submit through the actual authenticated vote button, never direct SQL.
+     await page.locator('#evVoteBtn').click({timeout:12000});
+   }else{
+     assert.equal(existing.entry,choice,'Existing staged vote belongs to a different entry');
+     assert.equal(await page.locator('#evVoteBtn').isDisabled(),true,'Already voted entry must be locked');
+     assert.match(viewer.voteText,/Your vote/,'Saved vote receipt missing');
+   }
    await page.waitForFunction(async({uid,entry})=>{
     const {data,error}=await db.from('entry_votes').select('entry_id')
      .eq('challenge_id','a3600000-0000-4000-8000-000000000004').eq('voter_id',uid).maybeSingle();
@@ -117,7 +134,7 @@ async function main(){
    assert.ok(errors.length===0,'JavaScript errors: '+errors.join(' / '));
    assert.ok(production.length===0,'Production API request attempt');
    await page.screenshot({path:out+'/return-'+width+'.png',fullPage:false});
-   results.push({width,backend:'staging',signedIn:true,video:spec,voted:true,returned:true,jsErrors:errors.length,overflow:before.horizontalOverflow});
+   results.push({width,backend:'staging',signedIn:true,video:spec,voteMode:freshBallot?'new':'existing',savedBallot:true,returned:true,jsErrors:errors.length,overflow:before.horizontalOverflow});
    await page.evaluate(()=>db.auth.signOut());
    await context.close();
   }
