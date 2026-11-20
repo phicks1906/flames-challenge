@@ -94,7 +94,9 @@ async function main(){
    assert.match(await page.locator('#featuredPhase').innerText(),/VOTING NOW/);
    await page.screenshot({path:`${out}/390-compete.png`,fullPage:true});
    await page.locator('#seeContest').click();
-   assert.equal(await page.locator('#a34Demo').isVisible(),true,'Compete launches same immersive comparison');
+   const cstate=await page.evaluate(()=>({demoHidden:document.querySelector('#a34Demo')?.hidden, demoDisplay:getComputedStyle(document.querySelector('#a34Demo')).display, demoVisible:!!document.querySelector('#a34Demo')?.getClientRects().length, featured:document.querySelector('#featuredTitle')?.textContent, modal:document.querySelector('#modal')?.className, entryView:document.querySelector('#entryView')?.className, competeView:document.querySelector('#contestView')?.className}));
+   console.log('COMPETE_CLICK_STATE',JSON.stringify(cstate));
+   assert.equal(await page.locator('#a34Demo').isVisible(),true,'Compete launches same immersive comparison '+JSON.stringify(cstate));
    await page.locator('#a34Skip').click();
    await page.locator('[data-nav="titles"]').click();
    assert.match(await page.locator('#a31Content').innerText(),/Championships/);
