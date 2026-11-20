@@ -1,0 +1,35 @@
+name: A3.7 North Star staging mobile acceptance
+on:
+  push:
+    branches: [a37-north-star-prototype-20261120]
+    paths:
+      - 'preview/a37-connected.html'
+      - 'devtools/a37_north_star_browser_test.js'
+      - '.github/workflows/a37-north-star-browser.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  staging-browser:
+    if: github.ref == 'refs/heads/a37-north-star-prototype-20261120'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated Playwright
+        run: npm install --prefix /tmp/fc-a37 --no-audit --no-fund playwright@1.56.1
+      - name: Render and verify staged A3.7 at three mobile widths
+        run: node devtools/a37_north_star_browser_test.js
+      - name: Upload rendered mobile states and browser report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a37-north-star-mobile-evidence
+          path: a37-evidence/
+          if-no-files-found: warn
+          retention-days: 14
