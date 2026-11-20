@@ -415,7 +415,7 @@ const baseRenderEntry=renderEntry;
 const baseRenderContests=renderContests;
 const originalFollowBtn=byId('followBtn');
 const originalSeeContest=byId('seeContest');
-const introHTML=`<div class="a3-hint" id="a3Hint"><strong>Two performers. One decision.</strong> Watch the entries, compare them, and vote for the one you think deserves to win.</div>`;
+const introHTML=`<div class="a3-hint" id="a3Hint"><strong>Five performers. One practice decision.</strong> Watch their work, compare every entry, then choose your favorite.</div>`;
 const body=byId('entryView').querySelector('.entryBody');body.insertAdjacentHTML('afterbegin',introHTML);
 byId('entryView').insertAdjacentHTML('beforeend','<span class="a3-mode-pill" id="a3ModePill" hidden>YOUR COMPETITION</span>');
 const tabs=byId('shell').querySelector('.previewBar');
@@ -617,9 +617,9 @@ document.querySelector('[data-nav="you"]').onclick=showProfile;
 // The A2 follow race CTA is distinct from following a competitor.
 byId('followContest').onclick=()=>{if(contestFollows.has(featured))contestFollows.delete(featured);else contestFollows.add(featured);renderContests();notify(contestFollows.has(featured)?'Following this competition in demo':'Stopped following this competition');};
 // Allow user to return to a tracked result on Compete. Defaults still use A2 exploration.
-byId('seeContest').onclick=()=>{const ev=events.find(x=>x.id===featured);if(ev?.status==='active')enterEvent(featured);else showVoteChoice(ev);};
+byId('seeContest').onclick=()=>{const ev=events.find(x=>x.id===featured);if(ev?.id==='dance'){a34Enter();return;}if(ev?.status==='active')enterEvent(featured);else showVoteChoice(ev);};
 byId('compareA').onclick=()=>{
-  const c=entryCards[entryIndex];if(demo.mode==='creator' && c.event==='dance'){showCompetitor();return;}
+  const c=entryCards[entryIndex];if(c.event==='dance'){a34Enter();return;}
   const ev=events.find(e=>e.id===c.event);if(ev?.status==='closed')showResult(c.event);else if(demo.voted[c.event]!==undefined)showReceipt(c.event);else showVoteChoice(ev);
 };
 // Show the next sample result in the returning demo without inventing a result
@@ -754,7 +754,7 @@ for(const dest of ['home','compete','titles','you'])document.querySelector(`[dat
 const a31OriginalCompetitor=showCompetitor;
 showCompetitor=function(){a31Route('creator');};
 byId('compareA').addEventListener('click',e=>{
- if(demo.mode==='creator' && entryCards[entryIndex]?.event==='dance'){
+ if(demo.mode==='creator' && entryCards[entryIndex]?.event==='creator-duel'){
   e.stopImmediatePropagation();a31ShowRace();
  }
 },true);
@@ -784,6 +784,9 @@ const a33ChallengeIds=['dance','sing','pasta','result'];
 const a33RememberedEntry=new Map();
 let a33VerticalLearned=false,a33HorizontalLearned=false,a33Category='',a33Feed='you';
 const a33AdditionalCards=[
+ {event:'dance',num:2,title:'Rhythm that tells a story.',caption:'Salsa · third dancer in this challenge'},
+ {event:'dance',num:3,title:'Every line has a purpose.',caption:'Ballet-inspired · fourth dancer in this challenge'},
+ {event:'dance',num:4,title:'Movement full of personality.',caption:'Bollywood-inspired · fifth dancer in this challenge'},
  {event:'sing',num:1,title:'Another voice. Same stage.',caption:'Original performance · competing vocalist'},
  {event:'pasta',num:1,title:'A different take on the plate.',caption:'A second food photograph · same challenge'},
  {event:'result',num:0,title:'The shot that won.',caption:'Weekend Photography · official demo result'},
