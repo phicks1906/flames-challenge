@@ -52,6 +52,22 @@ async function main(){
    if(appState.active!=='feed')await page.evaluate(()=>switchView('feed'));
    await page.locator('#fcHomeV2:not([hidden])').waitFor({state:'visible',timeout:20000});
    await page.locator('#fcHomeV2Switcher [data-a36-entry]').first().waitFor({state:'visible',timeout:20000});
+   // Ember's real daily briefing is modal. Respect it and minimize via its
+   // visible control before entering the competition; do not bypass overlays.
+   await sleep(1800);
+   const ember=page.locator('dialog#fcEmberDailyBriefingV1221:modal');
+   if(await ember.count()){
+     await page.screenshot({path:out+'/ember-'+width+'.png',fullPage:false});
+     await ember.locator('[aria-label="Minimize Ember"]').click({timeout:10000});
+     await page.waitForFunction(()=>!document.querySelector('#fcEmberDailyBriefingV1221:modal'),null,{timeout:10000});
+   }
+   // The optional Get App prompt can open immediately afterward.
+   await sleep(900);
+   const getApp=page.locator('#getAppPrompt.open');
+   if(await getApp.count()){
+     await getApp.locator('button.ga-later').click({timeout:10000});
+     await page.waitForFunction(()=>!document.getElementById('getAppPrompt')?.classList.contains('open'),null,{timeout:10000});
+   }
    const choice=auth.userId===ownerA?B:A;
    const spec=choice===A?'hiphop':'salsa';
    await page.locator('#fcHomeV2Switcher [data-a36-entry="'+choice+'"]').click();
