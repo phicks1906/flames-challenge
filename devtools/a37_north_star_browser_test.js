@@ -88,6 +88,7 @@ async function main(){
    assert.match(await page.locator('#a33EntryCount').innerText(),/1 OF 5/);
    await page.locator('#compareA').click();
    assert.equal(await page.locator('#a34Demo').isVisible(),true,'Home launches immersive comparison');
+   assert.equal(await page.locator('#a34Demo .a34DemoHead h2').innerText(),'Street Dance Weekend','Home challenge identity matches viewer');
    await page.locator('#a34Skip').click();
    await page.locator('[data-nav="compete"]').click();
    assert.equal(await page.locator('#featuredTitle').innerText(),'Street Dance Weekend');
@@ -97,6 +98,7 @@ async function main(){
    const cstate=await page.evaluate(()=>({demoHidden:document.querySelector('#a34Demo')?.hidden, demoDisplay:getComputedStyle(document.querySelector('#a34Demo')).display, demoVisible:!!document.querySelector('#a34Demo')?.getClientRects().length, featured:document.querySelector('#featuredTitle')?.textContent, modal:document.querySelector('#modal')?.className, entryView:document.querySelector('#entryView')?.className, competeView:document.querySelector('#contestView')?.className}));
    console.log('COMPETE_CLICK_STATE',JSON.stringify(cstate));
    assert.equal(await page.locator('#a34Demo').isVisible(),true,'Compete launches same immersive comparison '+JSON.stringify(cstate));
+   assert.equal(await page.locator('#a34Demo .a34DemoHead h2').innerText(),'Street Dance Weekend','Compete challenge identity matches viewer');
    await page.locator('#a34Skip').click();
    await page.locator('[data-nav="titles"]').click();
    assert.match(await page.locator('#a31Content').innerText(),/Championships/);
