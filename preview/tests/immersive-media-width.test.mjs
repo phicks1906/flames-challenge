@@ -56,7 +56,7 @@ async function visiblePixels(page){
     const canvas=document.createElement('canvas');canvas.width=bitmap.naturalWidth;canvas.height=bitmap.naturalHeight;
     const context=canvas.getContext('2d',{willReadFrequently:true});context.drawImage(bitmap,0,0);
     return [.12,.88].map(f=>{
-      const d=context.getImageData(Math.round(r.x+r.width*f),Math.round(r.y+r.height*.39),1,1).data;
+      const d=context.getImageData(Math.round(r.x+r.width*f),Math.round(r.y+r.height*.33),1,1).data;
       return {magenta:d[0]>95&&d[2]>95&&d[1]<d[0]*.65&&d[1]<d[2]*.65,rgba:Array.from(d)};
     });
   },{png:screenshot,r:info.rect});
