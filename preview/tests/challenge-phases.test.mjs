@@ -31,7 +31,7 @@ try{
       await page.locator('#viewerActions [data-act="phaseinfo:posterfinal"]').click();
       equal(await page.locator('#sheet [data-act^="phaseentry:"]').count(),2,'Processing entrant details');
       equal(await page.locator('#sheet .standing').count(),0,'No standings before settlement');
-      await page.locator('#sheet [data-act="closeSheet"]').click();
+      await page.locator('#sheet .sheethead [data-act="closeSheet"]').click();
       await page.locator('#viewerClose').click();
 
       await page.locator('button[data-act="filter:upcoming"]').click();
@@ -45,7 +45,7 @@ try{
       await page.locator('#viewerActions [data-act="phaseinfo:openmic"]').click();
       yes((await page.locator('#sheet').textContent()).includes('Submissions and voting are not available yet'),'Upcoming rules are truthful');
       equal(await page.locator('#entryForm').count(),0,'Upcoming never opens submission');
-      await page.locator('#sheet [data-act="closeSheet"]').click();
+      await page.locator('#sheet .sheethead [data-act="closeSheet"]').click();
       await page.locator('#viewerActions [data-act="filter:live"]').click();
       equal(await page.locator('#viewer.show').count(),0,'Transition back to directory closes viewer');
       equal(await page.locator('[data-act="open:music"]').count(),1,'Voting remains available');
@@ -58,7 +58,7 @@ try{
       yes((await page.locator('#viewerActions').textContent()).includes('Final standings'),'Results expose standings');
       await page.locator('#viewerActions [data-act="result:cooking"]').click();
       yes((await page.locator('#sheet').textContent()).includes('not a settled competition record'),'Sample winner clearly marked');
-      await page.locator('#sheet [data-act="closeSheet"]').click();
+      await page.locator('#sheet .sheethead [data-act="closeSheet"]').click();
     }finally{await page.close();}
   }
   console.log('PASS '+checks+' lifecycle assertions across portrait and landscape phone viewports.');
