@@ -116,6 +116,39 @@
 .viewer.dance-immersive .hint{position:absolute;z-index:9;bottom:calc(12px + var(--safeBottom));left:0;right:0;margin:0;font-size:10px;color:#d3c3b7}
 @media(max-height:720px){.viewer.dance-immersive .viewer-details .subline{display:none}.viewer.dance-immersive .viewer-details{bottom:calc(125px + var(--safeBottom));padding-top:22px}.viewer.dance-immersive .media-btn{bottom:calc(230px + var(--safeBottom))}}
 
+
+/* Approved A3.6 Hybrid B Home: compact discovery, full-size competition viewer */
+.hybrid-home{padding-bottom:15px;background:#090909}
+.hybrid-intro{padding:14px 18px 12px}
+.hybrid-intro h1{font-size:30px;line-height:1.05;letter-spacing:-.8px;margin:9px 0 6px;font-weight:950}
+.hybrid-intro p{color:#c5beb7;font-size:12px;line-height:1.4;margin:0}
+.hybrid-stage{position:relative;overflow:hidden;height:clamp(230px,47dvh,460px);background:#080809}
+.hybrid-stage img,.hybrid-stage video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;display:block}
+.hybrid-stage video{background:transparent}
+.hybrid-hit{position:absolute;inset:0;width:100%;height:100%;z-index:3;border:0;background:transparent;cursor:pointer;touch-action:manipulation}
+.hybrid-hit:focus-visible{outline:3px solid #ffb27f;outline-offset:-5px}
+.hybrid-live{position:absolute;top:12px;left:12px;z-index:4;pointer-events:none;padding:7px 9px;background:#ff7438;color:#121010;font-size:10px;letter-spacing:1px;font-weight:900;border-radius:4px}
+.hybrid-meta{padding:13px 17px 15px;display:grid;grid-template-columns:minmax(0,1fr);gap:12px;background:#151515;border-bottom:1px solid #363636}
+.hybrid-meta .eyebrow{font-size:9px;letter-spacing:1.4px}
+.hybrid-meta h2{font-size:22px;line-height:1.12;margin:4px 0;font-weight:900;letter-spacing:-.55px}
+.hybrid-meta p{font-size:11px;line-height:1.3;color:#c5bbb3;margin:0}
+.hybrid-meta .hybrid-watch{display:block;width:100%;max-width:none;min-height:50px;padding:14px 18px;font-size:15px;line-height:1.2;white-space:nowrap;border-radius:10px}
+.hybrid-section-head{padding:21px 18px 8px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.hybrid-section-head h2{font-size:22px;letter-spacing:-.55px;margin:0 0 6px}
+.hybrid-section-head p{font-size:11px;color:#b8b4ac;margin:0}
+.hybrid-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:8px 17px 12px}
+.hybrid-tile{min-width:0;display:flex;flex-direction:column;border:1px solid #353334;border-radius:11px;background:#171819;overflow:hidden;text-align:left;color:#fff;padding:0}
+.hybrid-tile-art{display:block;height:170px;position:relative;overflow:hidden;background:#101010}
+.hybrid-tile-art img{width:100%;height:100%;object-fit:cover;display:block}
+.hybrid-phase{position:absolute;top:8px;left:8px;background:#160b07e8;color:#ffb88f;border:1px solid #ff985876;padding:6px 8px;border-radius:4px;font-size:9px;font-weight:800}
+.hybrid-tile-info{display:block;padding:10px 12px 14px}
+.hybrid-tile-info small{display:block;font-size:9px;letter-spacing:1.3px;color:#e6ae7b;font-weight:800}
+.hybrid-tile-info strong{display:block;font-size:14px;line-height:1.2;margin:5px 0}
+.hybrid-tile-info>span{display:block;color:#bbb3ad;font-size:11px}
+.hybrid-disclosure{margin:6px 17px 20px;padding:12px;border:1px solid #45403c;border-radius:9px;background:#181513;color:#cbbdb0;font-size:11px;line-height:1.4}
+@media(max-height:710px){.hybrid-stage{height:clamp(198px,35dvh,245px)}}
+@media(min-height:790px){.hybrid-stage{height:min(49dvh,500px)}}
+@media(max-width:350px){.hybrid-intro h1{font-size:27px}.hybrid-grid{gap:8px;padding:8px 12px 12px}.hybrid-tile-art{height:135px}}
 </style>
 </head>
 <body>
@@ -185,8 +218,11 @@ function hero(c){return `<article class="lead"><div class="lead-media">${preview
 function smallCard(c){return `<button class="visual-card" data-act="open:${c.id}"><span class="visual-art">${previewMedia(c)}<span class="chip">${phaseName(c)}</span></span><span class="visual-body"><span class="eyebrow">${c.category}</span><strong>${escapeHTML(c.title)}</strong><small>${c.phase==='voting'?c.entries.length+' competitors · '+total(c)+' votes':c.remaining}</small></span></button>`}
 function rowCard(c){const suffix=c.phase==='voting'?`${c.entries.length} competitors · ${total(c)} votes`:c.remaining;return `<button class="rowcard" data-act="open:${c.id}">${previewMedia(c)}<span><span class="label">${escapeHTML(c.category.toUpperCase())} · ${phaseName(c)}</span><h3>${escapeHTML(c.title)}</h3><p>${escapeHTML(suffix)}</p><span class="row-action">${phaseAction(c)} →</span></span></button>`}
 function recentBanner(){let votes=Object.keys(stored.votes);if(!votes.length)return '';const c=find(votes[votes.length-1]);if(!c)return '';return `<div class="inline-notice"><div class="round">✓</div><div><strong>Your vote is in.</strong><p>${c.title} · ${c.phase==='finished'?'Result available':'Voting is still open'}</p></div><button data-act="nav:you">Track →</button></div>`}
-function renderHome(){if(homeTab==='following'){const handles=stored.following;const listed=challenges.filter(c=>c.entries.some(e=>handles.includes(e.handle)));return `<div class="page-intro"><div class="eyebrow">Your people</div><h1>Following.</h1><p>The competitors you care about, and what they're doing next.</p></div><div class="tape"><button class="category-pill" data-act="home:for-you">For You</button><button class="category-pill active" data-act="home:following">Following</button></div>${listed.length?`<div class="section-head"><h2>From your favorites</h2></div><div class="listwrap">${listed.map(rowCard).join('')}</div>`:`<div class="blank"><h3>Find someone worth following.</h3><p>Watch a performance, make a choice, and follow the competitors you want to see again.</p>${btn('Discover talent','home:for-you','button hot')}</div>`}`}
-return `<div class="page-intro"><div class="eyebrow">Watch. Vote. Win.</div><h1>Someone earns it.<br>Everyone sees it.</h1><p>Watch real skill unfold. Pick who deserves the win.</p></div><div class="tape"><button class="category-pill active" data-act="home:for-you">For You</button><button class="category-pill" data-act="home:following">Following</button><button class="category-pill" data-act="nav:compete">All challenges →</button></div>${recentBanner()}${hero(find('dance'))}<div class="section-head"><h2>Worth your vote</h2><button class="text-link" data-act="nav:compete">See all →</button></div><div class="duo">${smallCard(find('music'))}${smallCard(find('photo'))}</div><div class="section-head"><h2>Winners & new chances</h2><span style="font-size:11px;color:var(--sub)">Results / Entries</span></div><div class="duo">${smallCard(find('cooking'))}${smallCard(find('art'))}</div>`}
+function hybridTile(c){return `<button class="hybrid-tile" data-act="open:${c.id}"><span class="hybrid-tile-art"><img src="${c.cover}" alt="${escapeHTML(c.category)} sample competition" loading="lazy"><span class="hybrid-phase">${phaseName(c)}</span></span><span class="hybrid-tile-info"><small>${escapeHTML(c.category.toUpperCase())}</small><strong>${escapeHTML(c.title)}</strong><span>${c.phase==='voting'?'Watch & vote':c.phase==='finished'?'See example result':'Explore submissions'} →</span></span></button>`}
+function renderHome(){
+const c=find('dance');
+return `<div class="hybrid-home"><section class="hybrid-intro"><span class="eyebrow">HUMAN TALENT. REAL COMPETITION.</span><h1>Five performances.<br>One choice.</h1><p>Watch the work. Compare the competitors. Decide who stands out.</p></section><section class="hybrid-stage">${previewMedia(c)}<button class="hybrid-hit" data-act="open:dance" aria-label="Watch Dance Face-Off performances"></button><span class="hybrid-live">VOTING · SAMPLE</span></section><section class="hybrid-meta"><div><span class="eyebrow">DANCE · FIVE ENTRIES</span><h2>Dance Face-Off</h2><p>Swipe through all five and pick your favorite.</p></div><button class="button hot hybrid-watch" data-act="open:dance">Watch & compare →</button></section><section class="hybrid-section-head"><div><h2>More than one stage</h2><p>Different talents. Different moments.</p></div><button class="text-link" data-act="nav:compete">All challenges →</button></section><section class="hybrid-grid">${['music','photo','cooking','art'].map(id=>hybridTile(find(id))).join('')}</section>${recentBanner()}<p class="hybrid-disclosure">Design review only. People, votes, entries and results in this preview are samples, not live competition records.</p></div>`;
+}
 function renderCompete(){
  const f=competeFilter;
  const items=challenges.filter(c=>f==='all'||(f==='live'&&c.phase==='voting')||(f==='enter'&&c.phase==='entering')||(f==='results'&&c.phase==='finished'));
