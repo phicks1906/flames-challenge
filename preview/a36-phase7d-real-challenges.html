@@ -325,6 +325,16 @@
 @media(max-width:360px){.fc8-card img{height:128px}.fc8-grid{gap:8px}.fc8-card span.fc8-body{min-height:102px}}
 @media(max-height:570px){.fc8-audio-panel{top:34%;padding:7px}}
 
+
+/* Keep the audio player clear of the competitor strip at every phone height. */
+@media (orientation:portrait){.viewer.immersive-viewer .fc8-audio-panel{top:clamp(122px,18%,172px);}}
+@media (orientation:landscape) and (max-height:540px){
+ .viewer.immersive-viewer .fc8-audio-panel{top:140px;left:55%;width:42%;padding:7px;gap:3px}
+ .viewer.immersive-viewer .fc8-audio-panel audio{height:37px}
+ .viewer.fc8-audio-viewer .viewer-details{left:0;right:auto;width:52%;padding:5px 10px;bottom:calc(102px + var(--safeBottom))}
+ .viewer.fc8-audio-viewer .viewer-details .candidate-row{margin-top:3px}
+ .viewer.fc8-audio-viewer .viewer-details .subline{display:none}
+}
 </style>
 </head>
 <body>
@@ -902,7 +912,7 @@ function fc8You(){
  const body=t==='votes'?'<div class="fc7-real-card"><h2>Your official votes</h2><p>Private voting history requires an authenticated member. This read-only preview does not cast or retrieve personal ballots.</p><h3 style="margin-top:12px">Saved result bookmarks</h3></div>'+cards:'<div class="fc7-real-card"><h2>'+(t==='following'?'Following':'Your Entries')+'</h2><p>'+(t==='following'?'Real follow relationships require an authenticated account.':'Real submissions require an authenticated member and an open challenge. Local practice uploads are not counted as production entries.')+'</p></div>'+cards;
  return '<div class="page-intro"><div class="eyebrow">YOUR ARENA</div><h1>You.</h1><p>Public results and private member activity stay separate.</p></div>'+tabs+body+fc8Lab();
 }
-function fc8StopAudio(){let audio=byId('fc8Audio');if(audio){try{audio.pause();audio.removeAttribute('src');audio.load()}catch(_){}}byId('fc8AudioPanel')?.remove();byId('stage').classList.remove('fc8-audio-stage')}
+function fc8StopAudio(){byId('viewer').classList.remove('fc8-audio-viewer');let audio=byId('fc8Audio');if(audio){try{audio.pause();audio.removeAttribute('src');audio.load()}catch(_){}}byId('fc8AudioPanel')?.remove();byId('stage').classList.remove('fc8-audio-stage')}
 function fc8Rail(c){
  let rail=byId('viewerRivals');rail.hidden=c.entries.length<2;
  rail.innerHTML=c.entries.map((e,i)=>'<button type="button" class="contender-pick '+(currentEntry===i?'active':'')+' '+(c.winner===i?'fc7-winner':'')+'" data-act="fc8entry:'+c.id+':'+i+'" aria-label="Watch '+escapeHTML(e.name)+', entry '+(i+1)+' of '+c.entries.length+'"><img src="'+entryImage(c,e)+'" alt=""><span>'+escapeHTML(e.name)+'</span></button>').join('');
@@ -921,6 +931,7 @@ function fc8Viewer(){
  byId('viewerActions').innerHTML=btn('See recorded result','fc8result:'+c.id,'button hot fill')+btn(fc8Saved.includes(c.id)?'Saved result ✓':'Save result','fc8save:'+c.id,'button outline');
  byId('viewerDots').innerHTML='';byId('stage').classList.add('media-contained');mediaContained=true;
  if(audio){
+  byId('viewer').classList.add('fc8-audio-viewer');
   stopMedia();byId('stageVideo').hidden=true;byId('mediaControl').hidden=true;byId('fitControl').hidden=true;byId('stage').classList.add('fc8-audio-stage','still-entry');
   let panel=document.createElement('div');panel.id='fc8AudioPanel';panel.className='fc8-audio-panel';
   let name=document.createElement('strong');name.textContent='Original recording by '+e.name;
@@ -987,11 +998,3 @@ async function fc8Refresh(){
  const complete=cs.map(c=>fc8Record(c,resBy[c.id],winBy[c.id],es,names)).filter(Boolean);
  if(complete.length<7)throw Error('Too few public settled challenges can be verified');
  fc8Apply(complete);fc8Fetched=true;fc8Fetching=false;fc8Error='';
- }catch(e){fc8Fetching=false;fc8Error=String(e.message||e);console.warn('Read-only public challenges are unavailable:',fc8Error)}
- if(!byId('viewer').classList.contains('show')&&!sheetOpen)render();
-}
-render();fc8Refresh();
-
-</script>
-</body>
-</html>
