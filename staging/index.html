@@ -1,0 +1,21 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>FlamesChallenge v1390 — Staging</title><style>body{background:#0c0c0d;color:#fff;font:16px system-ui;padding:28px}p{color:#aaa}</style></head><body><h2>FlamesChallenge v1390 staging</h2><p id="status">Preparing isolated staging build…</p><script>
+(async()=>{
+ const status=document.getElementById('status');
+ try {
+  const response=await fetch('../index.html?fc-staging-source=1389&t='+Date.now(),{cache:'no-store'});
+  if(!response.ok)throw Error('Cannot load production source: HTTP '+response.status);
+  let html=await response.text();
+  const patches=[["v1389 · continuous-championship-medal-rings","v1390 · challenge-media-integrity-staging"],["function fcEntryCardMediaV1060(e, ch) {","function fcEntryCardMediaV1060(e, ch) {\n  if (!e || !ch || String(e.challenge_id) !== String(ch.id)) return '<div class=\"fcc-entry-media fcc-entry-placeholder\">Entry unavailable for this challenge</div>';"],["  let ch = state.challenges.find(c => c.id === chId) || state.currentChallenge;\n  if (!ch) return;","  let ch = (state.challenges || []).find(c => String(c.id) === String(chId));\n  if (!ch && String(state.currentChallenge?.id || '') === String(chId)) ch = state.currentChallenge;\n  if (!ch) { console.warn(\"[v1390] Challenge not found\", chId); return; }"],["    const entries = (entriesRes.data || []).filter(e => entryModVisible(e));","    const entries = (entriesRes.data || []).filter(e => String(e.challenge_id) === String(chId) && entryModVisible(e));"],[" const e=row.e;let url=fcHighlightMediaUrlV1354(e);"," const e=row.e && row.ch && String(row.e.challenge_id) !== String(row.ch.id) ? null : row.e;let url=fcHighlightMediaUrlV1354(e);"]];
+  if(!html.includes('v1389 · continuous-championship-medal-rings'))throw Error('Production version changed; staging patch disabled to prevent applying to the wrong build.');
+  for(const [before,after] of patches){
+   const pos=html.indexOf(before);
+   if(pos<0)throw Error('Staging patch anchor missing: '+before.slice(0,65));
+   if(html.indexOf(before,pos+before.length)>=0)throw Error('Staging patch anchor is ambiguous: '+before.slice(0,65));
+   html=html.slice(0,pos)+after+html.slice(pos+before.length);
+  }
+  // Keep relative resource paths aligned with the production root.
+  html=html.replace(/<head([^>]*)>/i,'<head$1><base href="../">');
+  document.open();document.write(html);document.close();
+ }catch(err){status.textContent='Staging failed safely: '+err.message;console.error(err);}
+})();
+</script></body></html>
