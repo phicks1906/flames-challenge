@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>FlamesChallenge — Legacy video check</title>
+<style>
+:root{color-scheme:dark;font-family:-apple-system,BlinkMacSystemFont,system-ui,Arial,sans-serif}
+*{box-sizing:border-box}html,body{margin:0;background:#090909;color:#faf5f1}
+main{max-width:680px;margin:auto;padding:24px 15px 80px}
+h1{margin:0 0 8px;font-size:25px}p{color:#c7b9af;line-height:1.5}
+small{color:#b8aa9e}.tag{color:#f1a373;font-size:11px;font-weight:800;letter-spacing:1.3px;text-transform:uppercase}
+.selector{display:flex;overflow-x:auto;gap:9px;padding:18px 0;scrollbar-width:thin}
+button,.link{font:inherit;min-height:44px;padding:10px 13px;border-radius:9px;border:1px solid #694837;background:#28201b;color:white;white-space:nowrap}
+button[aria-pressed=true],button.primary{background:#f47b3f;color:#120e0b;border-color:#f47b3f;font-weight:800}
+button:focus-visible,a:focus-visible{outline:3px solid #ffb779;outline-offset:3px}
+.stage{background:#050505;border-radius:14px;border:1px solid #44332b;overflow:hidden;display:grid;place-items:center;min-height:300px}
+video{display:block;width:100%;max-height:62dvh;min-height:290px;object-fit:contain;background:black}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+a.link{display:inline-flex;align-items:center;text-decoration:none}
+.status{padding:12px;background:#241a15;border:1px solid #6d4936;border-radius:9px}
+.status b{display:block;margin-bottom:4px}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#171512;color:#e9d1bf;border:1px solid #40342a;border-radius:10px;padding:13px;max-height:260px;overflow-y:auto;font:12px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace}
+footer{border-top:1px solid #3b312b;margin-top:22px;padding-top:16px;font-size:12px;color:#ada198;line-height:1.55}
+</style></head><body><main>
+<div class="tag">Isolated media QA • Phase 33C</div>
+<h1>Cooking Challenge video check</h1>
+<p>Test the four original competition videos individually. This page checks browser playback; it does not change the submissions, votes, or results.</p>
+<div id="choices" class="selector" role="group" aria-label="Choose original video"></div>
+<div class="stage"><video id="player" playsinline webkit-playsinline controls preload="none"></video></div>
+<div class="actions">
+<button id="play" class="primary">Play original video</button>
+<button id="reload">Retry</button>
+<a class="link" id="original" target="_blank" rel="noopener noreferrer">Open original file</a>
+<button id="copy">Copy diagnostics</button>
+</div>
+<div id="status" class="status" role="status" aria-live="polite"><b>Ready</b><span>Select an entry and tap Play.</span></div>
+<h2>Playback diagnostics</h2><pre id="log" aria-label="Browser media diagnostics"></pre>
+<footer>All four videos are actual legacy .mov files. A failed test may indicate an unsupported codec, a network problem, or a delivery issue. The error code alone cannot distinguish all causes. No automated conversion is presented here as though it were already deployed.</footer>
+</main>
+<script>
+(()=>{'use strict';
+const files=[{"id":"cooking-winner","path":"e0bd2e09-586b-4db0-9a30-92c6085363a5/1780360361541.mov","label":"Official winning entry"},{"id":"cooking-entrant-2","path":"80ae5161-a7fe-4f42-9b82-1298789ae6eb/1780361341661.mov","label":"Competitor 2"},{"id":"cooking-entrant-3","path":"96b09e09-33bb-4f00-87d2-ef5c4694ccdb/1780362005263.mov","label":"Competitor 3"},{"id":"cooking-entrant-4","path":"24c26d06-52c9-4134-8589-a2889d7ddfc0/1780532583837.mov","label":"Competitor 4"}];
+const base='https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/';
+const p=document.getElementById('player'),log=document.getElementById('log'),status=document.getElementById('status');
+const buttons=document.getElementById('choices');let index=0,events=[];
+const message=({1:'Playback aborted',2:'Network failure',3:'Decode failure',4:'Unsupported media or source'}); 
+function record(label,extra){
+ const info={time:new Date().toISOString(),entry:files[index].id,event:label,readyState:p.readyState,networkState:p.networkState,
+ errorCode:p.error?.code||null,duration:Number.isFinite(p.duration)?p.duration:null,width:p.videoWidth,height:p.videoHeight,...extra};
+ events.push(info);if(events.length>150)events.shift();
+ log.textContent=JSON.stringify({canPlayQuickTime:p.canPlayType('video/quicktime'),canPlayMp4:p.canPlayType('video/mp4; codecs="avc1.42E01E, mp4a.40.2"'),lastEvents:events.slice(-18)},null,2);
+}
+function setStatus(title,body){status.querySelector('b').textContent=title;status.querySelector('span').textContent=body}
+function choose(i){
+ p.pause();p.removeAttribute('src');p.load();index=i;events=[];
+ [...buttons.children].forEach((b,j)=>b.setAttribute('aria-pressed',String(i===j)));
+ document.getElementById('original').href=base+files[i].path;
+ setStatus(files[i].label,'The source loads only when you press Play.');
+ record('selected');
+}
+files.forEach((f,i)=>{
+ const b=document.createElement('button');b.type='button';b.textContent=f.label;
+ b.addEventListener('click',()=>choose(i));buttons.appendChild(b);
+});
+async function play(){
+ const url=base+files[index].path;
+ if(p.getAttribute('src')!==url){p.src=url;p.load()}
+ setStatus('Opening original video','Waiting for the browser to load media…');record('play-requested');
+ try{await p.play();record('play-resolved')}
+ catch(e){const detail=(e?.name||'Error')+': '+(e?.message||'Playback could not start');
+ setStatus('Playback did not start',detail);record('play-rejected',{detail})}
+}
+document.getElementById('play').addEventListener('click',play);
+document.getElementById('reload').addEventListener('click',()=>{p.pause();p.load();play()});
+document.getElementById('copy').addEventListener('click',()=>{
+ const text=JSON.stringify({entry:files[index].id,userAgent:navigator.userAgent,quicktime:p.canPlayType('video/quicktime'),h264:p.canPlayType('video/mp4; codecs="avc1.42E01E, mp4a.40.2"'),events},null,2);
+ if(navigator.clipboard?.writeText)navigator.clipboard.writeText(text).then(()=>setStatus('Copied','Diagnostics copied to clipboard')).catch(()=>setStatus('Copy unavailable','Select and copy the diagnostic text manually'));
+ else setStatus('Copy unavailable','Select and copy the diagnostic text manually');
+});
+for(const name of ['loadstart','loadedmetadata','loadeddata','canplay','playing','pause','waiting','stalled','suspend','ended','error']){
+ p.addEventListener(name,()=>{
+  if(name==='error')setStatus('Video unavailable',(message[p.error?.code]||'Unknown media error')+'. See the log for details.');
+  if(name==='playing')setStatus('Playback started','The original entry is playing in this browser.');
+  record(name);
+ });
+}
+choose(0);
+})();
+</script></body></html>
