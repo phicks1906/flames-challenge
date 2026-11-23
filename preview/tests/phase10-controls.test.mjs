@@ -21,6 +21,7 @@ try{
     // practice phase only, with no production authentication or database write.
     const c=fc7Real();
     if(!c?.entries||c.entries.length<2)throw Error('Need two approved source entries');
+    c.mediaType=c.mediaType||'video';
     c.previewPhase='voting';
     openChallenge(c.id);
    });
