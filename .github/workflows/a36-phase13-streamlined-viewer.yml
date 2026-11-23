@@ -1,0 +1,44 @@
+name: A3.6 Phase 13 streamlined immersive viewer (prototype only)
+on:
+  push:
+    branches: ['prototype/a36-phase13-streamlined-viewer-20261123']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  viewer-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    container:
+      image: mcr.microsoft.com/playwright:v1.57.0-noble
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save --no-package-lock playwright@1.57.0
+      - name: Check source syntax and isolate production
+        run: |
+          node --input-type=module - <<'NODE'
+          import fs from 'node:fs';
+          import vm from 'node:vm';
+          import assert from 'node:assert/strict';
+          const s=fs.readFileSync('preview/a36-phase13-streamlined-viewer.html','utf8');
+          const scripts=[...s.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)];
+          assert.equal(scripts.length,6,'Preserve earlier source and add Phase13 script');
+          for(const [i,m] of scripts.entries())new vm.Script(m[1],{filename:'phase13-'+i});
+          for(const term of ['assertDanceManifest();','fc12Ballot','fc14Sync','fc15Presentation','fc16Presentation','fc17Presentation','fc18Presentation','Saved in this browser']){
+            assert.ok(s.includes(term),term);
+          }
+          assert.ok(!/supabase\.from\([^)]*\)\.(insert|update|delete|upsert)/i.test(s));
+          console.log('PASS syntax and source fidelity');
+          NODE
+      - name: Test four rendered viewport sizes and interactions
+        run: node preview/tests/phase13-streamlined-viewer.test.mjs
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase13-rendered-viewports
+          path: phase13-*.png
+          if-no-files-found: ignore
+          retention-days: 7
