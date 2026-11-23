@@ -65,7 +65,8 @@ try{
    });
    await page.locator('#stageVideo').click({force:true});
    await page.waitForTimeout(60);
-   ok(await page.locator('#fc16PlaybackFlash').evaluate(e=>e.classList.contains('show')&&e.classList.contains('paused')),'Pause flashes only on user tap');
+   const pauseState=await page.evaluate(()=>({flash:byId('fc16PlaybackFlash').className,paused:byId('stageVideo').paused,hidden:byId('stageVideo').hidden,playbtn:byId('fc14Playback').dataset.playing}));
+   ok(pauseState.flash.includes('show')&&pauseState.flash.includes('paused'),'Pause flashes only on user tap: '+JSON.stringify(pauseState));
    await page.waitForTimeout(800);
    ok(!(await page.locator('#fc16PlaybackFlash').evaluate(e=>e.classList.contains('show'))),'Pause flash disappears');
    await page.locator('#stageVideo').click({force:true});
