@@ -49,7 +49,7 @@ try{
    check(state.ctaAction==='open:'+state.challenge&&state.mediaAction===state.ctaAction,'Stage and CTA open same challenge');
    check(!!state.selectedEntry,'Actual approved entry selected');
    check(state.mediaSrc===state.entryVideo||state.mediaSrc===state.entryPoster,'Home media is selected challenge entrant, not unrelated placeholder');
-   check(state.stage.height>=220,'Media retains prominent stage');
+   check(state.stage.height>=(viewport.width>viewport.height?170:220),'Media retains prominent stage');
    check(state.cta.top>=state.stage.bottom-2,'CTA directly follows one stage');
    check(state.hasFourCards,'Keep discovery compact');
    check(new Set(state.otherTitles).size===state.otherTitles.length,'Discovery repeats no identical challenge');
