@@ -1,0 +1,44 @@
+name: A3.6 Phase 14 single-feature Home regression (prototype only)
+on:
+  push:
+    branches: ['prototype/a36-phase14-home-single-hero-20261123']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  home-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    container:
+      image: mcr.microsoft.com/playwright:v1.57.0-noble
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save --no-package-lock playwright@1.57.0
+      - name: Validate inherited scripts and Home implementation
+        run: |
+          node --input-type=module - <<'NODE'
+          import fs from 'node:fs';
+          import vm from 'node:vm';
+          import assert from 'node:assert/strict';
+          const s=fs.readFileSync('preview/a36-phase14-home-single-hero.html','utf8');
+          const scripts=[...s.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)];
+          assert.equal(scripts.length,7,'Preserve Phase13 and add Home script');
+          for(const [i,m] of scripts.entries())new vm.Script(m[1],{filename:'phase14-'+i});
+          for(const term of ['assertDanceManifest();','fc12Ballot','fc18Presentation','fc19HomeTile','fc19-watch','previewMedia(hero)','Watch &amp; compare']){
+            assert.ok(s.includes(term),term);
+          }
+          assert.ok(!/supabase\.from\([^)]*\)\.(insert|update|delete|upsert)/i.test(s));
+          console.log('PASS seven script blocks parsed, media and voting invariants present');
+          NODE
+      - name: Test authentic Home hero and CTA in four screen sizes
+        run: node preview/tests/phase14-home-single-hero.test.mjs
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase14-home-rendered-viewports
+          path: phase14-home-*.png
+          if-no-files-found: ignore
+          retention-days: 7
