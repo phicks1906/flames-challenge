@@ -1,0 +1,45 @@
+name: A3.6 Phase 17 Recorded Contest Consistency (prototype only)
+on:
+  push:
+    branches: ['prototype/a36-phase17-coherent-recorded-contest-20261123']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  home-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    container:
+      image: mcr.microsoft.com/playwright:v1.57.0-noble
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save --no-package-lock playwright@1.57.0
+      - name: Verify inherited JS and critical code fidelity
+        run: |
+          node --input-type=module - <<'NODE'
+          import {readFileSync} from 'node:fs';
+          import vm from 'node:vm';
+          import assert from 'node:assert/strict';
+          const s=readFileSync('preview/a36-phase17-recorded-contest.html','utf8');
+          const scripts=[...s.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)];
+          assert.equal(scripts.length,8);
+          for(const [i,m] of scripts.entries())new vm.Script(m[1],{filename:'phase17-script-'+i});
+          for(const term of ['assertDanceManifest();','fc12Ballot','fc18Presentation','fc19HomeTile','Who did it best?','VIDEO ENTRIES','fc21-competition','PICK FAVORITE','Official voting is closed','Saved in this browser']){
+            assert.ok(s.includes(term),term);
+          }
+          assert.ok(!/supabase\.from\([^)]*\)\.(insert|update|delete|upsert)/i.test(s),'No database writes');
+          console.log('PASS seven scripts parse; inherited voting, media, result and Home methods preserved');
+          NODE
+      - name: Browser acceptance for challenge motivation and truthful flow
+        run: node preview/tests/phase17-recorded-contest.test.mjs
+      - name: Save rendered mobile checkpoints
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase17-home-rendered-viewports
+          path: phase17-home-*.png
+          if-no-files-found: ignore
+          retention-days: 7
