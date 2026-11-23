@@ -1055,11 +1055,25 @@ try{const v=JSON.parse(localStorage.getItem(fc10Key)||'{}');if(v&&typeof v==='ob
 const fc10OriginalApply=fc8Apply;
 fc8Apply=function(records){
  fc10OriginalApply(records);
- fc8Real().forEach(c=>{
+ const all=fc8Real();
+ all.forEach(c=>{
   const name=String(c.title||'').toLowerCase().trim();
   const match=fc10Assignments.find(([title])=>name.includes(title));
   c.previewPhase=match?match[1]:'finished';
  });
+ // If historical titles differ from our preferred examples, still cover
+ // every phase without manufacturing participants, votes, or results.
+ const targets=[['voting',2],['enter',2],['upcoming',1],['processing',1]];
+ for(const [phase,quantity] of targets){
+  let count=all.filter(c=>c.previewPhase===phase).length;
+  for(const c of all){
+   if(count>=quantity)break;
+   if(c.previewPhase!=='finished')continue;
+   c.previewPhase=phase;count++;
+  }
+ }
+ // Reserve at least one original authoritative settled result in this view.
+ if(!all.some(c=>c.previewPhase==='finished')&&all.length)all[all.length-1].previewPhase='finished';
  const featured=fc8Real().find(c=>fc10Phase(c)==='voting'&&c.mediaType==='video');
  if(featured)fc8Focused=featured.id;
 };
@@ -1122,7 +1136,7 @@ fc8Compete=function(){
  (hero?fc10Hero(hero):'<div class="fc10-simple"><h2>No challenges in this view</h2>'+
  '<p>Try another category or phase.</p>'+btn('Show all challenges','filter:all','button hot full')+'</div>')+
  (other.length?'<section class="hybrid-section-head"><div><h2>More challenges</h2></div></section>'+
- '<section class="fc10-tiles">'+other.map(fc10Tile).join('')+'</section>':'')+fc10Footer+'</div>';
+ '<section class="fc10-tiles">'+other.map(fc10Tile).join('')+'</section>':'')+'</div>';
 };
 fc8Create=function(){
  const list=fc10All().filter(c=>fc10Phase(c)==='enter');
@@ -1130,7 +1144,7 @@ fc8Create=function(){
  '<p>Find something worth attempting.</p></div>'+
  (list[0]?fc10Hero(list[0]):'<div class="fc10-simple"><h2>New challenges are coming.</h2></div>')+
  (list.length>1?'<section class="hybrid-section-head"><div><h2>Also open to enter</h2></div></section>'+
- '<section class="fc10-tiles">'+list.slice(1).map(fc10Tile).join('')+'</section>':'')+fc10Footer+'</div>';
+ '<section class="fc10-tiles">'+list.slice(1).map(fc10Tile).join('')+'</section>':'')+'</div>';
 };
 fc8Titles=function(){
  const t=titlesSection,all=fc10All().filter(c=>fc10Phase(c)==='finished');
@@ -1145,7 +1159,7 @@ fc8Titles=function(){
  :'<div class="fc10-simple"><h2>'+(t==='ranks'?'Ranks':'Hall of Fame')+'</h2>'+
  '<p>Only official settled results establish titles and Championship Score. No additional standings are inferred in this preview.</p></div>';
  return '<div class="hybrid-home"><div class="page-intro"><div class="eyebrow gold">COMPETITIVE ACHIEVEMENT</div>'+
- '<h1>Titles.</h1><p>Results, ranks, and the people who earn them.</p></div>'+tabs+body+fc10Footer+'</div>';
+ '<h1>Titles.</h1><p>Results, ranks, and the people who earn them.</p></div>'+tabs+body+'</div>';
 };
 fc8You=function(){
  const t=youTab;
@@ -1171,7 +1185,7 @@ fc8You=function(){
   btn('Explore challenges','fc10go:all','button hot full')+'</div>';
  }
  return '<div class="hybrid-home"><div class="page-intro"><div class="eyebrow">YOUR ARENA</div><h1>You.</h1>'+
- '<p>Your favorites, choices, and progress.</p></div>'+tabs+body+fc10Footer+'</div>';
+ '<p>Your favorites, choices, and progress.</p></div>'+tabs+body+'</div>';
 };
 const fc10OriginalViewer=fc8Viewer;
 renderViewer=function(){
