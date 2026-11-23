@@ -1,0 +1,44 @@
+name: A3.6 Phase 12 compact voting row (prototype only)
+on:
+  push:
+    branches: ['prototype/a36-phase12-compact-vote-row-20261123']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  viewer-regression:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.57.0-noble
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save --no-package-lock playwright@1.57.0
+      - name: Parse source scripts and verify base media
+        run: |
+          node --input-type=module - <<'NODE'
+          import fs from 'node:fs';
+          import vm from 'node:vm';
+          import assert from 'node:assert/strict';
+          const s=fs.readFileSync('preview/a36-phase12-compact-vote-row.html','utf8');
+          const scripts=[...s.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)];
+          assert.equal(scripts.length,5,'Preserve Phase 11 and append Phase 12');
+          for(const [i,m] of scripts.entries())new vm.Script(m[1],{filename:'phase12-'+i});
+          for(const term of ['assertDanceManifest();','fc12Ballot','fc14Sync','fc15Presentation','fc16Presentation','fc17Presentation','Saved in this browser']){
+           assert.ok(s.includes(term),term);
+          }
+          assert.ok(!/supabase\.from\([^)]*\)\.(insert|update|delete|upsert)/i.test(s));
+          console.log('PASS source syntax and source-fidelity assertions');
+          NODE
+      - name: Test compact row on mobile and landscape
+        run: node preview/tests/phase12-compact-vote-row.test.mjs
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase12-phone-renderings
+          path: phase12-*.png
+          if-no-files-found: ignore
+          retention-days: 7
