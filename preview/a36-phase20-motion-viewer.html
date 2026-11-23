@@ -2985,35 +2985,33 @@ fc14Sync=function(){
      v.setAttribute('webkit-playsinline','');
      v.autoplay=true;v.setAttribute('autoplay','');
      v.preload='auto';
-     v.loop=false;
-     let finished=false,started=false,timeout=null;
-     const stop=()=>{
-       if(finished)return;
-       finished=true;
-       if(timeout!==null)clearTimeout(timeout);
-       if(run===previewRun&&v.isConnected){
-         v.pause();
-         try{v.currentTime=0}catch(_){}
-       }
-     };
-     const onPlaying=()=>{
-       if(started||finished||run!==previewRun)return;
-       started=true;
-       timeout=setTimeout(stop,3000);
-     };
-     v.addEventListener('playing',onPlaying,{once:true});
+     // Repeat a moving three-second snippet instead of freezing after one pass.
+     v.loop=true;
+     if(v.dataset.fc27PreviewRun!==String(run)){
+       v.dataset.fc27PreviewRun=String(run);
+       v.addEventListener('timeupdate',()=>{
+         if(run!==previewRun||!v.isConnected)return;
+         if(v.currentTime>=3.0){try{v.currentTime=0}catch(_){}}
+       });
+     }
      const retry=()=>{
-       if(started||finished||run!==previewRun||!v.isConnected)return;
-       Promise.resolve(v.play()).catch(()=>{ /* muted autoplay can be blocked; opening the viewer remains available */ });
+       if(run!==previewRun||!v.isConnected||byId('viewer').classList.contains('show'))return;
+       Promise.resolve(v.play()).catch(()=>{ /* browser may defer muted autoplay until ready */ });
      };
      retry();
-     // iOS can reject play() while metadata is pending. Retry on media readiness.
      if(v.readyState<2)v.addEventListener('loadeddata',retry,{once:true});
      if(v.readyState<3)v.addEventListener('canplay',retry,{once:true});
    }
    const hero=document.querySelector('#screen .fc27-home .fc19-stage video[data-dance-preview]');
    if(hero){
-     begin(hero);
+     if('IntersectionObserver' in window){
+       previewObserver=new IntersectionObserver(entries=>entries.forEach(e=>{
+         if(run!==previewRun)return;
+         if(e.isIntersecting)begin(e.target);
+         else try{e.target.pause()}catch(_){}
+       }),{threshold:.15});
+       previewObserver.observe(hero);
+     }else begin(hero);
      return;
    }
    if(!('IntersectionObserver' in window)){if(previews[0])begin(previews[0]);return}
