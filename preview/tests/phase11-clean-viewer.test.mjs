@@ -32,6 +32,7 @@ try{
     eq(await page.locator('#'+id).evaluate(e=>getComputedStyle(e).display),'none',id+' removed from visible chrome');
    }
    eq(await page.locator('#fc16PlaybackFlash').count(),1,'Transient playback acknowledgement present');
+   await page.waitForTimeout(300);
    eq(await page.locator('#fc16PlaybackFlash').evaluate(e=>getComputedStyle(e).opacity),'0','Playback icon hidden before tap');
    eq(await page.locator('#viewerDetail .fc15-position').textContent(),'Competitor 1 of 6','Entrant position retained in lower text');
    eq((await page.locator('#nextEntry span').textContent()).trim(),'NEXT →','Text next control replaces overlay arrow icon');
