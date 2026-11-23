@@ -1,0 +1,42 @@
+name: A3.6 Phase 11 clean immersive viewer (prototype only)
+on:
+  push:
+    branches: ['prototype/a36-phase11-clean-viewer-20261123']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  viewer-regression:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.57.0-noble
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save --no-package-lock playwright@1.57.0
+      - name: Check source syntax and integrity
+        run: |
+          node --input-type=module - <<'NODE'
+          import fs from 'node:fs';
+          import vm from 'node:vm';
+          import assert from 'node:assert/strict';
+          const html=fs.readFileSync('preview/a36-phase11-clean-viewer.html','utf8');
+          const chunks=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)];
+          assert.equal(chunks.length,4,'Preserve old scripts and add Phase11 only');
+          for(const [i,c] of chunks.entries())new vm.Script(c[1],{filename:'phase11-'+i});
+          for(const term of ['assertDanceManifest();','fc12Ballot','fc14Sync','fc15Presentation','fc16Presentation','fc16PlaybackFlash','LOCAL VOTING'])assert.ok(html.includes(term),term);
+          assert.ok(!/supabase\.from\([^)]*\)\.(insert|update|delete|upsert)/i.test(html));
+          console.log('PASS four JS blocks parsed and invariants retained.');
+          NODE
+      - name: Inspect rendered viewer and interactions
+        run: node preview/tests/phase11-clean-viewer.test.mjs
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase11-phone-renderings
+          path: phase11-*.png
+          if-no-files-found: ignore
+          retention-days: 7
