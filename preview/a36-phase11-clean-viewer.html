@@ -2151,6 +2151,14 @@ function fc16PlaybackFlash(){
 fc14Video.setAttribute('tabindex','0');
 fc14Video.setAttribute('aria-label','Video. Tap to pause or resume.');
 fc14Video.addEventListener('click',()=>requestAnimationFrame(fc16PlaybackFlash));
+byId('stage').addEventListener('click',e=>{
+ // The stage overlay can be the hit target over video on phones. A tap on
+ // unobstructed media must still pause/resume; do not swallow button taps.
+ if(e.target===fc14Video||e.target.closest('button')||fc14Video.hidden||
+    !byId('viewer').classList.contains('show'))return;
+ fc14Playback.click();
+ requestAnimationFrame(fc16PlaybackFlash);
+});
 fc14Video.addEventListener('keydown',e=>{
  if(e.key==='Enter'||e.key===' '){
   e.preventDefault();
