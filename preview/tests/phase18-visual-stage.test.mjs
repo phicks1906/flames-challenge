@@ -69,6 +69,8 @@ try{
    check(await home.locator('.fc19-watch').evaluate(e=>getComputedStyle(e).backgroundImage.includes('gradient')),'Purposeful CTA styling');
    check(await home.locator('.fc23-stage').evaluate(e=>e.scrollWidth<=e.clientWidth+1),'Entry lineup never causes horizontal overflow');
    await page.screenshot({path:'phase18-home-'+viewport.width+'x'+viewport.height+'.png'});
+   if(viewport.width===393)console.log('PHASE18_VISUAL_JPEG='+(await page.screenshot({type:'jpeg',quality:38})).toString('base64'));
+
    await home.locator('.fc19-watch').click();
    await page.waitForSelector('#viewer.show.fc18-minimal');
    eq((await page.locator('#viewerTitle').textContent()).trim(),'Coolest video','Same challenge opens in viewer');
