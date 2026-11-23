@@ -1,0 +1,50 @@
+name: A3.6 Phase 10 viewer regression (prototype only)
+
+on:
+  push:
+    branches:
+      - 'prototype/a36-phase10-immersive-controls-20261123'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  phase10-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    container:
+      image: mcr.microsoft.com/playwright:v1.57.0-noble
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated browser dependency
+        run: npm install --no-save --no-package-lock playwright@1.57.0
+      - name: Parse inline JavaScript and protect source fidelity
+        run: |
+          node --input-type=module - <<'NODE'
+          import {readFileSync} from 'node:fs';
+          import vm from 'node:vm';
+          import assert from 'node:assert/strict';
+          const file=readFileSync('preview/a36-phase10-immersive-controls.html','utf8');
+          const scripts=[...file.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)];
+          assert.equal(scripts.length,3,'Three Phase 9 scripts must be retained');
+          for(const [i,script] of scripts.entries())new vm.Script(script[1],{filename:'phase10-script-'+(i+1)});
+          for(const required of ['assertDanceManifest();','PRACTICE ONLY · NO OFFICIAL VOTE','fc12-flame-ballot','fc14Playback','fc15Presentation','CHANGE VOTE','Turn on sound']){
+            assert.ok(file.includes(required),required+' must remain present');
+          }
+          assert.ok(!/supabase\.from\([^)]*\)\.(insert|update|delete|upsert)/i.test(file),'No production database writes');
+          console.log('PASS: '+scripts.length+' JS blocks parsed and source invariants present');
+          NODE
+      - name: Exercise browser playback, arrows, votes, close, and safe areas
+        run: node preview/tests/phase10-controls.test.mjs
+      - name: Upload rendered checkpoints
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase10-rendered-phone-checkpoints
+          path: phase10-*.png
+          if-no-files-found: ignore
+          retention-days: 7
