@@ -66,8 +66,22 @@
     "'<p>No verified completed results match this category.</p>'+btn('Show all results','filter:all','button hot full')");
   phase31Once("'<div class=\"fc10-simple\"><h2>New challenges are coming.</h2></div>'",
     "'<div class=\"fc10-simple\"><h2>Entry unavailable in this preview</h2><p>Only settled public competitions are connected here. Enter through an authenticated challenge that is actually accepting submissions.</p></div>'");
-  // Titles tab stays labeled Championships until an authoritative championship source is connected.
-  // Keep this surface unchanged rather than misrepresent ordinary wins as Championship titles.
+  // Keep the existing Titles data but label the generic recorded outcomes accurately.
+  const titleStart=html.indexOf('fc8Titles=function(){');
+  const titleEnd=html.indexOf('fc8You=function(){',titleStart);
+  if(titleStart<0||titleEnd<titleStart)throw Error('Phase 31 Titles source changed');
+  const oldTitle="[['championships','Championships'],['ranks','Ranks'],['hall','Hall of Fame']]";
+  const selectedTitle=html.slice(titleStart,titleEnd);
+  if(selectedTitle.split(oldTitle).length!==2)throw Error('Phase 31 Titles tab changed');
+  html=html.slice(0,titleStart)+selectedTitle.replace(oldTitle,
+    "[['championships','Recorded winners'],['ranks','Ranks'],['hall','Hall of Fame']]")+html.slice(titleEnd);
+  // The public result source has winning entry + Championship Score, not monthly title qualification.
+  const titleStartAgain=html.indexOf('fc8Titles=function(){');
+  const titleEndAgain=html.indexOf('fc8You=function(){',titleStartAgain);
+  const oldTitlesHero="<h1>Titles.</h1><p>Results, ranks, and the people who earn them.</p>";
+  if(html.slice(titleStartAgain,titleEndAgain).split(oldTitlesHero).length!==2)throw Error('Phase 31 Titles hero changed');
+  html=html.slice(0,titleStartAgain)+html.slice(titleStartAgain,titleEndAgain).replace(oldTitlesHero,
+    "<h1>Titles.</h1><p>Verified winners and recorded Championship Scores; monthly titles are separate.</p>")+html.slice(titleEndAgain);
   phase31Once("This result is from the published results table, not a practice vote. Voting has closed.",
     "Official result from the published results table. Voting has closed.");
   document.open();document.write(html);document.close();
