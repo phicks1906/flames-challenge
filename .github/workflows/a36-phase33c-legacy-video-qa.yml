@@ -1,0 +1,53 @@
+name: Phase 33C legacy video compatibility QA (prototype only)
+on:
+  push:
+    branches:
+      - 'prototype/a36-phase33c-legacy-video-qa-20261123'
+    paths:
+      - '.github/workflows/a36-phase33c-legacy-video-qa.yml'
+      - 'preview/tools/phase33c_media_qa.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-legacy-originals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: cooking-winner
+            path: e0bd2e09-586b-4db0-9a30-92c6085363a5/1780360361541.mov
+          - id: cooking-entrant-2
+            path: 80ae5161-a7fe-4f42-9b82-1298789ae6eb/1780361341661.mov
+          - id: cooking-entrant-3
+            path: 96b09e09-33bb-4f00-87d2-ef5c4694ccdb/1780362005263.mov
+          - id: cooking-entrant-4
+            path: 24c26d06-52c9-4134-8589-a2889d7ddfc0/1780532583837.mov
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check probe and encoder availability
+        run: |
+          command -v ffprobe
+          command -v ffmpeg
+          bash -n preview/tools/phase33c_media_qa.sh
+      - name: Probe source and make disposable browser-compatible copy
+        run: |
+          bash preview/tools/phase33c_media_qa.sh \
+            "https://sioalvawzayfphwzqctq.supabase.co/storage/v1/object/public/challenge-media/${{ matrix.path }}" \
+            "${{ matrix.id }}" "$RUNNER_TEMP/phase33c"
+      - name: Verify transcoded playback duration and faststart seek
+        run: |
+          ffmpeg -nostdin -v error -xerror -i "$RUNNER_TEMP/phase33c/${{ matrix.id }}/playback.mp4" \
+            -t 3 -f null -
+      - name: Upload disposable audit, poster and MP4 for review (7 days)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase33c-${{ matrix.id }}
+          path: ${{ runner.temp }}/phase33c/${{ matrix.id }}/
+          if-no-files-found: warn
+          retention-days: 7
