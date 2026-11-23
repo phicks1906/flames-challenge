@@ -84,6 +84,18 @@
     "<h1>Titles.</h1><p>Verified winners and recorded Championship Scores; monthly titles are separate.</p>")+html.slice(titleEndAgain);
   phase31Once("This result is from the published results table, not a practice vote. Voting has closed.",
     "Official result from the published results table. Voting has closed.");
+  // Recorded-winners cards must display the actual winning entry's artwork and published Score.
+  const titleA=html.indexOf('fc8Titles=function(){');
+  const titleB=html.indexOf('fc8You=function(){',titleA);
+  if(titleA<0||titleB<=titleA)throw Error('Phase 31 recorded-winners region missing');
+  let titlesHTML=html.slice(titleA,titleB);
+  if(titlesHTML.split('fc8Poster(c)').length!==2 ||
+     titlesHTML.split("'<span>View recorded result →</span></span></button>'").length!==2)
+    throw Error('Phase 31 recorded-winners source changed');
+  titlesHTML=titlesHTML.replace('fc8Poster(c)','(c.entries[c.winner]?.photo||fc8Poster(c))');
+  titlesHTML=titlesHTML.replace("'<span>View recorded result →</span></span></button>'",
+    "'<span>'+(Number.isFinite(Number(c.record?.winner?.championship_score))?Number(c.record.winner.championship_score)+' Championship Score · ':'')+'View recorded result →</span></span></button>'");
+  html=html.slice(0,titleA)+titlesHTML+html.slice(titleB);
   document.open();document.write(html);document.close();
  }catch(e){document.getElementById('loading').textContent='Preview unavailable: '+e.message;}
 })();
